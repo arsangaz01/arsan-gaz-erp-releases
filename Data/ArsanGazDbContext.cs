@@ -14,6 +14,7 @@ public sealed class ArsanGazDbContext : DbContext
  public DbSet<Invoice> Invoices => Set<Invoice>();
  public DbSet<Payment> Payments => Set<Payment>();
  public DbSet<ErpTask> Tasks => Set<ErpTask>();
+ public DbSet<AgentRun> AgentRuns => Set<AgentRun>();
  public string DatabasePath { get; }
  public ArsanGazDbContext()
  {
@@ -32,6 +33,7 @@ public sealed class ArsanGazDbContext : DbContext
   b.Entity<CylinderMovement>().HasOne(x=>x.Cylinder).WithMany(x=>x.Movements).HasForeignKey(x=>x.CylinderId).OnDelete(DeleteBehavior.Restrict);
   b.Entity<Quote>().HasIndex(x=>x.QuoteNumber).IsUnique();
   b.Entity<Invoice>().HasIndex(x=>x.InvoiceNumber).IsUnique();
+    b.Entity<AgentRun>().HasIndex(x=>x.StartedAtUtc);
   b.Entity<Payment>().HasOne(x=>x.Invoice).WithMany(x=>x.Payments).HasForeignKey(x=>x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
  }
 }

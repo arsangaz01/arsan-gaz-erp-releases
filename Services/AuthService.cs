@@ -65,6 +65,12 @@ public sealed class AuthService
         }
     }
 
+    public async Task<string?> GetCachedAccountNameAsync()
+    {
+        IAccount? account = (await _client.GetAccountsAsync()).FirstOrDefault();
+        return account?.Username;
+    }
+
     public async Task SignOutAsync()
     {
         foreach (IAccount account in await _client.GetAccountsAsync())

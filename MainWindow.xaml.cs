@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using ArsanGazERP.Data;
+using ArsanGazERP.Models;
 using ArsanGazERP.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Win32;
@@ -68,12 +69,16 @@ public partial class MainWindow : Window
 	private async Task LoadDashboardAsync()
 	{
 		TodayLabel.Text = DateTime.Now.ToString("dddd, d MMMM yyyy", CultureInfo.GetCultureInfo("tr-TR"));
-		string version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "5.2.0";
+		string version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "5.3.0";
 		VersionText.Text = $"v{version}";
 		Title = $"Arsan Gaz ERP {version}";
 		WorkbookStatus.Text = string.IsNullOrWhiteSpace(_excel.WorkbookPath)
 			? "Çalışma kitabı seçilmedi"
 			: Path.GetFileName(_excel.WorkbookPath);
+		string? cachedAccount = await _auth.GetCachedAccountNameAsync();
+		MicrosoftSummary.Text = string.IsNullOrWhiteSpace(cachedAccount)
+			? "M365: oturum yok"
+			: $"M365 hesabı: {cachedAccount}";
 
 		try
 		{
@@ -83,6 +88,20 @@ public partial class MainWindow : Window
 			CylinderCount.Text = (await db.Cylinders.CountAsync()).ToString("N0", CultureInfo.GetCultureInfo("tr-TR"));
 			OverdueCount.Text = (await db.Invoices.CountAsync(invoice => invoice.DueDate < DateTime.Today && invoice.PaidAmount < invoice.TotalAmount))
 				.ToString("N0", CultureInfo.GetCultureInfo("tr-TR"));
+			List<AgentRun> recentRuns = await db.AgentRuns.AsNoTracking()
+				.OrderByDescending(run => run.StartedAtUtc)
+				.Take(8)
+				.ToListAsync();
+			AgentRunsGrid.ItemsSource = recentRuns.Select(run => new AgentRunRow(
+				run.StartedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.GetCultureInfo("tr-TR")),
+				run.Succeeded ? "Tamamlandı" : "Başarısız",
+				run.FindingCount,
+				run.CriticalCount,
+				run.Summary)).ToList();
+			AgentRun latestRun = recentRuns.FirstOrDefault()!;
+			AgentRunSummary.Text = latestRun is null
+				? "Ajan henüz çalıştırılmadı"
+				: $"Son çalışma {latestRun.StartedAtUtc.ToLocalTime():dd.MM.yyyy HH:mm} · {(latestRun.Succeeded ? "başarılı" : "başarısız")} · {latestRun.CriticalCount} kritik";
 			DatabaseSummary.Text = $"SQLite hazır · Son yenileme {DateTime.Now:HH:mm}";
 			StatusText.Text = "Sistem hazır";
 		}
@@ -123,6 +142,8 @@ public partial class MainWindow : Window
 	}
 
 	private async void Refresh_Click(object sender, RoutedEventArgs e) => await LoadDashboardAsync();
+
+	private async void RefreshAgentRuns_Click(object sender, RoutedEventArgs e) => await LoadDashboardAsync();
 
 	private async void Login_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
 		$"Oturum açıldı: {(await _auth.SignInAsync()).Account.Username}");
@@ -185,9 +206,13 @@ public partial class MainWindow : Window
 		await LoadDashboardAsync();
 	}
 
-	private async void AgentV3_Click(object sender, RoutedEventArgs e) => await RunAsync(async () => string.Join(
-		Environment.NewLine,
-		(await _agent.AnalyzeAsync()).Select(finding => $"[{finding.Severity}] {finding.Category}: {finding.Message}")));
+	private async void AgentV3_Click(object sender, RoutedEventArgs e)
+	{
+		await RunAsync(async () => string.Join(
+			Environment.NewLine,
+			(await _agent.AnalyzeAsync()).Select(finding => $"[{finding.Severity}] {finding.Category}: {finding.Message}")));
+		await LoadDashboardAsync();
+	}
 
 	private async void Backup_Click(object sender, RoutedEventArgs e) => await RunAsync(
 		() => Task.FromResult("Excel yedeği oluşturuldu:" + Environment.NewLine + _excel.CreateBackup()));
@@ -208,4 +233,11 @@ public partial class MainWindow : Window
 		Output.Clear();
 		StatusText.Text = "İşlem günlüğü temizlendi";
 	}
+
+	private sealed record AgentRunRow(
+		string StartedAtLocal,
+		string StatusLabel,
+		int FindingCount,
+		int CriticalCount,
+		string Summary);
 }

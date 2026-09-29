@@ -28,6 +28,7 @@ if ($app.HasExited -or -not $app.MainWindowHandle) {
 
 $smallU = [string][char]0x00FC
 $smallC = [string][char]0x00E7
+$smallS = [string][char]0x015F
 $dotlessI = [string][char]0x0131
 $capitalO = [string][char]0x00D6
 $smallO = [string][char]0x00F6
@@ -36,6 +37,7 @@ $maximizeName = 'Ekran' + $dotlessI + ' kapla'
 $restoreName = $capitalO + 'nceki boyuta d' + $smallO + 'n'
 $logoName = 'Arsan Gaz S' + $dotlessI + 'nai ve T' + $dotlessI + 'bbi Gazlar logosu'
 $readyName = 'Sistem haz' + $dotlessI + 'r'
+$lastRunPrefix = 'Son ' + $smallC + 'al' + $dotlessI + $smallS + 'ma'
 
 $window = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$app.MainWindowHandle)
 $windowHandle = [IntPtr]$window.Current.NativeWindowHandle
@@ -82,6 +84,30 @@ foreach ($name in @(
     }
 }
 
+$analyze = Find-UiElement $window 'Ajan Analizi'
+if (-not $analyze) {
+    throw 'The agent analysis action is missing.'
+}
+$analyze.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+$latestRunSummary = $null
+
+for ($attempt = 0; $attempt -lt 30 -and -not $latestRunSummary; $attempt++) {
+    [void]$app.WaitForInputIdle(500)
+    $elements = $window.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    foreach ($element in $elements) {
+        if ($element.Current.Name.StartsWith($lastRunPrefix, [StringComparison]::Ordinal)) {
+            $latestRunSummary = $element
+            break
+        }
+    }
+}
+
+if (-not $latestRunSummary) {
+    throw 'The agent run was not persisted to the dashboard history.'
+}
+
 $maximize = Find-UiElement $window $maximizeName
 $maximize.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
 $restore = Wait-UiElement $window $restoreName
@@ -108,4 +134,4 @@ if (-not $app.WaitForExit(10000)) {
     throw 'Close button did not exit the application.'
 }
 
-Write-Output 'UI smoke test passed: logo, accessible controls, maximize, restore, minimize, and close.'
+Write-Output 'UI smoke test passed: persisted agent run, logo, accessible controls, maximize, restore, minimize, and close.'
