@@ -1,0 +1,10 @@
+bin/
+obj/
+publish*/
+installer/Output/
+*.user
+*.suo
+.vs/
+ArsanGazERP_KaynakKodlari.txt
+ArsanGazERP_*.zip
+*.log
