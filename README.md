@@ -13,4 +13,4 @@ dotnet publish ArsanGazERP.csproj -c Release -r win-x64 --self-contained true -p
 
 ## Release
 
-Push a `v*` tag to build the installer and portable ZIP and attach both to the matching GitHub Release. To rebuild an existing tag, run **Build and Release Arsan Gaz ERP** from GitHub Actions and enter the tag, such as `v5.0.2`.
+Push a `v*` tag to build the installer and portable ZIP and attach both to the matching GitHub Release. To rebuild an existing tag, run **Build and Release Arsan Gaz ERP** from GitHub Actions and enter the tag, such as `v5.1.0`.

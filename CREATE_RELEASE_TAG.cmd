@@ -2,7 +2,7 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 for /f "tokens=2 delims=<>" %%V in ('findstr /i "<Version>" ArsanGazERP.csproj') do set VERSION=%%V
-if "%VERSION%"=="" set VERSION=5.0.2
+if "%VERSION%"=="" set VERSION=5.1.0
 set TAG=v%VERSION%
 
 echo Creating release tag: %TAG%

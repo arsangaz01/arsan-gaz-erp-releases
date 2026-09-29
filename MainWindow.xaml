@@ -1,1 +1,194 @@
-﻿<Window x:Class="ArsanGazERP.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Arsan Gaz ERP v5" Height="780" Width="1280" WindowStartupLocation="CenterScreen"><Grid Margin="16"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="ARSAN GAZ ERP v5 | Microsoft 365 + Excel + SQLite + Ajan V3" FontSize="24" FontWeight="Bold" Foreground="#0F4C5C"/><WrapPanel Grid.Row="1" Margin="0,14,0,12"><Button Content="Microsoft Giriş" Click="Login_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="İzinleri Yenile" Click="Consent_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="Profil" Click="Profile_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="OneDrive" Click="OneDrive_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="E-postalar" Click="Mail_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="Kişiler" Click="Contacts_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="Takvim" Click="Calendar_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="ERP Excel Seç" Click="Excel_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="Excel → SQLite" Click="ExcelSync_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="Operasyon Merkezi" Click="Operations_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="Veritabanı Merkezi" Click="Database_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="Ajan V3" Click="AgentV3_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="Excel Yedekle" Click="Backup_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="OneDrive DB Yedek" Click="CloudBackup_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="Güncelleme Kontrol" Click="Update_Click" Padding="12,7" Margin="0,0,7,7"/><Button Content="Çıkış" Click="Logout_Click" Padding="12,7" Margin="0,0,7,7"/></WrapPanel><TextBox x:Name="Output" Grid.Row="2" FontFamily="Consolas" FontSize="13" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/></Grid></Window>
+<Window x:Class="ArsanGazERP.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Arsan Gaz ERP"
+        Width="1320"
+        Height="800"
+        MinWidth="1040"
+        MinHeight="680"
+        WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="248" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="{StaticResource SidebarBrush}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16,22,16,18">
+                        <Grid Margin="4,2,4,26">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="48" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="42" Height="42" CornerRadius="8" Background="{StaticResource AccentBrush}">
+                                <TextBlock Text="A" FontSize="24" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
+                                <TextBlock Text="ARSAN GAZ" FontSize="15" FontWeight="Bold" Foreground="White" />
+                                <TextBlock Text="KURUMSAL ERP" FontSize="10" FontWeight="SemiBold" Foreground="#9FB8AF" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Text="GENEL" FontSize="10" FontWeight="Bold" Foreground="#91AAA1" Margin="10,0,0,7" />
+                        <Button Content="İş merkezi" Style="{StaticResource SidebarButton}" Background="{StaticResource SidebarHoverBrush}" />
+
+                        <TextBlock Text="MICROSOFT 365" FontSize="10" FontWeight="Bold" Foreground="#91AAA1" Margin="10,20,0,7" />
+                        <Button Content="Microsoft Giriş" Click="Login_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="İzinleri Yenile" Click="Consent_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Profil" Click="Profile_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="OneDrive" Click="OneDrive_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="E-postalar" Click="Mail_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Kişiler" Click="Contacts_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Takvim" Click="Calendar_Click" Style="{StaticResource SidebarButton}" />
+
+                        <TextBlock Text="ERP VE VERİ" FontSize="10" FontWeight="Bold" Foreground="#91AAA1" Margin="10,20,0,7" />
+                        <Button Content="ERP Excel Seç" Click="Excel_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Excel → SQLite" Click="ExcelSync_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Operasyon Merkezi" Click="Operations_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Veritabanı Merkezi" Click="Database_Click" Style="{StaticResource SidebarButton}" />
+
+                        <TextBlock Text="YÖNETİM" FontSize="10" FontWeight="Bold" Foreground="#91AAA1" Margin="10,20,0,7" />
+                        <Button Content="Ajan Analizi" Click="AgentV3_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Excel Yedekle" Click="Backup_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="OneDrive DB Yedek" Click="CloudBackup_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Güncelleme Kontrolü" Click="Update_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Oturumu Kapat" Click="Logout_Click" Style="{StaticResource SidebarButton}" />
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="1" BorderBrush="#34584F" BorderThickness="0,1,0,0" Padding="22,14">
+                    <StackPanel>
+                        <TextBlock Text="SÜRÜM" FontSize="10" FontWeight="Bold" Foreground="#91AAA1" />
+                        <TextBlock x:Name="VersionText" Text="5.1.0" Foreground="White" FontWeight="SemiBold" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Border Grid.Column="1" Background="{StaticResource CanvasBrush}">
+            <Grid Margin="30,22,30,18">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock x:Name="TodayLabel" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="İş merkezi" FontSize="28" FontWeight="Bold" Margin="0,3,0,2" />
+                        <TextBlock Text="Satış, operasyon ve veri yönetimi" Foreground="{StaticResource MutedBrush}" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Yenile" Click="Refresh_Click" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0" />
+                </Grid>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,20,0,0">
+                    <StackPanel>
+                        <UniformGrid Columns="4" Margin="0,0,0,22">
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="16" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="MÜŞTERİLER" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock x:Name="CustomerCount" Text="—" FontSize="26" FontWeight="Bold" Margin="0,7,0,0" />
+                                    <TextBlock Text="Kayıtlı firma" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="16" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="ÜRÜNLER" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock x:Name="ProductCount" Text="—" FontSize="26" FontWeight="Bold" Margin="0,7,0,0" />
+                                    <TextBlock Text="Ürün kataloğu" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="16" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="TÜPLER" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock x:Name="CylinderCount" Text="—" FontSize="26" FontWeight="Bold" Margin="0,7,0,0" />
+                                    <TextBlock Text="Envanter kaydı" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="16">
+                                <StackPanel>
+                                    <TextBlock Text="GECİKEN TAHSİLAT" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock x:Name="OverdueCount" Text="—" FontSize="26" FontWeight="Bold" Foreground="{StaticResource DangerBrush}" Margin="0,7,0,0" />
+                                    <TextBlock Text="Açık vadesi geçmiş fatura" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+
+                        <Grid Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Hızlı erişim" FontSize="18" FontWeight="Bold" />
+                                <TextBlock Text="Öne çıkan çalışma alanları" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <UniformGrid Columns="3">
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="18" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="ERP ÇALIŞMA KİTABI" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock x:Name="WorkbookStatus" Text="Çalışma kitabı seçilmedi" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="Çalışma kitabı seçilmedi" Margin="0,9,0,12" />
+                                    <Button Content="Excel dosyası seç" Click="Excel_Click" Style="{StaticResource SecondaryButton}" Margin="0" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="18" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="OPERASYONLAR" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock Text="Müşteri, ürün ve tüp kayıtları" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,9,0,12" />
+                                    <Button Content="Operasyon merkezini aç" Click="Operations_Click" Style="{StaticResource SecondaryButton}" Margin="0" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="18">
+                                <StackPanel>
+                                    <TextBlock Text="VERİTABANI" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock Text="ERP kayıtlarını görüntüle" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,9,0,12" />
+                                    <Button Content="Veritabanını aç" Click="Database_Click" Style="{StaticResource SecondaryButton}" Margin="0" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+
+                        <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="18" Margin="0,22,0,0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Son işlem" FontSize="16" FontWeight="Bold" />
+                                        <TextBlock Text="Uygulama yanıtları ve işlem sonuçları" FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Temizle" Click="ClearOutput_Click" Style="{StaticResource SecondaryButton}" Margin="0" HorizontalAlignment="Right" />
+                                </Grid>
+                                <TextBox x:Name="Output" Grid.Row="1" Text="Henüz işlem yapılmadı." IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontFamily="Consolas" FontSize="12" MinHeight="104" MaxHeight="170" BorderThickness="0" Background="{StaticResource CanvasBrush}" Margin="0" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Grid Grid.Row="2" Margin="0,14,0,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0" />
+                        <TextBlock x:Name="StatusText" Text="Başlatılıyor" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                    </StackPanel>
+                    <TextBlock x:Name="DatabaseSummary" Text="Yerel SQLite" FontSize="11" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

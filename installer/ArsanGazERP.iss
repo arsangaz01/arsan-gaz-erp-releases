@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "5.0.2"
+  #define AppVersion "5.1.0"
 #endif
 
 #define AppName "Arsan Gaz ERP"
