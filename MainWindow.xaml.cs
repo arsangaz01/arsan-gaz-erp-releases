@@ -29,10 +29,48 @@ public partial class MainWindow : Window
 		Loaded += async (_, _) => await LoadDashboardAsync();
 	}
 
+	private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	{
+		if (e.ChangedButton != MouseButton.Left)
+		{
+			return;
+		}
+
+		if (e.ClickCount == 2)
+		{
+			ToggleWindowState();
+			return;
+		}
+
+		DragMove();
+	}
+
+	private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+	private void Maximize_Click(object sender, RoutedEventArgs e) => ToggleWindowState();
+
+	private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+	private void Window_StateChanged(object? sender, EventArgs e)
+	{
+		bool isMaximized = WindowState == WindowState.Maximized;
+		MaximizeButton.Content = isMaximized ? "❐" : "□";
+		MaximizeButton.ToolTip = isMaximized ? "Önceki boyuta dön" : "Ekranı kapla";
+		System.Windows.Automation.AutomationProperties.SetName(
+			MaximizeButton,
+			isMaximized ? "Önceki boyuta dön" : "Ekranı kapla");
+	}
+
+	private void ToggleWindowState() => WindowState = WindowState == WindowState.Maximized
+		? WindowState.Normal
+		: WindowState.Maximized;
+
 	private async Task LoadDashboardAsync()
 	{
 		TodayLabel.Text = DateTime.Now.ToString("dddd, d MMMM yyyy", CultureInfo.GetCultureInfo("tr-TR"));
-		VersionText.Text = $"v{typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "5.1.0"}";
+		string version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "5.2.0";
+		VersionText.Text = $"v{version}";
+		Title = $"Arsan Gaz ERP {version}";
 		WorkbookStatus.Text = string.IsNullOrWhiteSpace(_excel.WorkbookPath)
 			? "Çalışma kitabı seçilmedi"
 			: Path.GetFileName(_excel.WorkbookPath);

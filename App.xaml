@@ -3,23 +3,25 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <SolidColorBrush x:Key="CanvasBrush" Color="#F2F5F3" />
+        <SolidColorBrush x:Key="CanvasBrush" Color="#F2F6FA" />
         <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="InkBrush" Color="#19332D" />
-        <SolidColorBrush x:Key="MutedBrush" Color="#667870" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#087F68" />
-        <SolidColorBrush x:Key="AccentHoverBrush" Color="#066653" />
-        <SolidColorBrush x:Key="SidebarBrush" Color="#153B34" />
-        <SolidColorBrush x:Key="SidebarHoverBrush" Color="#24534A" />
-        <SolidColorBrush x:Key="BorderBrush" Color="#DCE5E1" />
-        <SolidColorBrush x:Key="TableHeaderBrush" Color="#EAF1EE" />
-        <SolidColorBrush x:Key="DangerBrush" Color="#A23F3A" />
+        <SolidColorBrush x:Key="InkBrush" Color="#12324B" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#485F73" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#075A9C" />
+        <SolidColorBrush x:Key="AccentHoverBrush" Color="#054476" />
+        <SolidColorBrush x:Key="AccentSoftBrush" Color="#E8F5FB" />
+        <SolidColorBrush x:Key="SidebarBrush" Color="#07365C" />
+        <SolidColorBrush x:Key="SidebarHoverBrush" Color="#0D4F79" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#D1DCE6" />
+        <SolidColorBrush x:Key="TableHeaderBrush" Color="#E8F1F7" />
+        <SolidColorBrush x:Key="DangerBrush" Color="#B42318" />
 
         <Style TargetType="{x:Type Window}">
             <Setter Property="Background" Value="{StaticResource CanvasBrush}" />
             <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
             <Setter Property="FontFamily" Value="Segoe UI" />
             <Setter Property="FontSize" Value="13" />
+            <Setter Property="Icon" Value="pack://application:,,,/Assets/ArsanGaz.ico" />
         </Style>
 
         <Style TargetType="{x:Type TextBlock}">
@@ -79,7 +81,7 @@
 
         <Style x:Key="SidebarButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="#E5EFEB" />
+            <Setter Property="Foreground" Value="#EAF4FB" />
             <Setter Property="Padding" Value="12,9" />
             <Setter Property="Margin" Value="0,1" />
             <Setter Property="FontWeight" Value="Normal" />
@@ -87,6 +89,50 @@
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource SidebarHoverBrush}" />
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="WindowControlButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Surface" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#DFEAF2" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#C9D9E5" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Surface" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CloseWindowButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WindowControlButton}">
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource DangerBrush}" />
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#8F1D14" />
                     <Setter Property="Foreground" Value="White" />
                 </Trigger>
             </Style.Triggers>

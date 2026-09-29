@@ -15,7 +15,7 @@ PUBLISH A NEW VERSION
 REBUILD AN EXISTING TAG
 1. Open Actions in the GitHub repository.
 2. Run Build and Release Arsan Gaz ERP.
-3. Enter the tag, for example v5.1.0.
+3. Enter the tag, for example v5.2.0.
 
 DOWNLOADS
 Latest release: https://github.com/arsangaz01/arsan-gaz-erp-releases/releases/latest
