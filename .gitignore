@@ -5,6 +5,9 @@ installer/Output/
 *.user
 *.suo
 .vs/
+.vscode/
+.github/upgrades/
 ArsanGazERP_KaynakKodlari.txt
 ArsanGazERP_*.zip
+proje.txt
 *.log
