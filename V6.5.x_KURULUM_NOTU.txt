@@ -1,6 +1,0 @@
-Arsan Gaz ERP V6.5.x birleşik modül paketi.
-Kurucu otomatik olarak yedek alır, dosyaları kurar, gerekli NuGet paketlerini ekler, restore/build yapar ve Git commit/push dener.
-Somut CRM ve Microsoft Graph sorguları mevcut DbContext ve GraphService sınıflarına özel olduğundan güvenli varsayılan servisler eklenmiştir.
-
-V3 sabit hedef: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis
-HttpClient ve System.Net.Http.Json derleme duzeltmesi eklendi.
