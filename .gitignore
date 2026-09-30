@@ -76,3 +76,5 @@ Tools/LocalAgent/bin/
 Tools/LocalAgent/obj/
 Tools/LocalAgent/publish/
 Tools/LocalAgentData/
+appsettings.Local.json
+AgentWatcherData/
