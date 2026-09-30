@@ -17,32 +17,24 @@ public partial class ProspectHunterWindow : Window
     public ProspectHunterWindow()
     {
         InitializeComponent();
+        AutoScanCheckBox.IsChecked = ProspectAutoRunner.IsEnabled();
         Loaded += async (_, _) => await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
         await using ArsanGazDbContext db = new();
-        ProspectsGrid.ItemsSource = await db.Prospects
-            .AsNoTracking()
+        ProspectsGrid.ItemsSource = await db.Prospects.AsNoTracking()
             .OrderByDescending(item => item.OpportunityScore)
             .ThenByDescending(item => item.FoundAtUtc)
             .ToListAsync();
         StatusText.Text = $"Toplam aday: {await db.Prospects.CountAsync()} · Son yenileme {DateTime.Now:HH:mm}";
     }
 
-    private void SaveApiKey_Click(object sender, RoutedEventArgs e)
+    private void AutoScan_Changed(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            ProspectDiscoveryService.SaveApiKey(ApiKeyBox.Password);
-            ApiKeyBox.Clear();
-            StatusText.Text = "API anahtarı Windows kullanıcı ayarına kaydedildi. Günlük otomatik tarama etkin.";
-        }
-        catch (Exception exception)
-        {
-            StatusText.Text = exception.GetBaseException().Message;
-        }
+        ProspectAutoRunner.SetEnabled(AutoScanCheckBox.IsChecked == true);
+        StatusText.Text = AutoScanCheckBox.IsChecked == true ? "Günlük otomatik ücretsiz tarama etkin." : "Otomatik tarama kapatıldı.";
     }
 
     private async void Scan_Click(object sender, RoutedEventArgs e)
@@ -58,14 +50,8 @@ public partial class ProspectHunterWindow : Window
             StatusText.Text = result.ToString();
             await LoadAsync();
         }
-        catch (OperationCanceledException)
-        {
-            StatusText.Text = "Tarama kullanıcı tarafından durduruldu.";
-        }
-        catch (Exception exception)
-        {
-            StatusText.Text = exception.GetBaseException().Message;
-        }
+        catch (OperationCanceledException) { StatusText.Text = "Tarama durduruldu."; }
+        catch (Exception exception) { StatusText.Text = exception.GetBaseException().Message; }
         finally
         {
             _scanCancellation.Dispose();
