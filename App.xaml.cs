@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using System.Windows;
 using ArsanGazERP.Services;
 
@@ -13,6 +14,7 @@ public partial class App : Application
         {
             DatabaseService databaseService = new();
             await databaseService.InitializeAsync();
+            _ = Task.Run(async () => await new ProspectAutoRunner().RunIfDueSafeAsync());
         }
         catch (Exception exception)
         {
