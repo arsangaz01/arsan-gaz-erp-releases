@@ -64,3 +64,7 @@ bin/
 Data/
 Logs/
 Screens/
+Tools/AgentBridge/bin/
+Tools/AgentBridge/obj/
+Tools/AgentBridge/publish/
+Tools/AgentBridgeData/
