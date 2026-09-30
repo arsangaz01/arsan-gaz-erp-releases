@@ -2,6 +2,7 @@
 using System.IO;
 using ArsanGazERP.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace ArsanGazERP.Data;
 public sealed class ArsanGazDbContext : DbContext
 {
@@ -25,7 +26,12 @@ public sealed class ArsanGazDbContext : DbContext
   string d=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"ArsanGazERP","Data");
   Directory.CreateDirectory(d); DatabasePath=Path.Combine(d,"arsangaz-erp-v3.db");
  }
- protected override void OnConfiguring(DbContextOptionsBuilder b)=>b.UseSqlite($"Data Source={DatabasePath};Foreign Keys=True");
+ protected override void OnConfiguring(DbContextOptionsBuilder b)
+    {
+        b
+            .UseSqlite($"Data Source={DatabasePath};Foreign Keys=True")
+            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+    }
  protected override void OnModelCreating(ModelBuilder b)
  {
   b.Entity<Customer>().HasIndex(x=>x.Code).IsUnique();
