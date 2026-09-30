@@ -14,7 +14,7 @@ public partial class App : Application
         {
             DatabaseService databaseService = new();
             await databaseService.InitializeAsync();
-            await new TextEncodingRepairService().RepairDatabaseAsync();
+            int repairedRecords = await new MojibakeRepairService().RepairAsync();
             _ = Task.Run(async () => await new ProspectAutoRunner().RunIfDueSafeAsync());
         }
         catch (Exception exception)
