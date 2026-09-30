@@ -1,0 +1,18 @@
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj geri yüklendi (390 ms içinde).
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:05.87
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\publish\
+��lem ba�ar�yla tamamland�.
+[main 0743e9f] V7.3.4 complete AgentWatcher task processor and reporting
+ 2 files changed, 59 insertions(+), 53 deletions(-)
+To https://github.com/arsangaz01/arsan-gaz-erp-releases.git
+   2ff582a..0743e9f  HEAD -> main

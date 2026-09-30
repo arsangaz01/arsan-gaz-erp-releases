@@ -1,0 +1,14 @@
+V7.4.3 baslangic Äar 30.09.2026 17:58:04,75
+        1 file(s) copied.
+        1 file(s) copied.
+Add-Content : òülem, baüka bir iülem tarafçndan kullançldçßçndan 'C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\V7.4.3_Back
+tick_Repair.log' dosyasçna eriüemiyor.
+At line:1 char:458
++ ... `')).Count; Add-Content -Path 'C:\ArsanGazERP\ArsanGazERP_V2_Duzeltil ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : WriteError: (C:\ArsanGazERP\...tick_Repair.log:String) [Add-Content], IOException
+    + FullyQualifiedErrorId : GetContentWriterIOError,Microsoft.PowerShell.Commands.AddContentCommand
+ 
+[HATA] Derleme basarisiz. MainWindow dosyalari geri yukleniyor.
+        1 file(s) copied.
+        1 file(s) copied.

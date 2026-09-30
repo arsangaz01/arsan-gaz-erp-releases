@@ -1,0 +1,39 @@
+V7.3.1 baslangic �ar 30.09.2026 16:39:03,57
+Input Length = 5938
+Output Length = 4338
+CertUtil: -decode command completed successfully.
+C:\Users\CASPER\AppData\Local\Programs\Ollama\ollama.exe
+C:\Users\CASPER\AppData\Local\Temp\AGERP731_1109428629\out\ArsanGazERP.AgentWatcher.csproj
+C:\Users\CASPER\AppData\Local\Temp\AGERP731_1109428629\out\Program.cs
+2 File(s) copied
+C:\Program Files\dotnet\dotnet.exe
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\AgentWatcher\ArsanGazERP.AgentWatcher.csproj geri yüklendi (1,51 sn içinde).
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:05.72
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\AgentWatcher\publish\
+��lem ba�ar�yla tamamland�.
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   App.xaml.cs
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	AgentHost/DOSYA_AGACI.txt
+	AgentHost/TUM_DOSYALAR.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Everything up-to-date
+[BASARILI] V7.3.1 tamamlandi.

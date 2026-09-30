@@ -1,0 +1,2319 @@
+ARSAN GAZ ERP KAYNAK KOD PAKETI
+Olusturma: 2026-09-30 19:23:48
+Proje: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis
+
+============================================================
+DOSYA: App.xaml
+============================================================
+<Application x:Class="ArsanGazERP.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <SolidColorBrush x:Key="CanvasBrush" Color="#F2F6FA" />
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="InkBrush" Color="#12324B" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#485F73" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#075A9C" />
+        <SolidColorBrush x:Key="AccentHoverBrush" Color="#054476" />
+        <SolidColorBrush x:Key="AccentSoftBrush" Color="#E8F5FB" />
+        <SolidColorBrush x:Key="SidebarBrush" Color="#07365C" />
+        <SolidColorBrush x:Key="SidebarHoverBrush" Color="#0E5F91" />
+        <SolidColorBrush x:Key="SidebarTextBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="SidebarMutedTextBrush" Color="#DCEAF5" />
+        <SolidColorBrush x:Key="SidebarSelectedBrush" Color="#0876B9" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#D1DCE6" />
+        <SolidColorBrush x:Key="TableHeaderBrush" Color="#E8F1F7" />
+        <SolidColorBrush x:Key="DangerBrush" Color="#B42318" />
+
+        <Style TargetType="{x:Type Window}">
+            <Setter Property="Background" Value="{StaticResource CanvasBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="FontFamily" Value="Segoe UI" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Icon" Value="pack://application:,,,/Assets/ArsanGaz.ico" />
+        </Style>
+
+        <Style TargetType="{x:Type TextBlock}">
+            <Setter Property="FontFamily" Value="Segoe UI" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+
+        <Style TargetType="{x:Type Button}">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="14,9" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Surface"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Opacity" Value="0.9" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Surface" Property="Opacity" Value="0.76" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Surface" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="DangerButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource DangerBrush}" />
+        </Style>
+        <Style x:Key="SidebarButton" TargetType="{x:Type Button}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="12,9" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="SidebarSurface"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       FontFamily="Segoe UI"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SidebarSurface" Property="Background" Value="#176A9C" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="SidebarSurface" Property="Background" Value="#2196D3" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="SidebarSurface" Property="Background" Value="#185F8B" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#B8D4E8" />
+                                <Setter TargetName="SidebarSurface" Property="Opacity" Value="0.72" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="WindowControlButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Surface" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#DFEAF2" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#C9D9E5" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Surface" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CloseWindowButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WindowControlButton}">
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource DangerBrush}" />
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#8F1D14" />
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="{x:Type TextBox}">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="9,6" />
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+        </Style>
+
+        <Style TargetType="{x:Type ComboBox}">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+        </Style>
+
+        <Style TargetType="{x:Type DataGrid}">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="GridLinesVisibility" Value="None" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="RowBackground" Value="White" />
+            <Setter Property="AlternatingRowBackground" Value="#F7F9F8" />
+            <Setter Property="AlternationCount" Value="2" />
+            <Setter Property="RowHeight" Value="38" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="EnableRowVirtualization" Value="True" />
+            <Setter Property="EnableColumnVirtualization" Value="True" />
+            <Setter Property="SelectionUnit" Value="FullRow" />
+            <Setter Property="ColumnHeaderStyle">
+                <Setter.Value>
+                    <Style TargetType="{x:Type DataGridColumnHeader}">
+                        <Setter Property="Background" Value="{StaticResource TableHeaderBrush}" />
+                        <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                        <Setter Property="FontWeight" Value="SemiBold" />
+                        <Setter Property="Padding" Value="12,10" />
+                        <Setter Property="BorderThickness" Value="0" />
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="{x:Type TabControl}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+
+        <Style TargetType="{x:Type TabItem}">
+            <Setter Property="Padding" Value="14,9" />
+            <Setter Property="Margin" Value="0,0,5,0" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Application.Resources>
+</Application>
+
+
+============================================================
+DOSYA: App.xaml.cs
+============================================================
+using System;
+using System.Threading.Tasks;
+using System.Windows;
+using ArsanGazERP.Services;
+
+namespace ArsanGazERP;
+
+public partial class App : Application
+{
+    protected override async void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+        try
+        {
+            AutoUpdateResult update = await new AutoUpdateLaunchService().CheckAndStartLatestInstallerAsync();
+            if (update.InstallerStarted)
+            {
+                Shutdown();
+                return;
+            }
+
+            DatabaseService databaseService = new();
+            await databaseService.InitializeAsync();
+            await new CrmSchemaService().EnsureAsync();
+            _ = await new MojibakeRepairService().RepairAsync();
+            _ = Task.Run(async () => await new ProspectAutoRunner().RunIfDueSafeAsync());
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                "Uygulama başlatılamadı:" + Environment.NewLine + exception.Message,
+                "Arsan Gaz ERP",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown();
+        }
+    }
+}
+
+
+============================================================
+DOSYA: ArsanGazERP.csproj
+============================================================
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><RuntimeIdentifier>win-x64</RuntimeIdentifier><ApplicationIcon>Assets\ArsanGaz.ico</ApplicationIcon><Version>7.0.5</Version><DefaultItemExcludes>$(DefaultItemExcludes);AgentHost\**;_Backups\**;publish\**</DefaultItemExcludes></PropertyGroup>
+<ItemGroup><PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2"/><PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12"><IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets><PrivateAssets>all</PrivateAssets></PackageReference><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12"/><PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.12"><IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets><PrivateAssets>all</PrivateAssets></PackageReference><PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12"/><PackageReference Include="Microsoft.Extensions.Http" Version="10.0.12"/><PackageReference Include="Microsoft.Identity.Client" Version="4.90.1"/><PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0"/><PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.90.1"/></ItemGroup>
+<ItemGroup><Resource Include="Assets\ArsanGazLogo.png"/><Resource Include="Assets\ArsanGazMark.png"/><Resource Include="Assets\ArsanGaz.ico"/><None Update="Assets\*.svg;Assets\*.ps1"/></ItemGroup>
+<ItemGroup><None Update="Update\update.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></None><None Update="Config\servers.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></None></ItemGroup>
+<ItemGroup><Compile Remove="AgentHost\**;_upgrade_backup_*\**;*Backup*\**;_Backups\**;publish\**"/><Page Remove="AgentHost\**;_upgrade_backup_*\**;*Backup*\**;_Backups\**;publish\**"/><ApplicationDefinition Remove="AgentHost\**;_upgrade_backup_*\**;*Backup*\**;_Backups\**;publish\**"/><EmbeddedResource Remove="AgentHost\**;_upgrade_backup_*\**;*Backup*\**;_Backups\**;publish\**"/><None Remove="AgentHost\**;_upgrade_backup_*\**;*Backup*\**;_Backups\**;publish\**"/></ItemGroup>
+</Project>
+
+============================================================
+DOSYA: Data\ArsanGazDbContext.cs
+============================================================
+using System;
+using System.IO;
+using ArsanGazERP.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+namespace ArsanGazERP.Data;
+public sealed class ArsanGazDbContext : DbContext
+{
+ public DbSet<Customer> Customers => Set<Customer>();
+ public DbSet<Product> Products => Set<Product>();
+ public DbSet<Cylinder> Cylinders => Set<Cylinder>();
+ public DbSet<CylinderMovement> CylinderMovements => Set<CylinderMovement>();
+ public DbSet<Quote> Quotes => Set<Quote>();
+ public DbSet<QuoteLine> QuoteLines => Set<QuoteLine>();
+ public DbSet<Invoice> Invoices => Set<Invoice>();
+ public DbSet<Payment> Payments => Set<Payment>();
+ public DbSet<ErpTask> Tasks => Set<ErpTask>();
+ public DbSet<AgentRun> AgentRuns => Set<AgentRun>();
+ public DbSet<Prospect> Prospects => Set<Prospect>();
+ public DbSet<CrmCompany> CrmCompanies => Set<CrmCompany>();
+ public DbSet<CrmActivity> CrmActivities => Set<CrmActivity>();
+ public DbSet<CrmNote> CrmNotes => Set<CrmNote>();
+ public string DatabasePath { get; }
+ public ArsanGazDbContext()
+ {
+  string d=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"ArsanGazERP","Data");
+  Directory.CreateDirectory(d); DatabasePath=Path.Combine(d,"arsangaz-erp-v3.db");
+ }
+ protected override void OnConfiguring(DbContextOptionsBuilder b)
+    {
+        b
+            .UseSqlite($"Data Source={DatabasePath};Foreign Keys=True")
+            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+    }
+ protected override void OnModelCreating(ModelBuilder b)
+ {
+  b.Entity<Customer>().HasIndex(x=>x.Code).IsUnique();
+  b.Entity<Product>().HasIndex(x=>x.Code).IsUnique();
+  b.Entity<Product>().Property(x=>x.SalesPrice).HasPrecision(18,4);
+  b.Entity<Cylinder>().HasIndex(x=>x.SerialNumber).IsUnique();
+  b.Entity<Cylinder>().HasIndex(x=>x.Barcode).IsUnique();
+  b.Entity<Cylinder>().HasOne(x=>x.CurrentCustomer).WithMany(x=>x.Cylinders).HasForeignKey(x=>x.CurrentCustomerId).OnDelete(DeleteBehavior.SetNull);
+  b.Entity<CylinderMovement>().HasOne(x=>x.Cylinder).WithMany(x=>x.Movements).HasForeignKey(x=>x.CylinderId).OnDelete(DeleteBehavior.Restrict);
+  b.Entity<Quote>().HasIndex(x=>x.QuoteNumber).IsUnique();
+  b.Entity<Invoice>().HasIndex(x=>x.InvoiceNumber).IsUnique();
+    b.Entity<AgentRun>().HasIndex(x=>x.StartedAtUtc);
+  b.Entity<Prospect>().HasIndex(x=>x.ProviderPlaceId).IsUnique();
+  b.Entity<Prospect>().HasIndex(x=>new { x.City, x.OpportunityScore });
+  b.Entity<CrmCompany>().HasIndex(x=>x.SourceProspectId).IsUnique();
+  b.Entity<CrmCompany>().HasIndex(x=>new { x.Status, x.Score });
+  b.Entity<CrmCompany>().HasMany(x=>x.Activities).WithOne(x=>x.Company).HasForeignKey(x=>x.CrmCompanyId).OnDelete(DeleteBehavior.Cascade);
+  b.Entity<CrmCompany>().HasMany(x=>x.Notes).WithOne(x=>x.Company).HasForeignKey(x=>x.CrmCompanyId).OnDelete(DeleteBehavior.Cascade);
+  b.Entity<Payment>().HasOne(x=>x.Invoice).WithMany(x=>x.Payments).HasForeignKey(x=>x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+ }
+}
+
+============================================================
+DOSYA: MainWindow.xaml
+============================================================
+<Window x:Class="ArsanGazERP.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="Arsan Gaz ERP"
+        Width="1320"
+        Height="800"
+        MinWidth="1040"
+        MinHeight="680"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        WindowState="Normal"
+        Icon="pack://application:,,,/Assets/ArsanGaz.ico"
+        StateChanged="Window_StateChanged"
+        SourceInitialized="Window_SourceInitialized"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="46" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="46" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="248" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border x:Name="TitleBar" Grid.Row="0" Grid.ColumnSpan="2" Panel.ZIndex="1000" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Image Source="pack://application:,,,/Assets/ArsanGazMark.png" Width="30" Height="30" Stretch="Uniform" Margin="14,0,9,0" AutomationProperties.Name="Arsan Gaz amblemi" />
+                <TextBlock Grid.Column="1" Text="ARSAN GAZ ERP" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button x:Name="MinimizeButton" Content="−" ToolTip="Küçült" AutomationProperties.Name="Küçült" Click="Minimize_Click" Style="{StaticResource WindowControlButton}" shell:WindowChrome.IsHitTestVisibleInChrome="True" />
+                    <Button x:Name="MaximizeButton" Content="□" ToolTip="Ekranı kapla" AutomationProperties.Name="Ekranı kapla" Click="Maximize_Click" Style="{StaticResource WindowControlButton}" shell:WindowChrome.IsHitTestVisibleInChrome="True" />
+                    <Button Content="×" ToolTip="Kapat" AutomationProperties.Name="Kapat" Click="Close_Click" Style="{StaticResource CloseWindowButton}" shell:WindowChrome.IsHitTestVisibleInChrome="True" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource SidebarBrush}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16,18,16,18">
+                        <Border Margin="4,2,4,20" Background="White" CornerRadius="4" Padding="8,5">
+                            <Image Source="pack://application:,,,/Assets/ArsanGazLogo.png" Height="136" Stretch="Uniform" AutomationProperties.Name="Arsan Gaz Sınai ve Tıbbi Gazlar logosu" />
+                        </Border>
+
+                        <TextBlock Text="GENEL" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,0,0,7" />
+                        <Button Content="İş merkezi" Style="{StaticResource SidebarButton}" Background="{StaticResource SidebarHoverBrush}" />
+
+                        <TextBlock Text="MICROSOFT 365" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,20,0,7" />
+                        <Button Content="Microsoft Giriş" Click="Login_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="İzinleri Yenile" Click="Consent_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Profil" Click="Profile_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="OneDrive" Click="OneDrive_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="E-postalar" Click="Mail_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Kişiler" Click="Contacts_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Takvim" Click="Calendar_Click" Style="{StaticResource SidebarButton}" />
+
+                        <TextBlock Text="ERP VE VERİ" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,20,0,7" />
+                        <Button Content="ERP Excel Seç" Click="Excel_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Excel → SQLite" Click="ExcelSync_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Operasyon Merkezi" Click="Operations_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Müşteri Avcısı" Click="ProspectHunter_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="CRM Firma Kartları" Click="Crm_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Veritabanı Merkezi" Click="Database_Click" Style="{StaticResource SidebarButton}" />
+
+                        <TextBlock Text="YÖNETİM" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,20,0,7" />
+                        <Button Content="Ajan Analizi" Click="AgentV3_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Excel Yedekle" Click="Backup_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="OneDrive DB Yedek" Click="CloudBackup_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Güncelleme Kontrolü" Click="Update_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Oturumu Kapat" Click="Logout_Click" Style="{StaticResource SidebarButton}" />
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="1" BorderBrush="#244B6C" BorderThickness="0,1,0,0" Padding="22,14">
+                    <StackPanel>
+                        <TextBlock Text="SÜRÜM" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" />
+                        <TextBlock x:Name="VersionText" Text="5.3.0" Foreground="White" FontWeight="SemiBold" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Grid.Column="1" Background="{StaticResource CanvasBrush}">
+            <Grid Margin="30,22,30,18">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock x:Name="TodayLabel" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="İş merkezi" FontSize="28" FontWeight="Bold" Margin="0,3,0,2" />
+                        <TextBlock Text="Satış, operasyon ve veri yönetimi" Foreground="{StaticResource MutedBrush}" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Yenile" Click="Refresh_Click" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0" />
+                </Grid>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,20,0,0">
+                    <StackPanel>
+                        <UniformGrid Columns="4" Margin="0,0,0,22">
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="16" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="MÜŞTERİLER" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock x:Name="CustomerCount" Text="—" FontSize="26" FontWeight="Bold" Margin="0,7,0,0" />
+                                    <TextBlock Text="Kayıtlı firma" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="16" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="ÜRÜNLER" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock x:Name="ProductCount" Text="—" FontSize="26" FontWeight="Bold" Margin="0,7,0,0" />
+                                    <TextBlock Text="Ürün kataloğu" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="16" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="TÜPLER" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock x:Name="CylinderCount" Text="—" FontSize="26" FontWeight="Bold" Margin="0,7,0,0" />
+                                    <TextBlock Text="Envanter kaydı" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="16">
+                                <StackPanel>
+                                    <TextBlock Text="GECİKEN TAHSİLAT" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock x:Name="OverdueCount" Text="—" FontSize="26" FontWeight="Bold" Foreground="{StaticResource DangerBrush}" Margin="0,7,0,0" />
+                                    <TextBlock Text="Açık vadesi geçmiş fatura" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+
+                        <Grid Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Hızlı erişim" FontSize="18" FontWeight="Bold" />
+                                <TextBlock Text="Öne çıkan çalışma alanları" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <UniformGrid Columns="3">
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="18" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="ERP ÇALIŞMA KİTABI" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock x:Name="WorkbookStatus" Text="Çalışma kitabı seçilmedi" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="Çalışma kitabı seçilmedi" Margin="0,9,0,12" />
+                                    <Button Content="Excel dosyası seç" Click="Excel_Click" Style="{StaticResource SecondaryButton}" Margin="0" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="18" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="OPERASYONLAR" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock Text="Müşteri, ürün ve tüp kayıtları" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,9,0,12" />
+                                    <Button Content="Operasyon merkezini aç" Click="Operations_Click" Style="{StaticResource SecondaryButton}" Margin="0" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="18">
+                                <StackPanel>
+                                    <TextBlock Text="VERİTABANI" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                                    <TextBlock Text="ERP kayıtlarını görüntüle" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,9,0,12" />
+                                    <Button Content="Veritabanını aç" Click="Database_Click" Style="{StaticResource SecondaryButton}" Margin="0" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+
+                        <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="18" Margin="0,22,0,0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Ajan çalışma geçmişi" FontSize="16" FontWeight="Bold" />
+                                        <TextBlock x:Name="AgentRunSummary" Text="Ajan henüz çalıştırılmadı" FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <Button Content="Analizi çalıştır" Click="AgentV3_Click" Margin="0,0,6,0" />
+                                        <Button Content="Yenile" Click="RefreshAgentRuns_Click" Style="{StaticResource SecondaryButton}" Margin="0" />
+                                    </StackPanel>
+                                </Grid>
+                                <DataGrid x:Name="AgentRunsGrid" Grid.Row="1" Height="174" IsReadOnly="True" AutoGenerateColumns="False" CanUserSortColumns="True" ColumnWidth="*">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="ZAMAN" Binding="{Binding StartedAtLocal}" Width="145" />
+                                        <DataGridTextColumn Header="DURUM" Binding="{Binding StatusLabel}" Width="100" />
+                                        <DataGridTextColumn Header="BULGU" Binding="{Binding FindingCount}" Width="72" />
+                                        <DataGridTextColumn Header="KRİTİK" Binding="{Binding CriticalCount}" Width="72" />
+                                        <DataGridTextColumn Header="ÖZET" Binding="{Binding Summary}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+
+                        <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="18" Margin="0,22,0,0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Son işlem" FontSize="16" FontWeight="Bold" />
+                                        <TextBlock Text="Uygulama yanıtları ve işlem sonuçları" FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Temizle" Click="ClearOutput_Click" Style="{StaticResource SecondaryButton}" Margin="0" HorizontalAlignment="Right" />
+                                </Grid>
+                                <TextBox x:Name="Output" Grid.Row="1" Text="Henüz işlem yapılmadı." IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontFamily="Consolas" FontSize="12" MinHeight="104" MaxHeight="170" BorderThickness="0" Background="{StaticResource CanvasBrush}" Margin="0" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Grid Grid.Row="2" Margin="0,14,0,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0" />
+                        <TextBlock x:Name="StatusText" Text="Başlatılıyor" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock x:Name="MicrosoftSummary" Text="M365: oturum yok" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="  ·  " FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock x:Name="DatabaseSummary" Text="Yerel SQLite" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+            <Border x:Name="UnifiedStatusPanel" Panel.ZIndex="1100" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,18,0" Background="#F8FBFD" BorderBrush="#D1DCE6" BorderThickness="1" CornerRadius="8" Padding="10,7">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse x:Name="M365StatusDot" Width="11" Height="11" Fill="#C62828" Margin="0,0,5,0"/>
+                <TextBlock x:Name="M365StatusText" Text="Microsoft 365 (Ba&#x11F;l&#x131; de&#x11F;il)" FontSize="11" VerticalAlignment="Center"/>
+                <Ellipse x:Name="PermissionStatusDot" Width="11" Height="11" Fill="#C62828" Margin="12,0,5,0"/>
+                <TextBlock x:Name="PermissionStatusText" Text="&#x130;zinler (Eksik)" FontSize="11" VerticalAlignment="Center"/>
+                <Ellipse x:Name="ExcelStatusDot" Width="11" Height="11" Fill="#C62828" Margin="12,0,5,0"/>
+                <TextBlock x:Name="ExcelStatusText" Text="Excel (Se&#xE7;ilmedi)" FontSize="11" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+<Button x:Name="NvidiaNimButton" Panel.ZIndex="1101" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,48,18,0" Padding="12,6" Content="NVIDIA NIM" Click="NvidiaNim_Click" Background="#76B900" Foreground="Black" FontWeight="SemiBold"/>
+</Grid>
+</Window>
+
+============================================================
+DOSYA: MainWindow.xaml.cs
+============================================================
+using System;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Input;
+using ArsanGazERP.Data;
+using ArsanGazERP.Models;
+using ArsanGazERP.Services;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Win32;
+
+namespace ArsanGazERP;
+
+public partial class MainWindow : Window
+{
+	private readonly AuthService _auth = new();
+	private readonly GraphService _graph;
+	private readonly ExcelErpService _excel = new();
+	private readonly ExcelSyncService _sync = new();
+	private readonly AgentV3Service _agent = new();
+	private readonly UpdateService _update = new();
+    private readonly NvidiaNimService _nvidiaNim = new();
+	private bool _isBusy;
+
+	public MainWindow()
+	{
+		InitializeComponent();
+		_graph = new GraphService(_auth);
+		Loaded += async (_, _) => { await LoadDashboardAsync(); RefreshUnifiedConnectionStatus(); };
+        var unifiedTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        unifiedTimer.Tick += (_, _) => RefreshUnifiedConnectionStatus();
+        unifiedTimer.Start();
+	}
+
+	private void Window_SourceInitialized(object? sender, EventArgs e)
+	{
+		MaxWidth = SystemParameters.WorkArea.Width;
+		MaxHeight = SystemParameters.WorkArea.Height;
+		if (Top < SystemParameters.WorkArea.Top || Left < SystemParameters.WorkArea.Left)
+		{
+			Top = SystemParameters.WorkArea.Top;
+			Left = SystemParameters.WorkArea.Left;
+		}
+	}
+	private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	{
+		if (e.ChangedButton != MouseButton.Left)
+		{
+			return;
+		}
+
+		if (e.ClickCount == 2)
+		{
+			ToggleWindowState();
+			return;
+		}
+
+		DragMove();
+	}
+
+	private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+	private void Maximize_Click(object sender, RoutedEventArgs e) => ToggleWindowState();
+
+	private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+	private void Window_StateChanged(object? sender, EventArgs e)
+	{
+		bool isMaximized = WindowState == WindowState.Maximized;
+		MaximizeButton.Content = isMaximized ? "❐" : "□";
+		MaximizeButton.ToolTip = isMaximized ? "Önceki boyuta dön" : "Ekranı kapla";
+		System.Windows.Automation.AutomationProperties.SetName(
+			MaximizeButton,
+			isMaximized ? "Önceki boyuta dön" : "Ekranı kapla");
+	}
+
+	private void ToggleWindowState() => WindowState = WindowState == WindowState.Maximized
+		? WindowState.Normal
+		: WindowState.Maximized;
+
+	private async Task LoadDashboardAsync()
+	{
+		TodayLabel.Text = DateTime.Now.ToString("dddd, d MMMM yyyy", CultureInfo.GetCultureInfo("tr-TR"));
+		string version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "5.3.0";
+		VersionText.Text = $"v{version}";
+		Title = $"Arsan Gaz ERP {version}";
+		WorkbookStatus.Text = string.IsNullOrWhiteSpace(_excel.WorkbookPath)
+			? "Çalışma kitabı seçilmedi"
+			: Path.GetFileName(_excel.WorkbookPath);
+		string? cachedAccount = await _auth.GetCachedAccountNameAsync();
+		MicrosoftSummary.Text = string.IsNullOrWhiteSpace(cachedAccount)
+			? "M365: oturum yok"
+			: $"M365 hesabı: {cachedAccount}";
+
+		try
+		{
+			await using ArsanGazDbContext db = new();
+			CustomerCount.Text = (await db.Customers.CountAsync()).ToString("N0", CultureInfo.GetCultureInfo("tr-TR"));
+			ProductCount.Text = (await db.Products.CountAsync()).ToString("N0", CultureInfo.GetCultureInfo("tr-TR"));
+			CylinderCount.Text = (await db.Cylinders.CountAsync()).ToString("N0", CultureInfo.GetCultureInfo("tr-TR"));
+			OverdueCount.Text = (await db.Invoices.CountAsync(invoice => invoice.DueDate < DateTime.Today && invoice.PaidAmount < invoice.TotalAmount))
+				.ToString("N0", CultureInfo.GetCultureInfo("tr-TR"));
+			List<AgentRun> recentRuns = await db.AgentRuns.AsNoTracking()
+				.OrderByDescending(run => run.StartedAtUtc)
+				.Take(8)
+				.ToListAsync();
+			AgentRunsGrid.ItemsSource = recentRuns.Select(run => new AgentRunRow(
+				run.StartedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.GetCultureInfo("tr-TR")),
+				run.Succeeded ? "Tamamlandı" : "Başarısız",
+				run.FindingCount,
+				run.CriticalCount,
+				run.Summary)).ToList();
+			AgentRun latestRun = recentRuns.FirstOrDefault()!;
+			AgentRunSummary.Text = latestRun is null
+				? "Ajan henüz çalıştırılmadı"
+				: $"Son çalışma {latestRun.StartedAtUtc.ToLocalTime():dd.MM.yyyy HH:mm} · {(latestRun.Succeeded ? "başarılı" : "başarısız")} · {latestRun.CriticalCount} kritik";
+			DatabaseSummary.Text = $"SQLite hazır · Son yenileme {DateTime.Now:HH:mm}";
+			StatusText.Text = "Sistem hazır";
+		}
+		catch (Exception exception)
+		{
+			DatabaseSummary.Text = "SQLite bağlantısı denetlenemedi";
+			StatusText.Text = "Veritabanı durumu alınamadı";
+			Output.Text = exception.GetBaseException().Message;
+		}
+	}
+
+	private async Task RunAsync(Func<Task<string>> action)
+	{
+		if (_isBusy)
+		{
+			return;
+		}
+
+		_isBusy = true;
+		Mouse.OverrideCursor = Cursors.Wait;
+		StatusText.Text = "İşlem sürüyor";
+
+		try
+		{
+			Output.Text = await action();
+			StatusText.Text = "İşlem tamamlandı";
+		}
+		catch (Exception exception)
+		{
+			Output.Text = exception.GetBaseException().Message;
+			StatusText.Text = "İşlem tamamlanamadı";
+		}
+		finally
+		{
+			Mouse.OverrideCursor = null;
+			_isBusy = false;
+		}
+	}
+
+	private async void Refresh_Click(object sender, RoutedEventArgs e) => await LoadDashboardAsync();
+
+	private async void RefreshAgentRuns_Click(object sender, RoutedEventArgs e) => await LoadDashboardAsync();
+
+	private async void Login_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+		$"Oturum açıldı: {(await _auth.SignInAsync()).Account.Username}");
+
+	private async void Consent_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+		$"İzinler yenilendi: {(await _auth.SignInAsync(true)).Account.Username}");
+
+	private async void Profile_Click(object sender, RoutedEventArgs e) => await RunAsync(_graph.GetProfileAsync);
+	private async void OneDrive_Click(object sender, RoutedEventArgs e) => await RunAsync(_graph.ListOneDriveFilesAsync);
+	private async void Mail_Click(object sender, RoutedEventArgs e) => await RunAsync(_graph.ListRecentMailAsync);
+	private async void Contacts_Click(object sender, RoutedEventArgs e) => await RunAsync(_graph.ListContactsAsync);
+	private async void Calendar_Click(object sender, RoutedEventArgs e) => await RunAsync(_graph.ListCalendarAsync);
+
+	private void Excel_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			OpenFileDialog dialog = new()
+			{
+				Title = "ERP çalışma kitabını seç",
+				Filter = "Excel makrolu çalışma kitabı (*.xlsm)|*.xlsm",
+				FileName = "ARSAN_AI_ERP_v1.0.xlsm",
+				CheckFileExists = true
+			};
+
+			if (dialog.ShowDialog(this) == true)
+			{
+				_excel.SelectWorkbook(dialog.FileName);
+                UnifiedConnectionStateService.SaveExcel(dialog.FileName);
+				WorkbookStatus.Text = Path.GetFileName(dialog.FileName);
+				WorkbookStatus.ToolTip = dialog.FileName;
+				Output.Text = "ERP çalışma kitabı bağlandı:" + Environment.NewLine
+					+ dialog.FileName + Environment.NewLine
+					+ "Sayfalar: " + string.Join(", ", _excel.GetSheetNames());
+				StatusText.Text = "ERP çalışma kitabı hazır";
+			}
+		}
+		catch (Exception exception)
+		{
+			Output.Text = exception.GetBaseException().Message;
+			StatusText.Text = "Çalışma kitabı açılamadı";
+		}
+	}
+
+	private async void ExcelSync_Click(object sender, RoutedEventArgs e)
+	{
+		await RunAsync(() => _sync.ImportProductsAsync(
+			_excel.WorkbookPath ?? throw new InvalidOperationException("Önce ERP Excel dosyasını seçin.")));
+		await LoadDashboardAsync();
+	}
+
+	private async void Operations_Click(object sender, RoutedEventArgs e)
+	{
+		new ArsanGazERP.Views.OperationsWindow { Owner = this }.ShowDialog();
+		await LoadDashboardAsync();
+	}
+
+	private async void ProspectHunter_Click(object sender, RoutedEventArgs e)
+	{
+		new ArsanGazERP.Views.ProspectHunterWindow { Owner = this }.ShowDialog();
+		await LoadDashboardAsync();
+	}
+	private async void Crm_Click(object sender, RoutedEventArgs e)
+	{
+		new ArsanGazERP.Views.CrmWindow { Owner = this }.ShowDialog();
+		await LoadDashboardAsync();
+	}
+	private async void Database_Click(object sender, RoutedEventArgs e)
+	{
+		new ArsanGazERP.Views.DatabaseManagementWindow { Owner = this }.ShowDialog();
+		await LoadDashboardAsync();
+	}
+
+	private async void AgentV3_Click(object sender, RoutedEventArgs e)
+	{
+		await RunAsync(async () => string.Join(
+			Environment.NewLine,
+			(await _agent.AnalyzeAsync()).Select(finding => $"[{finding.Severity}] {finding.Category}: {finding.Message}")));
+		await LoadDashboardAsync();
+	}
+
+	private async void Backup_Click(object sender, RoutedEventArgs e) => await RunAsync(
+		() => Task.FromResult("Excel yedeği oluşturuldu:" + Environment.NewLine + _excel.CreateBackup()));
+
+	private async void CloudBackup_Click(object sender, RoutedEventArgs e) => await RunAsync(
+		() => new DatabaseBackupService(_graph).BackupToOneDriveAsync());
+
+	private async void Update_Click(object sender, RoutedEventArgs e) => await RunAsync(_update.CheckAsync);
+
+	private async void Logout_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+	{
+		await _auth.SignOutAsync();
+		return "Microsoft 365 oturumu kapatıldı.";
+	});
+
+	private void ClearOutput_Click(object sender, RoutedEventArgs e)
+	{
+		Output.Clear();
+		StatusText.Text = "İşlem günlüğü temizlendi";
+	}
+
+	private sealed record AgentRunRow(
+		string StartedAtLocal,
+		string StatusLabel,
+		int FindingCount,
+		int CriticalCount,
+		string Summary);
+    private void RefreshUnifiedConnectionStatus()
+    {
+        var s = UnifiedConnectionStateService.Load();
+        bool m365 = !string.IsNullOrWhiteSpace(s.Account);
+        bool permissions = s.PermissionsGranted;
+        bool excel = !string.IsNullOrWhiteSpace(s.ExcelPath) && File.Exists(s.ExcelPath);
+        M365StatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(m365 ? "#2E7D32" : "#C62828"));
+        PermissionStatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(permissions ? "#2E7D32" : m365 ? "#F9A825" : "#C62828"));
+        ExcelStatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(excel ? "#2E7D32" : "#C62828"));
+        M365StatusText.Text = m365 ? $"Microsoft 365 (Ba\u011Fl\u0131: {s.Account})" : "Microsoft 365 (Ba\u011Fl\u0131 de\u011Fil)";
+        PermissionStatusText.Text = permissions ? "\u0130zinler (Verildi)" : "\u0130zinler (Eksik)";
+        ExcelStatusText.Text = excel ? $"Excel (Ba\u011Fl\u0131: {Path.GetFileName(s.ExcelPath)})" : "Excel (Se\u00E7ilmedi)";
+        if (excel && string.IsNullOrWhiteSpace(_excel.WorkbookPath)) { try { _excel.SelectWorkbook(s.ExcelPath); } catch { } }
+    }
+    private void NvidiaNim_Click(object sender, RoutedEventArgs e)
+    {
+        new ArsanGazERP.Views.NvidiaNimWindow(_nvidiaNim) { Owner = this }.ShowDialog();
+        NvidiaNimButton.Content = _nvidiaNim.IsConfigured ? "NVIDIA NIM (Bagli)" : "NVIDIA NIM (Bagli degil)";
+    }
+
+}
+
+============================================================
+DOSYA: Models\AgentFinding.cs
+============================================================
+namespace ArsanGazERP.Models;
+
+public sealed class AgentFinding
+{
+    public AgentFinding(string severity, string category, string message)
+    {
+        Severity = severity;
+        Category = category;
+        Message = message;
+    }
+
+    public string Severity { get; }
+    public string Category { get; }
+    public string Message { get; }
+}
+
+
+============================================================
+DOSYA: Models\AgentRun.cs
+============================================================
+using System;
+
+namespace ArsanGazERP.Models;
+
+public sealed class AgentRun
+{
+    public int Id { get; set; }
+    public DateTime StartedAtUtc { get; set; }
+    public DateTime CompletedAtUtc { get; set; }
+    public bool Succeeded { get; set; }
+    public int FindingCount { get; set; }
+    public int CriticalCount { get; set; }
+    public string Summary { get; set; } = string.Empty;
+    public string FindingsJson { get; set; } = "[]";
+}
+
+============================================================
+DOSYA: Models\AppSettings.cs
+============================================================
+namespace ArsanGazERP.Models;
+
+public static class AppSettings
+{
+    public const string ClientId = "3eaf1f8a-fbc8-40f0-9759-e134542606bf";
+    public const string RedirectUri = "http://localhost";
+
+    public static readonly string[] GraphScopes =
+    {
+        "User.Read",
+        "Files.ReadWrite",
+        "Mail.Read",
+        "Mail.Send",
+        "Contacts.Read",
+        "Calendars.ReadWrite"
+    };
+}
+
+
+============================================================
+DOSYA: Models\CommercialModels.cs
+============================================================
+using System;
+using System.Collections.Generic;
+namespace ArsanGazERP.Models;
+public sealed class Quote
+{
+ public int Id { get; set; }
+ public string QuoteNumber { get; set; } = string.Empty;
+ public int CustomerId { get; set; }
+ public Customer Customer { get; set; } = null!;
+ public DateTime QuoteDate { get; set; } = DateTime.Today;
+ public DateTime? ValidUntil { get; set; }
+ public string Status { get; set; } = "Taslak";
+ public decimal TotalAmount { get; set; }
+ public string Currency { get; set; } = "TRY";
+ public DateTime? FollowUpDate { get; set; }
+ public ICollection<QuoteLine> Lines { get; set; } = new List<QuoteLine>();
+}
+public sealed class QuoteLine
+{
+ public int Id { get; set; }
+ public int QuoteId { get; set; }
+ public Quote Quote { get; set; } = null!;
+ public int ProductId { get; set; }
+ public Product Product { get; set; } = null!;
+ public decimal Quantity { get; set; }
+ public decimal UnitPrice { get; set; }
+ public decimal VatRate { get; set; }
+ public decimal LineTotal { get; set; }
+}
+public sealed class Invoice
+{
+ public int Id { get; set; }
+ public string InvoiceNumber { get; set; } = string.Empty;
+ public int CustomerId { get; set; }
+ public Customer Customer { get; set; } = null!;
+ public DateTime InvoiceDate { get; set; } = DateTime.Today;
+ public DateTime? DueDate { get; set; }
+ public decimal TotalAmount { get; set; }
+ public decimal PaidAmount { get; set; }
+ public string Status { get; set; } = "Taslak";
+ public ICollection<Payment> Payments { get; set; } = new List<Payment>();
+}
+public sealed class Payment
+{
+ public int Id { get; set; }
+ public int InvoiceId { get; set; }
+ public Invoice Invoice { get; set; } = null!;
+ public DateTime PaymentDate { get; set; } = DateTime.Today;
+ public decimal Amount { get; set; }
+ public string Method { get; set; } = "Banka";
+ public string? Reference { get; set; }
+}
+public sealed class ErpTask
+{
+ public int Id { get; set; }
+ public string Title { get; set; } = string.Empty;
+ public string? Description { get; set; }
+ public DateTime? DueDate { get; set; }
+ public string Priority { get; set; } = "Normal";
+ public string Status { get; set; } = "Açık";
+ public string Category { get; set; } = "Genel";
+ public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+============================================================
+DOSYA: Models\CrmModels.cs
+============================================================
+using System;
+using System.Collections.Generic;
+
+namespace ArsanGazERP.Models;
+
+public sealed class CrmCompany
+{
+    public int Id { get; set; }
+    public int? SourceProspectId { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
+    public string? City { get; set; }
+    public string? Sector { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+    public string? Website { get; set; }
+    public string? Address { get; set; }
+    public int Score { get; set; }
+    public string Status { get; set; } = "Yeni";
+    public string? AssignedTo { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? LastContactAtUtc { get; set; }
+    public ICollection<CrmActivity> Activities { get; set; } = new List<CrmActivity>();
+    public ICollection<CrmNote> Notes { get; set; } = new List<CrmNote>();
+}
+
+public sealed class CrmActivity
+{
+    public int Id { get; set; }
+    public int CrmCompanyId { get; set; }
+    public CrmCompany Company { get; set; } = null!;
+    public string ActivityType { get; set; } = "Not";
+    public string Description { get; set; } = string.Empty;
+    public DateTime ActivityAtUtc { get; set; } = DateTime.UtcNow;
+    public string UserName { get; set; } = Environment.UserName;
+}
+
+public sealed class CrmNote
+{
+    public int Id { get; set; }
+    public int CrmCompanyId { get; set; }
+    public CrmCompany Company { get; set; } = null!;
+    public string NoteText { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+
+============================================================
+DOSYA: Models\Customer.cs
+============================================================
+using System;
+using System.Collections.Generic;
+namespace ArsanGazERP.Models;
+public sealed class Customer
+{
+ public int Id { get; set; }
+ public string Code { get; set; } = string.Empty;
+ public string CompanyName { get; set; } = string.Empty;
+ public string? ContactName { get; set; }
+ public string? Phone { get; set; }
+ public string? Email { get; set; }
+ public string? City { get; set; }
+ public string? District { get; set; }
+ public string? Address { get; set; }
+ public string? TaxOffice { get; set; }
+ public string? TaxNumber { get; set; }
+ public bool IsActive { get; set; } = true;
+ public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+ public DateTime? UpdatedAt { get; set; }
+ public ICollection<Cylinder> Cylinders { get; set; } = new List<Cylinder>();
+}
+
+============================================================
+DOSYA: Models\Cylinder.cs
+============================================================
+using System;
+using System.Collections.Generic;
+namespace ArsanGazERP.Models;
+public sealed class Cylinder
+{
+ public int Id { get; set; }
+ public string SerialNumber { get; set; } = string.Empty;
+ public string Barcode { get; set; } = string.Empty;
+ public string GasType { get; set; } = string.Empty;
+ public decimal Capacity { get; set; }
+ public string CapacityUnit { get; set; } = "Litre";
+ public CylinderStatus Status { get; set; } = CylinderStatus.Warehouse;
+ public int? CurrentCustomerId { get; set; }
+ public Customer? CurrentCustomer { get; set; }
+ public DateTime? LastMovementAt { get; set; }
+ public DateTime? TestDueDate { get; set; }
+ public bool IsActive { get; set; } = true;
+ public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+ public ICollection<CylinderMovement> Movements { get; set; } = new List<CylinderMovement>();
+}
+public enum CylinderStatus { Warehouse=1, Vehicle=2, Customer=3, Filling=4, Service=5, Scrap=6 }
+
+============================================================
+DOSYA: Models\CylinderMovement.cs
+============================================================
+using System;
+namespace ArsanGazERP.Models;
+public sealed class CylinderMovement
+{
+ public int Id { get; set; }
+ public int CylinderId { get; set; }
+ public Cylinder Cylinder { get; set; } = null!;
+ public int? CustomerId { get; set; }
+ public Customer? Customer { get; set; }
+ public CylinderStatus FromStatus { get; set; }
+ public CylinderStatus ToStatus { get; set; }
+ public string MovementType { get; set; } = string.Empty;
+ public string? DocumentNumber { get; set; }
+ public string? Description { get; set; }
+ public DateTime MovementDate { get; set; } = DateTime.UtcNow;
+ public string? PerformedBy { get; set; }
+}
+
+============================================================
+DOSYA: Models\MultiServerOptions.cs
+============================================================
+using System.Collections.Generic;
+
+namespace ArsanGazERP.Models;
+
+public sealed class MultiServerOptions
+{
+    public string ApiKeyEnvironmentVariable { get; set; } = "ARSANGAZ_ERP_API_KEY";
+    public int FailureCooldownSeconds { get; set; } = 30;
+    public List<ServerEndpoint> Servers { get; set; } = new();
+}
+
+
+============================================================
+DOSYA: Models\Product.cs
+============================================================
+using System;
+namespace ArsanGazERP.Models;
+public sealed class Product
+{
+ public int Id { get; set; }
+ public string Code { get; set; } = string.Empty;
+ public string Name { get; set; } = string.Empty;
+ public string Unit { get; set; } = "Adet";
+ public decimal SalesPrice { get; set; }
+ public string Currency { get; set; } = "TRY";
+ public decimal VatRate { get; set; } = 20;
+ public decimal CriticalStock { get; set; }
+ public bool IsActive { get; set; } = true;
+ public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+============================================================
+DOSYA: Models\Prospect.cs
+============================================================
+using System;
+namespace ArsanGazERP.Models;
+public sealed class Prospect
+{
+    public int Id { get; set; }
+    public string Provider { get; set; } = "Google Places";
+    public string ProviderPlaceId { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string SectorQuery { get; set; } = string.Empty;
+    public string? Address { get; set; }
+    public string? Phone { get; set; }
+    public string? Website { get; set; }
+    public string? MapsUrl { get; set; }
+    public string? Categories { get; set; }
+    public int OpportunityScore { get; set; }
+    public string RecommendedProducts { get; set; } = string.Empty;
+    public string Status { get; set; } = "Yeni";
+    public DateTime FoundAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime LastSeenAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+
+============================================================
+DOSYA: Models\ServerEndpoint.cs
+============================================================
+using System;
+
+namespace ArsanGazERP.Models;
+
+public sealed class ServerEndpoint
+{
+    public string Name { get; set; } = string.Empty;
+    public string BaseUrl { get; set; } = string.Empty;
+    public int Priority { get; set; }
+    public bool Enabled { get; set; } = true;
+    public string HealthPath { get; set; } = "health";
+    public int TimeoutSeconds { get; set; } = 15;
+
+    public Uri GetBaseUri()
+    {
+        if (!Uri.TryCreate(BaseUrl, UriKind.Absolute, out Uri? uri) ||
+            (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        {
+            throw new InvalidOperationException($"Geçersiz sunucu adresi: {Name} - {BaseUrl}");
+        }
+
+        return new Uri(uri.ToString().TrimEnd('/') + "/");
+    }
+}
+
+public sealed record ServerHealthResult(
+    string Name,
+    string BaseUrl,
+    bool IsHealthy,
+    int? StatusCode,
+    long ElapsedMilliseconds,
+    string Message);
+
+
+============================================================
+DOSYA: Repositories\IRepository.cs
+============================================================
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace ArsanGazERP.Repositories;
+
+public interface IRepository<T> where T : class
+{
+    Task<List<T>> GetAllAsync();
+    Task<T?> GetByIdAsync(int id);
+    Task<T> AddAsync(T entity);
+    Task UpdateAsync(T entity);
+    Task DeleteAsync(T entity);
+}
+
+============================================================
+DOSYA: Repositories\Repository.cs
+============================================================
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using ArsanGazERP.Data;
+using Microsoft.EntityFrameworkCore;
+
+namespace ArsanGazERP.Repositories;
+
+public sealed class Repository<T> : IRepository<T> where T : class
+{
+    private readonly ArsanGazDbContext _database;
+    public Repository(ArsanGazDbContext database) => _database = database;
+
+    public Task<List<T>> GetAllAsync() => _database.Set<T>().AsNoTracking().ToListAsync();
+    public async Task<T?> GetByIdAsync(int id) => await _database.Set<T>().FindAsync(id);
+
+    public async Task<T> AddAsync(T entity)
+    {
+        _database.Set<T>().Add(entity);
+        await _database.SaveChangesAsync();
+        return entity;
+    }
+
+    public async Task UpdateAsync(T entity)
+    {
+        _database.Set<T>().Update(entity);
+        await _database.SaveChangesAsync();
+    }
+
+    public async Task DeleteAsync(T entity)
+    {
+        _database.Set<T>().Remove(entity);
+        await _database.SaveChangesAsync();
+    }
+}
+
+============================================================
+DOSYA: Services\AgentService.cs
+============================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using ArsanGazERP.Models;
+
+namespace ArsanGazERP.Services;
+
+public sealed class AgentService
+{
+    private readonly ExcelErpService _excelService;
+
+    public AgentService(ExcelErpService excelService)
+    {
+        _excelService = excelService;
+    }
+
+    public IReadOnlyList<AgentFinding> Analyze()
+    {
+        List<AgentFinding> findings = new();
+        IReadOnlyList<string> sheets = _excelService.GetSheetNames();
+        string[] expectedSheets = { "AI Yönetim Paneli", "Teklif Formu", "Urunler", "Kur Bilgisi" };
+
+        foreach (string expected in expectedSheets)
+        {
+            if (!sheets.Contains(expected, StringComparer.OrdinalIgnoreCase))
+            {
+                findings.Add(new AgentFinding("Kritik", "Excel", $"Gerekli sayfa bulunamadı: {expected}"));
+            }
+        }
+
+        if (findings.Count == 0)
+        {
+            findings.Add(new AgentFinding("Başarılı", "Excel", "Temel ERP sayfaları doğrulandı."));
+        }
+
+        findings.Add(new AgentFinding(
+            "Bilgi",
+            "Güvenlik",
+            "Ajan analiz ve taslak üretir. Para transferi, resmî fatura, yüksek iskonto ve ilk müşteri iletişimi insan onayı gerektirir."));
+
+        return findings;
+    }
+}
+
+
+============================================================
+DOSYA: Services\AuthService.cs
+============================================================
+using System.Linq;
+using System.Threading.Tasks;
+using ArsanGazERP.Models;
+using Microsoft.Identity.Client;
+
+namespace ArsanGazERP.Services;
+
+public sealed class AuthService
+{
+    private readonly IPublicClientApplication _client;
+
+    public AuthService()
+    {
+        _client = PublicClientApplicationBuilder
+            .Create(AppSettings.ClientId)
+            .WithAuthority("https://login.microsoftonline.com/common")
+            .WithRedirectUri(AppSettings.RedirectUri)
+            .Build();
+    }
+
+    public async Task<AuthenticationResult> SignInAsync(bool forceConsent = false)
+    {
+        IAccount? account = (await _client.GetAccountsAsync()).FirstOrDefault();
+
+        if (!forceConsent && account != null)
+        {
+            try
+            {
+                return await _client
+                    .AcquireTokenSilent(AppSettings.GraphScopes, account)
+                    .ExecuteAsync();
+            }
+            catch (MsalUiRequiredException)
+            {
+            }
+        }
+
+        AcquireTokenInteractiveParameterBuilder request = _client
+            .AcquireTokenInteractive(AppSettings.GraphScopes)
+            .WithUseEmbeddedWebView(false)
+            .WithPrompt(forceConsent ? Prompt.Consent : Prompt.SelectAccount);
+
+        return await request.ExecuteAsync();
+    }
+
+    public async Task<string> GetAccessTokenAsync()
+    {
+        IAccount? account = (await _client.GetAccountsAsync()).FirstOrDefault();
+
+        if (account == null)
+        {
+            return (await SignInAsync()).AccessToken;
+        }
+
+        try
+        {
+            AuthenticationResult result = await _client
+                .AcquireTokenSilent(AppSettings.GraphScopes, account)
+                .ExecuteAsync();
+            return result.AccessToken;
+        }
+        catch (MsalUiRequiredException)
+        {
+            return (await SignInAsync()).AccessToken;
+        }
+    }
+
+    public async Task<string?> GetCachedAccountNameAsync()
+    {
+        IAccount? account = (await _client.GetAccountsAsync()).FirstOrDefault();
+        return account?.Username;
+    }
+
+    public async Task SignOutAsync()
+    {
+        foreach (IAccount account in await _client.GetAccountsAsync())
+        {
+            await _client.RemoveAsync(account);
+        }
+    }
+}
+
+
+============================================================
+DOSYA: Services\DatabaseService.cs
+============================================================
+using System.Threading.Tasks;
+using ArsanGazERP.Data;
+using ArsanGazERP.Models;
+using Microsoft.EntityFrameworkCore;
+namespace ArsanGazERP.Services;
+public sealed class DatabaseService
+{
+ public async Task InitializeAsync()
+ {
+  await using ArsanGazDbContext db=new();
+  await db.Database.MigrateAsync();
+  if(!await db.Products.AnyAsync())
+  {
+   db.Products.AddRange(New("OKSIJEN","Oksijen"),New("AZOT","Azot"),New("ARGON","Argon"),New("HELYUM","Helyum"),New("ASETILEN","Asetilen"),New("HIDROJEN","Hidrojen"),New("KURU-HAVA","Kuru Hava"),New("BALON-GAZI","Balon Gazı"));
+   await db.SaveChangesAsync();
+  }
+ }
+ private static Product New(string c,string n)=>new(){Code=c,Name=n,Unit="Adet",Currency="TRY",VatRate=20,IsActive=true};
+}
+
+============================================================
+DOSYA: Services\ExcelErpService.cs
+============================================================
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
+
+namespace ArsanGazERP.Services;
+
+public sealed class ExcelErpService
+{
+    public string? WorkbookPath { get; private set; }
+
+    public void SelectWorkbook(string path)
+    {
+        if (!File.Exists(path) || !path.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new FileNotFoundException("Geçerli XLSM dosyası bulunamadı.", path);
+        }
+
+        using SpreadsheetDocument document = SpreadsheetDocument.Open(path, false);
+        _ = document.WorkbookPart ?? throw new InvalidOperationException("Çalışma kitabı okunamadı.");
+        WorkbookPath = path;
+    }
+
+    public IReadOnlyList<string> GetSheetNames()
+    {
+        EnsureSelected();
+        using SpreadsheetDocument document = SpreadsheetDocument.Open(WorkbookPath!, false);
+        Sheets sheets = document.WorkbookPart!.Workbook.Sheets
+            ?? throw new InvalidOperationException("Sayfa listesi bulunamadı.");
+
+        return sheets.Elements<Sheet>()
+            .Select(sheet => sheet.Name?.Value ?? "Adsız")
+            .ToList();
+    }
+
+    public string CreateBackup()
+    {
+        EnsureSelected();
+        string workbookDirectory = Path.GetDirectoryName(WorkbookPath!)
+            ?? throw new InvalidOperationException("Dosya klasörü bulunamadı.");
+        string backupDirectory = Path.Combine(workbookDirectory, "Yedekler");
+        Directory.CreateDirectory(backupDirectory);
+
+        string target = Path.Combine(
+            backupDirectory,
+            $"ARSAN_AI_ERP_{DateTime.Now:yyyyMMdd_HHmmss}.xlsm");
+
+        File.Copy(WorkbookPath!, target, false);
+        return target;
+    }
+
+    private void EnsureSelected()
+    {
+        if (string.IsNullOrWhiteSpace(WorkbookPath))
+        {
+            throw new InvalidOperationException("Önce ARSAN_AI_ERP_v1.0.xlsm dosyasını seçin.");
+        }
+    }
+}
+
+
+============================================================
+DOSYA: Services\GraphService.cs
+============================================================
+using System;
+using System.IO;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+namespace ArsanGazERP.Services;
+public sealed class GraphService
+{
+ private readonly AuthService _authService; private readonly HttpClient _httpClient=new(){BaseAddress=new Uri("https://graph.microsoft.com/v1.0/")};
+ public GraphService(AuthService authService)=>_authService=authService;
+ public Task<string> GetProfileAsync()=>GetAsync("me?$select=displayName,mail,userPrincipalName");
+ public Task<string> ListOneDriveFilesAsync()=>GetAsync("me/drive/root/children?$select=id,name,size,lastModifiedDateTime,webUrl");
+ public Task<string> ListRecentMailAsync()=>GetAsync("me/messages?$top=10&$select=subject,from,receivedDateTime,isRead");
+ public Task<string> ListContactsAsync()=>GetAsync("me/contacts?$top=20&$select=displayName,emailAddresses,businessPhones");
+ public Task<string> ListCalendarAsync()=>GetAsync("me/events?$top=20&$select=subject,start,end,location");
+ public async Task SendMailAsync(string to,string subject,string body)
+ {
+  await AuthorizeAsync(); object payload=new{message=new{subject,body=new{contentType="Text",content=body},toRecipients=new[]{new{emailAddress=new{address=to}}}},saveToSentItems=true};
+  using StringContent c=new(JsonSerializer.Serialize(payload),Encoding.UTF8,"application/json"); using HttpResponseMessage r=await _httpClient.PostAsync("me/sendMail",c); string t=await r.Content.ReadAsStringAsync(); if(!r.IsSuccessStatusCode)throw new InvalidOperationException($"Mail hatası {(int)r.StatusCode}: {t}");
+ }
+ public async Task<string> UploadBackupAsync(string path)
+ {
+  await AuthorizeAsync(); string name=Uri.EscapeDataString(Path.GetFileName(path)); byte[] bytes=await File.ReadAllBytesAsync(path); using ByteArrayContent c=new(bytes); c.Headers.ContentType=new MediaTypeHeaderValue("application/octet-stream"); using HttpResponseMessage r=await _httpClient.PutAsync($"me/drive/root:/ArsanGazERP_Backups/{name}:/content",c); string t=await r.Content.ReadAsStringAsync(); if(!r.IsSuccessStatusCode)throw new InvalidOperationException($"OneDrive yedek hatası {(int)r.StatusCode}: {t}"); return "OneDrive yedeği oluşturuldu: "+Path.GetFileName(path);
+ }
+ private async Task AuthorizeAsync(){_httpClient.DefaultRequestHeaders.Authorization=new AuthenticationHeaderValue("Bearer",await _authService.GetAccessTokenAsync());}
+ private async Task<string> GetAsync(string path){await AuthorizeAsync();using HttpResponseMessage r=await _httpClient.GetAsync(path);string t=await r.Content.ReadAsStringAsync();if(!r.IsSuccessStatusCode)throw new InvalidOperationException($"Graph hatası {(int)r.StatusCode}: {t}");using JsonDocument d=JsonDocument.Parse(t);return JsonSerializer.Serialize(d,new JsonSerializerOptions{WriteIndented=true});}
+}
+
+============================================================
+DOSYA: Services\UpdateService.cs
+============================================================
+using System;
+using System.IO;
+using System.IO.Compression;
+using System.Net.Http;
+using System.Reflection;
+using System.Text.Json;
+using System.Threading.Tasks;
+namespace ArsanGazERP.Services;
+public sealed class UpdateService
+{
+ private static readonly HttpClient Http=new();
+ public async Task<string> CheckAsync()
+ {
+  Http.DefaultRequestHeaders.UserAgent.ParseAdd("ArsanGazERP/4.0"); using HttpResponseMessage r=await Http.GetAsync("https://api.github.com/repos/arsangaz01/arsan-gaz-erp-releases/releases/latest");
+    if (r.StatusCode == System.Net.HttpStatusCode.NotFound)
+     return "Henüz yayınlanmış bir GitHub sürümü bulunamadı.";
+  if(!r.IsSuccessStatusCode)return $"GitHub güncelleme kontrolü başarısız: {(int)r.StatusCode}";
+  using JsonDocument d=JsonDocument.Parse(await r.Content.ReadAsStringAsync()); string tag=d.RootElement.GetProperty("tag_name").GetString()??"0.0.0"; string page=d.RootElement.GetProperty("html_url").GetString()??""; Version current=Assembly.GetExecutingAssembly().GetName().Version??new(0,0); Version.TryParse(tag.TrimStart('v','V'),out Version? latest);
+  return latest!=null&&latest>current?$"Yeni sürüm hazır: {latest}. Yayın: {page}":$"Uygulama güncel: {current}";
+ }
+}
+
+============================================================
+DOSYA: Views\CrmWindow.xaml
+============================================================
+<Window x:Class="ArsanGazERP.Views.CrmWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="CRM Firma Kartı" Width="1380" Height="820" MinWidth="1080" MinHeight="680" WindowStartupLocation="CenterOwner">
+ <Grid Margin="26,22">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <Grid>
+   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <StackPanel><TextBlock Text="CRM VE SATIŞ" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/><TextBlock Text="Firma listesi ve firma kartı" FontSize="26" FontWeight="Bold" Margin="0,3,0,2"/><TextBlock Text="Aday firmaları takip edin, not ve aktivite kaydedin" Foreground="{StaticResource MutedBrush}"/></StackPanel>
+   <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom"><Button Content="Adaylardan içe aktar" Click="ImportProspects_Click"/><Button Content="Yenile" Click="Refresh_Click" Style="{StaticResource SecondaryButton}" Margin="0"/></StackPanel>
+  </Grid>
+  <Grid Grid.Row="1" Margin="0,18,0,0">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.85*"/></Grid.ColumnDefinitions>
+   <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="14" Margin="0,0,12,0">
+    <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="150"/></Grid.ColumnDefinitions><TextBox x:Name="SearchBox" TextChanged="SearchBox_TextChanged" ToolTip="Firma, şehir veya sektör ara"/><ComboBox x:Name="StatusFilter" Grid.Column="1" Margin="8,4,0,0" SelectionChanged="StatusFilter_SelectionChanged"><ComboBoxItem Content="Tümü" IsSelected="True"/><ComboBoxItem Content="Yeni"/><ComboBoxItem Content="Aranacak"/><ComboBoxItem Content="Arandı"/><ComboBoxItem Content="Teklif Verildi"/><ComboBoxItem Content="Beklemede"/><ComboBoxItem Content="Müşteri Oldu"/><ComboBoxItem Content="Kaybedildi"/></ComboBox></Grid>
+     <DataGrid x:Name="CompaniesGrid" Grid.Row="1" Margin="0,12,0,0" IsReadOnly="True" AutoGenerateColumns="False" SelectionChanged="CompaniesGrid_SelectionChanged"><DataGrid.Columns><DataGridTextColumn Header="PUAN" Binding="{Binding Score}" Width="60"/><DataGridTextColumn Header="FİRMA" Binding="{Binding CompanyName}" Width="*"/><DataGridTextColumn Header="İL" Binding="{Binding City}" Width="90"/><DataGridTextColumn Header="DURUM" Binding="{Binding Status}" Width="110"/></DataGrid.Columns></DataGrid>
+    </Grid>
+   </Border>
+   <Border Grid.Column="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="18">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
+     <TextBlock Text="FİRMA KARTI" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}"/><TextBlock x:Name="CompanyTitle" Text="Firma seçin" FontSize="22" FontWeight="Bold" Margin="0,5,0,14"/>
+     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <TextBlock Text="TELEFON" FontWeight="Bold" FontSize="10" Foreground="{StaticResource MutedBrush}"/><TextBlock Grid.Column="1" Text="E-POSTA" FontWeight="Bold" FontSize="10" Foreground="{StaticResource MutedBrush}"/><TextBox x:Name="PhoneBox" Grid.Row="1"/><TextBox x:Name="EmailBox" Grid.Row="1" Grid.Column="1" Margin="8,4,0,0"/>
+      <TextBlock Grid.Row="2" Text="WEB SİTESİ" FontWeight="Bold" FontSize="10" Foreground="{StaticResource MutedBrush}" Margin="0,12,0,0"/><TextBlock Grid.Row="2" Grid.Column="1" Text="DURUM" FontWeight="Bold" FontSize="10" Foreground="{StaticResource MutedBrush}" Margin="8,12,0,0"/>
+      <TextBox x:Name="WebsiteBox" Grid.Row="3"/><ComboBox x:Name="CompanyStatus" Grid.Row="3" Grid.Column="1" Margin="8,4,0,0"><ComboBoxItem Content="Yeni"/><ComboBoxItem Content="Aranacak"/><ComboBoxItem Content="Arandı"/><ComboBoxItem Content="Teklif Verildi"/><ComboBoxItem Content="Beklemede"/><ComboBoxItem Content="Müşteri Oldu"/><ComboBoxItem Content="Kaybedildi"/></ComboBox>
+     </Grid>
+     <TextBlock Text="ADRES" FontWeight="Bold" FontSize="10" Foreground="{StaticResource MutedBrush}" Margin="0,12,0,0"/><TextBox x:Name="AddressBox" AcceptsReturn="True" Height="64" TextWrapping="Wrap"/>
+     <StackPanel Orientation="Horizontal" Margin="0,12,0,4"><Button Content="Kartı kaydet" Click="SaveCompany_Click"/><Button Content="Telefon" Click="Phone_Click" Style="{StaticResource SecondaryButton}"/><Button Content="WhatsApp" Click="WhatsApp_Click" Style="{StaticResource SecondaryButton}"/><Button Content="Web sitesi" Click="Website_Click" Style="{StaticResource SecondaryButton}" Margin="0"/></StackPanel>
+     <Separator Margin="0,12"/>
+     <TextBlock Text="NOT EKLE" FontWeight="Bold" FontSize="10" Foreground="{StaticResource MutedBrush}"/><TextBox x:Name="NoteBox" AcceptsReturn="True" Height="72" TextWrapping="Wrap"/><Button Content="Notu kaydet" Click="AddNote_Click" HorizontalAlignment="Left" Margin="0,8,0,12"/>
+     <DataGrid x:Name="NotesGrid" Height="135" IsReadOnly="True" AutoGenerateColumns="False"><DataGrid.Columns><DataGridTextColumn Header="TARİH" Binding="{Binding CreatedAtLocal}" Width="130"/><DataGridTextColumn Header="NOT" Binding="{Binding NoteText}" Width="*"/></DataGrid.Columns></DataGrid>
+     <TextBlock Text="AKTİVİTELER" FontWeight="Bold" FontSize="10" Foreground="{StaticResource MutedBrush}" Margin="0,14,0,4"/><DataGrid x:Name="ActivitiesGrid" Height="135" IsReadOnly="True" AutoGenerateColumns="False"><DataGrid.Columns><DataGridTextColumn Header="TARİH" Binding="{Binding ActivityAtLocal}" Width="130"/><DataGridTextColumn Header="TÜR" Binding="{Binding ActivityType}" Width="120"/><DataGridTextColumn Header="AÇIKLAMA" Binding="{Binding Description}" Width="*"/></DataGrid.Columns></DataGrid>
+    </StackPanel></ScrollViewer>
+   </Border>
+  </Grid>
+  <TextBlock x:Name="StatusText" Grid.Row="2" Margin="2,10,0,0" Foreground="{StaticResource MutedBrush}"/>
+ </Grid>
+</Window>
+
+
+============================================================
+DOSYA: Views\CrmWindow.xaml.cs
+============================================================
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using ArsanGazERP.Data;
+using ArsanGazERP.Models;
+using ArsanGazERP.Services;
+using Microsoft.EntityFrameworkCore;
+
+namespace ArsanGazERP.Views;
+
+public partial class CrmWindow : Window
+{
+    private List<CrmCompany> _companies = new();
+    private CrmCompany? _selected;
+    public CrmWindow(){InitializeComponent();Loaded += async (_,_) => await LoadAsync();}
+
+    private async Task LoadAsync()
+    {
+        await new CrmSchemaService().EnsureAsync();
+        await using ArsanGazDbContext db = new();
+        _companies = await db.CrmCompanies.AsNoTracking().OrderByDescending(x=>x.Score).ThenBy(x=>x.CompanyName).ToListAsync();
+        ApplyFilter(); StatusText.Text = $"CRM firma sayısı: {_companies.Count:N0} · Son yenileme {DateTime.Now:HH:mm}";
+    }
+    private void ApplyFilter(){string q=SearchBox.Text.Trim();string status=(StatusFilter.SelectedItem as ComboBoxItem)?.Content?.ToString()??"Tümü";CompaniesGrid.ItemsSource=_companies.Where(x=>(string.IsNullOrWhiteSpace(q)||(x.CompanyName.Contains(q,StringComparison.CurrentCultureIgnoreCase)||(x.City?.Contains(q,StringComparison.CurrentCultureIgnoreCase)??false)||(x.Sector?.Contains(q,StringComparison.CurrentCultureIgnoreCase)??false)))&&(status=="Tümü"||x.Status==status)).ToList();}
+    private async Task LoadCardAsync(int id){await using ArsanGazDbContext db=new();_selected=await db.CrmCompanies.AsNoTracking().FirstAsync(x=>x.Id==id);CompanyTitle.Text=_selected.CompanyName;PhoneBox.Text=_selected.Phone??"";EmailBox.Text=_selected.Email??"";WebsiteBox.Text=_selected.Website??"";AddressBox.Text=_selected.Address??"";foreach(ComboBoxItem item in CompanyStatus.Items)if(item.Content?.ToString()==_selected.Status){CompanyStatus.SelectedItem=item;break;}NotesGrid.ItemsSource=await db.CrmNotes.AsNoTracking().Where(x=>x.CrmCompanyId==id).OrderByDescending(x=>x.CreatedAtUtc).Select(x=>new NoteRow(x.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm"),x.NoteText)).ToListAsync();ActivitiesGrid.ItemsSource=await db.CrmActivities.AsNoTracking().Where(x=>x.CrmCompanyId==id).OrderByDescending(x=>x.ActivityAtUtc).Select(x=>new ActivityRow(x.ActivityAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm"),x.ActivityType,x.Description)).ToListAsync();}
+    private async void ImportProspects_Click(object s,RoutedEventArgs e){try{await new CrmSchemaService().EnsureAsync();await using ArsanGazDbContext db=new();var existing=await db.CrmCompanies.Where(x=>x.SourceProspectId!=null).Select(x=>x.SourceProspectId!.Value).ToListAsync();var prospects=await db.Prospects.AsNoTracking().Where(x=>!existing.Contains(x.Id)).ToListAsync();foreach(var p in prospects)db.CrmCompanies.Add(new CrmCompany{SourceProspectId=p.Id,CompanyName=p.CompanyName,City=p.City,Sector=p.SectorQuery,Phone=p.Phone,Website=p.Website,Address=p.Address,Score=p.OpportunityScore,Status="Yeni"});await db.SaveChangesAsync();StatusText.Text=$"{prospects.Count:N0} aday CRM'e aktarıldı.";await LoadAsync();}catch(Exception ex){StatusText.Text=ex.GetBaseException().Message;}}
+    private async void CompaniesGrid_SelectionChanged(object s,SelectionChangedEventArgs e){if(CompaniesGrid.SelectedItem is CrmCompany c)await LoadCardAsync(c.Id);}
+    private void SearchBox_TextChanged(object s,TextChangedEventArgs e)=>ApplyFilter();
+    private void StatusFilter_SelectionChanged(object s,SelectionChangedEventArgs e){if(IsLoaded)ApplyFilter();}
+    private async void Refresh_Click(object s,RoutedEventArgs e)=>await LoadAsync();
+    private async void SaveCompany_Click(object s,RoutedEventArgs e){if(_selected is null)return;await using ArsanGazDbContext db=new();var c=await db.CrmCompanies.FindAsync(_selected.Id);if(c is null)return;c.Phone=PhoneBox.Text.Trim();c.Email=EmailBox.Text.Trim();c.Website=WebsiteBox.Text.Trim();c.Address=AddressBox.Text.Trim();c.Status=(CompanyStatus.SelectedItem as ComboBoxItem)?.Content?.ToString()??c.Status;await db.SaveChangesAsync();StatusText.Text="Firma kartı kaydedildi.";await LoadAsync();await LoadCardAsync(c.Id);}
+    private async void AddNote_Click(object s,RoutedEventArgs e){if(_selected is null||string.IsNullOrWhiteSpace(NoteBox.Text))return;await using ArsanGazDbContext db=new();db.CrmNotes.Add(new CrmNote{CrmCompanyId=_selected.Id,NoteText=NoteBox.Text.Trim()});db.CrmActivities.Add(new CrmActivity{CrmCompanyId=_selected.Id,ActivityType="Not",Description="CRM notu eklendi"});await db.SaveChangesAsync();NoteBox.Clear();await LoadCardAsync(_selected.Id);}
+    private void Phone_Click(object s,RoutedEventArgs e){if(!string.IsNullOrWhiteSpace(PhoneBox.Text))Process.Start(new ProcessStartInfo("tel:"+PhoneBox.Text.Trim()){UseShellExecute=true});}
+    private void WhatsApp_Click(object s,RoutedEventArgs e){string digits=new(PhoneBox.Text.Where(char.IsDigit).ToArray());if(digits.StartsWith("0"))digits="90"+digits[1..];if(!string.IsNullOrWhiteSpace(digits))Process.Start(new ProcessStartInfo("https://wa.me/"+digits){UseShellExecute=true});}
+    private void Website_Click(object s,RoutedEventArgs e){string url=WebsiteBox.Text.Trim();if(!string.IsNullOrWhiteSpace(url))Process.Start(new ProcessStartInfo(url.StartsWith("http",StringComparison.OrdinalIgnoreCase)?url:"https://"+url){UseShellExecute=true});}
+    private sealed record NoteRow(string CreatedAtLocal,string NoteText);
+    private sealed record ActivityRow(string ActivityAtLocal,string ActivityType,string Description);
+}
+
+
+============================================================
+DOSYA: Views\DatabaseManagementWindow.xaml
+============================================================
+<Window x:Class="ArsanGazERP.Views.DatabaseManagementWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Veritabanı Merkezi"
+        Width="1160"
+        Height="740"
+        MinWidth="900"
+        MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        UseLayoutRounding="True">
+    <Grid Margin="28,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Margin="0,0,0,18">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="VERİ VE KAYITLAR" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
+                <TextBlock Text="Veritabanı merkezi" FontSize="26" FontWeight="Bold" Margin="0,3,0,2" />
+                <TextBlock Text="İşletme kayıtlarını görüntüleyin ve veri durumunu izleyin" Foreground="{StaticResource MutedBrush}" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="Yenile" Click="Refresh_Click" Style="{StaticResource SecondaryButton}" Margin="0" VerticalAlignment="Center" />
+        </Grid>
+
+        <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="16" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="VERİTABANI ÖZETİ" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                    <TextBlock x:Name="Summary" Text="Veriler yükleniyor" FontSize="14" FontWeight="SemiBold" Margin="0,6,0,0" />
+                </StackPanel>
+                <TextBlock x:Name="UpdatedAt" Grid.Column="1" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="2">
+            <TabItem Header="Müşteriler">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="CustomersGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Ürünler">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="ProductsGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Tüpler">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="CylindersGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Teklifler">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="QuotesGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Faturalar">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="InvoicesGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Görevler">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="TasksGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>
+
+============================================================
+DOSYA: Views\DatabaseManagementWindow.xaml.cs
+============================================================
+using System;
+using System.Threading.Tasks;
+using System.Windows;
+using ArsanGazERP.Data;
+using Microsoft.EntityFrameworkCore;
+
+namespace ArsanGazERP.Views;
+
+public partial class DatabaseManagementWindow : Window
+{
+	public DatabaseManagementWindow()
+	{
+		InitializeComponent();
+		Loaded += async (_, _) => await LoadAsync();
+	}
+
+	private async Task LoadAsync()
+	{
+		try
+		{
+			await using ArsanGazDbContext db = new();
+			CustomersGrid.ItemsSource = await db.Customers.AsNoTracking().ToListAsync();
+			ProductsGrid.ItemsSource = await db.Products.AsNoTracking().ToListAsync();
+			CylindersGrid.ItemsSource = await db.Cylinders.AsNoTracking().ToListAsync();
+			QuotesGrid.ItemsSource = await db.Quotes.AsNoTracking().ToListAsync();
+			InvoicesGrid.ItemsSource = await db.Invoices.AsNoTracking().ToListAsync();
+			TasksGrid.ItemsSource = await db.Tasks.AsNoTracking().ToListAsync();
+
+			int customerCount = await db.Customers.CountAsync();
+			int productCount = await db.Products.CountAsync();
+			int cylinderCount = await db.Cylinders.CountAsync();
+			int quoteCount = await db.Quotes.CountAsync();
+			int invoiceCount = await db.Invoices.CountAsync();
+			int taskCount = await db.Tasks.CountAsync();
+
+			Summary.Text = $"Müşteri {customerCount:N0}   ·   Ürün {productCount:N0}   ·   Tüp {cylinderCount:N0}   ·   Teklif {quoteCount:N0}   ·   Fatura {invoiceCount:N0}   ·   Görev {taskCount:N0}";
+			UpdatedAt.Text = $"Son yenileme {DateTime.Now:HH:mm}";
+		}
+		catch (Exception exception)
+		{
+			Summary.Text = "Veriler yüklenemedi: " + exception.GetBaseException().Message;
+			UpdatedAt.Text = string.Empty;
+		}
+	}
+
+	private async void Refresh_Click(object sender, RoutedEventArgs e) => await LoadAsync();
+}
+
+============================================================
+DOSYA: Views\NvidiaNimWindow.cs
+============================================================
+using System;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using ArsanGazERP.Services;
+
+namespace ArsanGazERP.Views;
+
+public sealed class NvidiaNimWindow : Window
+{
+    private readonly NvidiaNimService _service;
+    private readonly PasswordBox _key = new() { Margin = new Thickness(0, 6, 0, 12) };
+    private readonly ComboBox _model = new() { Margin = new Thickness(0, 6, 0, 12), IsEditable = true };
+    private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
+
+    public NvidiaNimWindow(NvidiaNimService service)
+    {
+        _service = service; Title = "NVIDIA NIM Ayarlari"; Width = 590; Height = 390; WindowStartupLocation = WindowStartupLocation.CenterOwner; ResizeMode = ResizeMode.NoResize;
+        _model.ItemsSource = new[] { "meta/llama-3.1-8b-instruct", "microsoft/phi-4-mini-instruct", "qwen/qwen2.5-coder-32b-instruct", "nvidia/llama-3.3-nemotron-super-49b-v1.5" }; _model.Text = service.Model;
+        StackPanel form = new() { Margin = new Thickness(24) };
+        form.Children.Add(new TextBlock { Text = service.IsConfigured ? "NVIDIA NIM (Bagli)" : "NVIDIA NIM (Bagli degil)", Foreground = service.IsConfigured ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Red, FontWeight = FontWeights.SemiBold });
+        form.Children.Add(new TextBlock { Text = "Yeni API anahtari", Margin = new Thickness(0, 16, 0, 0) }); form.Children.Add(_key); form.Children.Add(new TextBlock { Text = "Model" }); form.Children.Add(_model);
+        StackPanel buttons = new() { Orientation = Orientation.Horizontal };
+        Button save = new() { Content = "Kaydet ve Test Et", Padding = new Thickness(16, 8, 16, 8), Margin = new Thickness(0, 0, 8, 0) };
+        Button test = new() { Content = "Baglantiyi Test Et", Padding = new Thickness(16, 8, 16, 8), Margin = new Thickness(0, 0, 8, 0) };
+        Button remove = new() { Content = "Anahtari Sil", Padding = new Thickness(16, 8, 16, 8) };
+        save.Click += async (_, _) => await SaveAndTestAsync(); test.Click += async (_, _) => await TestAsync(); remove.Click += (_, _) => { _service.Remove(); _status.Text = "NVIDIA anahtari kaldirildi."; };
+        buttons.Children.Add(save); buttons.Children.Add(test); buttons.Children.Add(remove); form.Children.Add(buttons); form.Children.Add(_status); Content = form;
+    }
+    private async Task SaveAndTestAsync() { try { _service.Save(_key.Password, _model.Text); _key.Clear(); _status.Text = "Baglanti basarili: " + await _service.TestAsync(); } catch (Exception ex) { _status.Text = ex.GetBaseException().Message; } }
+    private async Task TestAsync() { try { _status.Text = "Test ediliyor..."; _status.Text = "Baglanti basarili: " + await _service.TestAsync(); } catch (Exception ex) { _status.Text = ex.GetBaseException().Message; } }
+}
+
+
+============================================================
+DOSYA: Views\OperationsWindow.xaml
+============================================================
+<Window x:Class="ArsanGazERP.Views.OperationsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Operasyon Merkezi"
+        Width="1260"
+        Height="780"
+        MinWidth="980"
+        MinHeight="640"
+        WindowStartupLocation="CenterOwner"
+        UseLayoutRounding="True">
+    <Grid Margin="28,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Margin="0,0,0,12">
+            <TextBlock Text="OPERASYONLAR" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
+            <TextBlock Text="Operasyon merkezi" FontSize="26" FontWeight="Bold" Margin="0,3,0,2" />
+            <TextBlock Text="Müşteri kayıtları, ürün kataloğu, tüp envanteri ve tahsilat takibi" Foreground="{StaticResource MutedBrush}" />
+        </StackPanel>
+
+        <TabControl Grid.Row="1">
+            <TabItem Header="Müşteriler">
+                <Grid Margin="4,14,4,4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="14" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="0.8*" />
+                                <ColumnDefinition Width="1.7*" />
+                                <ColumnDefinition Width="1.1*" />
+                                <ColumnDefinition Width="1.4*" />
+                                <ColumnDefinition Width="0.9*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="MÜŞTERİ KODU" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="1" Text="FİRMA ADI" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="2" Text="TELEFON" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="3" Text="E-POSTA" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="4" Text="İL" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBox x:Name="CustomerCode" Grid.Row="1" ToolTip="Boş bırakılırsa otomatik oluşturulur" />
+                            <TextBox x:Name="CustomerName" Grid.Row="1" Grid.Column="1" />
+                            <TextBox x:Name="CustomerPhone" Grid.Row="1" Grid.Column="2" />
+                            <TextBox x:Name="CustomerEmail" Grid.Row="1" Grid.Column="3" />
+                            <TextBox x:Name="CustomerCity" Grid.Row="1" Grid.Column="4" />
+                            <StackPanel Grid.RowSpan="2" Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="12,0,0,0">
+                                <Button Content="Müşteri ekle" Click="AddCustomer_Click" Margin="0,0,6,0" />
+                                <Button Content="Seçileni sil" Click="DeleteCustomer_Click" Style="{StaticResource DangerButton}" Margin="0" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <DataGrid x:Name="Customers" Grid.Row="1" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Ürünler">
+                <Grid Margin="4,14,4,4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="14" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1*" />
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="1*" />
+                                <ColumnDefinition Width="0.8*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="ÜRÜN KODU" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="1" Text="ÜRÜN ADI" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="2" Text="BİRİM FİYAT" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="3" Text="PARA BİRİMİ" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBox x:Name="ProductCode" Grid.Row="1" />
+                            <TextBox x:Name="ProductName" Grid.Row="1" Grid.Column="1" />
+                            <TextBox x:Name="ProductPrice" Grid.Row="1" Grid.Column="2" />
+                            <ComboBox x:Name="ProductCurrency" Grid.Row="1" Grid.Column="3">
+                                <ComboBoxItem Content="TRY" IsSelected="True" />
+                                <ComboBoxItem Content="USD" />
+                                <ComboBoxItem Content="EUR" />
+                                <ComboBoxItem Content="GBP" />
+                            </ComboBox>
+                            <StackPanel Grid.RowSpan="2" Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="12,0,0,0">
+                                <Button Content="Ürün ekle" Click="AddProduct_Click" Margin="0,0,6,0" />
+                                <Button Content="Seçileni sil" Click="DeleteProduct_Click" Style="{StaticResource DangerButton}" Margin="0" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <DataGrid x:Name="Products" Grid.Row="1" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Tüp envanteri">
+                <Grid Margin="4,14,4,4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="14" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.1*" />
+                                <ColumnDefinition Width="1.1*" />
+                                <ColumnDefinition Width="1.3*" />
+                                <ColumnDefinition Width="0.8*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="SERİ NUMARASI" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="1" Text="BARKOD" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="2" Text="GAZ TÜRÜ" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="3" Text="KAPASİTE" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBox x:Name="CylinderSerial" Grid.Row="1" />
+                            <TextBox x:Name="CylinderBarcode" Grid.Row="1" Grid.Column="1" />
+                            <TextBox x:Name="CylinderGas" Grid.Row="1" Grid.Column="2" />
+                            <TextBox x:Name="CylinderCapacity" Grid.Row="1" Grid.Column="3" />
+                            <StackPanel Grid.RowSpan="2" Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="12,0,0,0">
+                                <Button Content="Tüp ekle" Click="AddCylinder_Click" Margin="0,0,6,0" />
+                                <Button Content="Depoya al" Click="MoveWarehouse_Click" Style="{StaticResource SecondaryButton}" Margin="0" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <DataGrid x:Name="Cylinders" Grid.Row="1" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Geciken tahsilatlar">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="OverdueInvoices" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <Grid Grid.Row="2" Margin="2,10,2,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Ellipse x:Name="StatusIndicator" Width="8" Height="8" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0" />
+                <TextBlock x:Name="Status" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+            </StackPanel>
+            <TextBlock Text="Değişiklikler yerel veritabanına kaydedilir" FontSize="11" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Right" />
+        </Grid>
+    </Grid>
+</Window>
+
+============================================================
+DOSYA: Views\OperationsWindow.xaml.cs
+============================================================
+using System;
+using System.Globalization;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media;
+using ArsanGazERP.Models;
+using ArsanGazERP.Services;
+
+namespace ArsanGazERP.Views;
+
+public partial class OperationsWindow : Window
+{
+	private readonly CrudService _crud = new();
+	private readonly CultureInfo _turkishCulture = CultureInfo.GetCultureInfo("tr-TR");
+
+	public OperationsWindow()
+	{
+		InitializeComponent();
+		Loaded += async (_, _) => await LoadAsync();
+	}
+
+	private async Task LoadAsync()
+	{
+		try
+		{
+			Customers.ItemsSource = await _crud.CustomersAsync();
+			Products.ItemsSource = await _crud.ProductsAsync();
+			Cylinders.ItemsSource = await _crud.CylindersAsync();
+			OverdueInvoices.ItemsSource = await _crud.OverdueInvoicesAsync();
+			SetStatus($"Veriler yenilendi · {DateTime.Now:HH:mm}");
+		}
+		catch (Exception exception)
+		{
+			SetStatus(exception.GetBaseException().Message, true);
+		}
+	}
+
+	private void SetStatus(string message, bool isError = false)
+	{
+		Status.Text = message;
+		StatusIndicator.Fill = (Brush)FindResource(isError ? "DangerBrush" : "AccentBrush");
+	}
+
+	private async Task RunChangeAsync(Func<Task> action, string successMessage)
+	{
+		try
+		{
+			await action();
+			await LoadAsync();
+			SetStatus(successMessage);
+		}
+		catch (Exception exception)
+		{
+			SetStatus(exception.GetBaseException().Message, true);
+		}
+	}
+
+	private async void AddCustomer_Click(object sender, RoutedEventArgs e)
+	{
+		if (string.IsNullOrWhiteSpace(CustomerName.Text))
+		{
+			SetStatus("Firma adı zorunludur.", true);
+			CustomerName.Focus();
+			return;
+		}
+
+		string code = string.IsNullOrWhiteSpace(CustomerCode.Text)
+			? $"MUS-{DateTime.Now:yyyyMMddHHmmss}"
+			: CustomerCode.Text.Trim();
+
+		await RunChangeAsync(
+			() => _crud.SaveCustomerAsync(new Customer
+			{
+				Code = code,
+				CompanyName = CustomerName.Text.Trim(),
+				Phone = CustomerPhone.Text.Trim(),
+				Email = CustomerEmail.Text.Trim(),
+				City = CustomerCity.Text.Trim()
+			}),
+			$"{CustomerName.Text.Trim()} müşteri listesine eklendi.");
+
+		CustomerCode.Clear();
+		CustomerName.Clear();
+		CustomerPhone.Clear();
+		CustomerEmail.Clear();
+		CustomerCity.Clear();
+	}
+
+	private async void DeleteCustomer_Click(object sender, RoutedEventArgs e)
+	{
+		if (Customers.SelectedItem is not Customer customer)
+		{
+			SetStatus("Silmek için müşteri tablosundan bir kayıt seçin.", true);
+			return;
+		}
+
+		if (MessageBox.Show(this, $"'{customer.CompanyName}' müşterisi silinsin mi?", "Müşteriyi sil", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+		{
+			return;
+		}
+
+		await RunChangeAsync(() => _crud.DeleteCustomerAsync(customer.Id), "Müşteri kaydı silindi.");
+	}
+
+	private async void AddProduct_Click(object sender, RoutedEventArgs e)
+	{
+		if (string.IsNullOrWhiteSpace(ProductCode.Text) || string.IsNullOrWhiteSpace(ProductName.Text))
+		{
+			SetStatus("Ürün kodu ve ürün adı zorunludur.", true);
+			return;
+		}
+
+		if (!decimal.TryParse(ProductPrice.Text, NumberStyles.Number, _turkishCulture, out decimal price) || price < 0)
+		{
+			SetStatus("Birim fiyatı geçerli ve sıfırdan küçük olmayan bir tutar olmalıdır.", true);
+			ProductPrice.Focus();
+			return;
+		}
+
+		if (ProductCurrency.SelectedItem is not System.Windows.Controls.ComboBoxItem { Content: string currency })
+		{
+			SetStatus("Para birimi seçin.", true);
+			return;
+		}
+
+		await RunChangeAsync(
+			() => _crud.SaveProductAsync(new Product
+			{
+				Code = ProductCode.Text.Trim(),
+				Name = ProductName.Text.Trim(),
+				SalesPrice = price,
+				Currency = currency,
+				VatRate = 20
+			}),
+			$"{ProductName.Text.Trim()} ürün kataloğuna eklendi.");
+
+		ProductCode.Clear();
+		ProductName.Clear();
+		ProductPrice.Clear();
+	}
+
+	private async void DeleteProduct_Click(object sender, RoutedEventArgs e)
+	{
+		if (Products.SelectedItem is not Product product)
+		{
+			SetStatus("Silmek için ürün tablosundan bir kayıt seçin.", true);
+			return;
+		}
+
+		if (MessageBox.Show(this, $"'{product.Name}' ürünü silinsin mi?", "Ürünü sil", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+		{
+			return;
+		}
+
+		await RunChangeAsync(() => _crud.DeleteProductAsync(product.Id), "Ürün kaydı silindi.");
+	}
+
+	private async void AddCylinder_Click(object sender, RoutedEventArgs e)
+	{
+		if (string.IsNullOrWhiteSpace(CylinderSerial.Text) || string.IsNullOrWhiteSpace(CylinderGas.Text))
+		{
+			SetStatus("Tüp seri numarası ve gaz türü zorunludur.", true);
+			return;
+		}
+
+		if (!decimal.TryParse(CylinderCapacity.Text, NumberStyles.Number, _turkishCulture, out decimal capacity) || capacity <= 0)
+		{
+			SetStatus("Tüp kapasitesi sıfırdan büyük geçerli bir sayı olmalıdır.", true);
+			CylinderCapacity.Focus();
+			return;
+		}
+
+		await RunChangeAsync(
+			() => _crud.SaveCylinderAsync(new Cylinder
+			{
+				SerialNumber = CylinderSerial.Text.Trim(),
+				Barcode = CylinderBarcode.Text.Trim(),
+				GasType = CylinderGas.Text.Trim(),
+				Capacity = capacity,
+				Status = CylinderStatus.Warehouse
+			}),
+			"Tüp envantere eklendi.");
+
+		CylinderSerial.Clear();
+		CylinderBarcode.Clear();
+		CylinderGas.Clear();
+		CylinderCapacity.Clear();
+	}
+
+	private async void MoveWarehouse_Click(object sender, RoutedEventArgs e)
+	{
+		if (Cylinders.SelectedItem is not Cylinder cylinder)
+		{
+			SetStatus("Depoya almak için tüp tablosundan bir kayıt seçin.", true);
+			return;
+		}
+
+		await RunChangeAsync(
+			() => _crud.MoveCylinderAsync(cylinder.Id, CylinderStatus.Warehouse, null, "Operasyon ekranından depoya alındı"),
+			$"{cylinder.SerialNumber} numaralı tüp depoya alındı.");
+	}
+}
+
+============================================================
+DOSYA: Views\ProspectHunterWindow.xaml
+============================================================
+<Window x:Class="ArsanGazERP.Views.ProspectHunterWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Ücretsiz Müşteri Avcısı" Width="1320" Height="780" MinWidth="1040" MinHeight="640" WindowStartupLocation="CenterOwner">
+<Grid Margin="28,24"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+<StackPanel><TextBlock Text="ÜCRETSİZ SATIŞ İSTİHBARATI" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/><TextBlock Text="Müşteri Avcısı" FontSize="26" FontWeight="Bold" Margin="0,3,0,2"/><TextBlock Text="OpenStreetMap üzerindeki kamuya açık kurumsal işletme kayıtlarını araştırır" Foreground="{StaticResource MutedBrush}"/></StackPanel>
+<Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="14" Margin="0,16,0,12"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="ARAMA KAPSAMI" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}"/><TextBlock Text="Adana, Mersin, Hatay, Osmaniye, Gaziantep ve Şanlıurfa" Margin="0,5,0,0"/><TextBlock Text="API anahtarı ve kredi kartı gerekmez. Veri kapsamı OpenStreetMap kayıtlarına bağlıdır." FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/><TextBlock Text="© OpenStreetMap contributors · ODbL" FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom"><CheckBox x:Name="AutoScanCheckBox" Content="Günlük otomatik tara" VerticalAlignment="Center" Margin="0,0,16,8" Checked="AutoScan_Changed" Unchecked="AutoScan_Changed"/><Button x:Name="ScanButton" Content="Şimdi tara" Click="Scan_Click"/><Button Content="Yenile" Click="Refresh_Click" Style="{StaticResource SecondaryButton}" Margin="0"/></StackPanel></Grid></Border>
+<DataGrid x:Name="ProspectsGrid" Grid.Row="2" IsReadOnly="True" AutoGenerateColumns="False" CanUserSortColumns="True"><DataGrid.Columns><DataGridTextColumn Header="PUAN" Binding="{Binding OpportunityScore}" Width="62"/><DataGridTextColumn Header="FİRMA" Binding="{Binding CompanyName}" Width="2*"/><DataGridTextColumn Header="İL" Binding="{Binding City}" Width="90"/><DataGridTextColumn Header="SEKTÖR" Binding="{Binding SectorQuery}" Width="1.4*"/><DataGridTextColumn Header="TELEFON" Binding="{Binding Phone}" Width="125"/><DataGridTextColumn Header="WEB" Binding="{Binding Website}" Width="1.4*"/><DataGridTextColumn Header="ÖNERİLEN ÜRÜNLER" Binding="{Binding RecommendedProducts}" Width="1.5*"/><DataGridTextColumn Header="DURUM" Binding="{Binding Status}" Width="85"/></DataGrid.Columns></DataGrid>
+<Grid Grid.Row="3" Margin="2,10,0,0"><TextBlock x:Name="StatusText" Foreground="{StaticResource MutedBrush}"/><Button x:Name="CancelButton" Content="İptal" Click="Cancel_Click" Style="{StaticResource DangerButton}" HorizontalAlignment="Right" Visibility="Collapsed" Margin="0"/></Grid>
+</Grid></Window>
+
+
+============================================================
+DOSYA: Views\ProspectHunterWindow.xaml.cs
+============================================================
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using ArsanGazERP.Data;
+using ArsanGazERP.Services;
+using Microsoft.EntityFrameworkCore;
+
+namespace ArsanGazERP.Views;
+
+public partial class ProspectHunterWindow : Window
+{
+    private readonly ProspectDiscoveryService _service = new();
+    private CancellationTokenSource? _scanCancellation;
+
+    public ProspectHunterWindow()
+    {
+        InitializeComponent();
+        AutoScanCheckBox.IsChecked = ProspectAutoRunner.IsEnabled();
+        Loaded += async (_, _) => await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using ArsanGazDbContext db = new();
+        ProspectsGrid.ItemsSource = await db.Prospects.AsNoTracking()
+            .OrderByDescending(item => item.OpportunityScore)
+            .ThenByDescending(item => item.FoundAtUtc)
+            .ToListAsync();
+        StatusText.Text = $"Toplam aday: {await db.Prospects.CountAsync()} · Son yenileme {DateTime.Now:HH:mm}";
+    }
+
+    private void AutoScan_Changed(object sender, RoutedEventArgs e)
+    {
+        ProspectAutoRunner.SetEnabled(AutoScanCheckBox.IsChecked == true);
+        StatusText.Text = AutoScanCheckBox.IsChecked == true ? "Günlük otomatik ücretsiz tarama etkin." : "Otomatik tarama kapatıldı.";
+    }
+
+    private async void Scan_Click(object sender, RoutedEventArgs e)
+    {
+        if (_scanCancellation is not null) return;
+        _scanCancellation = new CancellationTokenSource();
+        ScanButton.IsEnabled = false;
+        CancelButton.Visibility = Visibility.Visible;
+        try
+        {
+            Progress<string> progress = new(message => StatusText.Text = "Taranıyor · " + message);
+            ProspectScanResult result = await _service.ScanAsync(progress, _scanCancellation.Token);
+            StatusText.Text = result.ToString();
+            await LoadAsync();
+        }
+        catch (OperationCanceledException) { StatusText.Text = "Tarama durduruldu."; }
+        catch (Exception exception) { StatusText.Text = exception.GetBaseException().Message; }
+        finally
+        {
+            _scanCancellation.Dispose();
+            _scanCancellation = null;
+            ScanButton.IsEnabled = true;
+            CancelButton.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void Cancel_Click(object sender, RoutedEventArgs e) => _scanCancellation?.Cancel();
+    private async void Refresh_Click(object sender, RoutedEventArgs e) => await LoadAsync();
+}
+

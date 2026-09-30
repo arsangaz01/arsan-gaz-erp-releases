@@ -1,0 +1,19 @@
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj geri yüklendi (599 ms içinde).
+  ArsanGazERP -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ArsanGazERP.dll
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:03.30
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj geri yüklendi (712 ms içinde).
+  ArsanGazERP -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ArsanGazERP.dll
+  ArsanGazERP -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\publish\current\
+��lem ba�ar�yla tamamland�.
+[main 043f605] V7.0.5 fix CS0103 updater compile errors
+ 2 files changed, 124 insertions(+), 47 deletions(-)
+ create mode 100644 Services/AutoUpdateLaunchService.cs
+To https://github.com/arsangaz01/arsan-gaz-erp-releases.git
+   c479d9b..043f605  HEAD -> main

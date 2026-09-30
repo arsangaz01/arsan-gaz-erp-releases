@@ -1,0 +1,20 @@
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentBridge\ArsanGazERP.AgentBridge.csproj geri yüklendi (666 ms içinde).
+  ArsanGazERP.AgentBridge -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentBridge\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentBridge.dll
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:05.07
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+  ArsanGazERP.AgentBridge -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentBridge\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentBridge.dll
+  ArsanGazERP.AgentBridge -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentBridge\publish\
+��lem ba�ar�yla tamamland�.
+[main d5ac595] V7.1.0 autonomous AI Agent Bridge
+ 3 files changed, 125 insertions(+)
+ create mode 100644 Tools/AgentBridge/ArsanGazERP.AgentBridge.csproj
+ create mode 100644 Tools/AgentBridge/Program.cs
+To https://github.com/arsangaz01/arsan-gaz-erp-releases.git
+   043f605..d5ac595  HEAD -> main

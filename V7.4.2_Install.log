@@ -1,0 +1,94 @@
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,95): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,97): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,97): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,111): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,210): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,212): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,212): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,234): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,235): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,286): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,288): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,288): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,310): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,311): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,44): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,46): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,46): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,93): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,94): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+
+Oluşturma BAŞARISIZ OLDU.
+
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,95): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,97): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,97): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,111): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,210): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,212): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,212): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,234): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,235): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,286): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,288): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,288): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,310): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,311): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,44): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,46): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,46): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,93): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,94): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+    0 Uyarı
+    19 Hata
+
+Geçen Süre 00:00:04.92
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj geri yüklendi (1,61 sn içinde).
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,95): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,97): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,97): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,111): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,210): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,212): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,212): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,234): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,235): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,286): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,288): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,288): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,310): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,311): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,44): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,46): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,46): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,93): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,94): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+
+Oluşturma BAŞARISIZ OLDU.
+
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,95): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,97): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,97): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,111): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,210): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,212): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,212): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,234): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,235): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,286): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,288): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,288): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,310): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(30,311): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,44): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,46): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,46): error CS1056: Beklenmeyen karakter: '`' [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,93): error CS1003: Sözdizimi hatası, ',' bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml.cs(184,94): error CS1002: ; bekleniyor [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+    0 Uyarı
+    19 Hata
+
+Geçen Süre 00:00:01.92

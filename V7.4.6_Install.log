@@ -1,0 +1,51 @@
+At C:\Users\CASPER\AppData\Local\Temp\AGERP746_2938124889\out\patch.ps1:10 char:35
++ $c=$c.Replace('Ba«fÉ??«∂˜l«fÉ??«'∂Ò','Ba\u011Fl\u0131').Replace('Ba« ...
++                                   ~
+Missing ')' in method call.
+At C:\Users\CASPER\AppData\Local\Temp\AGERP746_2938124889\out\patch.ps1:10 char:35
++ ... «∂˜l«fÉ??«'∂Ò','Ba\u011Fl\u0131').Replace('Ba«"è˜l«"∂Ò','Ba\u011Fl\u ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Unexpected token '∂Ò','Ba\u011Fl\u0131').Replace('Ba«"è˜l«"∂Ò','Ba\u011Fl\u0131').Replace('de«"è˜il','de\u011Fil').Repl
+ace('«"∂¯zinler','\u0130zinler').Replace('Se«f∂ıilmedi','Se\u00E7ilmedi')
+$c=$c.Replace('`r`n',[Environment]::NewLine).Replace('`n',[Environment]::NewLine).Replace('`r',[Environment]::NewLine)
+[IO.File]::WriteAllText($code,$c,(New-Object Text.UTF8Encoding($true)))
+$x=[IO.File]::ReadAllText($xaml)
+$x=[regex]::Replace($x,'Text="Microsoft 365 \([^\"]*\' in expression or statement.
+At C:\Users\CASPER\AppData\Local\Temp\AGERP746_2938124889\out\patch.ps1:14 char:54
++ $x=[regex]::Replace($x,'Text="Microsoft 365 \([^\"]*\)"','Text="Micro ...
++                                                      ~
+Unexpected token ')' in expression or statement.
+At C:\Users\CASPER\AppData\Local\Temp\AGERP746_2938124889\out\patch.ps1:14 char:65
++ ... Replace($x,'Text="Microsoft 365 \([^\"]*\)"','Text="Microsoft 365 (Ba ...
++                                                         ~~~~~~~~~
+Unexpected token 'Microsoft' in expression or statement.
+At C:\Users\CASPER\AppData\Local\Temp\AGERP746_2938124889\out\patch.ps1:14 char:82
++ ... x,'Text="Microsoft 365 \([^\"]*\)"','Text="Microsoft 365 (Ba&#x11F;l& ...
++                                                                 ~
+The ampersand (&) character is not allowed. The & operator is reserved for future use; wrap an ampersand in double quot
+ation marks ("&") to pass it as part of a string.
+At C:\Users\CASPER\AppData\Local\Temp\AGERP746_2938124889\out\patch.ps1:14 char:83
++ ... x,'Text="Microsoft 365 \([^\"]*\)"','Text="Microsoft 365 (Ba&#x11F;l& ...
++                                                                  ~
+Missing closing ')' in expression.
+At C:\Users\CASPER\AppData\Local\Temp\AGERP746_2938124889\out\patch.ps1:21 char:36
++  $w=$w.Replace('Ba«fÉ??«∂˜l«fÉ??«'∂Ò','Ba\u011Fl\u0131').Replace('Ba ...
++                                    ~
+Missing ')' in method call.
+At C:\Users\CASPER\AppData\Local\Temp\AGERP746_2938124889\out\patch.ps1:21 char:36
++ ... «∂˜l«fÉ??«'∂Ò','Ba\u011Fl\u0131').Replace('Ba«"è˜l«"∂Ò','Ba\u011Fl\u ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Unexpected token '∂Ò','Ba\u011Fl\u0131').Replace('Ba«"è˜l«"∂Ò','Ba\u011Fl\u0131').Replace('de«"è˜il','de\u011Fil').Repl
+ace('Se«f∂ıilmedi','Se\u00E7ilmedi').Replace('Se«f∂ıili','Se\u00E7ili')
+ $w=$w.Replace('"HazéÒr' in expression or statement.
+At C:\Users\CASPER\AppData\Local\Temp\AGERP746_2938124889\out\patch.ps1:22 char:113
++ ... )"').Replace('SetProgress(0,"HazéÒr")','SetProgress(0,"Haz\u0131r")')
++                                                                      ~~~~
+The string is missing the terminator: ".
+At C:\Users\CASPER\AppData\Local\Temp\AGERP746_2938124889\out\patch.ps1:19 char:23
++ if(Test-Path $watcher){
++                       ~
+Missing closing '}' in statement block or type definition.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : MissingEndParenthesisInMethodCall
+ 

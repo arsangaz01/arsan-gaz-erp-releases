@@ -1,0 +1,814 @@
+V7.3.2 baslangic €ar 30.09.2026 16:54:36,84
+Proje: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis
+SUCCESS: The process "ArsanGazERP.AgentWatcher.exe" with PID 9500 has been terminated.
+ERROR: The process "ArsanGazERP.LocalAgent.exe" not found.
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : 30 Eyll 2026 €arŸamba 16:54:37
+   Source : C:\ArsanGazERP\AgentWatcher\
+     Dest : C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\
+
+    Files : *.*
+	    
+  Options : *.* /S /E /DCOPY:DA /COPY:DAT /MOVE /XJ /R:1 /W:1 
+
+------------------------------------------------------------------------------
+
+	                   2	C:\ArsanGazERP\AgentWatcher\
+	    New File  		     557	ArsanGazERP.AgentWatcher.csproj100%  
+	    New File  		   10469	Program.cs100%  
+	  New Dir          0	C:\ArsanGazERP\AgentWatcher\bin\
+	  New Dir          0	C:\ArsanGazERP\AgentWatcher\bin\Release\
+	  New Dir          0	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\
+	  New Dir        221	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\
+	    New File  		   20776	Accessibility.dll100%  
+	    New File  		   33974	ArsanGazERP.AgentWatcher.deps.json100%  
+	    New File  		   31744	ArsanGazERP.AgentWatcher.dll100%  
+	    New File  		  162304	ArsanGazERP.AgentWatcher.exe 80%  100%  
+	    New File  		   16760	ArsanGazERP.AgentWatcher.pdb100%  
+	    New File  		     529	ArsanGazERP.AgentWatcher.runtimeconfig.json100%  
+	    New File  		  317736	clretwrc.dll 41%   82%  100%  
+	    New File  		  674088	clrgc.dll 38%   77%  100%  
+	    New File  		  711464	clrgcexp.dll 36%   73%  100%  
+	    New File  		   1.9 m	clrjit.dll 12%   25%   37%   50%   62%   75%   87%  100%  
+	    New File  		   4.4 m	coreclr.dll 11%   22%   34%   45%   56%   68%   79%   90%  100%  
+	    New File  		   71552	createdump.exe100%  
+	    New File  		  379688	hostfxr.dll 34%   69%  100%  
+	    New File  		  378664	hostpolicy.dll 34%   69%  100%  
+	    New File  		  980776	Microsoft.CSharp.dll 26%   53%   80%  100%  
+	    New File  		   2.2 m	Microsoft.DiaSymReader.Native.amd64.dll 22%   44%   66%   88%  100%  
+	    New File  		   1.2 m	Microsoft.Identity.Client.dll 20%   41%   62%   82%  100%  
+	    New File  		   19504	Microsoft.IdentityModel.Abstractions.dll100%  
+	    New File  		   1.1 m	Microsoft.VisualBasic.Core.dll 21%   43%   65%   87%  100%  
+	    New File  		   18728	Microsoft.VisualBasic.dll100%  
+	    New File  		  247632	Microsoft.VisualBasic.Forms.dll 52%  100%  
+	    New File  		   15656	Microsoft.Win32.Primitives.dll100%  
+	    New File  		   34600	Microsoft.Win32.Registry.AccessControl.dll100%  
+	    New File  		  116520	Microsoft.Win32.Registry.dll100%  
+	    New File  		  116520	Microsoft.Win32.SystemEvents.dll100%  
+	    New File  		   1.2 m	mscordaccore.dll 19%   38%   57%   77%   96%  100%  
+	    New File  		   1.2 m	mscordaccore_amd64_amd64_10.0.1226.42308.dll 19%   38%   57%   77%   96%  100%  
+	    New File  		   1.1 m	mscordbi.dll 21%   42%   63%   84%  100%  
+	    New File  		   59728	mscorlib.dll100%  
+	    New File  		  133968	mscorrc.dll 97%  100%  
+	    New File  		  536344	msquic.dll 48%   97%  100%  
+	    New File  		  100648	netstandard.dll100%  
+	    New File  		   15144	System.AppContext.dll100%  
+	    New File  		   15144	System.Buffers.dll100%  
+	    New File  		  476968	System.CodeDom.dll 27%   54%   82%  100%  
+	    New File  		  231248	System.Collections.Concurrent.dll 56%  100%  
+	    New File  		  296744	System.Collections.dll 44%   88%  100%  
+	    New File  		  976680	System.Collections.Immutable.dll 26%   53%   80%  100%  
+	    New File  		  104232	System.Collections.NonGeneric.dll100%  
+	    New File  		  104272	System.Collections.Specialized.dll100%  
+	    New File  		  198480	System.ComponentModel.Annotations.dll 66%  100%  
+	    New File  		   16720	System.ComponentModel.DataAnnotations.dll100%  
+	    New File  		   30544	System.ComponentModel.dll100%  
+	    New File  		   46888	System.ComponentModel.EventBasedAsync.dll100%  
+	    New File  		   79656	System.ComponentModel.Primitives.dll100%  
+	    New File  		  767784	System.ComponentModel.TypeConverter.dll 34%   68%  100%  
+	    New File  		 1046352	System.Configuration.ConfigurationManager.dll 25%   50%   75%  100%  
+	    New File  		   19240	System.Configuration.dll100%  
+	    New File  		  169808	System.Console.dll 77%  100%  
+	    New File  		   23336	System.Core.dll100%  
+	    New File  		   2.6 m	System.Data.Common.dll 18%   37%   56%   75%   94%  100%  
+	    New File  		   15656	System.Data.DataSetExtensions.dll100%  
+	    New File  		   25424	System.Data.dll100%  
+	    New File  		   23376	System.Design.dll100%  
+	    New File  		   16208	System.Diagnostics.Contracts.dll100%  
+	    New File  		   15656	System.Diagnostics.Debug.dll100%  
+	    New File  		  501544	System.Diagnostics.DiagnosticSource.dll 26%   52%   78%  100%  
+	    New File  		  366376	System.Diagnostics.EventLog.dll 35%   71%  100%  
+	    New File  		  800552	System.Diagnostics.EventLog.Messages.dll 32%   65%   98%  100%  
+	    New File  		   46928	System.Diagnostics.FileVersionInfo.dll100%  
+	    New File  		  300840	System.Diagnostics.PerformanceCounter.dll 43%   87%  100%  
+	    New File  		  329552	System.Diagnostics.Process.dll 39%   79%  100%  
+	    New File  		   46888	System.Diagnostics.StackTrace.dll100%  
+	    New File  		   67368	System.Diagnostics.TextWriterTraceListener.dll100%  
+	    New File  		   15144	System.Diagnostics.Tools.dll100%  
+	    New File  		  141096	System.Diagnostics.TraceSource.dll 92%  100%  
+	    New File  		   16208	System.Diagnostics.Tracing.dll100%  
+	    New File  		 1021736	System.DirectoryServices.dll 25%   51%   76%  100%  
+	    New File  		   50472	System.dll100%  
+	    New File  		  923432	System.Drawing.Common.dll 28%   56%   85%  100%  
+	    New File  		   15656	System.Drawing.Design.dll100%  
+	    New File  		   20816	System.Drawing.dll100%  
+	    New File  		  132944	System.Drawing.Primitives.dll 98%  100%  
+	    New File  		   16168	System.Dynamic.Runtime.dll100%  
+	    New File  		  239440	System.Formats.Asn1.dll 54%  100%  
+	    New File  		  137000	System.Formats.Nrbf.dll 95%  100%  
+	    New File  		  272168	System.Formats.Tar.dll 48%   96%  100%  
+	    New File  		   15656	System.Globalization.Calendars.dll100%  
+	    New File  		   15696	System.Globalization.dll100%  
+	    New File  		   15144	System.Globalization.Extensions.dll100%  
+	    New File  		   83752	System.IO.Compression.Brotli.dll100%  
+	    New File  		  419624	System.IO.Compression.dll 31%   62%   93%  100%  
+	    New File  		   15184	System.IO.Compression.FileSystem.dll100%  
+	    New File  		  937256	System.IO.Compression.Native.dll 27%   55%   83%  100%  
+	    New File  		  100176	System.IO.Compression.ZipFile.dll100%  
+	    New File  		   15656	System.IO.dll100%  
+	    New File  		  104232	System.IO.FileSystem.AccessControl.dll100%  
+	    New File  		   15656	System.IO.FileSystem.dll100%  
+	    New File  		   55120	System.IO.FileSystem.DriveInfo.dll100%  
+	    New File  		   15144	System.IO.FileSystem.Primitives.dll100%  
+	    New File  		   87848	System.IO.FileSystem.Watcher.dll100%  
+	    New File  		   87848	System.IO.IsolatedStorage.dll100%  
+	    New File  		   83752	System.IO.MemoryMappedFiles.dll100%  
+	    New File  		  321360	System.IO.Packaging.dll 40%   81%  100%  
+	    New File  		  190248	System.IO.Pipelines.dll 68%  100%  
+	    New File  		   15656	System.IO.Pipes.AccessControl.dll100%  
+	    New File  		  165712	System.IO.Pipes.dll 79%  100%  
+	    New File  		   15696	System.IO.UnmanagedMemoryStream.dll100%  
+	    New File  		   1.2 m	System.Linq.AsyncEnumerable.dll 20%   40%   60%   81%  100%  
+	    New File  		  698192	System.Linq.dll 37%   75%  100%  
+	    New File  		   3.4 m	System.Linq.Expressions.dll 14%   28%   43%   57%   72%   86%  100%  
+	    New File  		  775976	System.Linq.Parallel.dll 33%   67%  100%  
+	    New File  		  182056	System.Linq.Queryable.dll 71%  100%  
+	    New File  		  161576	System.Memory.dll 81%  100%  
+	    New File  		   17192	System.Net.dll100%  
+	    New File  		   1.6 m	System.Net.Http.dll 15%   30%   45%   60%   75%   90%  100%  
+	    New File  		  128848	System.Net.Http.Json.dll100%  
+	    New File  		  534312	System.Net.HttpListener.dll 49%   98%  100%  
+	    New File  		  481064	System.Net.Mail.dll 27%   54%   81%  100%  
+	    New File  		  124712	System.Net.NameResolution.dll100%  
+	    New File  		  157520	System.Net.NetworkInformation.dll 83%  100%  
+	    New File  		   91984	System.Net.Ping.dll100%  
+	    New File  		  210728	System.Net.Primitives.dll 62%  100%  
+	    New File  		  358224	System.Net.Quic.dll 36%   73%  100%  
+	    New File  		  374568	System.Net.Requests.dll 34%   69%  100%  
+	    New File  		  665424	System.Net.Security.dll 39%   78%  100%  
+	    New File  		   83752	System.Net.ServerSentEvents.dll100%  
+	    New File  		   15144	System.Net.ServicePoint.dll100%  
+	    New File  		  530216	System.Net.Sockets.dll 49%   98%  100%  
+	    New File  		  165672	System.Net.WebClient.dll 79%  100%  
+	    New File  		   63312	System.Net.WebHeaderCollection.dll100%  
+	    New File  		   42832	System.Net.WebProxy.dll100%  
+	    New File  		  104232	System.Net.WebSockets.Client.dll100%  
+	    New File  		  243496	System.Net.WebSockets.dll 53%  100%  
+	    New File  		   15184	System.Numerics.dll100%  
+	    New File  		   15656	System.Numerics.Vectors.dll100%  
+	    New File  		   79656	System.ObjectModel.dll100%  
+	    New File  		  15.2 m	System.Private.CoreLib.dll  6.5% 13.0% 19.6% 26.1% 32.6% 39.2% 45.7% 52.3% 58.8% 65.3% 71.9% 78.4% 85.0% 91.5% 98.0%100%  
+	    New File  		   1.9 m	System.Private.DataContractSerialization.dll 12%   25%   38%   50%   63%   76%   88%  100%  
+	    New File  		  255824	System.Private.Uri.dll 51%  100%  
+	    New File  		   1.8 m	System.Private.Windows.Core.dll 13%   27%   41%   55%   68%   82%   96%  100%  
+	    New File  		  427816	System.Private.Windows.GdiPlus.dll 30%   61%   91%  100%  
+	    New File  		   7.4 m	System.Private.Xml.dll  6.7% 13.4% 20.1% 26.9% 33.6% 40.3% 47.1% 53.8% 60.5% 67.3% 74.0% 80.7% 87.5% 94.2%100%  
+	    New File  		  390952	System.Private.Xml.Linq.dll 33%   67%  100%  
+	    New File  		   75600	System.Reflection.DispatchProxy.dll100%  
+	    New File  		   16168	System.Reflection.dll100%  
+	    New File  		  309032	System.Reflection.Emit.dll 42%   84%  100%  
+	    New File  		   15656	System.Reflection.Emit.ILGeneration.dll100%  
+	    New File  		   15656	System.Reflection.Emit.Lightweight.dll100%  
+	    New File  		   15144	System.Reflection.Extensions.dll100%  
+	    New File  		   1.1 m	System.Reflection.Metadata.dll 22%   45%   67%   90%  100%  
+	    New File  		   15656	System.Reflection.Primitives.dll100%  
+	    New File  		   42792	System.Reflection.TypeExtensions.dll100%  
+	    New File  		  194344	System.Resources.Extensions.dll 67%  100%  
+	    New File  		   15144	System.Resources.Reader.dll100%  
+	    New File  		   15696	System.Resources.ResourceManager.dll100%  
+	    New File  		   50984	System.Resources.Writer.dll100%  
+	    New File  		   15184	System.Runtime.CompilerServices.Unsafe.dll100%  
+	    New File  		   30504	System.Runtime.CompilerServices.VisualC.dll100%  
+	    New File  		   44840	System.Runtime.dll100%  
+	    New File  		   17704	System.Runtime.Extensions.dll100%  
+	    New File  		   15656	System.Runtime.Handles.dll100%  
+	    New File  		  112464	System.Runtime.InteropServices.dll100%  
+	    New File  		   50984	System.Runtime.InteropServices.JavaScript.dll100%  
+	    New File  		   15656	System.Runtime.InteropServices.RuntimeInformation.dll100%  
+	    New File  		   17192	System.Runtime.Intrinsics.dll100%  
+	    New File  		   15656	System.Runtime.Loader.dll100%  
+	    New File  		  354128	System.Runtime.Numerics.dll 37%   74%  100%  
+	    New File  		   17192	System.Runtime.Serialization.dll100%  
+	    New File  		  124712	System.Runtime.Serialization.Formatters.dll100%  
+	    New File  		   15656	System.Runtime.Serialization.Json.dll100%  
+	    New File  		   38696	System.Runtime.Serialization.Primitives.dll100%  
+	    New File  		   16680	System.Runtime.Serialization.Xml.dll100%  
+	    New File  		  227112	System.Security.AccessControl.dll 57%  100%  
+	    New File  		  100176	System.Security.Claims.dll100%  
+	    New File  		   17232	System.Security.Cryptography.Algorithms.dll100%  
+	    New File  		   16168	System.Security.Cryptography.Cng.dll100%  
+	    New File  		   16208	System.Security.Cryptography.Csp.dll100%  
+	    New File  		   2.4 m	System.Security.Cryptography.dll 20%   41%   61%   82%  100%  
+	    New File  		   15656	System.Security.Cryptography.Encoding.dll100%  
+	    New File  		   15656	System.Security.Cryptography.OpenSsl.dll100%  
+	    New File  		  767784	System.Security.Cryptography.Pkcs.dll 34%   68%  100%  
+	    New File  		   15656	System.Security.Cryptography.Primitives.dll100%  
+	    New File  		   59216	System.Security.Cryptography.ProtectedData.dll100%  
+	    New File  		   16680	System.Security.Cryptography.X509Certificates.dll100%  
+	    New File  		  452392	System.Security.Cryptography.Xml.dll 28%   57%   86%  100%  
+	    New File  		   18256	System.Security.dll100%  
+	    New File  		  190248	System.Security.Permissions.dll 68%  100%  
+	    New File  		   15144	System.Security.Principal.dll100%  
+	    New File  		  178000	System.Security.Principal.Windows.dll 73%  100%  
+	    New File  		   15696	System.Security.SecureString.dll100%  
+	    New File  		   16680	System.ServiceModel.Web.dll100%  
+	    New File  		   15696	System.ServiceProcess.dll100%  
+	    New File  		  862032	System.Text.Encoding.CodePages.dll 30%   60%   91%  100%  
+	    New File  		   15696	System.Text.Encoding.dll100%  
+	    New File  		   15656	System.Text.Encoding.Extensions.dll100%  
+	    New File  		  124752	System.Text.Encodings.Web.dll100%  
+	    New File  		   1.8 m	System.Text.Json.dll 13%   27%   41%   55%   69%   83%   97%  100%  
+	    New File  		 1034064	System.Text.RegularExpressions.dll 25%   50%   76%  100%  
+	    New File  		   75560	System.Threading.AccessControl.dll100%  
+	    New File  		  157480	System.Threading.Channels.dll 83%  100%  
+	    New File  		   83792	System.Threading.dll100%  
+	    New File  		   15696	System.Threading.Overlapped.dll100%  
+	    New File  		  472872	System.Threading.Tasks.Dataflow.dll 27%   55%   83%  100%  
+	    New File  		   16680	System.Threading.Tasks.dll100%  
+	    New File  		   15696	System.Threading.Tasks.Extensions.dll100%  
+	    New File  		  132904	System.Threading.Tasks.Parallel.dll 98%  100%  
+	    New File  		   15696	System.Threading.Thread.dll100%  
+	    New File  		   15656	System.Threading.ThreadPool.dll100%  
+	    New File  		   15144	System.Threading.Timer.dll100%  
+	    New File  		   16720	System.Transactions.dll100%  
+	    New File  		  640808	System.Transactions.Local.dll 40%   81%  100%  
+	    New File  		   15696	System.ValueTuple.dll100%  
+	    New File  		   15144	System.Web.dll100%  
+	    New File  		   63272	System.Web.HttpUtility.dll100%  
+	    New File  		   15696	System.Windows.dll100%  
+	    New File  		  120616	System.Windows.Extensions.dll100%  
+	    New File  		   5.8 m	System.Windows.Forms.Design.dll  8.6% 17.2% 25.8% 34.4% 43.0% 51.6% 60.2% 68.8% 77.4% 86.0% 94.6%100%  
+	    New File  		   16168	System.Windows.Forms.Design.Editors.dll100%  
+	    New File  		  13.0 m	System.Windows.Forms.dll  7.6% 15.2% 22.9% 30.5% 38.2% 45.8% 53.5% 61.1% 68.8% 76.4% 84.0% 91.7% 99.3%100%  
+	    New File  		   3.4 m	System.Windows.Forms.Primitives.dll 14%   28%   43%   57%   72%   86%  100%  
+	    New File  		   23376	System.Xml.dll100%  
+	    New File  		   15696	System.Xml.Linq.dll100%  
+	    New File  		   21840	System.Xml.ReaderWriter.dll100%  
+	    New File  		   16208	System.Xml.Serialization.dll100%  
+	    New File  		   15696	System.Xml.XDocument.dll100%  
+	    New File  		   15656	System.Xml.XmlDocument.dll100%  
+	    New File  		   17744	System.Xml.XmlSerializer.dll100%  
+	    New File  		   15656	System.Xml.XPath.dll100%  
+	    New File  		   30504	System.Xml.XPath.XDocument.dll100%  
+	    New File  		   16208	WindowsBase.dll100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\cs\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  269096	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  369960	System.Windows.Forms.resources.dll 35%   70%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\de\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  270120	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  378664	System.Windows.Forms.resources.dll 34%   69%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\es\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  269608	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15696	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  370512	System.Windows.Forms.resources.dll 35%   70%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\fr\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  270632	System.Windows.Forms.Design.resources.dll 48%   96%  100%  
+	    New File  		   15696	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  377640	System.Windows.Forms.resources.dll 34%   69%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\it\
+	    New File  		   25424	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  270632	System.Windows.Forms.Design.resources.dll 48%   96%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  373032	System.Windows.Forms.resources.dll 35%   70%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\ja\
+	    New File  		   25936	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  276264	System.Windows.Forms.Design.resources.dll 47%   94%  100%  
+	    New File  		   16168	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  413992	System.Windows.Forms.resources.dll 31%   63%   94%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\ko\
+	    New File  		   25424	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  271656	System.Windows.Forms.Design.resources.dll 48%   96%  100%  
+	    New File  		   16168	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  375592	System.Windows.Forms.resources.dll 34%   69%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\pl\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  269096	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  370984	System.Windows.Forms.resources.dll 35%   70%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\pt-BR\
+	    New File  		   25424	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  269136	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  363816	System.Windows.Forms.resources.dll 36%   72%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\ru\
+	    New File  		   26448	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  285992	System.Windows.Forms.Design.resources.dll 45%   91%  100%  
+	    New File  		   16168	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  482600	System.Windows.Forms.resources.dll 27%   54%   81%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\tr\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  268584	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15696	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  365864	System.Windows.Forms.resources.dll 35%   71%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\zh-Hans\
+	    New File  		   24872	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  263976	System.Windows.Forms.Design.resources.dll 49%   99%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  323408	System.Windows.Forms.resources.dll 40%   81%  100%  
+	  New Dir          4	C:\ArsanGazERP\AgentWatcher\bin\Release\net10.0-windows\win-x64\zh-Hant\
+	    New File  		   24872	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  264488	System.Windows.Forms.Design.resources.dll 49%   99%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  329000	System.Windows.Forms.resources.dll 39%   79%  100%  
+	  New Dir          5	C:\ArsanGazERP\AgentWatcher\obj\
+	    New File  		   23584	ArsanGazERP.AgentWatcher.csproj.nuget.dgspec.json100%  
+	    New File  		    1751	ArsanGazERP.AgentWatcher.csproj.nuget.g.props100%  
+	    New File  		     150	ArsanGazERP.AgentWatcher.csproj.nuget.g.targets100%  
+	    New File  		   29839	project.assets.json100%  
+	    New File  		    1090	project.nuget.cache100%  
+	  New Dir          0	C:\ArsanGazERP\AgentWatcher\obj\Release\
+	  New Dir          0	C:\ArsanGazERP\AgentWatcher\obj\Release\net10.0-windows\
+	  New Dir         19	C:\ArsanGazERP\AgentWatcher\obj\Release\net10.0-windows\win-x64\
+	    New File  		     200	.NETCoreApp,Version=v10.0.AssemblyAttributes.cs100%  
+	    New File  		  162304	apphost.exe 80%  100%  
+	    New File  		       0	ArsanGaz.9C48D49D.Up2Date
+	    New File  		    1166	ArsanGazERP.AgentWatcher.AssemblyInfo.cs100%  
+	    New File  		      66	ArsanGazERP.AgentWatcher.AssemblyInfoInputs.cache100%  
+	    New File  		    2147	ArsanGazERP.AgentWatcher.assets.cache100%  
+	    New File  		    1010	ArsanGazERP.AgentWatcher.csproj.AssemblyReference.cache100%  
+	    New File  		      66	ArsanGazERP.AgentWatcher.csproj.CoreCompileInputs.cache100%  
+	    New File  		   27762	ArsanGazERP.AgentWatcher.csproj.FileListAbsolute.txt100%  
+	    New File  		   32539	ArsanGazERP.AgentWatcher.deps.json100%  
+	    New File  		   31744	ArsanGazERP.AgentWatcher.dll100%  
+	    New File  		      66	ArsanGazERP.AgentWatcher.genbundle.cache100%  
+	    New File  		    1429	ArsanGazERP.AgentWatcher.GeneratedMSBuildEditorConfig.editorconfig100%  
+	    New File  		      66	ArsanGazERP.AgentWatcher.genpublishdeps.cache100%  
+	    New File  		      66	ArsanGazERP.AgentWatcher.genruntimeconfig.cache100%  
+	    New File  		     305	ArsanGazERP.AgentWatcher.GlobalUsings.g.cs100%  
+	    New File  		   16760	ArsanGazERP.AgentWatcher.pdb100%  
+	    New File  		     132	PublishOutputs.c64fc11684.txt100%  
+	    New File  		   9.5 m	singlefilehost.exe 10.4% 20.9% 31.4% 41.9% 52.4% 62.9% 73.4% 83.9% 94.4%100%  
+	  New Dir          1	C:\ArsanGazERP\AgentWatcher\obj\Release\net10.0-windows\win-x64\ref\
+	    New File  		    8192	ArsanGazERP.AgentWatcher.dll100%  
+	  New Dir          1	C:\ArsanGazERP\AgentWatcher\obj\Release\net10.0-windows\win-x64\refint\
+	    New File  		    8192	ArsanGazERP.AgentWatcher.dll100%  
+	  New Dir          2	C:\ArsanGazERP\AgentWatcher\publish\
+	    New File  		 111.9 m	ArsanGazERP.AgentWatcher.exe  0.8%  1.7%  2.6%  3.5%  4.4%  5.3%  6.2%  7.1%  8.0%  8.9%  9.8% 10.7% 11.6% 12.5% 13.3% 14.2% 15.1% 16.0% 16.9% 17.8% 18.7% 19.6% 20.5% 21.4% 22.3% 23.2% 24.1% 25.0% 25.9% 26.7% 27.6% 28.5% 29.4% 30.3% 31.2% 32.1% 33.0% 33.9% 34.8% 35.7% 36.6% 37.5% 38.4% 39.3% 40.1% 41.0% 41.9% 42.8% 43.7% 44.6% 45.5% 46.4% 47.3% 48.2% 49.1% 50.0% 50.9% 51.8% 52.7% 53.5% 54.4% 55.3% 56.2% 57.1% 58.0% 58.9% 59.8% 60.7% 61.6% 62.5% 63.4% 64.3% 65.2% 66.1% 66.9% 67.8% 68.7% 69.6% 70.5% 71.4% 72.3% 73.2% 74.1% 75.0% 75.9% 76.8% 77.7% 78.6% 79.5% 80.3% 81.2% 82.1% 83.0% 83.9% 84.8% 85.7% 86.6% 87.5% 88.4% 89.3% 90.2% 91.1% 92.0% 92.9% 93.7% 94.6% 95.5% 96.4% 97.3% 98.2% 99.1%100%  
+	    New File  		   16760	ArsanGazERP.AgentWatcher.pdb100%  
+
+------------------------------------------------------------------------------
+
+               Total    Copied   Skipped  Mismatch    FAILED    Extras
+    Dirs :        25        24         1         0         0         0
+   Files :       303       303         0         0         0         0
+   Bytes :  240.33 m  240.33 m         0         0         0         0
+   Times :   0:00:01   0:00:00                       0:00:00   0:00:00
+
+
+   Speed :           257417017 Bytes/sec.
+   Speed :           14729.519 MegaBytes/min.
+   Ended : 30 Eyll 2026 €arŸamba 16:54:38
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : 30 Eyll 2026 €arŸamba 16:54:38
+   Source : C:\ArsanGazERP\AgentWatcherData\
+     Dest : C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcherData\
+
+    Files : *.*
+	    
+  Options : *.* /S /E /DCOPY:DA /COPY:DAT /MOVE /XJ /R:1 /W:1 
+
+------------------------------------------------------------------------------
+
+	                   0	C:\ArsanGazERP\AgentWatcherData\
+	  New Dir          0	C:\ArsanGazERP\AgentWatcherData\Logs\
+	  New Dir          2	C:\ArsanGazERP\AgentWatcherData\Queue\
+	    New File  		      64	20260930-164823-51f6e3edf4b94defa4ae27ec26570b76.task.txt100%  
+	    New File  		       9	20260930-164904-114e2ef4b9994141adfafa6f7a89698b.task.txt100%  
+	  New Dir          2	C:\ArsanGazERP\AgentWatcherData\Reports\
+	    New File  		       7	connection-test.txt100%  
+	    New File  		     335	m365-tasks-latest.json100%  
+
+------------------------------------------------------------------------------
+
+               Total    Copied   Skipped  Mismatch    FAILED    Extras
+    Dirs :         4         3         1         0         0         0
+   Files :         4         4         0         0         0         0
+   Bytes :       415       415         0         0         0         0
+   Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+   Speed :               69166 Bytes/sec.
+   Speed :               3.957 MegaBytes/min.
+   Ended : 30 Eyll 2026 €arŸamba 16:54:38
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : 30 Eyll 2026 €arŸamba 16:54:38
+   Source : C:\ArsanGazERP\LocalAgent\
+     Dest : C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\LocalAgent\
+
+    Files : *.*
+	    
+  Options : *.* /S /E /DCOPY:DA /COPY:DAT /MOVE /XJ /R:1 /W:1 
+
+------------------------------------------------------------------------------
+
+	                   2	C:\ArsanGazERP\LocalAgent\
+	    New File  		     459	ArsanGazERP.LocalAgent.csproj100%  
+	    New File  		    3232	Program.cs100%  
+	  New Dir          0	C:\ArsanGazERP\LocalAgent\bin\
+	  New Dir          0	C:\ArsanGazERP\LocalAgent\bin\Release\
+	  New Dir          0	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\
+	  New Dir        219	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\
+	    New File  		   20776	Accessibility.dll100%  
+	    New File  		   32600	ArsanGazERP.LocalAgent.deps.json100%  
+	    New File  		   16384	ArsanGazERP.LocalAgent.dll100%  
+	    New File  		  162304	ArsanGazERP.LocalAgent.exe 80%  100%  
+	    New File  		   13840	ArsanGazERP.LocalAgent.pdb100%  
+	    New File  		     529	ArsanGazERP.LocalAgent.runtimeconfig.json100%  
+	    New File  		  317736	clretwrc.dll 41%   82%  100%  
+	    New File  		  674088	clrgc.dll 38%   77%  100%  
+	    New File  		  711464	clrgcexp.dll 36%   73%  100%  
+	    New File  		   1.9 m	clrjit.dll 12%   25%   37%   50%   62%   75%   87%  100%  
+	    New File  		   4.4 m	coreclr.dll 11%   22%   34%   45%   56%   68%   79%   90%  100%  
+	    New File  		   71552	createdump.exe100%  
+	    New File  		  379688	hostfxr.dll 34%   69%  100%  
+	    New File  		  378664	hostpolicy.dll 34%   69%  100%  
+	    New File  		  980776	Microsoft.CSharp.dll 26%   53%   80%  100%  
+	    New File  		   2.2 m	Microsoft.DiaSymReader.Native.amd64.dll 22%   44%   66%   88%  100%  
+	    New File  		   1.1 m	Microsoft.VisualBasic.Core.dll 21%   43%   65%   87%  100%  
+	    New File  		   18728	Microsoft.VisualBasic.dll100%  
+	    New File  		  247632	Microsoft.VisualBasic.Forms.dll 52%  100%  
+	    New File  		   15656	Microsoft.Win32.Primitives.dll100%  
+	    New File  		   34600	Microsoft.Win32.Registry.AccessControl.dll100%  
+	    New File  		  116520	Microsoft.Win32.Registry.dll100%  
+	    New File  		  116520	Microsoft.Win32.SystemEvents.dll100%  
+	    New File  		   1.2 m	mscordaccore.dll 19%   38%   57%   77%   96%  100%  
+	    New File  		   1.2 m	mscordaccore_amd64_amd64_10.0.1226.42308.dll 19%   38%   57%   77%   96%  100%  
+	    New File  		   1.1 m	mscordbi.dll 21%   42%   63%   84%  100%  
+	    New File  		   59728	mscorlib.dll100%  
+	    New File  		  133968	mscorrc.dll 97%  100%  
+	    New File  		  536344	msquic.dll 48%   97%  100%  
+	    New File  		  100648	netstandard.dll100%  
+	    New File  		   15144	System.AppContext.dll100%  
+	    New File  		   15144	System.Buffers.dll100%  
+	    New File  		  476968	System.CodeDom.dll 27%   54%   82%  100%  
+	    New File  		  231248	System.Collections.Concurrent.dll 56%  100%  
+	    New File  		  296744	System.Collections.dll 44%   88%  100%  
+	    New File  		  976680	System.Collections.Immutable.dll 26%   53%   80%  100%  
+	    New File  		  104232	System.Collections.NonGeneric.dll100%  
+	    New File  		  104272	System.Collections.Specialized.dll100%  
+	    New File  		  198480	System.ComponentModel.Annotations.dll 66%  100%  
+	    New File  		   16720	System.ComponentModel.DataAnnotations.dll100%  
+	    New File  		   30544	System.ComponentModel.dll100%  
+	    New File  		   46888	System.ComponentModel.EventBasedAsync.dll100%  
+	    New File  		   79656	System.ComponentModel.Primitives.dll100%  
+	    New File  		  767784	System.ComponentModel.TypeConverter.dll 34%   68%  100%  
+	    New File  		 1046352	System.Configuration.ConfigurationManager.dll 25%   50%   75%  100%  
+	    New File  		   19240	System.Configuration.dll100%  
+	    New File  		  169808	System.Console.dll 77%  100%  
+	    New File  		   23336	System.Core.dll100%  
+	    New File  		   2.6 m	System.Data.Common.dll 18%   37%   56%   75%   94%  100%  
+	    New File  		   15656	System.Data.DataSetExtensions.dll100%  
+	    New File  		   25424	System.Data.dll100%  
+	    New File  		   23376	System.Design.dll100%  
+	    New File  		   16208	System.Diagnostics.Contracts.dll100%  
+	    New File  		   15656	System.Diagnostics.Debug.dll100%  
+	    New File  		  501544	System.Diagnostics.DiagnosticSource.dll 26%   52%   78%  100%  
+	    New File  		  366376	System.Diagnostics.EventLog.dll 35%   71%  100%  
+	    New File  		  800552	System.Diagnostics.EventLog.Messages.dll 32%   65%   98%  100%  
+	    New File  		   46928	System.Diagnostics.FileVersionInfo.dll100%  
+	    New File  		  300840	System.Diagnostics.PerformanceCounter.dll 43%   87%  100%  
+	    New File  		  329552	System.Diagnostics.Process.dll 39%   79%  100%  
+	    New File  		   46888	System.Diagnostics.StackTrace.dll100%  
+	    New File  		   67368	System.Diagnostics.TextWriterTraceListener.dll100%  
+	    New File  		   15144	System.Diagnostics.Tools.dll100%  
+	    New File  		  141096	System.Diagnostics.TraceSource.dll 92%  100%  
+	    New File  		   16208	System.Diagnostics.Tracing.dll100%  
+	    New File  		 1021736	System.DirectoryServices.dll 25%   51%   76%  100%  
+	    New File  		   50472	System.dll100%  
+	    New File  		  923432	System.Drawing.Common.dll 28%   56%   85%  100%  
+	    New File  		   15656	System.Drawing.Design.dll100%  
+	    New File  		   20816	System.Drawing.dll100%  
+	    New File  		  132944	System.Drawing.Primitives.dll 98%  100%  
+	    New File  		   16168	System.Dynamic.Runtime.dll100%  
+	    New File  		  239440	System.Formats.Asn1.dll 54%  100%  
+	    New File  		  137000	System.Formats.Nrbf.dll 95%  100%  
+	    New File  		  272168	System.Formats.Tar.dll 48%   96%  100%  
+	    New File  		   15656	System.Globalization.Calendars.dll100%  
+	    New File  		   15696	System.Globalization.dll100%  
+	    New File  		   15144	System.Globalization.Extensions.dll100%  
+	    New File  		   83752	System.IO.Compression.Brotli.dll100%  
+	    New File  		  419624	System.IO.Compression.dll 31%   62%   93%  100%  
+	    New File  		   15184	System.IO.Compression.FileSystem.dll100%  
+	    New File  		  937256	System.IO.Compression.Native.dll 27%   55%   83%  100%  
+	    New File  		  100176	System.IO.Compression.ZipFile.dll100%  
+	    New File  		   15656	System.IO.dll100%  
+	    New File  		  104232	System.IO.FileSystem.AccessControl.dll100%  
+	    New File  		   15656	System.IO.FileSystem.dll100%  
+	    New File  		   55120	System.IO.FileSystem.DriveInfo.dll100%  
+	    New File  		   15144	System.IO.FileSystem.Primitives.dll100%  
+	    New File  		   87848	System.IO.FileSystem.Watcher.dll100%  
+	    New File  		   87848	System.IO.IsolatedStorage.dll100%  
+	    New File  		   83752	System.IO.MemoryMappedFiles.dll100%  
+	    New File  		  321360	System.IO.Packaging.dll 40%   81%  100%  
+	    New File  		  190248	System.IO.Pipelines.dll 68%  100%  
+	    New File  		   15656	System.IO.Pipes.AccessControl.dll100%  
+	    New File  		  165712	System.IO.Pipes.dll 79%  100%  
+	    New File  		   15696	System.IO.UnmanagedMemoryStream.dll100%  
+	    New File  		   1.2 m	System.Linq.AsyncEnumerable.dll 20%   40%   60%   81%  100%  
+	    New File  		  698192	System.Linq.dll 37%   75%  100%  
+	    New File  		   3.4 m	System.Linq.Expressions.dll 14%   28%   43%   57%   72%   86%  100%  
+	    New File  		  775976	System.Linq.Parallel.dll 33%   67%  100%  
+	    New File  		  182056	System.Linq.Queryable.dll 71%  100%  
+	    New File  		  161576	System.Memory.dll 81%  100%  
+	    New File  		   17192	System.Net.dll100%  
+	    New File  		   1.6 m	System.Net.Http.dll 15%   30%   45%   60%   75%   90%  100%  
+	    New File  		  128848	System.Net.Http.Json.dll100%  
+	    New File  		  534312	System.Net.HttpListener.dll 49%   98%  100%  
+	    New File  		  481064	System.Net.Mail.dll 27%   54%   81%  100%  
+	    New File  		  124712	System.Net.NameResolution.dll100%  
+	    New File  		  157520	System.Net.NetworkInformation.dll 83%  100%  
+	    New File  		   91984	System.Net.Ping.dll100%  
+	    New File  		  210728	System.Net.Primitives.dll 62%  100%  
+	    New File  		  358224	System.Net.Quic.dll 36%   73%  100%  
+	    New File  		  374568	System.Net.Requests.dll 34%   69%  100%  
+	    New File  		  665424	System.Net.Security.dll 39%   78%  100%  
+	    New File  		   83752	System.Net.ServerSentEvents.dll100%  
+	    New File  		   15144	System.Net.ServicePoint.dll100%  
+	    New File  		  530216	System.Net.Sockets.dll 49%   98%  100%  
+	    New File  		  165672	System.Net.WebClient.dll 79%  100%  
+	    New File  		   63312	System.Net.WebHeaderCollection.dll100%  
+	    New File  		   42832	System.Net.WebProxy.dll100%  
+	    New File  		  104232	System.Net.WebSockets.Client.dll100%  
+	    New File  		  243496	System.Net.WebSockets.dll 53%  100%  
+	    New File  		   15184	System.Numerics.dll100%  
+	    New File  		   15656	System.Numerics.Vectors.dll100%  
+	    New File  		   79656	System.ObjectModel.dll100%  
+	    New File  		  15.2 m	System.Private.CoreLib.dll  6.5% 13.0% 19.6% 26.1% 32.6% 39.2% 45.7% 52.3% 58.8% 65.3% 71.9% 78.4% 85.0% 91.5% 98.0%100%  
+	    New File  		   1.9 m	System.Private.DataContractSerialization.dll 12%   25%   38%   50%   63%   76%   88%  100%  
+	    New File  		  255824	System.Private.Uri.dll 51%  100%  
+	    New File  		   1.8 m	System.Private.Windows.Core.dll 13%   27%   41%   55%   68%   82%   96%  100%  
+	    New File  		  427816	System.Private.Windows.GdiPlus.dll 30%   61%   91%  100%  
+	    New File  		   7.4 m	System.Private.Xml.dll  6.7% 13.4% 20.1% 26.9% 33.6% 40.3% 47.1% 53.8% 60.5% 67.3% 74.0% 80.7% 87.5% 94.2%100%  
+	    New File  		  390952	System.Private.Xml.Linq.dll 33%   67%  100%  
+	    New File  		   75600	System.Reflection.DispatchProxy.dll100%  
+	    New File  		   16168	System.Reflection.dll100%  
+	    New File  		  309032	System.Reflection.Emit.dll 42%   84%  100%  
+	    New File  		   15656	System.Reflection.Emit.ILGeneration.dll100%  
+	    New File  		   15656	System.Reflection.Emit.Lightweight.dll100%  
+	    New File  		   15144	System.Reflection.Extensions.dll100%  
+	    New File  		   1.1 m	System.Reflection.Metadata.dll 22%   45%   67%   90%  100%  
+	    New File  		   15656	System.Reflection.Primitives.dll100%  
+	    New File  		   42792	System.Reflection.TypeExtensions.dll100%  
+	    New File  		  194344	System.Resources.Extensions.dll 67%  100%  
+	    New File  		   15144	System.Resources.Reader.dll100%  
+	    New File  		   15696	System.Resources.ResourceManager.dll100%  
+	    New File  		   50984	System.Resources.Writer.dll100%  
+	    New File  		   15184	System.Runtime.CompilerServices.Unsafe.dll100%  
+	    New File  		   30504	System.Runtime.CompilerServices.VisualC.dll100%  
+	    New File  		   44840	System.Runtime.dll100%  
+	    New File  		   17704	System.Runtime.Extensions.dll100%  
+	    New File  		   15656	System.Runtime.Handles.dll100%  
+	    New File  		  112464	System.Runtime.InteropServices.dll100%  
+	    New File  		   50984	System.Runtime.InteropServices.JavaScript.dll100%  
+	    New File  		   15656	System.Runtime.InteropServices.RuntimeInformation.dll100%  
+	    New File  		   17192	System.Runtime.Intrinsics.dll100%  
+	    New File  		   15656	System.Runtime.Loader.dll100%  
+	    New File  		  354128	System.Runtime.Numerics.dll 37%   74%  100%  
+	    New File  		   17192	System.Runtime.Serialization.dll100%  
+	    New File  		  124712	System.Runtime.Serialization.Formatters.dll100%  
+	    New File  		   15656	System.Runtime.Serialization.Json.dll100%  
+	    New File  		   38696	System.Runtime.Serialization.Primitives.dll100%  
+	    New File  		   16680	System.Runtime.Serialization.Xml.dll100%  
+	    New File  		  227112	System.Security.AccessControl.dll 57%  100%  
+	    New File  		  100176	System.Security.Claims.dll100%  
+	    New File  		   17232	System.Security.Cryptography.Algorithms.dll100%  
+	    New File  		   16168	System.Security.Cryptography.Cng.dll100%  
+	    New File  		   16208	System.Security.Cryptography.Csp.dll100%  
+	    New File  		   2.4 m	System.Security.Cryptography.dll 20%   41%   61%   82%  100%  
+	    New File  		   15656	System.Security.Cryptography.Encoding.dll100%  
+	    New File  		   15656	System.Security.Cryptography.OpenSsl.dll100%  
+	    New File  		  767784	System.Security.Cryptography.Pkcs.dll 34%   68%  100%  
+	    New File  		   15656	System.Security.Cryptography.Primitives.dll100%  
+	    New File  		   59216	System.Security.Cryptography.ProtectedData.dll100%  
+	    New File  		   16680	System.Security.Cryptography.X509Certificates.dll100%  
+	    New File  		  452392	System.Security.Cryptography.Xml.dll 28%   57%   86%  100%  
+	    New File  		   18256	System.Security.dll100%  
+	    New File  		  190248	System.Security.Permissions.dll 68%  100%  
+	    New File  		   15144	System.Security.Principal.dll100%  
+	    New File  		  178000	System.Security.Principal.Windows.dll 73%  100%  
+	    New File  		   15696	System.Security.SecureString.dll100%  
+	    New File  		   16680	System.ServiceModel.Web.dll100%  
+	    New File  		   15696	System.ServiceProcess.dll100%  
+	    New File  		  862032	System.Text.Encoding.CodePages.dll 30%   60%   91%  100%  
+	    New File  		   15696	System.Text.Encoding.dll100%  
+	    New File  		   15656	System.Text.Encoding.Extensions.dll100%  
+	    New File  		  124752	System.Text.Encodings.Web.dll100%  
+	    New File  		   1.8 m	System.Text.Json.dll 13%   27%   41%   55%   69%   83%   97%  100%  
+	    New File  		 1034064	System.Text.RegularExpressions.dll 25%   50%   76%  100%  
+	    New File  		   75560	System.Threading.AccessControl.dll100%  
+	    New File  		  157480	System.Threading.Channels.dll 83%  100%  
+	    New File  		   83792	System.Threading.dll100%  
+	    New File  		   15696	System.Threading.Overlapped.dll100%  
+	    New File  		  472872	System.Threading.Tasks.Dataflow.dll 27%   55%   83%  100%  
+	    New File  		   16680	System.Threading.Tasks.dll100%  
+	    New File  		   15696	System.Threading.Tasks.Extensions.dll100%  
+	    New File  		  132904	System.Threading.Tasks.Parallel.dll 98%  100%  
+	    New File  		   15696	System.Threading.Thread.dll100%  
+	    New File  		   15656	System.Threading.ThreadPool.dll100%  
+	    New File  		   15144	System.Threading.Timer.dll100%  
+	    New File  		   16720	System.Transactions.dll100%  
+	    New File  		  640808	System.Transactions.Local.dll 40%   81%  100%  
+	    New File  		   15696	System.ValueTuple.dll100%  
+	    New File  		   15144	System.Web.dll100%  
+	    New File  		   63272	System.Web.HttpUtility.dll100%  
+	    New File  		   15696	System.Windows.dll100%  
+	    New File  		  120616	System.Windows.Extensions.dll100%  
+	    New File  		   5.8 m	System.Windows.Forms.Design.dll  8.6% 17.2% 25.8% 34.4% 43.0% 51.6% 60.2% 68.8% 77.4% 86.0% 94.6%100%  
+	    New File  		   16168	System.Windows.Forms.Design.Editors.dll100%  
+	    New File  		  13.0 m	System.Windows.Forms.dll  7.6% 15.2% 22.9% 30.5% 38.2% 45.8% 53.5% 61.1% 68.8% 76.4% 84.0% 91.7% 99.3%100%  
+	    New File  		   3.4 m	System.Windows.Forms.Primitives.dll 14%   28%   43%   57%   72%   86%  100%  
+	    New File  		   23376	System.Xml.dll100%  
+	    New File  		   15696	System.Xml.Linq.dll100%  
+	    New File  		   21840	System.Xml.ReaderWriter.dll100%  
+	    New File  		   16208	System.Xml.Serialization.dll100%  
+	    New File  		   15696	System.Xml.XDocument.dll100%  
+	    New File  		   15656	System.Xml.XmlDocument.dll100%  
+	    New File  		   17744	System.Xml.XmlSerializer.dll100%  
+	    New File  		   15656	System.Xml.XPath.dll100%  
+	    New File  		   30504	System.Xml.XPath.XDocument.dll100%  
+	    New File  		   16208	WindowsBase.dll100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\cs\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  269096	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  369960	System.Windows.Forms.resources.dll 35%   70%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\de\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  270120	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  378664	System.Windows.Forms.resources.dll 34%   69%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\es\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  269608	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15696	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  370512	System.Windows.Forms.resources.dll 35%   70%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\fr\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  270632	System.Windows.Forms.Design.resources.dll 48%   96%  100%  
+	    New File  		   15696	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  377640	System.Windows.Forms.resources.dll 34%   69%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\it\
+	    New File  		   25424	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  270632	System.Windows.Forms.Design.resources.dll 48%   96%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  373032	System.Windows.Forms.resources.dll 35%   70%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\ja\
+	    New File  		   25936	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  276264	System.Windows.Forms.Design.resources.dll 47%   94%  100%  
+	    New File  		   16168	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  413992	System.Windows.Forms.resources.dll 31%   63%   94%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\ko\
+	    New File  		   25424	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  271656	System.Windows.Forms.Design.resources.dll 48%   96%  100%  
+	    New File  		   16168	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  375592	System.Windows.Forms.resources.dll 34%   69%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\pl\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  269096	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  370984	System.Windows.Forms.resources.dll 35%   70%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\pt-BR\
+	    New File  		   25424	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  269136	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  363816	System.Windows.Forms.resources.dll 36%   72%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\ru\
+	    New File  		   26448	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  285992	System.Windows.Forms.Design.resources.dll 45%   91%  100%  
+	    New File  		   16168	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  482600	System.Windows.Forms.resources.dll 27%   54%   81%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\tr\
+	    New File  		   25384	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  268584	System.Windows.Forms.Design.resources.dll 48%   97%  100%  
+	    New File  		   15696	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  365864	System.Windows.Forms.resources.dll 35%   71%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\zh-Hans\
+	    New File  		   24872	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  263976	System.Windows.Forms.Design.resources.dll 49%   99%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  323408	System.Windows.Forms.resources.dll 40%   81%  100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgent\bin\Release\net10.0-windows\win-x64\zh-Hant\
+	    New File  		   24872	Microsoft.VisualBasic.Forms.resources.dll100%  
+	    New File  		  264488	System.Windows.Forms.Design.resources.dll 49%   99%  100%  
+	    New File  		   15656	System.Windows.Forms.Primitives.resources.dll100%  
+	    New File  		  329000	System.Windows.Forms.resources.dll 39%   79%  100%  
+	  New Dir          5	C:\ArsanGazERP\LocalAgent\obj\
+	    New File  		   23429	ArsanGazERP.LocalAgent.csproj.nuget.dgspec.json100%  
+	    New File  		    1751	ArsanGazERP.LocalAgent.csproj.nuget.g.props100%  
+	    New File  		     150	ArsanGazERP.LocalAgent.csproj.nuget.g.targets100%  
+	    New File  		   25511	project.assets.json100%  
+	    New File  		     812	project.nuget.cache100%  
+	  New Dir          0	C:\ArsanGazERP\LocalAgent\obj\Release\
+	  New Dir          0	C:\ArsanGazERP\LocalAgent\obj\Release\net10.0-windows\
+	  New Dir         18	C:\ArsanGazERP\LocalAgent\obj\Release\net10.0-windows\win-x64\
+	    New File  		     200	.NETCoreApp,Version=v10.0.AssemblyAttributes.cs100%  
+	    New File  		  162304	apphost.exe 80%  100%  
+	    New File  		       0	ArsanGaz.8700F134.Up2Date
+	    New File  		    1160	ArsanGazERP.LocalAgent.AssemblyInfo.cs100%  
+	    New File  		      66	ArsanGazERP.LocalAgent.AssemblyInfoInputs.cache100%  
+	    New File  		     725	ArsanGazERP.LocalAgent.assets.cache100%  
+	    New File  		      66	ArsanGazERP.LocalAgent.csproj.CoreCompileInputs.cache100%  
+	    New File  		   26850	ArsanGazERP.LocalAgent.csproj.FileListAbsolute.txt100%  
+	    New File  		   31165	ArsanGazERP.LocalAgent.deps.json100%  
+	    New File  		   16384	ArsanGazERP.LocalAgent.dll100%  
+	    New File  		      66	ArsanGazERP.LocalAgent.genbundle.cache100%  
+	    New File  		    1425	ArsanGazERP.LocalAgent.GeneratedMSBuildEditorConfig.editorconfig100%  
+	    New File  		      66	ArsanGazERP.LocalAgent.genpublishdeps.cache100%  
+	    New File  		      66	ArsanGazERP.LocalAgent.genruntimeconfig.cache100%  
+	    New File  		     305	ArsanGazERP.LocalAgent.GlobalUsings.g.cs100%  
+	    New File  		   13840	ArsanGazERP.LocalAgent.pdb100%  
+	    New File  		     124	PublishOutputs.bbc7926ada.txt100%  
+	    New File  		   9.5 m	singlefilehost.exe 10.4% 20.9% 31.4% 41.9% 52.4% 62.9% 73.4% 83.9% 94.4%100%  
+	  New Dir          1	C:\ArsanGazERP\LocalAgent\obj\Release\net10.0-windows\win-x64\ref\
+	    New File  		    6656	ArsanGazERP.LocalAgent.dll100%  
+	  New Dir          1	C:\ArsanGazERP\LocalAgent\obj\Release\net10.0-windows\win-x64\refint\
+	    New File  		    6656	ArsanGazERP.LocalAgent.dll100%  
+	  New Dir          2	C:\ArsanGazERP\LocalAgent\publish\
+	    New File  		 110.7 m	ArsanGazERP.LocalAgent.exe  0.9%  1.8%  2.7%  3.6%  4.5%  5.4%  6.3%  7.2%  8.1%  9.0%  9.9% 10.8% 11.7% 12.6% 13.5% 14.4% 15.3% 16.2% 17.1% 18.0% 18.9% 19.8% 20.7% 21.6% 22.5% 23.4% 24.3% 25.2% 26.1% 27.0% 28.0% 28.9% 29.8% 30.7% 31.6% 32.5% 33.4% 34.3% 35.2% 36.1% 37.0% 37.9% 38.8% 39.7% 40.6% 41.5% 42.4% 43.3% 44.2% 45.1% 46.0% 46.9% 47.8% 48.7% 49.6% 50.5% 51.4% 52.3% 53.2% 54.1% 55.1% 56.0% 56.9% 57.8% 58.7% 59.6% 60.5% 61.4% 62.3% 63.2% 64.1% 65.0% 65.9% 66.8% 67.7% 68.6% 69.5% 70.4% 71.3% 72.2% 73.1% 74.0% 74.9% 75.8% 76.7% 77.6% 78.5% 79.4% 80.3% 81.2% 82.2% 83.1% 84.0% 84.9% 85.8% 86.7% 87.6% 88.5% 89.4% 90.3% 91.2% 92.1% 93.0% 93.9% 94.8% 95.7% 96.6% 97.5% 98.4% 99.3%100%  
+	    New File  		   13840	ArsanGazERP.LocalAgent.pdb100%  
+
+------------------------------------------------------------------------------
+
+               Total    Copied   Skipped  Mismatch    FAILED    Extras
+    Dirs :        25        24         1         0         0         0
+   Files :       300       300         0         0         0         0
+   Bytes :  237.80 m  237.80 m         0         0         0         0
+   Times :   0:00:02   0:00:01                       0:00:00   0:00:00
+
+
+   Speed :           132778863 Bytes/sec.
+   Speed :            7597.667 MegaBytes/min.
+   Ended : 30 Eyll 2026 €arŸamba 16:54:40
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : 30 Eyll 2026 €arŸamba 16:54:40
+   Source : C:\ArsanGazERP\LocalAgentData\
+     Dest : C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\LocalAgentData\
+
+    Files : *.*
+	    
+  Options : *.* /S /E /DCOPY:DA /COPY:DAT /MOVE /XJ /R:1 /W:1 
+
+------------------------------------------------------------------------------
+
+	                   0	C:\ArsanGazERP\LocalAgentData\
+	  New Dir          0	C:\ArsanGazERP\LocalAgentData\Backups\
+	  New Dir          1	C:\ArsanGazERP\LocalAgentData\Logs\
+	    New File  		     286	local-agent-20260930.log100%  
+	  New Dir          4	C:\ArsanGazERP\LocalAgentData\Reports\
+	    New File  		       8	connection-test.txt100%  
+	    New File  		    2436	report-20260930-155507.json100%  
+	    New File  		     187	report-20260930-160222.json100%  
+	    New File  		     187	report-20260930-161007.json100%  
+
+------------------------------------------------------------------------------
+
+               Total    Copied   Skipped  Mismatch    FAILED    Extras
+    Dirs :         4         3         1         0         0         0
+   Files :         5         5         0         0         0         0
+   Bytes :     3.0 k     3.0 k         0         0         0         0
+   Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+   Speed :              443428 Bytes/sec.
+   Speed :              25.373 MegaBytes/min.
+   Ended : 30 Eyll 2026 €arŸamba 16:54:40
+
+  Geri yÃ¼klenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj geri yÃ¼klendi (396 ms iÃ§inde).
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+
+OluÅŸturma baÅŸarÄ±lÄ± oldu.
+    0 UyarÄ±
+    0 Hata
+
+GeÃ§en SÃ¼re 00:00:02.70
+  Geri yÃ¼klenecek projeler belirleniyor...
+  Geri yÃ¼kleme iÃ§in tÃ¼m projeler gÃ¼ncel.
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\publish\
+˜Ÿlem baŸaryla tamamland.
+˜Ÿlem baŸaryla tamamland.
+[main 2ff582a] V7.3.2 move agents into ERP project and clean legacy outputs
+ 5 files changed, 179 insertions(+)
+ create mode 100644 ArsanGazERP_Guncel_Ac.cmd
+ create mode 100644 Directory.Build.props
+ create mode 100644 Tools/AgentWatcher/ArsanGazERP.AgentWatcher.csproj
+ create mode 100644 Tools/AgentWatcher/Program.cs
+To https://github.com/arsangaz01/arsan-gaz-erp-releases.git
+   d5ac595..2ff582a  HEAD -> main
+BASARILI: V7.3.2 tamamlandi.

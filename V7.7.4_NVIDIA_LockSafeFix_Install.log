@@ -1,0 +1,36 @@
+﻿V7.7.4 NVIDIA locked-file safe repair started
+2026-09-30T21:33:52 Tools\LocalAgent source backup completed; bin obj publish excluded
+2026-09-30T21:33:52 Backup completed
+2026-09-30T21:33:52 Historical logs and queue archives excluded from active-source validation
+2026-09-30T21:33:53 Obsolete Tools\LocalAgent removed after source-only backup
+2026-09-30T21:33:53 Active-source validation passed; historical logs were not scanned
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(69,174): error CS0103: 'RefreshQueue' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(97,291): error CS0103: 'CancelActive' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(97,342): error CS0103: 'RetryFailed' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(97,381): error CS0103: 'RefreshQueue' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(110,64): error CS0103: 'SelectExcel' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(110,107): error CS0103: 'TestExcel' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(110,147): error CS0103: 'ListExcelSheets' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(111,178): error CS0103: 'SaveAndTestNvidiaAsync' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(111,330): error CS0103: 'RemoveNvidia' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(149,312): error CS0103: 'RefreshQueue' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(153,1376): error CS0103: 'RefreshQueue' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+
+Oluşturma BAŞARISIZ OLDU.
+
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(69,174): error CS0103: 'RefreshQueue' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(97,291): error CS0103: 'CancelActive' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(97,342): error CS0103: 'RetryFailed' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(97,381): error CS0103: 'RefreshQueue' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(110,64): error CS0103: 'SelectExcel' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(110,107): error CS0103: 'TestExcel' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(110,147): error CS0103: 'ListExcelSheets' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(111,178): error CS0103: 'SaveAndTestNvidiaAsync' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(111,330): error CS0103: 'RemoveNvidia' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(149,312): error CS0103: 'RefreshQueue' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs(153,1376): error CS0103: 'RefreshQueue' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj]
+    0 Uyarı
+    11 Hata
+
+Geçen Süre 00:00:04.07
+2026-09-30T21:34:01 ERROR: AgentWatcher build failed

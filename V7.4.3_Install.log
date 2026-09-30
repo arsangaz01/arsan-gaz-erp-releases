@@ -1,0 +1,31 @@
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+  ArsanGazERP -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ArsanGazERP.dll
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:07.07
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:02.76
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj geri yüklendi (740 ms içinde).
+  ArsanGazERP -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ArsanGazERP.dll
+  ArsanGazERP -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\publish\current\
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\publish\
+[main 48f7df0] V7.4.3 repair literal newline tokens and idle zero
+ 3 files changed, 38 insertions(+), 4 deletions(-)
+ create mode 100644 Services/UnifiedConnectionStateService.cs
+To https://github.com/arsangaz01/arsan-gaz-erp-releases.git
+   3e08704..48f7df0  HEAD -> main

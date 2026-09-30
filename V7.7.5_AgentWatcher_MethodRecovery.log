@@ -1,0 +1,29 @@
+﻿V7.7.5 AgentWatcher missing-method recovery started
+2026-09-30T21:35:44 Broken source and project backed up
+2026-09-30T21:35:44 Complete source restored from: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\_Backups\V7.7.0_NVIDIA_Main\Tools\AgentWatcher\Program.cs
+2026-09-30T21:35:44 NVIDIA set as the only selectable/default provider without deleting method bodies
+2026-09-30T21:35:44 Verified method: void RefreshQueue(
+2026-09-30T21:35:44 Verified method: void CancelActive(
+2026-09-30T21:35:44 Verified method: void RetryFailed(
+2026-09-30T21:35:44 Verified method: void SelectExcel(
+2026-09-30T21:35:44 Verified method: void TestExcel(
+2026-09-30T21:35:44 Verified method: void ListExcelSheets(
+2026-09-30T21:35:44 Verified method: Task SaveAndTestNvidiaAsync(
+2026-09-30T21:35:44 Verified method: void RemoveNvidia(
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj geri yüklendi (450 ms içinde).
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:04.16
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj geri yüklendi (508 ms içinde).
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\publish\
+2026-09-30T21:35:58 Build and publish passed with all methods present
+2026-09-30T21:36:05 AgentWatcher V7.7.5 started
+2026-09-30T21:36:09 GitHub sync attempted
+2026-09-30T21:36:09 SUCCESS

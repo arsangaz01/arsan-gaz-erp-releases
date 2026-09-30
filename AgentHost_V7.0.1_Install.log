@@ -1,0 +1,21 @@
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\AgentHost\ArsanGazERP.AgentHost.csproj geri yüklendi (383 ms içinde).
+  ArsanGazERP.AgentHost -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\AgentHost\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentHost.dll
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:02.62
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+  ArsanGazERP.AgentHost -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\AgentHost\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentHost.dll
+  ArsanGazERP.AgentHost -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\AgentHost\publish\
+��lem ba�ar�yla tamamland�.
+[main c479d9b] V7.0.1 correct Agent Host install location
+ 3 files changed, 11 insertions(+)
+ create mode 100644 AgentHost/ArsanGazERP.AgentHost.csproj
+ create mode 100644 AgentHost/Program.cs
+ create mode 100644 AgentHost/README.txt
+To https://github.com/arsangaz01/arsan-gaz-erp-releases.git
+   af175cb..c479d9b  HEAD -> main

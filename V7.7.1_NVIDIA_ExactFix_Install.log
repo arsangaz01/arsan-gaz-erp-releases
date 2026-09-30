@@ -1,0 +1,5 @@
+﻿V7.7.1 NVIDIA-only exact-source repair started
+2026-09-30T21:27:31 Backup completed
+2026-09-30T21:27:31 Ollama computer cleanup/control intentionally separated from V7.7.0 main package
+2026-09-30T21:27:31 Remaining reference: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs:78 foreach (string key in new[] { "ERP", "AgentWatcher", "Microsoft 365", "İzinler", "Excel", "NVIDIA NIM", "Ollama", "Görev Kuyruğu" }) grid.Controls.Add(StatusCard(key));
+2026-09-30T21:27:31 ERROR: Aktif kaynaklarda Ollama baÅŸvurusu kaldÄ±

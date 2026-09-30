@@ -1,0 +1,27 @@
+V7.6.1 start Çar 30.09.2026 20:01:24,50
+        1 file(s) copied.
+Input Length = 5674
+Output Length = 4146
+CertUtil: -decode command completed successfully.
+        1 file(s) copied.
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj geri yüklendi (729 ms içinde).
+  ArsanGazERP -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ArsanGazERP.dll
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:05.22
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj geri yüklendi (713 ms içinde).
+  ArsanGazERP -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ArsanGazERP.dll
+  ArsanGazERP -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\publish\current.new\
+        1 dir(s) moved.
+        1 dir(s) moved.
+[main cc2f055] V7.6.1 add ERP AI Dashboard integration
+ 2 files changed, 164 insertions(+)
+ create mode 100644 Views/AiDashboardWindow.cs
+To https://github.com/arsangaz01/arsan-gaz-erp-releases.git
+   aeb9b97..cc2f055  HEAD -> main
+[SUCCESS] V7.6.1 build, publish and ERP startup verified.

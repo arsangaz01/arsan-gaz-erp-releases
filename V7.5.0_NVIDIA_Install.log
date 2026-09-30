@@ -1,0 +1,11 @@
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj geri yüklendi (1,74 sn içinde).
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\NvidiaNimService.cs(14,22): error CS0246: 'HttpClient' türü veya ad alanı adı bulunamadı (bir using yönergeniz veya derleme başvurunuz mu eksik?) [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+
+Oluşturma BAŞARISIZ OLDU.
+
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\NvidiaNimService.cs(14,22): error CS0246: 'HttpClient' türü veya ad alanı adı bulunamadı (bir using yönergeniz veya derleme başvurunuz mu eksik?) [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+    0 Uyarı
+    1 Hata
+
+Geçen Süre 00:00:04.65

@@ -1,0 +1,21 @@
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj geri yüklendi (1,57 sn içinde).
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(44,29): error CS0103: 'Path' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(44,42): error CS0103: 'Path' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(45,13): error CS0103: 'Directory' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(46,29): error CS0103: 'Path' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(48,19): error CS0103: 'File' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(68,22): error CS0103: 'Path' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+
+Oluşturma BAŞARISIZ OLDU.
+
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(44,29): error CS0103: 'Path' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(44,42): error CS0103: 'Path' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(45,13): error CS0103: 'Directory' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(46,29): error CS0103: 'Path' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(48,19): error CS0103: 'File' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Services\AutoUpdateLaunchService.cs(68,22): error CS0103: 'Path' adı geçerli bağlamda yok [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+    0 Uyarı
+    6 Hata
+
+Geçen Süre 00:00:03.01

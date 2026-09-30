@@ -1,0 +1,7 @@
+﻿V7.6.8 NVIDIA-only installation started
+2026-09-30T21:15:38 Source backup completed
+2026-09-30T21:15:50 Ollama application, models, cache, services, startup items and environment variables removed
+2026-09-30T21:15:50 Remaining Ollama reference: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs:78 foreach (string key in new[] { "ERP", "AgentWatcher", "Microsoft 365", "İzinler", "Excel", "NVIDIA NIM", "Ollama", "Görev Kuyruğu" }) grid.Controls.Add(StatusCard(key));
+2026-09-30T21:15:50 Remaining Ollama reference: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\Program.cs:153 async Task<string> ExecuteTaskAsync(TaskItem item){string prompt=$"Arsan Gaz ERP için güvenli ve uygulanabilir rapor üret. Görev türü: {item.Type}. Öncelik: {item.Priority}. Silme, ödeme, e-posta gönderme, fatura kesme veya yetki yükseltme yapma. İstek: {item.Title}";string p="NVIDIA NIM";if(p=="NVIDIA NIM"){try{return await AskNvidiaAsync(prompt);}catch(Exception ex){Append("NVIDIA başarısız, Ollama yedeğine geçiliyor: "+ex.Message);return await AskOllamaAsync(prompt);}}return await AskOllamaAsync(prompt);}
+2026-09-30T21:15:50 Remaining Ollama reference: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Views\AiDashboardWindow.cs:28 private readonly TextBlock ollamaValue = BodyText();
+2026-09-30T21:15:50 ERROR: Aktif kaynaklarda Ollama baÅŸvurusu kaldÄ±

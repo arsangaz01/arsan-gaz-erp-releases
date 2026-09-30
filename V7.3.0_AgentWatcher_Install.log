@@ -1,0 +1,88 @@
+============================================================
+ARSAN GAZ ERP V7.3 AGENTWATCHER TANI RAPORU
+Tarih: �ar 30.09.2026 16:36:21,86
+============================================================
+[VAR] Ana ERP proje dosyasi: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj
+[VAR] AgentWatcher kaynak klasoru: C:\ArsanGazERP\AgentWatcher
+[YOK] AgentWatcher proje dosyasi: C:\ArsanGazERP\AgentWatcher\ArsanGazERP.AgentWatcher.csproj
+[YOK] AgentWatcher publish klasoru: C:\ArsanGazERP\AgentWatcher\publish
+[YOK] AgentWatcher EXE: C:\ArsanGazERP\AgentWatcher\publish\ArsanGazERP.AgentWatcher.exe
+[VAR] AgentWatcherData klasoru: C:\ArsanGazERP\AgentWatcherData
+[VAR] Gorev kuyrugu: C:\ArsanGazERP\AgentWatcherData\Queue
+[VAR] AgentWatcher log klasoru: C:\ArsanGazERP\AgentWatcherData\Logs
+[VAR] AgentWatcher rapor klasoru: C:\ArsanGazERP\AgentWatcherData\Reports
+
+[OLLAMA]
+C:\Users\CASPER\AppData\Local\Programs\Ollama\ollama.exe
+NAME                  ID              SIZE      MODIFIED       
+qwen2.5-coder:1.5b    d7372fd82851    986 MB    17 minutes ago    
+gemma3:4b             a2af6cc3eb7f    3.3 GB    2 hours ago       
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+
+[DOTNET]
+C:\Program Files\dotnet\dotnet.exe
+.NET SDK:
+ Version:           10.0.401
+ Commit:            e34a38d2ae
+ Workload version:  10.0.400-manifests.63b36e85
+ MSBuild version:   18.9.11+e34a38d2a
+
+Çalışma Zamanı Ortamı:
+ OS Name:     Windows
+ OS Version:  10.0.19045
+ OS Platform: Windows
+ RID:         win-x64
+ Base Path:   C:\Program Files\dotnet\sdk\10.0.401\
+
+.NET iş yükleri yüklendi:
+Görüntülenecek yüklü iş yükü yok.
+Yeni bildirimler yüklenirken workload sets kullanacak şekilde yapılandırılmıştır.
+İş yükü kümesi yüklenmemiştir. Bir iş yükü seti yüklemek için “dotnet workload restore” komutunu çalıştırın.
+
+Host:
+  Version:      10.0.12
+  Architecture: x64
+  Commit:       95017c711e
+
+.NET SDKs installed:
+  8.0.425 [C:\Program Files\dotnet\sdk]
+  10.0.401 [C:\Program Files\dotnet\sdk]
+
+.NET runtimes installed:
+  Microsoft.AspNetCore.App 8.0.31 [C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 10.0.12 [C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App]
+  Microsoft.NETCore.App 8.0.31 [C:\Program Files\dotnet\shared\Microsoft.NETCore.App]
+  Microsoft.NETCore.App 10.0.12 [C:\Program Files\dotnet\shared\Microsoft.NETCore.App]
+  Microsoft.WindowsDesktop.App 8.0.31 [C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App]
+  Microsoft.WindowsDesktop.App 10.0.12 [C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App]
+
+Other architectures found:
+  x86   [C:\Program Files (x86)\dotnet]
+    registered at [HKLM\SOFTWARE\dotnet\Setup\InstalledVersions\x86\InstallLocation]
+
+Environment variables:
+  Not set
+
+global.json file:
+  Not found
+
+Learn more:
+  https://aka.ms/dotnet/info
+
+Download .NET:
+  https://aka.ms/dotnet/download
+
+[CALISAN SURECLER]
+INFO: No tasks are running which match the specified criteria.
+INFO: No tasks are running which match the specified criteria.
+INFO: No tasks are running which match the specified criteria.
+
+[WINDOWS BASLANGIC KAYDI]
+
+
+ERROR: The system was unable to find the specified registry key or value.
+
+[AGENTWATCHER BUILD TESTI]
+[HATA] Build testi yapilamadi. AgentWatcher csproj bulunamadi.
+
+[TANI TAMAMLANDI]

@@ -1,0 +1,60 @@
+Oluşturma başlatıldı: 30.09.2026 13:46:13.
+     1>1 düğümünde "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj" projesi (Clean hedef).
+     1>CoreClean:
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.csproj.AssemblyReference.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\MainWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\CrmWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\DatabaseManagementWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\OperationsWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\ProspectHunterWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\App.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\MainWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\CrmWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\DatabaseManagementWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\OperationsWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\ProspectHunterWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\App.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP_MarkupCompile.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.g.resources" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.GeneratedMSBuildEditorConfig.editorconfig" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfoInputs.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.csproj.CoreCompileInputs.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.sourcelink.json" dosyası siliniyor.
+     1>"C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj" Projesini Oluşturma İşlemi Tamamlandı (Clean hedef).
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:01.28
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\.NETCoreApp,Version=v10.0.AssemblyAttributes.cs(4,12): error CS0579: Yinelenen 'global::System.Runtime.Versioning.TargetFrameworkAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(13,12): error CS0579: Yinelenen 'System.Reflection.AssemblyCompanyAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(14,12): error CS0579: Yinelenen 'System.Reflection.AssemblyConfigurationAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(15,12): error CS0579: Yinelenen 'System.Reflection.AssemblyFileVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(16,12): error CS0579: Yinelenen 'System.Reflection.AssemblyInformationalVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(17,12): error CS0579: Yinelenen 'System.Reflection.AssemblyProductAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(18,12): error CS0579: Yinelenen 'System.Reflection.AssemblyTitleAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(19,12): error CS0579: Yinelenen 'System.Reflection.AssemblyVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(20,12): error CS0579: Yinelenen 'System.Runtime.Versioning.TargetPlatformAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\AgentHost\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AgentHost.GlobalUsings.g.cs(10,29): error CS0234: 'Forms' tür veya ad alanı adı 'System.Windows' ad alanında yok (bir derleme başvurunuz mu eksik?) [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+
+Oluşturma BAŞARISIZ OLDU.
+
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\.NETCoreApp,Version=v10.0.AssemblyAttributes.cs(4,12): error CS0579: Yinelenen 'global::System.Runtime.Versioning.TargetFrameworkAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(13,12): error CS0579: Yinelenen 'System.Reflection.AssemblyCompanyAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(14,12): error CS0579: Yinelenen 'System.Reflection.AssemblyConfigurationAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(15,12): error CS0579: Yinelenen 'System.Reflection.AssemblyFileVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(16,12): error CS0579: Yinelenen 'System.Reflection.AssemblyInformationalVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(17,12): error CS0579: Yinelenen 'System.Reflection.AssemblyProductAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(18,12): error CS0579: Yinelenen 'System.Reflection.AssemblyTitleAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(19,12): error CS0579: Yinelenen 'System.Reflection.AssemblyVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(20,12): error CS0579: Yinelenen 'System.Runtime.Versioning.TargetPlatformAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\AgentHost\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AgentHost.GlobalUsings.g.cs(10,29): error CS0234: 'Forms' tür veya ad alanı adı 'System.Windows' ad alanında yok (bir derleme başvurunuz mu eksik?) [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+    0 Uyarı
+    10 Hata
+
+Geçen Süre 00:00:01.83
+Derleme veya publish basarisiz. Kaynaklar geri yukleniyor.

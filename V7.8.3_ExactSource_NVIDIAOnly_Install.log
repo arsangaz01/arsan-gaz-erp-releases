@@ -1,0 +1,18 @@
+﻿V7.8.3 exact-source NVIDIA-only repair started
+2026-09-30T22:20:12 Exact collected source hash verified and backup completed
+2026-09-30T22:20:12 Exact Program.cs replacement and NVIDIA-only settings applied
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj geri yüklendi (1,35 sn içinde).
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:05.05
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\bin\Release\net10.0-windows\win-x64\ArsanGazERP.AgentWatcher.dll
+  ArsanGazERP.AgentWatcher -> C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\Tools\AgentWatcher\publish\
+2026-09-30T22:20:25 AgentWatcher build and publish passed
+2026-09-30T22:22:43 ERROR: NVIDIA gerÃ§ek baÄŸlantÄ± testi baÅŸarÄ±sÄ±z: İşlem zaman aşımına uğradı

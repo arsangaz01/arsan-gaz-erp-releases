@@ -1,0 +1,11 @@
+  Geri yüklenecek projeler belirleniyor...
+  C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj geri yüklendi (927 ms içinde).
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml(42,10): error MC3088: Özellik öğeleri bir öğenin içeriğinin ortasında olamaz. İçerikten önce veya sonra gelmelidirler. Satır 42 Konum 10. [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+
+Oluşturma BAŞARISIZ OLDU.
+
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\MainWindow.xaml(42,10): error MC3088: Özellik öğeleri bir öğenin içeriğinin ortasında olamaz. İçerikten önce veya sonra gelmelidirler. Satır 42 Konum 10. [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+    0 Uyarı
+    1 Hata
+
+Geçen Süre 00:00:01.57

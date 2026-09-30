@@ -1,0 +1,244 @@
+Oluşturma başlatıldı: 30.09.2026 13:42:02.
+     1>1 düğümünde "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj" projesi (Clean hedef).
+     1>CoreClean:
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Config\servers.json" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Update\update.json" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ArsanGazERP.exe" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ArsanGazERP.deps.json" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ArsanGazERP.runtimeconfig.json" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ArsanGazERP.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ArsanGazERP.pdb" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\CommunityToolkit.Mvvm.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\DocumentFormat.OpenXml.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\DocumentFormat.OpenXml.Framework.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Humanizer.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Build.Framework.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.CodeAnalysis.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.CodeAnalysis.CSharp.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.CodeAnalysis.CSharp.Workspaces.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.CodeAnalysis.Workspaces.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.CodeAnalysis.ExternalAccess.RazorCompiler.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.CodeAnalysis.Workspaces.MSBuild.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Data.Sqlite.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.EntityFrameworkCore.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.EntityFrameworkCore.Abstractions.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.EntityFrameworkCore.Design.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.EntityFrameworkCore.Relational.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.EntityFrameworkCore.Sqlite.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Caching.Abstractions.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Caching.Memory.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Configuration.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Configuration.Abstractions.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Configuration.Binder.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.DependencyInjection.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.DependencyInjection.Abstractions.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.DependencyModel.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Diagnostics.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Diagnostics.Abstractions.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Http.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Logging.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Logging.Abstractions.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Options.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Options.ConfigurationExtensions.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Extensions.Primitives.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Identity.Client.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.Identity.Client.Extensions.Msal.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.IdentityModel.Abstractions.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Microsoft.VisualStudio.SolutionPersistence.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Mono.TextTemplating.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\Newtonsoft.Json.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\SQLitePCLRaw.batteries_v2.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\SQLitePCLRaw.core.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\SQLitePCLRaw.provider.e_sqlite3.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\System.Composition.AttributedModel.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\System.Composition.Convention.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\System.Composition.Hosting.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\System.Composition.Runtime.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\System.Composition.TypedParts.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\cs\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\de\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\es\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\fr\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\it\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ja\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ko\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\pl\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\pt-BR\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ru\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\tr\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\zh-Hans\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\zh-Hant\Microsoft.CodeAnalysis.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\cs\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\de\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\es\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\fr\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\it\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ja\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ko\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\pl\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\pt-BR\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ru\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\tr\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\zh-Hans\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\zh-Hant\Microsoft.CodeAnalysis.CSharp.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\cs\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\de\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\es\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\fr\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\it\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ja\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ko\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\pl\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\pt-BR\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ru\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\tr\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\zh-Hans\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\zh-Hant\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\cs\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\de\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\es\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\fr\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\it\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ja\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ko\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\pl\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\pt-BR\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ru\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\tr\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\zh-Hans\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\zh-Hant\Microsoft.CodeAnalysis.Workspaces.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\cs\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\de\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\es\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\fr\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\it\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ja\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ko\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\pl\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\pt-BR\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\ru\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\tr\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\zh-Hans\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\zh-Hant\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\bin\Release\net10.0-windows\win-x64\e_sqlite3.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.csproj.AssemblyReference.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\MainWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\CrmWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\DatabaseManagementWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\OperationsWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\ProspectHunterWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\App.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\MainWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\CrmWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\DatabaseManagementWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\OperationsWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\ProspectHunterWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\App.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP_MarkupCompile.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.g.resources" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.GeneratedMSBuildEditorConfig.editorconfig" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfoInputs.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.csproj.CoreCompileInputs.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.sourcelink.json" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGaz.90530165.Up2Date" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\refint\ArsanGazERP.dll" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.pdb" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.genruntimeconfig.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ref\ArsanGazERP.dll" dosyası siliniyor.
+     1>"C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj" Projesini Oluşturma İşlemi Tamamlandı (Clean hedef).
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:01.60
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\.NETCoreApp,Version=v10.0.AssemblyAttributes.cs(4,12): error CS0579: Yinelenen 'global::System.Runtime.Versioning.TargetFrameworkAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(13,12): error CS0579: Yinelenen 'System.Reflection.AssemblyCompanyAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(14,12): error CS0579: Yinelenen 'System.Reflection.AssemblyConfigurationAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(15,12): error CS0579: Yinelenen 'System.Reflection.AssemblyFileVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(16,12): error CS0579: Yinelenen 'System.Reflection.AssemblyInformationalVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(17,12): error CS0579: Yinelenen 'System.Reflection.AssemblyProductAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(18,12): error CS0579: Yinelenen 'System.Reflection.AssemblyTitleAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(19,12): error CS0579: Yinelenen 'System.Reflection.AssemblyVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(20,12): error CS0579: Yinelenen 'System.Runtime.Versioning.TargetPlatformAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\AgentHost\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AgentHost.GlobalUsings.g.cs(10,29): error CS0234: 'Forms' tür veya ad alanı adı 'System.Windows' ad alanında yok (bir derleme başvurunuz mu eksik?) [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+
+Oluşturma BAŞARISIZ OLDU.
+
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\.NETCoreApp,Version=v10.0.AssemblyAttributes.cs(4,12): error CS0579: Yinelenen 'global::System.Runtime.Versioning.TargetFrameworkAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(13,12): error CS0579: Yinelenen 'System.Reflection.AssemblyCompanyAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(14,12): error CS0579: Yinelenen 'System.Reflection.AssemblyConfigurationAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(15,12): error CS0579: Yinelenen 'System.Reflection.AssemblyFileVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(16,12): error CS0579: Yinelenen 'System.Reflection.AssemblyInformationalVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(17,12): error CS0579: Yinelenen 'System.Reflection.AssemblyProductAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(18,12): error CS0579: Yinelenen 'System.Reflection.AssemblyTitleAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(19,12): error CS0579: Yinelenen 'System.Reflection.AssemblyVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(20,12): error CS0579: Yinelenen 'System.Runtime.Versioning.TargetPlatformAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\AgentHost\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AgentHost.GlobalUsings.g.cs(10,29): error CS0234: 'Forms' tür veya ad alanı adı 'System.Windows' ad alanında yok (bir derleme başvurunuz mu eksik?) [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+    0 Uyarı
+    10 Hata
+
+Geçen Süre 00:00:02.84
+Oluşturma başlatıldı: 30.09.2026 13:43:01.
+     1>1 düğümünde "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj" projesi (Clean hedef).
+     1>CoreClean:
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.csproj.AssemblyReference.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\MainWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\CrmWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\DatabaseManagementWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\OperationsWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\ProspectHunterWindow.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\App.baml" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\MainWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\CrmWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\DatabaseManagementWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\OperationsWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\Views\ProspectHunterWindow.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\App.g.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP_MarkupCompile.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.g.resources" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.GeneratedMSBuildEditorConfig.editorconfig" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfoInputs.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.csproj.CoreCompileInputs.cache" dosyası siliniyor.
+         "C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.sourcelink.json" dosyası siliniyor.
+     1>"C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj" Projesini Oluşturma İşlemi Tamamlandı (Clean hedef).
+
+Oluşturma başarılı oldu.
+    0 Uyarı
+    0 Hata
+
+Geçen Süre 00:00:00.98
+  Geri yüklenecek projeler belirleniyor...
+  Geri yükleme için tüm projeler güncel.
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\.NETCoreApp,Version=v10.0.AssemblyAttributes.cs(4,12): error CS0579: Yinelenen 'global::System.Runtime.Versioning.TargetFrameworkAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(13,12): error CS0579: Yinelenen 'System.Reflection.AssemblyCompanyAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(14,12): error CS0579: Yinelenen 'System.Reflection.AssemblyConfigurationAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(15,12): error CS0579: Yinelenen 'System.Reflection.AssemblyFileVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(16,12): error CS0579: Yinelenen 'System.Reflection.AssemblyInformationalVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(17,12): error CS0579: Yinelenen 'System.Reflection.AssemblyProductAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(18,12): error CS0579: Yinelenen 'System.Reflection.AssemblyTitleAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(19,12): error CS0579: Yinelenen 'System.Reflection.AssemblyVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(20,12): error CS0579: Yinelenen 'System.Runtime.Versioning.TargetPlatformAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\AgentHost\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AgentHost.GlobalUsings.g.cs(10,29): error CS0234: 'Forms' tür veya ad alanı adı 'System.Windows' ad alanında yok (bir derleme başvurunuz mu eksik?) [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+
+Oluşturma BAŞARISIZ OLDU.
+
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\.NETCoreApp,Version=v10.0.AssemblyAttributes.cs(4,12): error CS0579: Yinelenen 'global::System.Runtime.Versioning.TargetFrameworkAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(13,12): error CS0579: Yinelenen 'System.Reflection.AssemblyCompanyAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(14,12): error CS0579: Yinelenen 'System.Reflection.AssemblyConfigurationAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(15,12): error CS0579: Yinelenen 'System.Reflection.AssemblyFileVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(16,12): error CS0579: Yinelenen 'System.Reflection.AssemblyInformationalVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(17,12): error CS0579: Yinelenen 'System.Reflection.AssemblyProductAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(18,12): error CS0579: Yinelenen 'System.Reflection.AssemblyTitleAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(19,12): error CS0579: Yinelenen 'System.Reflection.AssemblyVersionAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AssemblyInfo.cs(20,12): error CS0579: Yinelenen 'System.Runtime.Versioning.TargetPlatformAttribute' özniteliği [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\AgentHost\obj\Release\net10.0-windows\win-x64\ArsanGazERP.AgentHost.GlobalUsings.g.cs(10,29): error CS0234: 'Forms' tür veya ad alanı adı 'System.Windows' ad alanında yok (bir derleme başvurunuz mu eksik?) [C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\ArsanGazERP.csproj]
+    0 Uyarı
+    10 Hata
+
+Geçen Süre 00:00:01.89

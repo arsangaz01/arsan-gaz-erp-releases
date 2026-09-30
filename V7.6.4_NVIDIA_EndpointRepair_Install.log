@@ -1,0 +1,9 @@
+﻿V7.6.4 NVIDIA endpoint repair started
+2026-09-30T20:12:52 Backup completed
+2026-09-30T20:12:53 Rejected model: meta/llama-3.3-70b-instruct | Uzak sunucu hata döndürdü: (410) Gitti.
+2026-09-30T20:12:53 Rejected model: microsoft/phi-4-mini-instruct | Uzak sunucu hata döndürdü: (410) Gitti.
+2026-09-30T20:12:53 Rejected model: meta/llama-3.2-3b-instruct | Uzak sunucu hata döndürdü: (410) Gitti.
+2026-09-30T20:12:54 Rejected model: meta/llama-3.2-1b-instruct | Uzak sunucu hata döndürdü: (410) Gitti.
+2026-09-30T20:12:54 Rejected model: mistralai/mixtral-8x7b-instruct | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:12:54 Rejected model: google/codegemma-7b | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:12:54 ERROR: None of the officially documented chat models accepted the request. See log.

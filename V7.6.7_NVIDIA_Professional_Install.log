@@ -1,0 +1,15 @@
+﻿V7.6.7 NVIDIA professional failover installation started
+2026-09-30T20:43:55 Backup completed
+2026-09-30T20:43:56 Model probe failed: ai21labs/jamba-1.5-large-instruct | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:57 Model probe failed: aisingapore/sea-lion-7b-instruct | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:57 Model probe failed: bigcode/starcoder2-15b | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:57 Model probe failed: databricks/dbrx-instruct | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:57 Model probe failed: deepseek-ai/deepseek-coder-6.7b-instruct | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:57 Model probe failed: ibm/granite-3.0-3b-a800m-instruct | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:58 Model probe failed: ibm/granite-3.0-8b-instruct | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:58 Model probe failed: ibm/granite-34b-code-instruct | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:58 Model probe failed: ibm/granite-8b-code-instruct | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:58 Model probe failed: microsoft/phi-3.5-moe-instruct | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:58 Model probe failed: mistralai/codestral-22b-instruct-v0.1 | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:59 Model probe failed: mistralai/mistral-7b-instruct-v0.3 | Uzak sunucu hata döndürdü: (404) Bulunamadı.
+2026-09-30T20:43:59 ERROR: NVIDIA catalog is reachable, but none of the first compatible chat models completed a test request
