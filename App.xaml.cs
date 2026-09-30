@@ -14,6 +14,7 @@ public partial class App : Application
         {
             DatabaseService databaseService = new();
             await databaseService.InitializeAsync();
+            await new CrmSchemaService().EnsureAsync();
             int repairedRecords = await new MojibakeRepairService().RepairAsync();
             _ = Task.Run(async () => await new ProspectAutoRunner().RunIfDueSafeAsync());
         }

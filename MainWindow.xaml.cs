@@ -215,6 +215,11 @@ public partial class MainWindow : Window
 		new ArsanGazERP.Views.ProspectHunterWindow { Owner = this }.ShowDialog();
 		await LoadDashboardAsync();
 	}
+	private async void Crm_Click(object sender, RoutedEventArgs e)
+	{
+		new ArsanGazERP.Views.CrmWindow { Owner = this }.ShowDialog();
+		await LoadDashboardAsync();
+	}
 	private async void Database_Click(object sender, RoutedEventArgs e)
 	{
 		new ArsanGazERP.Views.DatabaseManagementWindow { Owner = this }.ShowDialog();

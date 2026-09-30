@@ -58,10 +58,10 @@
                             <Image Source="pack://application:,,,/Assets/ArsanGazLogo.png" Height="136" Stretch="Uniform" AutomationProperties.Name="Arsan Gaz Sınai ve Tıbbi Gazlar logosu" />
                         </Border>
 
-                        <TextBlock Text="GENEL" FontSize="10" FontWeight="Bold" Foreground="#CADAE6" Margin="10,0,0,7" />
+                        <TextBlock Text="GENEL" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,0,0,7" />
                         <Button Content="İş merkezi" Style="{StaticResource SidebarButton}" Background="{StaticResource SidebarHoverBrush}" />
 
-                        <TextBlock Text="MICROSOFT 365" FontSize="10" FontWeight="Bold" Foreground="#CADAE6" Margin="10,20,0,7" />
+                        <TextBlock Text="MICROSOFT 365" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,20,0,7" />
                         <Button Content="Microsoft Giriş" Click="Login_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="İzinleri Yenile" Click="Consent_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="Profil" Click="Profile_Click" Style="{StaticResource SidebarButton}" />
@@ -70,14 +70,15 @@
                         <Button Content="Kişiler" Click="Contacts_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="Takvim" Click="Calendar_Click" Style="{StaticResource SidebarButton}" />
 
-                        <TextBlock Text="ERP VE VERİ" FontSize="10" FontWeight="Bold" Foreground="#CADAE6" Margin="10,20,0,7" />
+                        <TextBlock Text="ERP VE VERİ" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,20,0,7" />
                         <Button Content="ERP Excel Seç" Click="Excel_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="Excel → SQLite" Click="ExcelSync_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="Operasyon Merkezi" Click="Operations_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="Müşteri Avcısı" Click="ProspectHunter_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="CRM Firma Kartları" Click="Crm_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="Veritabanı Merkezi" Click="Database_Click" Style="{StaticResource SidebarButton}" />
 
-                        <TextBlock Text="YÖNETİM" FontSize="10" FontWeight="Bold" Foreground="#CADAE6" Margin="10,20,0,7" />
+                        <TextBlock Text="YÖNETİM" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,20,0,7" />
                         <Button Content="Ajan Analizi" Click="AgentV3_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="Excel Yedekle" Click="Backup_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="OneDrive DB Yedek" Click="CloudBackup_Click" Style="{StaticResource SidebarButton}" />
@@ -88,7 +89,7 @@
 
                 <Border Grid.Row="1" BorderBrush="#244B6C" BorderThickness="0,1,0,0" Padding="22,14">
                     <StackPanel>
-                        <TextBlock Text="SÜRÜM" FontSize="10" FontWeight="Bold" Foreground="#CADAE6" />
+                        <TextBlock Text="SÜRÜM" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" />
                         <TextBlock x:Name="VersionText" Text="5.3.0" Foreground="White" FontWeight="SemiBold" Margin="0,4,0,0" />
                     </StackPanel>
                 </Border>
