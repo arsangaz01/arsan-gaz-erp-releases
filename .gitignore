@@ -1,4 +1,4 @@
-bin/
+﻿bin/
 obj/
 publish*/
 installer/Output/
@@ -10,4 +10,9 @@ installer/Output/
 ArsanGazERP_KaynakKodlari.txt
 ArsanGazERP_*.zip
 proje.txt
-*.log
+*.log_upgrade_backup_*/
+*Backup*/
+*.db
+*.db-shm
+*.db-wal
+ArsanGazERP_KaynakKodlari*.txt

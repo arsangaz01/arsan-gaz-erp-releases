@@ -201,11 +201,11 @@ public partial class MainWindow : Window
 	}
 
 	private async void ProspectHunter_Click(object sender, RoutedEventArgs e)
-\t{
-\t\tnew ArsanGazERP.Views.ProspectHunterWindow { Owner = this }.ShowDialog();
-\t\tawait LoadDashboardAsync();
-\t}
-\tprivate async void Database_Click(object sender, RoutedEventArgs e)
+	{
+		new ArsanGazERP.Views.ProspectHunterWindow { Owner = this }.ShowDialog();
+		await LoadDashboardAsync();
+	}
+	private async void Database_Click(object sender, RoutedEventArgs e)
 	{
 		new ArsanGazERP.Views.DatabaseManagementWindow { Owner = this }.ShowDialog();
 		await LoadDashboardAsync();
