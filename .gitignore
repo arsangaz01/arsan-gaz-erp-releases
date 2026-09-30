@@ -68,3 +68,11 @@ Tools/AgentBridge/bin/
 Tools/AgentBridge/obj/
 Tools/AgentBridge/publish/
 Tools/AgentBridgeData/
+Tools/AgentWatcher/bin/
+Tools/AgentWatcher/obj/
+Tools/AgentWatcher/publish/
+Tools/AgentWatcherData/
+Tools/LocalAgent/bin/
+Tools/LocalAgent/obj/
+Tools/LocalAgent/publish/
+Tools/LocalAgentData/

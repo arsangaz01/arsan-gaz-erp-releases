@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'ArsanGazERP'">
+    <DefaultItemExcludes>$(DefaultItemExcludes);Tools\**;AgentHost\**;_Backups\**;publish\**;publish_v*\**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'ArsanGazERP'">
+    <Compile Remove="Tools\**;AgentHost\**;_Backups\**;publish\**;publish_v*\**" />
+    <Page Remove="Tools\**;AgentHost\**;_Backups\**;publish\**;publish_v*\**" />
+    <ApplicationDefinition Remove="Tools\**;AgentHost\**;_Backups\**;publish\**;publish_v*\**" />
+    <EmbeddedResource Remove="Tools\**;AgentHost\**;_Backups\**;publish\**;publish_v*\**" />
+    <None Remove="Tools\**;AgentHost\**;_Backups\**;publish\**;publish_v*\**" />
+  </ItemGroup>
+</Project>
