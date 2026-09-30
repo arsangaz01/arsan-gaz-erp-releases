@@ -60,3 +60,7 @@ publish/
 _Backups/
 .env
 secrets.json
+bin/
+Data/
+Logs/
+Screens/
