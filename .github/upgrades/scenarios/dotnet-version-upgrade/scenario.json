@@ -1,0 +1,14 @@
+{
+  "scenarioId": "dotnet-version-upgrade",
+  "operationId": "445a8d48-f2e7-400a-9f2d-635f1d58f16e",
+  "description": "Upgrade .NET projects to newer .NET versions, including guidance on current release status, support lifecycle (LTS/STS), and recommended upgrade targets.",
+  "startTime": "2026-09-29T03:30:03.9700507Z",
+  "lastUpdateTime": "2026-09-29T03:48:58.4041242Z",
+  "properties": {
+    "UpgradeTargetFramework": "net10.0-windows",
+    "taskStates": {
+      "01-arsangaz-erp-upgrade": "Completed"
+    }
+  },
+  "folderPath": ""
+}

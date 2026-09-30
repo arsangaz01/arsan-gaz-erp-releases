@@ -30,6 +30,16 @@ public partial class MainWindow : Window
 		Loaded += async (_, _) => await LoadDashboardAsync();
 	}
 
+	private void Window_SourceInitialized(object? sender, EventArgs e)
+	{
+		MaxWidth = SystemParameters.WorkArea.Width;
+		MaxHeight = SystemParameters.WorkArea.Height;
+		if (Top < SystemParameters.WorkArea.Top || Left < SystemParameters.WorkArea.Left)
+		{
+			Top = SystemParameters.WorkArea.Top;
+			Left = SystemParameters.WorkArea.Left;
+		}
+	}
 	private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
 	{
 		if (e.ChangedButton != MouseButton.Left)

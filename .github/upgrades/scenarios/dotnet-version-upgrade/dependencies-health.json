@@ -1,0 +1,1585 @@
+{
+  "packageGovernance": {
+    "totalDistinctPackages": 51,
+    "totalVersionDriftInstances": 0,
+    "targetFramework": "net10.0-windows",
+    "packages": [
+      {
+        "name": "DocumentFormat.OpenXml",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "3.3.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "3.3.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "DocumentFormat.OpenXml.Framework",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "3.3.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "3.3.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Humanizer.Core",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "2.14.1",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "2.14.1",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Bcl.AsyncInterfaces",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.CodeAnalysis.Analyzers",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "3.3.3",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "3.3.3",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.CodeAnalysis.Common",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "4.5.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "4.5.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.CodeAnalysis.CSharp",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "4.5.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "4.5.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.CodeAnalysis.CSharp.Workspaces",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "4.5.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "4.5.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.CodeAnalysis.Workspaces.Common",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "4.5.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "4.5.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Data.Sqlite.Core",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.21",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.21",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.EntityFrameworkCore",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.21",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.21",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.EntityFrameworkCore.Abstractions",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.21",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.21",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.EntityFrameworkCore.Analyzers",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.21",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.21",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.EntityFrameworkCore.Design",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "10.0.12",
+        "isCompatible": true,
+        "description": "NuGet paketinin y\u00FCkseltilmesi \u00F6nerilir",
+        "versions": [
+          {
+            "version": "8.0.21",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": false
+          }
+        ],
+        "upgrade": {
+          "newVersion": "10.0.12"
+        }
+      },
+      {
+        "name": "Microsoft.EntityFrameworkCore.Relational",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.21",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.21",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.EntityFrameworkCore.Sqlite",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "10.0.12",
+        "isCompatible": true,
+        "description": "NuGet paketinin y\u00FCkseltilmesi \u00F6nerilir",
+        "versions": [
+          {
+            "version": "8.0.21",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": false
+          }
+        ],
+        "upgrade": {
+          "newVersion": "10.0.12"
+        }
+      },
+      {
+        "name": "Microsoft.EntityFrameworkCore.Sqlite.Core",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.21",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.21",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.EntityFrameworkCore.Tools",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "10.0.12",
+        "isCompatible": true,
+        "description": "NuGet paketinin y\u00FCkseltilmesi \u00F6nerilir",
+        "versions": [
+          {
+            "version": "8.0.21",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": false
+          }
+        ],
+        "upgrade": {
+          "newVersion": "10.0.12"
+        }
+      },
+      {
+        "name": "Microsoft.Extensions.Caching.Abstractions",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Extensions.Caching.Memory",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.1",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.1",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Extensions.Configuration.Abstractions",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Extensions.DependencyInjection",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.1",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.1",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Extensions.DependencyInjection.Abstractions",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.2",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.2",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Extensions.DependencyModel",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.2",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.2",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Extensions.Logging",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.1",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.1",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Extensions.Logging.Abstractions",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.2",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.2",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Extensions.Options",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.2",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.2",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Extensions.Primitives",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.Identity.Client",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "4.77.1",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "4.77.1",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Microsoft.IdentityModel.Abstractions",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.14.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.14.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "Mono.TextTemplating",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "2.2.1",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "2.2.1",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "SQLitePCLRaw.bundle_e_sqlite3",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "2.1.6",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "2.1.6",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "SQLitePCLRaw.core",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "2.1.6",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "2.1.6",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "SQLitePCLRaw.lib.e_sqlite3",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "2.1.6",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "2.1.6",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "SQLitePCLRaw.provider.e_sqlite3",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "2.1.6",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "2.1.6",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.CodeDom",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "4.4.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "4.4.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Collections.Immutable",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Composition",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Composition.AttributedModel",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Composition.Convention",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Composition.Hosting",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Composition.Runtime",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Composition.TypedParts",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Diagnostics.DiagnosticSource",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.1",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.1",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.IO.Packaging",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "8.0.1",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "8.0.1",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.IO.Pipelines",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.3",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.3",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Memory",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "4.5.3",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "4.5.3",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Reflection.Metadata",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.1",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.1",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Runtime.CompilerServices.Unsafe",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Text.Encoding.CodePages",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      },
+      {
+        "name": "System.Threading.Channels",
+        "totalProjectCount": 1,
+        "distinctVersionCount": 1,
+        "recommendedVersion": "6.0.0",
+        "isCompatible": true,
+        "description": "",
+        "versions": [
+          {
+            "version": "6.0.0",
+            "projects": [
+              "ArsanGazERP"
+            ],
+            "isRecommended": true
+          }
+        ]
+      }
+    ]
+  },
+  "projects": [
+    {
+      "name": "ArsanGazERP",
+      "path": "ArsanGazERP.csproj",
+      "isSdk": true,
+      "currentFrameworks": [
+        "net8.0-windows"
+      ],
+      "targetFramework": "net10.0-windows",
+      "dependencies": {
+        "packages": [
+          {
+            "name": "DocumentFormat.OpenXml",
+            "version": "3.3.0",
+            "isTransitive": false,
+            "isGlobal": false,
+            "isImplicit": false,
+            "definedIn": [
+              {
+                "path": "ArsanGazERP.csproj"
+              }
+            ],
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": ""
+          },
+          {
+            "name": "DocumentFormat.OpenXml.Framework",
+            "version": "3.3.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "DocumentFormat.OpenXml \u003E DocumentFormat.OpenXml.Framework"
+            ]
+          },
+          {
+            "name": "Humanizer.Core",
+            "version": "2.14.1",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Humanizer.Core"
+            ]
+          },
+          {
+            "name": "Microsoft.Bcl.AsyncInterfaces",
+            "version": "6.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Workspaces.Common \u003E Microsoft.Bcl.AsyncInterfaces"
+            ]
+          },
+          {
+            "name": "Microsoft.CodeAnalysis.Analyzers",
+            "version": "3.3.3",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Common \u003E Microsoft.CodeAnalysis.Analyzers"
+            ]
+          },
+          {
+            "name": "Microsoft.CodeAnalysis.Common",
+            "version": "4.5.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Common"
+            ]
+          },
+          {
+            "name": "Microsoft.CodeAnalysis.CSharp",
+            "version": "4.5.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.CSharp"
+            ]
+          },
+          {
+            "name": "Microsoft.CodeAnalysis.CSharp.Workspaces",
+            "version": "4.5.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces"
+            ]
+          },
+          {
+            "name": "Microsoft.CodeAnalysis.Workspaces.Common",
+            "version": "4.5.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Workspaces.Common"
+            ]
+          },
+          {
+            "name": "Microsoft.Data.Sqlite.Core",
+            "version": "8.0.21",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Sqlite \u003E Microsoft.EntityFrameworkCore.Sqlite.Core \u003E Microsoft.Data.Sqlite.Core"
+            ]
+          },
+          {
+            "name": "Microsoft.EntityFrameworkCore",
+            "version": "8.0.21",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.EntityFrameworkCore"
+            ]
+          },
+          {
+            "name": "Microsoft.EntityFrameworkCore.Abstractions",
+            "version": "8.0.21",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.EntityFrameworkCore \u003E Microsoft.EntityFrameworkCore.Abstractions"
+            ]
+          },
+          {
+            "name": "Microsoft.EntityFrameworkCore.Analyzers",
+            "version": "8.0.21",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.EntityFrameworkCore \u003E Microsoft.EntityFrameworkCore.Analyzers"
+            ]
+          },
+          {
+            "name": "Microsoft.EntityFrameworkCore.Design",
+            "version": "8.0.21",
+            "isTransitive": false,
+            "isGlobal": false,
+            "isImplicit": false,
+            "definedIn": [
+              {
+                "path": "ArsanGazERP.csproj"
+              }
+            ],
+            "description": "NuGet paketinin y\u00FCkseltilmesi \u00F6nerilir",
+            "compatibility": "valid",
+            "recommendedVersion": "10.0.12",
+            "upgrade": {
+              "newVersion": "10.0.12"
+            }
+          },
+          {
+            "name": "Microsoft.EntityFrameworkCore.Relational",
+            "version": "8.0.21",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational"
+            ]
+          },
+          {
+            "name": "Microsoft.EntityFrameworkCore.Sqlite",
+            "version": "8.0.21",
+            "isTransitive": false,
+            "isGlobal": false,
+            "isImplicit": false,
+            "definedIn": [
+              {
+                "path": "ArsanGazERP.csproj"
+              }
+            ],
+            "description": "NuGet paketinin y\u00FCkseltilmesi \u00F6nerilir",
+            "compatibility": "valid",
+            "recommendedVersion": "10.0.12",
+            "upgrade": {
+              "newVersion": "10.0.12"
+            }
+          },
+          {
+            "name": "Microsoft.EntityFrameworkCore.Sqlite.Core",
+            "version": "8.0.21",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Sqlite \u003E Microsoft.EntityFrameworkCore.Sqlite.Core"
+            ]
+          },
+          {
+            "name": "Microsoft.EntityFrameworkCore.Tools",
+            "version": "8.0.21",
+            "isTransitive": false,
+            "isGlobal": false,
+            "isImplicit": false,
+            "definedIn": [
+              {
+                "path": "ArsanGazERP.csproj"
+              }
+            ],
+            "description": "NuGet paketinin y\u00FCkseltilmesi \u00F6nerilir",
+            "compatibility": "valid",
+            "recommendedVersion": "10.0.12",
+            "upgrade": {
+              "newVersion": "10.0.12"
+            }
+          },
+          {
+            "name": "Microsoft.Extensions.Caching.Abstractions",
+            "version": "8.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.EntityFrameworkCore \u003E Microsoft.Extensions.Caching.Memory \u003E Microsoft.Extensions.Caching.Abstractions"
+            ]
+          },
+          {
+            "name": "Microsoft.Extensions.Caching.Memory",
+            "version": "8.0.1",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.EntityFrameworkCore \u003E Microsoft.Extensions.Caching.Memory"
+            ]
+          },
+          {
+            "name": "Microsoft.Extensions.Configuration.Abstractions",
+            "version": "8.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.Extensions.Configuration.Abstractions"
+            ]
+          },
+          {
+            "name": "Microsoft.Extensions.DependencyInjection",
+            "version": "8.0.1",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.EntityFrameworkCore \u003E Microsoft.Extensions.Logging \u003E Microsoft.Extensions.DependencyInjection"
+            ]
+          },
+          {
+            "name": "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "version": "8.0.2",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.EntityFrameworkCore \u003E Microsoft.Extensions.Caching.Memory \u003E Microsoft.Extensions.DependencyInjection.Abstractions"
+            ]
+          },
+          {
+            "name": "Microsoft.Extensions.DependencyModel",
+            "version": "8.0.2",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.Extensions.DependencyModel"
+            ]
+          },
+          {
+            "name": "Microsoft.Extensions.Logging",
+            "version": "8.0.1",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.EntityFrameworkCore \u003E Microsoft.Extensions.Logging"
+            ]
+          },
+          {
+            "name": "Microsoft.Extensions.Logging.Abstractions",
+            "version": "8.0.2",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.EntityFrameworkCore \u003E Microsoft.Extensions.Caching.Memory \u003E Microsoft.Extensions.Logging.Abstractions"
+            ]
+          },
+          {
+            "name": "Microsoft.Extensions.Options",
+            "version": "8.0.2",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.EntityFrameworkCore \u003E Microsoft.Extensions.Caching.Memory \u003E Microsoft.Extensions.Options"
+            ]
+          },
+          {
+            "name": "Microsoft.Extensions.Primitives",
+            "version": "8.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.EntityFrameworkCore.Relational \u003E Microsoft.Extensions.Configuration.Abstractions \u003E Microsoft.Extensions.Primitives"
+            ]
+          },
+          {
+            "name": "Microsoft.Identity.Client",
+            "version": "4.77.1",
+            "isTransitive": false,
+            "isGlobal": false,
+            "isImplicit": false,
+            "definedIn": [
+              {
+                "path": "ArsanGazERP.csproj"
+              }
+            ],
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": ""
+          },
+          {
+            "name": "Microsoft.IdentityModel.Abstractions",
+            "version": "8.14.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.Identity.Client \u003E Microsoft.IdentityModel.Abstractions"
+            ]
+          },
+          {
+            "name": "Mono.TextTemplating",
+            "version": "2.2.1",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Mono.TextTemplating"
+            ]
+          },
+          {
+            "name": "SQLitePCLRaw.bundle_e_sqlite3",
+            "version": "2.1.6",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Sqlite \u003E SQLitePCLRaw.bundle_e_sqlite3"
+            ]
+          },
+          {
+            "name": "SQLitePCLRaw.core",
+            "version": "2.1.6",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Sqlite \u003E Microsoft.EntityFrameworkCore.Sqlite.Core \u003E Microsoft.Data.Sqlite.Core \u003E SQLitePCLRaw.core"
+            ]
+          },
+          {
+            "name": "SQLitePCLRaw.lib.e_sqlite3",
+            "version": "2.1.6",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Sqlite \u003E SQLitePCLRaw.bundle_e_sqlite3 \u003E SQLitePCLRaw.lib.e_sqlite3"
+            ]
+          },
+          {
+            "name": "SQLitePCLRaw.provider.e_sqlite3",
+            "version": "2.1.6",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Sqlite \u003E SQLitePCLRaw.bundle_e_sqlite3 \u003E SQLitePCLRaw.provider.e_sqlite3"
+            ]
+          },
+          {
+            "name": "System.CodeDom",
+            "version": "4.4.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Mono.TextTemplating \u003E System.CodeDom"
+            ]
+          },
+          {
+            "name": "System.Collections.Immutable",
+            "version": "6.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Common \u003E System.Collections.Immutable"
+            ]
+          },
+          {
+            "name": "System.Composition",
+            "version": "6.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Workspaces.Common \u003E System.Composition"
+            ]
+          },
+          {
+            "name": "System.Composition.AttributedModel",
+            "version": "6.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Workspaces.Common \u003E System.Composition \u003E System.Composition.AttributedModel"
+            ]
+          },
+          {
+            "name": "System.Composition.Convention",
+            "version": "6.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Workspaces.Common \u003E System.Composition \u003E System.Composition.Convention"
+            ]
+          },
+          {
+            "name": "System.Composition.Hosting",
+            "version": "6.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Workspaces.Common \u003E System.Composition \u003E System.Composition.Hosting"
+            ]
+          },
+          {
+            "name": "System.Composition.Runtime",
+            "version": "6.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Workspaces.Common \u003E System.Composition \u003E System.Composition.Runtime"
+            ]
+          },
+          {
+            "name": "System.Composition.TypedParts",
+            "version": "6.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Workspaces.Common \u003E System.Composition \u003E System.Composition.TypedParts"
+            ]
+          },
+          {
+            "name": "System.Diagnostics.DiagnosticSource",
+            "version": "6.0.1",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.Identity.Client \u003E System.Diagnostics.DiagnosticSource"
+            ]
+          },
+          {
+            "name": "System.IO.Packaging",
+            "version": "8.0.1",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "DocumentFormat.OpenXml \u003E DocumentFormat.OpenXml.Framework \u003E System.IO.Packaging"
+            ]
+          },
+          {
+            "name": "System.IO.Pipelines",
+            "version": "6.0.3",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Workspaces.Common \u003E System.IO.Pipelines"
+            ]
+          },
+          {
+            "name": "System.Memory",
+            "version": "4.5.3",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Sqlite \u003E Microsoft.EntityFrameworkCore.Sqlite.Core \u003E Microsoft.Data.Sqlite.Core \u003E SQLitePCLRaw.core \u003E System.Memory"
+            ]
+          },
+          {
+            "name": "System.Reflection.Metadata",
+            "version": "6.0.1",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Common \u003E System.Reflection.Metadata"
+            ]
+          },
+          {
+            "name": "System.Runtime.CompilerServices.Unsafe",
+            "version": "6.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.Identity.Client \u003E System.Diagnostics.DiagnosticSource \u003E System.Runtime.CompilerServices.Unsafe"
+            ]
+          },
+          {
+            "name": "System.Text.Encoding.CodePages",
+            "version": "6.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Common \u003E System.Text.Encoding.CodePages"
+            ]
+          },
+          {
+            "name": "System.Threading.Channels",
+            "version": "6.0.0",
+            "isTransitive": true,
+            "isGlobal": false,
+            "isImplicit": false,
+            "description": "",
+            "compatibility": "valid",
+            "recommendedVersion": "",
+            "transitiveChain": [
+              "Microsoft.EntityFrameworkCore.Design \u003E Microsoft.CodeAnalysis.CSharp.Workspaces \u003E Microsoft.CodeAnalysis.Workspaces.Common \u003E System.Threading.Channels"
+            ]
+          }
+        ],
+        "assemblies": [],
+        "projectReferences": [],
+        "frameworkReferences": []
+      }
+    }
+  ]
+}

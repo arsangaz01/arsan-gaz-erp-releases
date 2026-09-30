@@ -10,8 +10,10 @@
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
+        WindowState="Normal"
         Icon="pack://application:,,,/Assets/ArsanGaz.ico"
         StateChanged="Window_StateChanged"
+        SourceInitialized="Window_SourceInitialized"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
     <shell:WindowChrome.WindowChrome>
@@ -27,7 +29,7 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <Border x:Name="TitleBar" Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+        <Border x:Name="TitleBar" Grid.Row="0" Grid.ColumnSpan="2" Panel.ZIndex="1000" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" shell:WindowChrome.IsHitTestVisibleInChrome="True">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />

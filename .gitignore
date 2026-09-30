@@ -1,18 +1,57 @@
-﻿bin/
+﻿# Build and publish outputs
+bin/
 obj/
 publish*/
-installer/Output/
+artifacts/
+TestResults/
 *.user
 *.suo
 .vs/
-.vscode/
-.github/upgrades/
-ArsanGazERP_KaynakKodlari.txt
-ArsanGazERP_*.zip
-proje.txt
-*.log_upgrade_backup_*/
+
+# Backups and generated packages
 *Backup*/
+*_backup_*/
+_upgrade_backup_*/
+Archived_Project_Backups_*/
+*.zip
+*.rar
+
+# Local databases and business data
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite3
+*.xlsm
+*.xlsx
+*.xls
+
+# Logs, temporary files and source dumps
+*.log
+*.tmp
+*.bak
 ArsanGazERP_KaynakKodlari*.txt
+SourceSnapshot/
+
+# Secrets and local configuration
+.env
+.env.*
+secrets.json
+appsettings.Local.json
+appsettings.*.Local.json
+appsettings.Development.json
+*.pfx
+*.p12
+*.snk
+*.key
+*.pem
+*apikey*
+*api-key*
+*credential*
+*secret*
+
+# OS and editor files
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
