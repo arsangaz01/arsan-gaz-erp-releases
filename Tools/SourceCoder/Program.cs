@@ -1,0 +1,32 @@
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+
+string root = @"C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis";
+string taskFile = args.Length > 0 ? Path.GetFullPath(args[0]) : Path.Combine(root, "SourceCoderTask.txt");
+string log = Path.Combine(root, "SourceCoder.log");
+void Log(string s) => File.AppendAllText(log, $"{DateTime.Now:O} {s}{Environment.NewLine}", new UTF8Encoding(false));
+if (!File.Exists(taskFile)) { File.WriteAllText(taskFile, "Ä°stenen kaynak kod deÄŸiÅŸikliÄŸini buraya yazÄ±n.", new UTF8Encoding(false)); Console.WriteLine($"GÃ¶rev dosyasÄ± oluÅŸturuldu: {taskFile}"); return; }
+string task = File.ReadAllText(taskFile).Trim(); if (task.Length < 5) throw new InvalidOperationException("GÃ¶rev aÃ§Ä±klamasÄ± boÅŸ.");
+string key = Environment.GetEnvironmentVariable("NVIDIA_API_KEY", EnvironmentVariableTarget.User) ?? throw new InvalidOperationException("NVIDIA_API_KEY bulunamadÄ±.");
+string[] allowedExt = [".cs", ".xaml", ".csproj", ".json", ".xml", ".props", ".targets", ".md"];
+IEnumerable<string> files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Where(f => allowedExt.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase) && !Regex.IsMatch(f, @"\\(bin|obj|publish|\.git|\.vs|_Backups|Logs?)(\\|$)", RegexOptions.IgnoreCase) && !Regex.IsMatch(Path.GetFileName(f), @"secret|credential|token|password|appsettings\.local", RegexOptions.IgnoreCase));
+var ranked = files.Select(f => new { Path=f, Score=task.Split(' ', StringSplitOptions.RemoveEmptyEntries).Count(w => Path.GetFileName(f).Contains(w, StringComparison.OrdinalIgnoreCase) || File.ReadAllText(f).Contains(w, StringComparison.OrdinalIgnoreCase)) }).OrderByDescending(x=>x.Score).ThenBy(x=>x.Path).Take(14).ToList();
+var context = new StringBuilder(); foreach(var f in ranked){string c=File.ReadAllText(f.Path); if(c.Length>45000)c=c[..45000]; context.AppendLine($"===== {Path.GetRelativePath(root,f.Path)} =====").AppendLine(c);}
+using HttpClient http = new(){BaseAddress=new Uri("https://integrate.api.nvidia.com/v1/"),Timeout=TimeSpan.FromMinutes(6)}; http.DefaultRequestHeaders.Authorization=new AuthenticationHeaderValue("Bearer",key);
+string system = "Sen Arsan Gaz ERP iÃ§in kÄ±demli .NET 10 geliÅŸtiricisisin. YalnÄ±zca geÃ§erli JSON dÃ¶ndÃ¼r. Åema: {\\\"summary\\\":\\\"...\\\",\\\"files\\\":[{\\\"path\\\":\\\"relative/path.cs\\\",\\\"content\\\":\\\"tam dosya iÃ§eriÄŸi\\\"}]}. En fazla 8 dosya. Mevcut davranÄ±ÅŸÄ± koru. Gizli bilgi ekleme. Ollama kullanma. NVIDIA birincil saÄŸlayÄ±cÄ±dÄ±r.";
+var payload = new { model="deepseek-ai/deepseek-v4.1-flash", messages=new[]{new{role="system",content=system},new{role="user",content=$"GÃ–REV:\n{task}\n\nKAYNAKLAR:\n{context}"}}, temperature=0.1, max_tokens=16000, stream=false, response_format=new{type="json_object"} };
+using var res=await http.PostAsync("chat/completions",new StringContent(JsonSerializer.Serialize(payload),Encoding.UTF8,"application/json")); string raw=await res.Content.ReadAsStringAsync(); if(!res.IsSuccessStatusCode)throw new InvalidOperationException($"NVIDIA HTTP {(int)res.StatusCode}: {raw}");
+using JsonDocument outer=JsonDocument.Parse(raw); string answer=outer.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString()??throw new InvalidOperationException("NVIDIA boÅŸ cevap verdi."); answer=Regex.Replace(answer,@"^```(?:json)?\s*|\s*```$","",RegexOptions.IgnoreCase);
+SourcePlan? plan=JsonSerializer.Deserialize<SourcePlan>(answer,new JsonSerializerOptions{PropertyNameCaseInsensitive=true}); if(plan?.Files is null || plan.Files.Count==0)throw new InvalidOperationException("NVIDIA deÄŸiÅŸtirilecek dosya Ã¼retmedi."); if(plan.Files.Count>8)throw new InvalidOperationException("GÃ¼venlik sÄ±nÄ±rÄ±: en fazla 8 dosya deÄŸiÅŸtirilebilir.");
+string backup=Path.Combine(root,"_Backups","SourceCoder_"+DateTime.Now.ToString("yyyyMMdd_HHmmss")); Directory.CreateDirectory(backup); var written=new List<string>();
+try{
+ foreach(var item in plan.Files){string full=Path.GetFullPath(Path.Combine(root,item.Path.Replace('/',Path.DirectorySeparatorChar))); if(!full.StartsWith(root+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("GeÃ§ersiz yol: "+item.Path); if(!allowedExt.Contains(Path.GetExtension(full),StringComparer.OrdinalIgnoreCase))throw new InvalidOperationException("Ä°zin verilmeyen uzantÄ±: "+item.Path); string rel=Path.GetRelativePath(root,full); string bak=Path.Combine(backup,rel); Directory.CreateDirectory(Path.GetDirectoryName(bak)!); if(File.Exists(full))File.Copy(full,bak,true); Directory.CreateDirectory(Path.GetDirectoryName(full)!); File.WriteAllText(full,item.Content,new UTF8Encoding(false)); written.Add(full); Log("WROTE "+rel); }
+ string project=Path.Combine(root,"ArsanGazERP.csproj"); var build=System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("dotnet",$"build \\\"{project}\\\" -c Release") { WorkingDirectory=root,UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true }); string output=await build!.StandardOutput.ReadToEndAsync()+await build.StandardError.ReadToEndAsync(); await build.WaitForExitAsync(); File.AppendAllText(log,output); if(build.ExitCode!=0)throw new InvalidOperationException("Ana ERP derlemesi baÅŸarÄ±sÄ±z.");
+ if(Directory.Exists(Path.Combine(root,".git"))){Run("git","add .");Run("git",$"commit -m \\\"SourceCoder: {Safe(plan.Summary)}\\\"");Run("git","push origin HEAD");}
+ Log("SUCCESS "+plan.Summary); Console.WriteLine("BaÅŸarÄ±lÄ±: "+plan.Summary); Console.WriteLine("Yedek: "+backup);
+}catch{foreach(string full in written){string rel=Path.GetRelativePath(root,full);string bak=Path.Combine(backup,rel);if(File.Exists(bak)){Directory.CreateDirectory(Path.GetDirectoryName(full)!);File.Copy(bak,full,true);}else if(File.Exists(full))File.Delete(full);}Log("ROLLBACK");throw;}
+void Run(string exe,string arguments){var p=System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe,arguments){WorkingDirectory=root,UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true});p!.WaitForExit();Log(exe+" "+arguments+" exit="+p.ExitCode);}
+string Safe(string? s) { string value = Regex.Replace(s ?? "update", @"[^\p{L}\p{N} ._-]", " ").Trim(); return value.Length > 80 ? value[..80] : value; }
+record SourcePlan(string Summary,List<SourceFile> Files); record SourceFile(string Path,string Content);
