@@ -11,7 +11,10 @@
         <SolidColorBrush x:Key="AccentHoverBrush" Color="#054476" />
         <SolidColorBrush x:Key="AccentSoftBrush" Color="#E8F5FB" />
         <SolidColorBrush x:Key="SidebarBrush" Color="#07365C" />
-        <SolidColorBrush x:Key="SidebarHoverBrush" Color="#0D4F79" />
+        <SolidColorBrush x:Key="SidebarHoverBrush" Color="#0E5F91" />
+        <SolidColorBrush x:Key="SidebarTextBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="SidebarMutedTextBrush" Color="#DCEAF5" />
+        <SolidColorBrush x:Key="SidebarSelectedBrush" Color="#0876B9" />
         <SolidColorBrush x:Key="BorderBrush" Color="#D1DCE6" />
         <SolidColorBrush x:Key="TableHeaderBrush" Color="#E8F1F7" />
         <SolidColorBrush x:Key="DangerBrush" Color="#B42318" />
@@ -78,21 +81,52 @@
         <Style x:Key="DangerButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Background" Value="{StaticResource DangerBrush}" />
         </Style>
-
-        <Style x:Key="SidebarButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+        <Style x:Key="SidebarButton" TargetType="{x:Type Button}">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="#FFFFFF" />
-            <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+            <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="12,9" />
             <Setter Property="Margin" Value="0,1" />
-            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource SidebarHoverBrush}" />
-                    <Setter Property="Foreground" Value="White" />
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="SidebarSurface"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       FontFamily="Segoe UI"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SidebarSurface" Property="Background" Value="#176A9C" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="SidebarSurface" Property="Background" Value="#2196D3" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="SidebarSurface" Property="Background" Value="#185F8B" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#B8D4E8" />
+                                <Setter TargetName="SidebarSurface" Property="Opacity" Value="0.72" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="WindowControlButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
