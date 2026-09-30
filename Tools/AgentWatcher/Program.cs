@@ -1,4 +1,4 @@
-using Microsoft.Identity.Client;
+﻿using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Extensions.Msal;
 using System.Diagnostics;
 using System.Net.Http.Headers;
@@ -20,7 +20,7 @@ internal sealed class WatcherForm:Form
     const string Model="qwen2.5-coder:1.5b";
     readonly string Queue=Path.Combine(Root,"Queue"),Logs=Path.Combine(Root,"Logs"),Reports=Path.Combine(Root,"Reports");
     readonly Label connection=new(){Text="Microsoft 365 (Bağlı değil) | Excel (Seçilmedi)",Dock=DockStyle.Top,Height=34,Padding=new(10,9,0,0)};
-    readonly Label taskStatus=new(){Text="Hazır (%0)",Dock=DockStyle.Top,Height=28,Padding=new(10,6,0,0)};
+    readonly Label taskStatus=new(){Text="Haz\u0131r (%0)",Dock=DockStyle.Top,Height=28,Padding=new(10,6,0,0)};
     readonly ProgressBar progress=new(){Dock=DockStyle.Top,Height=22,Minimum=0,Maximum=100};
     readonly TextBox output=new(){Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Vertical,Dock=DockStyle.Fill};
     readonly TextBox input=new(){Multiline=true,Height=70,Dock=DockStyle.Bottom};
@@ -47,7 +47,7 @@ internal sealed class WatcherForm:Form
     }
     async Task TryRestoreMicrosoftSessionAsync(){try{string? account=await MicrosoftGraph.TryConnectSilentAsync();if(!string.IsNullOrWhiteSpace(account)){state.Account=account;state.Save();UpdateConnectionLabel();Append("Microsoft 365 oturumu önbellekten geri yüklendi.");}}catch(Exception ex){Append("Sessiz oturum kontrolü: "+ex.GetBaseException().Message);}}
     async Task SignOutAsync(){await MicrosoftGraph.SignOutAsync();state.Account="";state.Save();UpdateConnectionLabel();Append("Microsoft 365 oturumu kullanıcı isteğiyle kapatıldı.");}
-    void UpdateConnectionLabel(){string m=string.IsNullOrWhiteSpace(state.Account)?"Bağlı değil":"Bağlı: "+state.Account;string x=string.IsNullOrWhiteSpace(state.ExcelPath)?"Seçilmedi":"Seçili: "+Path.GetFileName(state.ExcelPath);connection.Text=$"Microsoft 365 ({m}) | Excel ({x})";}
+    void UpdateConnectionLabel(){string m=string.IsNullOrWhiteSpace(state.Account)?"Ba\u011Fl\u0131 de\u011Fil":"Ba\u011Fl\u0131: "+state.Account;string x=string.IsNullOrWhiteSpace(state.ExcelPath)?"Se\u00E7ilmedi":"Se\u00E7ili: "+Path.GetFileName(state.ExcelPath);connection.Text=$"Microsoft 365 ({m}) | Excel ({x})";}
     async Task AddTaskAsync(){string text=input.Text.Trim();if(text.Length==0)return;input.Clear();string f=Path.Combine(Queue,$"{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.task.txt");await File.WriteAllTextAsync(f,text,new UTF8Encoding(false));Append("Görev kuyruğa eklendi: "+text);SetProgress(0,"Görev bekliyor");await CheckAsync();}
     async Task CheckAsync(){if(busy||AvailableMemory()<2UL*1024*1024*1024||Process.GetProcessesByName("devenv").Length>0)return;string? task=Directory.EnumerateFiles(Queue,"*.task.txt").OrderBy(x=>x).FirstOrDefault();if(task!=null){busy=true;try{await RunTaskAsync(task);}catch(Exception ex){Append("Görev hatası: "+ex.GetBaseException().Message);SetProgress(0,"Görev başarısız");}finally{busy=false;}return;}string errors=CollectErrors();if(errors.Length==0)return;busy=true;try{await AnalyzeAsync(errors);}finally{busy=false;}}
     async Task RunTaskAsync(string file){SetProgress(10,"Görev okunuyor");string request=await File.ReadAllTextAsync(file);SetProgress(30,"Görev analiz ediliyor");string result=IsProjectStatusRequest(request)?BuildProjectStatusReport(request):await AskAsync("Arsan Gaz ERP .NET 10 WPF sistemi için güvenli ve uygulanabilir görev planı üret. Silme, ödeme, e-posta gönderme, fatura ve yetki yükseltme yapma. İstek: "+request);SetProgress(80,"Rapor kaydediliyor");lastReport=Path.Combine(Reports,$"task-{DateTime.Now:yyyyMMdd-HHmmss}.txt");await File.WriteAllTextAsync(lastReport,result,new UTF8Encoding(false));File.Move(file,file.Replace(".task.txt",".done.txt"),true);SetProgress(100,"Görev tamamlandı");UpdateReportLink();Append("Görev tamamlandı. Rapor: "+lastReport);Append(result);await UnloadAsync();await Task.Delay(1200);SetProgress(0,"Hazır");}
