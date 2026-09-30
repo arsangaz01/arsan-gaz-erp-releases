@@ -27,6 +27,7 @@ public partial class MainWindow : Window
 	public MainWindow()
 	{
 		InitializeComponent();
+        InstallAiDashboardButton();
 		_graph = new GraphService(_auth);
 		Loaded += async (_, _) => { await LoadDashboardAsync(); RefreshUnifiedConnectionStatus(); };
         var unifiedTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -285,4 +286,23 @@ public partial class MainWindow : Window
         NvidiaNimButton.Content = _nvidiaNim.IsConfigured ? "NVIDIA NIM (Bagli)" : "NVIDIA NIM (Bagli degil)";
     }
 
+    private void InstallAiDashboardButton()
+    {
+        if (Content is not System.Windows.Controls.Panel root || root.Children.OfType<System.Windows.Controls.Button>().Any(b => Equals(b.Tag, "AI-DASHBOARD"))) return;
+        var button = new System.Windows.Controls.Button
+        {
+            Tag = "AI-DASHBOARD",
+            Content = "AI Dashboard",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 92, 18, 0),
+            Padding = new Thickness(14, 7, 14, 7),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(24, 94, 166)),
+            Foreground = System.Windows.Media.Brushes.White,
+            FontWeight = FontWeights.SemiBold
+        };
+        System.Windows.Controls.Panel.SetZIndex(button, 1200);
+        button.Click += (_, _) => new ArsanGazERP.Views.AiDashboardWindow { Owner = this }.ShowDialog();
+        root.Children.Add(button);
+    }
 }
