@@ -1,0 +1,1 @@
+Agent Host V7.0.1. Correct source location: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis\AgentHost. Correct publish location: AgentHost\publish. Allowed commands only: dotnet restore/build/test and git status/add/commit/push. Destructive commands remain blocked.
