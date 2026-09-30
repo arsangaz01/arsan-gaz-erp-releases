@@ -21,6 +21,7 @@ public partial class MainWindow : Window
 	private readonly ExcelSyncService _sync = new();
 	private readonly AgentV3Service _agent = new();
 	private readonly UpdateService _update = new();
+    private readonly NvidiaNimService _nvidiaNim = new();
 	private bool _isBusy;
 
 	public MainWindow()
@@ -278,4 +279,10 @@ public partial class MainWindow : Window
         ExcelStatusText.Text = excel ? $"Excel (Ba\u011Fl\u0131: {Path.GetFileName(s.ExcelPath)})" : "Excel (Se\u00E7ilmedi)";
         if (excel && string.IsNullOrWhiteSpace(_excel.WorkbookPath)) { try { _excel.SelectWorkbook(s.ExcelPath); } catch { } }
     }
+    private void NvidiaNim_Click(object sender, RoutedEventArgs e)
+    {
+        new ArsanGazERP.Views.NvidiaNimWindow(_nvidiaNim) { Owner = this }.ShowDialog();
+        NvidiaNimButton.Content = _nvidiaNim.IsConfigured ? "NVIDIA NIM (Bagli)" : "NVIDIA NIM (Bagli degil)";
+    }
+
 }

@@ -259,5 +259,6 @@
                 <TextBlock x:Name="ExcelStatusText" Text="Excel (Se&#xE7;ilmedi)" FontSize="11" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
+<Button x:Name="NvidiaNimButton" Panel.ZIndex="1101" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,48,18,0" Padding="12,6" Content="NVIDIA NIM" Click="NvidiaNim_Click" Background="#76B900" Foreground="Black" FontWeight="SemiBold"/>
 </Grid>
 </Window>
