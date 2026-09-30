@@ -1,0 +1,30 @@
+﻿{
+  "apiKeyEnvironmentVariable": "ARSANGAZ_ERP_API_KEY",
+  "failureCooldownSeconds": 30,
+  "servers": [
+    {
+      "name": "Birincil",
+      "baseUrl": "https://erp-api.example.com/",
+      "priority": 1,
+      "enabled": false,
+      "healthPath": "health",
+      "timeoutSeconds": 15
+    },
+    {
+      "name": "Yedek-1",
+      "baseUrl": "https://erp-backup-1.example.com/",
+      "priority": 2,
+      "enabled": false,
+      "healthPath": "health",
+      "timeoutSeconds": 15
+    },
+    {
+      "name": "Yedek-2",
+      "baseUrl": "https://erp-backup-2.example.com/",
+      "priority": 3,
+      "enabled": false,
+      "healthPath": "health",
+      "timeoutSeconds": 15
+    }
+  ]
+}

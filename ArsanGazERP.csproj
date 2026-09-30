@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <ApplicationIcon>Assets\ArsanGaz.ico</ApplicationIcon>
-    <Version>5.5.3</Version>
+    <Version>5.5.4</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
@@ -40,5 +40,10 @@
     <ApplicationDefinition Remove="_upgrade_backup_*\**;*Backup*\**;publish*\**" />
     <EmbeddedResource Remove="_upgrade_backup_*\**;*Backup*\**;publish*\**" />
     <None Remove="_upgrade_backup_*\**;*Backup*\**;publish*\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="Config\servers.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>
