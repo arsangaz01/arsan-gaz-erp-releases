@@ -54,4 +54,9 @@ appsettings.Development.json
 Thumbs.db
 .DS_Store
 .vscode/
-.idea/
+.idea/bin/
+obj/
+publish/
+_Backups/
+.env
+secrets.json
