@@ -1,0 +1,7 @@
+﻿ARSAN GAZ ERP TAM KAYNAK SENKRONIZASYONU BASARILI
+Tarih: 2026-09-30 07:55:35
+Depo: https://github.com/arsangaz01/arsan-gaz-erp-releases.git
+Dal: main
+Commit: fabe74eb5424a271edb10f6317ddfb3fce839883
+Yedek: C:\ArsanGazERP\ArsanGazERP_SourceSync_Backup_20260930_075515
+Sonraki adim: V5.5.9 tema ve menu okunabilirlik guncellemesi
