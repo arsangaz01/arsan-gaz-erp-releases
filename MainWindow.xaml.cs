@@ -267,11 +267,15 @@ public partial class MainWindow : Window
     private void RefreshUnifiedConnectionStatus()
     {
         var s = UnifiedConnectionStateService.Load();
-        bool m365 = !string.IsNullOrWhiteSpace(s.Account); bool permissions = s.PermissionsGranted; bool excel = !string.IsNullOrWhiteSpace(s.ExcelPath) && File.Exists(s.ExcelPath);
+        bool m365 = !string.IsNullOrWhiteSpace(s.Account);
+        bool permissions = s.PermissionsGranted;
+        bool excel = !string.IsNullOrWhiteSpace(s.ExcelPath) && File.Exists(s.ExcelPath);
         M365StatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(m365 ? "#2E7D32" : "#C62828"));
         PermissionStatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(permissions ? "#2E7D32" : m365 ? "#F9A825" : "#C62828"));
         ExcelStatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(excel ? "#2E7D32" : "#C62828"));
-        M365StatusText.Text = m365 ? $"Microsoft 365 (BaÄŸlÄ±: {s.Account})" : "Microsoft 365 (BaÄŸlÄ± deÄŸil)"; PermissionStatusText.Text = permissions ? "Ä°zinler (Verildi)" : "Ä°zinler (Eksik)"; ExcelStatusText.Text = excel ? $"Excel (BaÄŸlÄ±: {Path.GetFileName(s.ExcelPath)})" : "Excel (SeÃ§ilmedi)";
+        M365StatusText.Text = m365 ? $"Microsoft 365 (BaÄŸlÄ±: {s.Account})" : "Microsoft 365 (BaÄŸlÄ± deÄŸil)";
+        PermissionStatusText.Text = permissions ? "Ä°zinler (Verildi)" : "Ä°zinler (Eksik)";
+        ExcelStatusText.Text = excel ? $"Excel (BaÄŸlÄ±: {Path.GetFileName(s.ExcelPath)})" : "Excel (SeÃ§ilmedi)";
         if (excel && string.IsNullOrWhiteSpace(_excel.WorkbookPath)) { try { _excel.SelectWorkbook(s.ExcelPath); } catch { } }
     }
 }

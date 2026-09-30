@@ -251,9 +251,12 @@
         </Border>
             <Border x:Name="UnifiedStatusPanel" Panel.ZIndex="1100" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,18,0" Background="#F8FBFD" BorderBrush="#D1DCE6" BorderThickness="1" CornerRadius="8" Padding="10,7">
             <StackPanel Orientation="Horizontal">
-                <Ellipse x:Name="M365StatusDot" Width="11" Height="11" Fill="#C62828" Margin="0,0,5,0"/><TextBlock x:Name="M365StatusText" Text="Microsoft 365 (BaÄŸlÄ± deÄŸil)" FontSize="11" VerticalAlignment="Center"/>
-                <Ellipse x:Name="PermissionStatusDot" Width="11" Height="11" Fill="#C62828" Margin="12,0,5,0"/><TextBlock x:Name="PermissionStatusText" Text="Ä°zinler (Eksik)" FontSize="11" VerticalAlignment="Center"/>
-                <Ellipse x:Name="ExcelStatusDot" Width="11" Height="11" Fill="#C62828" Margin="12,0,5,0"/><TextBlock x:Name="ExcelStatusText" Text="Excel (SeÃ§ilmedi)" FontSize="11" VerticalAlignment="Center"/>
+                <Ellipse x:Name="M365StatusDot" Width="11" Height="11" Fill="#C62828" Margin="0,0,5,0"/>
+                <TextBlock x:Name="M365StatusText" Text="Microsoft 365 (BaÄŸlÄ± deÄŸil)" FontSize="11" VerticalAlignment="Center"/>
+                <Ellipse x:Name="PermissionStatusDot" Width="11" Height="11" Fill="#C62828" Margin="12,0,5,0"/>
+                <TextBlock x:Name="PermissionStatusText" Text="Ä°zinler (Eksik)" FontSize="11" VerticalAlignment="Center"/>
+                <Ellipse x:Name="ExcelStatusDot" Width="11" Height="11" Fill="#C62828" Margin="12,0,5,0"/>
+                <TextBlock x:Name="ExcelStatusText" Text="Excel (SeÃ§ilmedi)" FontSize="11" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 </Grid>
