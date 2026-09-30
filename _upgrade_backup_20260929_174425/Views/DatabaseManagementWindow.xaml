@@ -1,0 +1,78 @@
+<Window x:Class="ArsanGazERP.Views.DatabaseManagementWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Veritabanı Merkezi"
+        Width="1160"
+        Height="740"
+        MinWidth="900"
+        MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        UseLayoutRounding="True">
+    <Grid Margin="28,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Margin="0,0,0,18">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="VERİ VE KAYITLAR" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
+                <TextBlock Text="Veritabanı merkezi" FontSize="26" FontWeight="Bold" Margin="0,3,0,2" />
+                <TextBlock Text="İşletme kayıtlarını görüntüleyin ve veri durumunu izleyin" Foreground="{StaticResource MutedBrush}" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="Yenile" Click="Refresh_Click" Style="{StaticResource SecondaryButton}" Margin="0" VerticalAlignment="Center" />
+        </Grid>
+
+        <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="16" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="VERİTABANI ÖZETİ" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                    <TextBlock x:Name="Summary" Text="Veriler yükleniyor" FontSize="14" FontWeight="SemiBold" Margin="0,6,0,0" />
+                </StackPanel>
+                <TextBlock x:Name="UpdatedAt" Grid.Column="1" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="2">
+            <TabItem Header="Müşteriler">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="CustomersGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Ürünler">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="ProductsGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Tüpler">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="CylindersGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Teklifler">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="QuotesGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Faturalar">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="InvoicesGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Görevler">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="TasksGrid" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>
