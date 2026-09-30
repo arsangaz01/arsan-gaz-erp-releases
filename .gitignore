@@ -1,4 +1,4 @@
-﻿# Build and publish outputs
+# Build and publish outputs
 bin/
 obj/
 publish*/
@@ -78,3 +78,7 @@ Tools/LocalAgent/publish/
 Tools/LocalAgentData/
 appsettings.Local.json
 AgentWatcherData/
+
+**/settings.local.json
+**/*secret*
+**/*apikey*

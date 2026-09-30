@@ -1,4 +1,4 @@
-using ArsanGazERP.Data;
+﻿using ArsanGazERP.Data;
 using ArsanGazERP.Models;
 using ArsanGazERP.Services;
 using Microsoft.EntityFrameworkCore;
@@ -25,7 +25,7 @@ public sealed class AiDashboardWindow : Window
     private readonly TextBlock m365Value = BodyText();
     private readonly TextBlock excelValue = BodyText();
     private readonly TextBlock nvidiaValue = BodyText();
-    private readonly TextBlock ollamaValue = BodyText();
+
     private readonly TextBox output = new() { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(10), MinHeight = 160 };
 
     public AiDashboardWindow()
@@ -60,7 +60,7 @@ public sealed class AiDashboardWindow : Window
 
         Grid stateGrid = new() { Margin = new Thickness(0, 0, 0, 14) };
         stateGrid.ColumnDefinitions.Add(new ColumnDefinition()); stateGrid.ColumnDefinitions.Add(new ColumnDefinition()); stateGrid.ColumnDefinitions.Add(new ColumnDefinition()); stateGrid.ColumnDefinitions.Add(new ColumnDefinition());
-        AddAt(stateGrid, Card("Microsoft 365", m365Value), 0); AddAt(stateGrid, Card("Excel", excelValue), 1); AddAt(stateGrid, Card("NVIDIA NIM", nvidiaValue), 2); AddAt(stateGrid, Card("Ollama", ollamaValue), 3);
+
         Grid.SetRow(stateGrid, 2); root.Children.Add(stateGrid);
 
         Grid lower = new(); lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(310) }); lower.ColumnDefinitions.Add(new ColumnDefinition());
@@ -98,7 +98,7 @@ public sealed class AiDashboardWindow : Window
             m365Value.Text = string.IsNullOrWhiteSpace(s.Account) ? "Bağlı değil" : "Bağlı: " + s.Account;
             excelValue.Text = !string.IsNullOrWhiteSpace(s.ExcelPath) && File.Exists(s.ExcelPath) ? "Bağlı: " + Path.GetFileName(s.ExcelPath) : "Seçilmedi";
             NvidiaNimService nim = new(); nvidiaValue.Text = nim.IsConfigured ? "Yapılandırıldı: " + nim.Model : "Bağlı değil";
-            ollamaValue.Text = Process.GetProcessesByName("ollama").Length > 0 ? "Çalışıyor" : "Kapalı";
+
             output.Text = $"Dashboard güncellendi: {DateTime.Now:dd.MM.yyyy HH:mm:ss}";
         }
         catch (Exception ex) { output.Text = "Dashboard yenileme hatası: " + ex.GetBaseException().Message; }
@@ -110,7 +110,7 @@ public sealed class AiDashboardWindow : Window
         {
             Directory.CreateDirectory(Queue);
             string id = Guid.NewGuid().ToString("N");
-            var task = new { Id = id, Title = title, Type = type, Priority = "Yüksek", Provider = "Otomatik", Status = "Bekliyor", Created = DateTime.Now, Started = (DateTime?)null, Completed = (DateTime?)null, Report = (string?)null };
+            var task = new { Id = id, Title = title, Type = type, Priority = "Yüksek", Provider = "NVIDIA NIM", Status = "Bekliyor", Created = DateTime.Now, Started = (DateTime?)null, Completed = (DateTime?)null, Report = (string?)null };
             string file = Path.Combine(Queue, id + ".task.json");
             await File.WriteAllTextAsync(file, JsonSerializer.Serialize(task, new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
             output.Text = "Görev kuyruğa eklendi:" + Environment.NewLine + title + Environment.NewLine + Environment.NewLine + file;

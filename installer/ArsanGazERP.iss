@@ -1,41 +1,28 @@
-#ifndef AppVersion
-  #define AppVersion "5.3.0"
-#endif
-
-#define AppName "Arsan Gaz ERP"
-#define AppPublisher "Arsan Gaz"
-#define AppExeName "ArsanGazERP.exe"
-
+#define MyAppName "Arsan Gaz ERP"
+#define MyAppVersion "7.9.3"
+#define MyAppPublisher "Arsan Gaz"
+#define MyAppExeName "ArsanGazERP.exe"
 [Setup]
-AppId={{8A3A8CE0-99D8-4EE5-B8CF-8E240CB4E501}
-AppName={#AppName}
-AppVersion={#AppVersion}
-AppPublisher={#AppPublisher}
+AppId={{87C4E7B7-4F39-4ED6-8B4F-ARSANGAZ7900}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\Arsan Gaz ERP
 DefaultGroupName=Arsan Gaz ERP
-DisableProgramGroupPage=yes
-OutputDir=Output
-OutputBaseFilename=ArsanGazERPSetup
+OutputDir=..\artifacts\installer
+OutputBaseFilename=ArsanGazERP_Setup
 Compression=lzma2
 SolidCompression=yes
-WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-PrivilegesRequired=lowest
-UninstallDisplayIcon={app}\{#AppExeName}
-
-[Languages]
-Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
-
+PrivilegesRequired=admin
+UninstallDisplayIcon={app}\{#MyAppExeName}
 [Files]
-Source: "..\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-
+Source: "..\artifacts\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]
-Name: "{autoprograms}\Arsan Gaz ERP"; Filename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\Arsan Gaz ERP"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
-
+Name: "{autoprograms}\Arsan Gaz ERP"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\Arsan Gaz ERP"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
-
+Name: desktopicon; Description: "Masaüstü kısayolu oluştur"; Flags: unchecked
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "Start Arsan Gaz ERP"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Arsan Gaz ERP'yi başlat"; Flags: nowait postinstall skipifsilent
