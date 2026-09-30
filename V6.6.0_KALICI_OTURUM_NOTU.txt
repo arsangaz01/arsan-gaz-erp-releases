@@ -1,0 +1,7 @@
+Arsan Gaz ERP V6.6.0 Kalici Oturum
+- Microsoft MSAL token cache LocalAppData altinda kalici ve sifreli saklanir.
+- Uygulama acilisinda AcquireTokenSilent denenir.
+- Kullanici Oturumu Kapat secmedikce etkilesimli giris tekrar istenmez.
+- Secilen Excel dosyasi, son sayfa ve Microsoft hesap kimligi LocalAppData altinda saklanir.
+- Oturumu Kapat token cache hesabi ile kalici hesap kaydini temizler.
+- Sabit proje: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis

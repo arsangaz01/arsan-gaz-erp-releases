@@ -1,0 +1,6 @@
+V6.6.1 Derleme Onarimi
+- AppPersistentState.cs icin System.IO, System, Threading ve Tasks using bildirimleri eklendi.
+- Microsoft365PersistentSessionService.cs icin System.IO ve diger acik using bildirimleri eklendi.
+- ImplicitUsings kapali projelerle uyumluluk saglandi.
+- MsalCacheHelper referansi servis omru boyunca tutuluyor.
+- Sabit proje: C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis
