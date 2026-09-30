@@ -1,7 +1,7 @@
-{
+﻿{
+    "version":  "8.0.8",
     "mandatory":  false,
-    "url":  "https://github.com/arsangaz01/arsan-gaz-erp-releases/releases/download/v7.9.3/ArsanGazERP_Setup.exe",
-    "publishedAt":  "2026-09-30T21:58:55.0635402Z",
-    "version":  "7.9.3",
-    "sha256":  "4A281D80047AECB5CA7CC378B633123F0ECB2F8DE68E044CC60EDD6E02675B1D"
+    "url":  "https://github.com/arsangaz01/arsan-gaz-erp-releases/releases/download/v8.0.8/ArsanGazERP_Setup.exe",
+    "sha256":  "4A281D80047AECB5CA7CC378B633123F0ECB2F8DE68E044CC60EDD6E02675B1D",
+    "publishedAt":  "2026-09-30T23:17:43.2765952Z"
 }

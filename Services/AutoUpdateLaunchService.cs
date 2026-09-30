@@ -1,118 +1,161 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
+using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace ArsanGazERP.Services;
 
+public sealed record AutoUpdateResult(bool UpdateAvailable, bool InstallerStarted, string Message);
+
 public sealed class AutoUpdateLaunchService
 {
-    private const string Api = "https://api.github.com/repos/arsangaz01/arsan-gaz-erp-releases/releases/latest";
+    private const string LatestReleaseApi = "https://api.github.com/repos/arsangaz01/arsan-gaz-erp-releases/releases/latest";
     private static readonly HttpClient Http = CreateClient();
 
-    public async Task<AutoUpdateResult> CheckAndStartLatestInstallerAsync()
+    public async Task<AutoUpdateResult> CheckAndStartLatestInstallerAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            using HttpResponseMessage response = await Http.GetAsync(Api);
-            if (response.StatusCode == HttpStatusCode.NotFound)
-                return new AutoUpdateResult(false, false, "Yayinlanmis guncelleme bulunamadi.");
+            using var checkTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            checkTimeout.CancelAfter(TimeSpan.FromSeconds(20));
+            using var response = await Http.GetAsync(LatestReleaseApi, HttpCompletionOption.ResponseHeadersRead, checkTimeout.Token);
             if (!response.IsSuccessStatusCode)
-                return new AutoUpdateResult(false, false, "Guncelleme denetimi basarisiz: " + (int)response.StatusCode);
+                return new(false, false, $"Güncelleme denetimi başarısız: HTTP {(int)response.StatusCode}");
 
-            using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            JsonElement root = document.RootElement;
-            string tag = root.GetProperty("tag_name").GetString() ?? "0.0.0";
-            Version current = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0);
-            Version latest;
-            if (!TryVersion(tag, out latest) || latest <= current)
-                return new AutoUpdateResult(false, false, "Uygulama guncel: " + current);
+            await using var stream = await response.Content.ReadAsStreamAsync(checkTimeout.Token);
+            var release = await JsonSerializer.DeserializeAsync<GitHubRelease>(stream, JsonOptions, checkTimeout.Token);
+            if (release is null || release.Draft || release.Prerelease)
+                return new(false, false, "Yayımlanmış kararlı sürüm bulunamadı.");
+            if (!TryVersion(release.TagName, out var latest))
+                return new(false, false, "GitHub sürüm etiketi geçersiz.");
 
-            JsonElement assets;
-            if (!root.TryGetProperty("assets", out assets))
-                return new AutoUpdateResult(true, false, "Yeni surum bulundu fakat installer yok.");
+            var current = Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0, 0);
+            if (latest <= current)
+                return new(false, false, $"Güncel sürüm kullanılıyor: {current}");
 
-            string selectedName = string.Empty;
-            string selectedUrl = string.Empty;
-            int selectedPriority = -1;
-            foreach (JsonElement asset in assets.EnumerateArray())
+            var setup = release.Assets.FirstOrDefault(a => a.Name.Equals("ArsanGazERP_Setup.exe", StringComparison.OrdinalIgnoreCase))
+                ?? release.Assets.FirstOrDefault(a => a.Name.EndsWith("Setup.exe", StringComparison.OrdinalIgnoreCase));
+            if (setup is null || string.IsNullOrWhiteSpace(setup.BrowserDownloadUrl))
+                return new(true, false, "Yeni sürüm var ancak Setup.exe bulunamadı.");
+
+            if (MessageBox.Show($"Arsan Gaz ERP {latest} sürümü hazır. İndirip kurmak ister misiniz?", "Arsan Gaz ERP Güncelleme", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes)
+                return new(true, false, "Güncelleme ertelendi.");
+
+            var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ArsanGazERP", "Updates", latest.ToString());
+            Directory.CreateDirectory(directory);
+            var installer = Path.Combine(directory, "ArsanGazERP_Setup.exe");
+            var partial = installer + ".download";
+            if (File.Exists(partial)) File.Delete(partial);
+
+            using var downloadTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            downloadTimeout.CancelAfter(TimeSpan.FromMinutes(10));
+            using var download = await Http.GetAsync(setup.BrowserDownloadUrl, HttpCompletionOption.ResponseHeadersRead, downloadTimeout.Token);
+            download.EnsureSuccessStatusCode();
+            await using (var input = await download.Content.ReadAsStreamAsync(downloadTimeout.Token))
+            await using (var output = new FileStream(partial, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
+                await input.CopyToAsync(output, downloadTimeout.Token);
+
+            var expected = NormalizeDigest(setup.Digest) ?? await GetSidecarHashAsync(release, setup.Name, downloadTimeout.Token);
+            var actual = await ComputeSha256Async(partial, downloadTimeout.Token);
+            if (string.IsNullOrWhiteSpace(expected))
             {
-                string name = asset.GetProperty("name").GetString() ?? string.Empty;
-                string url = asset.GetProperty("browser_download_url").GetString() ?? string.Empty;
-                int priority = Priority(name);
-                if (priority > selectedPriority && !string.IsNullOrWhiteSpace(url))
-                {
-                    selectedName = name;
-                    selectedUrl = url;
-                    selectedPriority = priority;
-                }
+                File.Delete(partial);
+                return new(true, false, "SHA-256 doğrulama verisi bulunmadığı için güncelleme kurulmadı.");
             }
-            if (selectedPriority < 0)
-                return new AutoUpdateResult(true, false, "Yeni surum bulundu fakat uygun installer yok.");
-
-            string folder = Path.Combine(Path.GetTempPath(), "ArsanGazERP", "Updates", latest.ToString());
-            Directory.CreateDirectory(folder);
-            string target = Path.Combine(folder, selectedName);
-            string temporary = target + ".download";
-            if (File.Exists(temporary)) File.Delete(temporary);
-            await File.WriteAllBytesAsync(temporary, await Http.GetByteArrayAsync(selectedUrl));
-            File.Move(temporary, target, true);
-
-            ProcessStartInfo start = new ProcessStartInfo();
-            start.WorkingDirectory = folder;
-            start.UseShellExecute = true;
-            string extension = Path.GetExtension(target);
-            if (extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase) || extension.Equals(".bat", StringComparison.OrdinalIgnoreCase))
+            if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
             {
-                start.FileName = Environment.GetEnvironmentVariable("COMSPEC") ?? "cmd.exe";
-                start.Arguments = "/d /c \"\"" + target + "\"\"";
+                File.Delete(partial);
+                return new(true, false, "Güncelleme SHA-256 doğrulaması başarısız.");
             }
-            else start.FileName = target;
 
-            Process process = Process.Start(start) ?? throw new InvalidOperationException("Installer baslatilamadi.");
-            return new AutoUpdateResult(true, true, "Guncelleme indirildi ve baslatildi.");
+            File.Move(partial, installer, true);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = installer,
+                Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS",
+                UseShellExecute = true,
+                Verb = "runas"
+            });
+            return new(true, true, $"Arsan Gaz ERP {latest} kurulumu başlatıldı.");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new(false, false, "Güncelleme denetimi zaman aşımına uğradı; uygulama normal açılacak.");
         }
         catch (Exception exception)
         {
-            return new AutoUpdateResult(false, false, "Otomatik guncelleme denetlenemedi: " + exception.GetBaseException().Message);
+            return new(false, false, "Güncelleme denetimi atlandı: " + exception.GetBaseException().Message);
         }
     }
 
-    private static int Priority(string name)
+    private static async Task<string?> GetSidecarHashAsync(GitHubRelease release, string installerName, CancellationToken cancellationToken)
     {
-        bool installer = name.Contains("setup", StringComparison.OrdinalIgnoreCase) || name.Contains("installer", StringComparison.OrdinalIgnoreCase) || name.Contains("update", StringComparison.OrdinalIgnoreCase) || name.Contains("onarim", StringComparison.OrdinalIgnoreCase) || name.Contains("kurulum", StringComparison.OrdinalIgnoreCase);
-        if (!installer) return -1;
-        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return 30;
-        if (name.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)) return 20;
-        if (name.EndsWith(".bat", StringComparison.OrdinalIgnoreCase)) return 10;
-        return -1;
+        var asset = release.Assets.FirstOrDefault(a => a.Name.Equals(installerName + ".sha256", StringComparison.OrdinalIgnoreCase))
+            ?? release.Assets.FirstOrDefault(a => a.Name.Equals("SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase));
+        if (asset is null) return null;
+        using var response = await Http.GetAsync(asset.BrowserDownloadUrl, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        var text = await response.Content.ReadAsStringAsync(cancellationToken);
+        foreach (var line in text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.Trim().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length > 0 && parts[0].Length == 64 && parts[0].All(Uri.IsHexDigit) && (parts.Length == 1 || line.Contains(installerName, StringComparison.OrdinalIgnoreCase)))
+                return parts[0];
+        }
+        return null;
     }
 
-    private static bool TryVersion(string value, out Version version)
+    private static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
     {
-        string normalized = value.Trim().TrimStart('v', 'V');
-        int dash = normalized.IndexOf('-');
-        if (dash >= 0) normalized = normalized.Substring(0, dash);
-        int plus = normalized.IndexOf('+');
-        if (plus >= 0) normalized = normalized.Substring(0, plus);
-        Version parsed;
-        bool ok = Version.TryParse(normalized, out parsed!);
-        version = parsed ?? new Version(0, 0);
-        return ok;
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
+        using var sha = SHA256.Create();
+        return Convert.ToHexString(await sha.ComputeHashAsync(stream, cancellationToken));
+    }
+
+    private static string? NormalizeDigest(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return value.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? value[7..] : value;
+    }
+
+    private static bool TryVersion(string? tag, out Version version)
+    {
+        var value = (tag ?? string.Empty).Trim().TrimStart('v', 'V');
+        var separator = value.IndexOf('-');
+        if (separator >= 0) value = value[..separator];
+        return Version.TryParse(value, out version!);
     }
 
     private static HttpClient CreateClient()
     {
-        HttpClient client = new HttpClient();
-        client.Timeout = TimeSpan.FromMinutes(5);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("ArsanGazERP-AutoUpdater/7.0.5");
-        client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+        var client = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("ArsanGazERP-Updater/8.0.7");
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
         return client;
     }
-}
 
-public sealed record AutoUpdateResult(bool UpdateAvailable, bool InstallerStarted, string Message);
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private sealed class GitHubRelease
+    {
+        [JsonPropertyName("tag_name")] public string TagName { get; set; } = string.Empty;
+        [JsonPropertyName("draft")] public bool Draft { get; set; }
+        [JsonPropertyName("prerelease")] public bool Prerelease { get; set; }
+        [JsonPropertyName("assets")] public GitHubAsset[] Assets { get; set; } = Array.Empty<GitHubAsset>();
+    }
+    private sealed class GitHubAsset
+    {
+        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+        [JsonPropertyName("browser_download_url")] public string BrowserDownloadUrl { get; set; } = string.Empty;
+        [JsonPropertyName("digest")] public string? Digest { get; set; }
+    }
+}
