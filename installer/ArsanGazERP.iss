@@ -1,5 +1,5 @@
 #define MyAppName "Arsan Gaz ERP"
-#define MyAppVersion "7.9.3"
+#define MyAppVersion "8.1.0"
 #define MyAppPublisher "Arsan Gaz"
 #define MyAppExeName "ArsanGazERP.exe"
 [Setup]
