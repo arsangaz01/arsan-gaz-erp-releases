@@ -82,3 +82,7 @@ AgentWatcherData/
 **/settings.local.json
 **/*secret*
 **/*apikey*
+# Package installs, Wrangler cache and built VS Code extensions
+node_modules/
+.wrangler/
+*.vsix
