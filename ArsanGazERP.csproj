@@ -2,8 +2,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -12,7 +13,15 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);AgentHost\**;_Backups\**;publish\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.Windows.SDK.NET.Ref" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.16" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -27,6 +36,10 @@
     <PackageReference Include="Microsoft.Identity.Client" Version="4.90.1" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
     <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.90.1" />
+    <PackageReference Include="NAudio" Version="3.1.0" />
+    <PackageReference Include="OsmSharp.Geo" Version="6.2.0" />
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\ArsanGazLogo.png" />
@@ -49,4 +62,12 @@
     <EmbeddedResource Remove="AgentHost\**;_upgrade_backup_*\**;*Backup*\**;_Backups\**;publish\**" />
     <None Remove="AgentHost\**;_upgrade_backup_*\**;*Backup*\**;_Backups\**;publish\**" />
   </ItemGroup>
+  <!-- Whisper.net loads its native DLLs from runtimes\<rid>\ on disk; it cannot use copies bundled inside the single-file exe. -->
+  <Target Name="KeepWhisperNativeLibrariesOnDisk" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Condition="'%(Filename)%(Extension)' == 'whisper.dll' or '%(Filename)%(Extension)' == 'ggml-whisper.dll' or '%(Filename)%(Extension)' == 'ggml-base-whisper.dll' or '%(Filename)%(Extension)' == 'ggml-cpu-whisper.dll'">
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 </Project>

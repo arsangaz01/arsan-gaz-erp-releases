@@ -1,0 +1,39 @@
+---
+description: Telegram ile uzaktan görev alma, raporlama ve onay akışı
+alwaysApply: true
+---
+
+# Telegram uzaktan çalışma akışı
+
+Kullanıcı bilgisayar başında olmasa da işi Telegram üzerinden yönetir. Görev nereden gelirse gelsin
+(Cursor sohbeti veya Telegram) sonuç ve onay soruları **mutlaka Telegram'a da** gider. Kullanıcıyla Türkçe konuş.
+
+Veri klasörü: `%LOCALAPPDATA%\ArsanGazERP\AgentWatcherData`. Betikler `Tools/CursorIdeBridge/` altında,
+PowerShell ile ve sandbox dışında (`required_permissions: ["all"]`) çalıştırılır.
+
+## Telegram'a mesaj gönderme
+Metni UTF-8 bir dosyaya yaz (ör. `%TEMP%\cursor-telegram.txt`), sonra:
+`powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CursorIdeBridge\Send-Telegram.ps1 -Path <dosya>`
+AgentWatcher çalışıyorsa mesaj birkaç saniye içinde iletilir.
+
+## Ne zaman gönderilir
+- Bilgisayardan verilen her görev bitince: kısa Türkçe rapor (ne yapıldı, derleme/test sonucu, kalan risk, kullanıcının yapması gereken).
+- Onay gerektiren her durumda (ERP'yi kapatıp güncelleme, deploy, commit/push, geri alınamaz işlem): soruyu hem sohbette
+  sor hem Telegram'a "Onaylıyor musun? Evet/Hayır yazın" diye gönder. Telegram'dan gelen "evet/hayır" cevabı yeni bir istek
+  olarak bu sohbete düşer; onu onay sayabilirsin.
+- Cursor'un kendi "Auto-review" onay kartları yalnızca bilgisayardan onaylanabilir; böyle bir onay beklerken bunu Telegram'da açıkça belirt.
+
+## Telegram'dan gelen istekler (IDE sohbeti açıkken)
+`Tools/CursorIdeBridge/ide-watch.ps1` bu sohbette arka planda izlenir ve şu satırları basar:
+- `AGENT_LOOP_WAKE_ide_request {"id":...,"path":...}` → istek dosyasını (`Text`, `Context`, `Attachments`) oku, işi yap,
+  raporu dosyaya yazıp `Complete-Request.ps1 -Id <id> -ReportPath <dosya>` çalıştır (rapor Telegram'a gider).
+- `AGENT_LOOP_WAKE_ide_report {"name":...,"path":...}` → ERP ajan sohbetindeki araştırma raporunu incele.
+  Önerileri tek tek değerlendir: ERP'ye uygun, kanıtlı ve düşük riskli olanları kodla, derle ve testleri çalıştır;
+  zayıf, spekülatif veya kapsam dışı olanları gerekçesiyle ele. Değerlendirmeyi Telegram'a gönder. Yayınlamak için
+  ERP'nin kapatılması gerekiyorsa önce onay iste.
+- Sohbet kapalıyken istekleri `Tools/CursorTelegramBridge/bridge.js` (ayrı bir Cursor ajanı) işler. Ne yaptığını görmek için
+  `cursor-journal.md` dosyasının sonunu oku.
+
+## Sınırlar
+Müşterilere e-posta/WhatsApp gönderme, ödeme veya silme gibi geri alınamaz işlemleri onaysız yapma. Gizli anahtarları
+rapora yazma. Doğrulamadığın işi yapılmış gibi raporlama.

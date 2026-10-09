@@ -20,6 +20,10 @@ public sealed class CloudAgentSettingsWindow : Window
     {
         Content = "ERP özetini okuyabilir (müşteri adı, tutar ve tarihler yapay zeka sağlayıcısına gönderilir)"
     };
+    private readonly CheckBox _computerControl = new()
+    {
+        Content = "Bilgisayar komutları (izinli uygulama/site açma, Masaüstü/Belgeler altında klasör oluşturma)"
+    };
     private readonly TextBlock _roleDescription = new()
     {
         TextWrapping = TextWrapping.Wrap,
@@ -197,6 +201,7 @@ public sealed class CloudAgentSettingsWindow : Window
         _delegateTasks.IsChecked = permission.CanDelegateTasks;
         _collectionReminders.IsChecked = permission.CanManageCollectionReminders;
         _erpSummary.IsChecked = permission.CanReadErpSummary;
+        _computerControl.IsChecked = permission.CanControlComputer;
 
         string id = _selectedProfile.Id;
         ShowWhen(_publicResearch, id == "researcher");
@@ -206,6 +211,7 @@ public sealed class CloudAgentSettingsWindow : Window
         ShowWhen(_delegateTasks, id is "supervisor" or "jarvis");
         ShowWhen(_collectionReminders, id == "finance");
         ShowWhen(_erpSummary, ErpContextSnapshotService.IsEligible(id));
+        ShowWhen(_computerControl, id == "jarvis");
 
         int available = PermissionOptions.Count(option => option.Visibility == Visibility.Visible);
         _permissionHint.Text = available == 0
@@ -216,7 +222,7 @@ public sealed class CloudAgentSettingsWindow : Window
     }
 
     private CheckBox[] PermissionOptions =>
-        [_publicResearch, _crmNote, _crmFollowUp, _erpTask, _delegateTasks, _collectionReminders, _erpSummary];
+        [_publicResearch, _crmNote, _crmFollowUp, _erpTask, _delegateTasks, _collectionReminders, _erpSummary, _computerControl];
 
     private static void ShowWhen(CheckBox option, bool applicable)
     {
@@ -238,7 +244,8 @@ public sealed class CloudAgentSettingsWindow : Window
             CanCreateErpTask: _selectedProfile.Id == "planner" && _erpTask.IsChecked == true,
             CanDelegateTasks: _selectedProfile.Id is "supervisor" or "jarvis" && _delegateTasks.IsChecked == true,
             CanManageCollectionReminders: _selectedProfile.Id == "finance" && _collectionReminders.IsChecked == true,
-            CanReadErpSummary: ErpContextSnapshotService.IsEligible(_selectedProfile.Id) && _erpSummary.IsChecked == true);
+            CanReadErpSummary: ErpContextSnapshotService.IsEligible(_selectedProfile.Id) && _erpSummary.IsChecked == true,
+            CanControlComputer: _selectedProfile.Id == "jarvis" && _computerControl.IsChecked == true);
     }
 
     private void SavePermissions()

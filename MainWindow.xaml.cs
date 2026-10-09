@@ -414,6 +414,12 @@ public partial class MainWindow : Window
     private void AgentControlCenter_Click(object sender, RoutedEventArgs e) =>
         new ArsanGazERP.Views.AgentControlCenterWindow { Owner = this }.ShowDialog();
 
+    private void Briefing_Click(object sender, RoutedEventArgs e) =>
+        new ArsanGazERP.Views.BriefingWindow { Owner = this }.Show();
+
+    private void MailAssistant_Click(object sender, RoutedEventArgs e) =>
+        new ArsanGazERP.Views.MailAssistantWindow(_graph) { Owner = this }.Show();
+
     private void Campaigns_Click(object sender, RoutedEventArgs e) =>
         new ArsanGazERP.Views.CampaignWindow { Owner = this }.ShowDialog();
 

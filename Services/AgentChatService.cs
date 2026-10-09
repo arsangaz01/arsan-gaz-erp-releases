@@ -25,7 +25,7 @@ public sealed class AgentChatService : IAsyncDisposable
         new("planner", "Can", "Görev ve iş planlama", "ERP işleri için önceliklendirilmiş, uygulanabilir günlük görev planları hazırlayan bir operasyon planlayıcısısın."),
         new("researcher", "Ar-Ge Araştırmacısı", "Kamuya açık yazılım kaynaklarında araştırma", "Kamuya açık yazılım ve arayüz örneklerini araştırıp kaynak URL'leriyle karşılaştırmalı, uygulanabilir öneriler sunarsın."),
         new("supervisor", "Gözcü", "Sistem sağlığı, görev dağıtımı ve sonuç denetimi", "Yerel sağlık durumunu izler, açık kullanıcı isteğiyle ilgili uzmanlara salt-analiz alt görevleri dağıtır ve sonuçları denetlersin. ERP kaydı, dosya, kod veya ayar değiştiremez; müşteriyle iletişim kuramazsın."),
-        new("jarvis", "Jarvis", "Genel sohbet, soruları yanıtlama ve ajan koordinasyonu", "Kullanıcının genel sorularına açık, doğru ve uygulanabilir yanıtlar verirsin; gerekirse uygun uzmana yönlendirirsin. Araç çağırmaz, ERP kaydı, dosya/kod veya ayar değiştirmez ve onaylanmamış işlemleri yapmış gibi göstermezsin.")
+        new("jarvis", "Jarvis", "Genel sohbet, soruları yanıtlama ve ajan koordinasyonu", "Kullanıcının genel sorularına açık, doğru ve uygulanabilir yanıtlar verirsin; gerekirse uygun uzmana yönlendirirsin. Hava durumu, TCMB döviz kurları, haber gündemi ve günlük özet ('günaydın', 'günün özeti') ERP tarafından canlı olarak yanıtlanır; bunlar sorulduğunda kullanıcıdan il adını veya para birimini açıkça yazmasını iste. İzin verilmişse 'Excel'i aç', 'YouTube'da X ara', 'Masaüstünde X klasörü oluştur' gibi izinli bilgisayar komutlarını ERP yürütür. Araç çağırmaz, ERP kaydı, dosya/kod veya ayar değiştirmez ve onaylanmamış işlemleri yapmış gibi göstermezsin.")
     ];
 
     public string ProviderStatus => (CloudAgentClient.IsConfigured, IsNimConfigured(_nim)) switch
@@ -77,7 +77,7 @@ public sealed class AgentChatService : IAsyncDisposable
         }
 
         using CancellationTokenSource turnTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        turnTimeout.CancelAfter(TimeSpan.FromSeconds(75));
+        turnTimeout.CancelAfter(TimeSpan.FromSeconds(180));
 
         HashSet<string> participantIds = AgentChatRoutingPolicy.SelectParticipantIds(
             input,
@@ -111,7 +111,8 @@ public sealed class AgentChatService : IAsyncDisposable
                     input,
                     addressedAgent,
                     addressedAgent?.Id == profile.Id,
-                    turnTimeout.Token);
+                    turnTimeout.Token,
+                    text => onReply?.Invoke(new ErpAgentReply(profile, text, true, IsProgress: true)));
                 reply = new ErpAgentReply(profile, answer, true);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -120,7 +121,7 @@ public sealed class AgentChatService : IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
-                reply = new ErpAgentReply(profile, "Ajan yanıtı zaman aşımına uğradı (75 saniye). Yeniden deneyin.", false);
+                reply = new ErpAgentReply(profile, "Ajan yanıtı zaman aşımına uğradı (180 saniye). Yeniden deneyin.", false);
             }
             catch (Exception exception)
             {
@@ -175,7 +176,8 @@ public sealed class AgentChatService : IAsyncDisposable
         string userMessage,
         ErpAgentProfile? addressedAgent,
         bool mayExecuteCommand,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<string>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(userMessage);
@@ -219,6 +221,42 @@ public sealed class AgentChatService : IAsyncDisposable
         if (profile.Id == "supervisor")
         {
             return await GetSupervisorResponseAsync(input, cancellationToken);
+        }
+
+        if (profile.Id == "jarvis" && PcCommandService.TryParse(input) is { } pcCommand)
+        {
+            string pcAnswer = ExecutePcCommand(pcCommand);
+            await RecordAgentRunAsync(profile.Name, pcAnswer);
+            return "[Bilgisayar] " + pcAnswer;
+        }
+
+        if (profile.Id == "jarvis" && CloudAgentClient.IsConfigured)
+        {
+            try
+            {
+                string agentAnswer = await JarvisAgentService.RunAsync(history, input, progress, cancellationToken);
+                await RecordAgentRunAsync(profile.Name, agentAnswer);
+                return agentAnswer;
+            }
+            catch (Exception exception) when (
+                !cancellationToken.IsCancellationRequested &&
+                exception is HttpRequestException or InvalidOperationException or InvalidDataException or TaskCanceledException)
+            {
+                progress?.Invoke("⚠ Ajan modu yanıt veremedi (" + exception.GetBaseException().Message + "); hızlı moda geçiyorum.");
+            }
+        }
+
+        if (profile.Id == "jarvis")
+        {
+            LiveInfoRequest liveRequest = LiveInfoService.Detect(input, history);
+            string? liveAnswer = liveRequest.Kind == LiveInfoKind.Briefing
+                ? await DailyBriefingService.BuildTextAsync(liveRequest.City, cancellationToken)
+                : await LiveInfoService.TryAnswerAsync(liveRequest, cancellationToken);
+            if (liveAnswer is not null)
+            {
+                await RecordAgentRunAsync(profile.Name, liveAnswer);
+                return "[Canlı veri] " + liveAnswer;
+            }
         }
 
         AgentPermissionSettings permissions = CloudAgentSettingsStore.GetPermissions(profile.Id);
@@ -311,6 +349,30 @@ public sealed class AgentChatService : IAsyncDisposable
             exception is System.Security.Cryptography.CryptographicException or IOException or UnauthorizedAccessException)
         {
             return false;
+        }
+    }
+
+    internal static string ExecutePcCommand(PcCommand command)
+    {
+        if (!CloudAgentSettingsStore.GetPermissions("jarvis").CanControlComputer)
+        {
+            return "Bilgisayar komutları kapalı. Ajan Yetkileri → Jarvis → \"Bilgisayar komutları\" iznini açın." +
+                   Environment.NewLine + PcCommandService.DescribeAllowList();
+        }
+
+        if (command.Kind == PcCommandKind.CreateFolder && command.Target.Length == 0)
+        {
+            return "Klasör adı anlaşılamadı veya geçersiz. Örnek: Masaüstünde \"Teklifler 2026\" klasörü oluştur.";
+        }
+
+        try
+        {
+            return PcCommandService.Execute(command);
+        }
+        catch (Exception exception) when (
+            exception is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
+        {
+            return $"{command.Label} açılamadı/oluşturulamadı: {exception.GetBaseException().Message}";
         }
     }
 

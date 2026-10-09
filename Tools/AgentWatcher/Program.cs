@@ -565,6 +565,8 @@ internal sealed partial class ControlCenterForm : Form
     string? activeTask, lastReport;
     DateTime nextDailyStatusReportAttemptUtc;
     CancellationTokenSource? activeCancellation;
+    Task? cloudRelayTask;
+    bool cloudRelayUnavailableLogged;
     Task? startupTask, scheduledTickTask, campaignPumpTask, queueProcessingTask, localTestAutomationTask, hourlyLocalTestAutomationTask, shutdownTask;
     bool adjustingWorkArea;
     NotifyIcon? trayIcon;
@@ -696,6 +698,7 @@ internal sealed partial class ControlCenterForm : Form
             timer.Start();
             startupTask = CompleteStartupAsync();
             campaignPumpTask = campaignScheduler.RunAsync(closing.Token);
+            cloudRelayTask = RunCloudRelayAsync(closing.Token);
         };
         FormClosing += async (_, e) =>
         {
@@ -722,7 +725,7 @@ internal sealed partial class ControlCenterForm : Form
                 () => startupTask,
                 async () =>
                 {
-                    await Task.WhenAll(new[] { scheduledTickTask, campaignPumpTask }.OfType<Task>());
+                    await Task.WhenAll(new[] { scheduledTickTask, campaignPumpTask, cloudRelayTask }.OfType<Task>());
                     if (localTestAutomationTask is not null)
                     {
                         await localTestAutomationTask;
@@ -1582,7 +1585,7 @@ internal sealed partial class ControlCenterForm : Form
         layout.Controls.Add(Group("NVIDIA NIM", Labeled("API anahtarı", NewNvidiaKeyBox()), Labeled("Model", NewNvidiaModelBox()), Button("Kaydet ve Test Et", async () => await SaveAndTestNvidiaAsync()), Button("Bağlantıyı Test Et", async () => ShowResult(await AskNvidiaAsync("Yalnızca TAMAM yaz."))), Button("Anahtarı Kaldır", RemoveNvidia)));
         TextBox telegramTokenInput = new() { Width = 330, UseSystemPasswordChar = true, PlaceholderText = secrets.HasTelegramToken ? "Kayıtlı token (değiştirmek için girin)" : "BotFather bot tokenı" };
         TextBox telegramChatInput = new() { Width = 220, Text = settings.TelegramChatId };
-        layout.Controls.Add(Group("Telegram (yalnızca yetkili sohbet)", Labeled("Bot tokenı · Windows hesabına şifreli kaydedilir", telegramTokenInput), Labeled("İzin verilen Telegram chat ID", telegramChatInput), Button("Kaydet ve botu başlat", async () => await SaveTelegramSettingsAsync(telegramTokenInput, telegramChatInput)), Button("Bağlantıyı test et", async () => await TestTelegramAsync(telegramTokenInput, telegramChatInput)), Button("Telegram'ı devre dışı bırak", async () => await DisableTelegramAsync(telegramTokenInput))));
+        layout.Controls.Add(Group("Telegram (yalnızca yetkili sohbet)", Labeled("Bot tokenı · Windows hesabına şifreli kaydedilir", telegramTokenInput), Labeled("İzin verilen Telegram chat ID", telegramChatInput), Button("Kaydet ve botu başlat", async () => await SaveTelegramSettingsAsync(telegramTokenInput, telegramChatInput)), Button("Bağlantıyı test et", async () => await TestTelegramAsync(telegramTokenInput, telegramChatInput)), Button("Telegram'ı devre dışı bırak", async () => await DisableTelegramAsync(telegramTokenInput)), Button("7/24 bulut asistanını etkinleştir (bilgisayar kapalıyken + sabah özeti)", async () => await EnableCloudRelayAsync())));
         ComboBox researchProviderInput = NewCombo("SerpApi", "Google Custom Search");
         if (researchProviderInput.Items.Contains(settings.ResearchProvider))
         {
@@ -3537,6 +3540,121 @@ internal sealed partial class ControlCenterForm : Form
                 QueueTelegramTaskAsync(updateId, targetChatId, caption, "Sohbet", cancellationToken,
                     "VS Code Copilot Chat", attachments));
         await Task.Yield();
+    }
+
+    async Task RunCloudRelayAsync(CancellationToken cancellationToken)
+    {
+        using PeriodicTimer relayTimer = new(CloudTelegramRelay.HeartbeatInterval);
+        do
+        {
+            try
+            {
+                await ExchangeCloudRelayAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception) when (
+                exception is HttpRequestException or TaskCanceledException or InvalidOperationException
+                    or InvalidDataException or JsonException)
+            {
+                AppLog.Write("CLOUD_RELAY", "7/24 röle sinyali gönderilemedi: " + exception.GetBaseException().Message);
+            }
+        }
+        while (await WaitForNextRelayTickAsync(relayTimer, cancellationToken));
+    }
+
+    static async Task<bool> WaitForNextRelayTickAsync(PeriodicTimer relayTimer, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await relayTimer.WaitForNextTickAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    async Task ExchangeCloudRelayAsync(CancellationToken cancellationToken)
+    {
+        CloudRelayHeartbeat? heartbeat = await CloudTelegramRelay.SendHeartbeatAsync(cancellationToken);
+        if (heartbeat is null)
+        {
+            if (!cloudRelayUnavailableLogged && CloudTelegramRelay.IsWorkerConfigured)
+            {
+                cloudRelayUnavailableLogged = true;
+                Append("7/24 bulut rölesi bu Worker sürümünde yok; Worker'ı güncelleyince otomatik devreye girer.");
+            }
+            return;
+        }
+
+        if (heartbeat.Deferred.Count == 0
+            || telegram is not { IsConnected: true } bot
+            || !long.TryParse(settings.TelegramChatId, NumberStyles.Integer, CultureInfo.InvariantCulture, out long allowedChatId))
+        {
+            return;
+        }
+
+        List<long> handled = [];
+        foreach (CloudDeferredCommand command in heartbeat.Deferred.OrderBy(item => item.UpdateId))
+        {
+            handled.Add(command.UpdateId);
+            if (command.ChatId != allowedChatId)
+            {
+                continue;
+            }
+
+            Append($"Bilgisayar kapalıyken gelen Telegram emri çalıştırılıyor: {LimitText(command.Text, 120)}");
+            string reply;
+            try
+            {
+                reply = await HandleTelegramCommandAsync(command.UpdateId, command.Text, command.ChatId, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                reply = "Emir çalıştırılamadı: " + exception.GetBaseException().Message;
+            }
+
+            await bot.SendMessageAsync(
+                $"💻 Bilgisayar açıldı; kapalıyken gönderdiğiniz emir işlendi:\n{LimitText(command.Text, 300)}\n\n{reply}",
+                cancellationToken);
+        }
+
+        await CloudTelegramRelay.AcknowledgeAsync(handled, cancellationToken);
+    }
+
+    async Task EnableCloudRelayAsync()
+    {
+        if (!secrets.HasTelegramToken || string.IsNullOrWhiteSpace(settings.TelegramChatId))
+        {
+            ShowResult("Önce Telegram bot tokenını ve izin verilen chat ID'yi kaydedin.");
+            return;
+        }
+
+        if (!CloudTelegramRelay.IsWorkerConfigured)
+        {
+            ShowResult("Önce ERP > Ajan Yetkileri ve Bulut bölümünde Cloudflare Worker adresini ve erişim anahtarını kaydedin.");
+            return;
+        }
+
+        Append("7/24 bulut asistanı Cloudflare'de etkinleştiriliyor...");
+        try
+        {
+            string result = await CloudTelegramRelay.ConfigureWorkerSecretsAsync(
+                secrets.TelegramBotToken,
+                settings.TelegramChatId,
+                closing.Token);
+            await ExchangeCloudRelayAsync(closing.Token);
+            ShowResult(result);
+        }
+        catch (Exception exception) when (
+            exception is InvalidOperationException or IOException or Win32Exception or HttpRequestException
+                or OperationCanceledException)
+        {
+            ShowResult("7/24 bulut asistanı etkinleştirilemedi: " + exception.GetBaseException().Message);
+        }
     }
 
     async Task StopTelegramPollingAsync()

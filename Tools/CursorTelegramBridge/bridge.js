@@ -12,12 +12,15 @@ const POLL_INTERVAL_MS = 1500;
 const REQUEST_MAX_LENGTH = 4096;
 const REQUEST_MAX_BYTES = 65_536;
 const DEFAULT_MODEL = "composer-2.5";
+// The open Cursor IDE chat (Tools/CursorIdeBridge/ide-watch.ps1) refreshes its heartbeat every 3 s.
+const IDE_SESSION_STALE_MS = 90_000;
 
 const projectRoot = findProjectRoot(__dirname);
 const dataRoot = resolveDataRoot(projectRoot);
 const inboxDirectory = path.join(dataRoot, "CopilotInbox");
 const logPath = path.join(dataRoot, "Logs", "cursor-bridge.log");
 const statePath = path.join(dataRoot, "cursor-bridge-state.json");
+const journalPath = path.join(dataRoot, "cursor-journal.md");
 const configPath = path.join(__dirname, "bridge-config.json");
 
 let processing = false;
@@ -128,9 +131,22 @@ async function writeProgress(id, stage) {
   });
 }
 
+async function isIdeSessionActive() {
+  const status = await readJson(path.join(inboxDirectory, "ide-session-status.json")).catch(() => null);
+  const updated = Date.parse(status?.updatedUtc ?? "");
+  return Number.isFinite(updated) && Date.now() - updated < IDE_SESSION_STALE_MS;
+}
+
+async function appendJournal(id, text, report) {
+  const entry = `\r\n## ${new Date().toISOString().slice(0, 16).replace("T", " ")} - Telegram köprüsü (ayrı Cursor ajanı) - ${id}\r\n`
+    + `**İstek:** ${text}\r\n\r\n**Rapor:** ${report}\r\n`;
+  await fs.appendFile(journalPath, entry, "utf8").catch(() => undefined);
+}
+
 async function listPendingRequests() {
   const names = await fs.readdir(inboxDirectory).catch(() => []);
   const requests = [];
+  if (await isIdeSessionActive()) return requests;
   for (const name of names) {
     const match = /^([A-Za-z0-9_-]{1,80})\.request\.json$/.exec(name);
     if (!match) continue;
@@ -291,6 +307,7 @@ async function processRequest(entry) {
       updatedUtc: new Date().toISOString(),
     });
     await writeProgress(id, "completed");
+    await appendJournal(id, text, report);
     lastError = null;
     log(`Cursor yanıtı tamamlandı: ${id} (${result.durationMs ?? "?"} ms)`);
   } catch (error) {

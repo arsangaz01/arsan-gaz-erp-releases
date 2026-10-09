@@ -63,6 +63,8 @@
 
                         <TextBlock Text="AJANLAR VE KAMPANYALAR" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,20,0,7" />
                         <Button Content="Ajan Sohbeti" Click="AgentChat_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Günün Gündemi" Click="Briefing_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Mail Asistanı" Click="MailAssistant_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="Ajan Yetkileri" Click="AgentPermissions_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="Ajan Kontrol Merkezi" Click="AgentControlCenter_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="Tahsilat Hatırlatmaları" Click="CollectionReminders_Click" Style="{StaticResource SidebarButton}" />

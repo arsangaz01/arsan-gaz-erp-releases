@@ -48,6 +48,12 @@
     <Compile Include="..\..\Services\BackgroundWorkShutdown.cs" Link="BackgroundWorkShutdown.cs" />
     <Compile Include="..\..\Services\AgentChatPromptBuilder.cs" Link="AgentChatPromptBuilder.cs" />
     <Compile Include="..\..\Services\AgentChatRoutingPolicy.cs" Link="AgentChatRoutingPolicy.cs" />
+    <Compile Include="..\..\Services\LiveInfoService.cs" Link="LiveInfoService.cs" />
+    <Compile Include="..\..\Services\PcCommandService.cs" Link="PcCommandService.cs" />
+    <Compile Include="..\..\Services\WakeWordDetector.cs" Link="WakeWordDetector.cs" />
+    <Compile Include="..\..\Services\MailReplyDraftParser.cs" Link="MailReplyDraftParser.cs" />
+    <Compile Include="..\..\Services\JarvisAgentProtocol.cs" Link="JarvisAgentProtocol.cs" />
+    <Compile Include="..\..\Services\WebResearchService.cs" Link="WebResearchService.cs" />
     <Compile Include="..\..\Services\AgentWatcherPaths.cs" Link="AgentWatcherPaths.cs" />
     <Compile Include="..\AgentWatcher\AgentWatcherWindowLayout.cs" Link="AgentWatcherWindowLayout.cs" />
     <Compile Include="..\AgentWatcher\AgentWatcherRestart.cs" Link="AgentWatcherRestart.cs" />
