@@ -1,0 +1,384 @@
+using System.Globalization;
+using System.IO;
+using System.Text.Json;
+using System.Windows;
+using System.Windows.Controls;
+using ArsanGazERP.Models;
+using ArsanGazERP.Services;
+using Microsoft.Win32;
+
+namespace ArsanGazERP.Views;
+
+public sealed class CampaignWindow : Window
+{
+    private readonly CancellationTokenSource closing = new();
+    private CampaignTransport? transport;
+    private CampaignService? service;
+    private CampaignSnapshot? current;
+    private ApprovalPreview? approval;
+    private WhatsAppTemplateApproval? verifiedTemplate;
+    private readonly List<Guid> attachmentIds = [];
+    private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly TextBox name = new() { Text = "Tanitim kampanyasi" };
+    private readonly ComboBox channel = new() { ItemsSource = Enum.GetValues<CampaignChannel>(), SelectedIndex = 0 };
+    private readonly ComboBox population = new() { ItemsSource = Enum.GetValues<CampaignPopulation>(), SelectedIndex = 0 };
+    private readonly ComboBox sender = new() { DisplayMemberPath = nameof(CampaignSenderOption.DisplayName), MinWidth = 260 };
+    private readonly CheckBox all = new() { Content = "Tum uygun alicilar (onayda liste dondurulur)", IsChecked = true };
+    private readonly TextBox search = new();
+    private readonly ListBox contacts = new() { SelectionMode = SelectionMode.Extended, Height = 160, DisplayMemberPath = nameof(CampaignContactOption.DisplayName) };
+    private readonly TextBox evidence = new();
+    private readonly TextBox subject = new();
+    private readonly TextBox body = new() { AcceptsReturn = true, Height = 140, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    private readonly TextBox template = new();
+    private readonly TextBox language = new() { Text = "tr" };
+    private readonly TextBox businessAccount = new();
+    private readonly TextBox parameters = new() { AcceptsReturn = true, Height = 90, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    private readonly TextBox zone = new() { Text = TimeZoneInfo.Local.Id };
+    private readonly TextBox start = new() { Text = DateTime.Now.AddHours(1).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) };
+    private readonly TextBox end = new();
+    private readonly TextBox windows = new() { Text = "09:00-18:00", AcceptsReturn = true, Height = 65 };
+    private readonly TextBox spacing = new() { Text = "60" };
+    private readonly TextBox cap = new() { Text = "1000" };
+    private readonly TextBox cost = new() { Text = "0" };
+    private readonly CheckBox costAcknowledged = new() { Content = "Saglayici ucret/kota kosullarini kontrol ettim; tahmin garanti degildir." };
+    private readonly TextBox detail = new() { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MinHeight = 200 };
+    private readonly ListBox campaigns = new() { Height = 220, DisplayMemberPath = "Input.Name" };
+    private readonly DataGrid recipients = new() { IsReadOnly = true, AutoGenerateColumns = true, Height = 220 };
+    private bool busy;
+
+    public CampaignWindow(CampaignService? campaignService = null)
+    {
+        service = campaignService;
+        Title = "Musteri Kampanyalari - E-posta / WhatsApp";
+        Width = 1100;
+        Height = 820;
+        MinWidth = 700;
+        MinHeight = 500;
+        WindowWorkAreaService.Fit(this);
+        var tabs = new TabControl();
+        var editor = new StackPanel { Margin = new Thickness(18) };
+        editor.Children.Add(new TextBlock
+        {
+            Text = "Taslak > alici/icerik onayi > genel gonderim izni > etkinlestirme. Her aliciya ayri gonderim; API kabul edilmesi teslimat degildir. Bilgisayar ve Watcher acik olmali.",
+            TextWrapping = TextWrapping.Wrap,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+        Add(editor, "Kampanya adi", name);
+        Add(editor, "Kanal (Email / WhatsApp)", channel);
+        Add(editor, "Alici kaynagi (CRM firmalari / ERP musterileri)", population);
+        Add(editor, "Gonderici", sender);
+        Actions(editor, ("Gondericileri yenile", LoadSendersAsync), ("Microsoft Mail.Send izni", MailConsentAsync));
+        editor.Children.Add(all);
+        Add(editor, "Musteri ara (ad, e-posta, telefon, il, sektor veya CRM durumu)", search);
+        Actions(editor, ("Musterileri getir", LoadContactsAsync), ("Listelenenlerin hepsini sec", SelectListedContactsAsync), ("Uygun alicilari onizle", PreviewAsync));
+        editor.Children.Add(contacts);
+        Add(editor, "Secili musterilerin kanal izni kaniti / ret aciklamasi", evidence);
+        Actions(editor, ("Kanal iznini kaydet", () => ConsentAsync(true)), ("Kanal iznini geri cek", () => ConsentAsync(false)), ("Izin gecmisi", ShowConsentsAsync));
+        Add(editor, "E-posta konusu", subject);
+        Add(editor, "E-posta govdesi (WhatsApp icin bos kalir)", body);
+        Add(editor, "WhatsApp onayli MARKETING sablon adi", template);
+        Add(editor, "Sablon dil kodu", language);
+        Add(editor, "WhatsApp Business Account ID (WABA; Phone Number ID degildir)", businessAccount);
+        Actions(editor, ("WABA kimligini yerel ayarlara kaydet", SaveBusinessAccountAsync));
+        Add(editor, "WhatsApp govde parametreleri (her satir bir parametre)", parameters);
+        Actions(editor, ("WhatsApp sablonunu saglayicida dogrula", VerifyTemplateAsync));
+        Add(editor, "Saat dilimi kimligi", zone);
+        Add(editor, "Baslangic yerel tarih/saat (yyyy-MM-dd HH:mm)", start);
+        Add(editor, "Bitis yerel tarih/saat (istege bagli)", end);
+        Add(editor, "Gunluk saat pencereleri (satir basina HH:mm-HH:mm, gece araligi desteklenir)", windows);
+        Add(editor, "Alicilar arasi en az saniye (30-86400)", spacing);
+        Add(editor, "En fazla alici (1-1000)", cap);
+        Add(editor, "Tahmini toplam saglayici maliyeti", cost);
+        editor.Children.Add(costAcknowledged);
+        Actions(editor, ("Taslagi kaydet", SaveAsync), ("Dosya ekle (once taslagi kaydet)", AttachAsync), ("Eki kaldir ve taslagi kaydet", RemoveAttachmentAsync));
+        Actions(editor, ("Kesin onay onizlemesi", PrepareAsync), ("Onizlenen kampanyayi onayla", ApproveAsync));
+        tabs.Items.Add(new TabItem { Header = "Kampanya hazirla", Content = new ScrollViewer { Content = editor, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
+        var monitor = new StackPanel { Margin = new Thickness(18) };
+        Actions(monitor, ("Listeyi yenile", RefreshAsync), ("Secili kampanyayi ac", OpenSelectedAsync), ("Yeni taslak", NewAsync));
+        monitor.Children.Add(campaigns);
+        Actions(monitor, ("Genel gonderim iznini ac", EnableAsync), ("Tum gonderimleri durdur", DisableAsync));
+        Actions(monitor, ("Onayli kampanyayi etkinlestir", ActivateAsync), ("Duraklat", PauseAsync), ("Devam et", ResumeAsync), ("Iptal et", CancelAsync));
+        monitor.Children.Add(recipients);
+        tabs.Items.Add(new TabItem { Header = "Izle ve yonet", Content = new ScrollViewer { Content = monitor } });
+        var preview = new StackPanel { Margin = new Thickness(18) };
+        preview.Children.Add(new TextBlock { Text = "Unknown: sonuc belirsiz, otomatik tekrar yok. Accepted: saglayici kabul etti, teslimat kaniti degil.", TextWrapping = TextWrapping.Wrap });
+        preview.Children.Add(detail);
+        tabs.Items.Add(new TabItem { Header = "Onizleme / durum", Content = new ScrollViewer { Content = preview } });
+        var root = new DockPanel();
+        status.Margin = new Thickness(12);
+        DockPanel.SetDock(status, Dock.Bottom);
+        root.Children.Add(status);
+        root.Children.Add(tabs);
+        Content = root;
+        Loaded += async (_, _) => await RunAsync(async () =>
+        {
+            if (service is null)
+            {
+                transport = await CampaignTransport.CreateForCurrentWindowsUserAsync(cancellationToken: closing.Token);
+                service = new CampaignService(CampaignStore.CreateForCurrentWindowsUser(), transport);
+            }
+            await RefreshAsync();
+            await LoadSendersAsync();
+        });
+        Closing += (_, _) => closing.Cancel();
+        Closed += (_, _) => transport?.Dispose();
+        channel.SelectionChanged += (_, _) =>
+        {
+            verifiedTemplate = null;
+            approval = null;
+            sender.ItemsSource = null;
+        };
+    }
+
+    private CampaignService Service => service ?? throw new InvalidOperationException("Kampanya hizmeti henuz hazir degil.");
+    private CampaignChannel Channel => (CampaignChannel)(channel.SelectedItem ?? throw new InvalidOperationException("Kanal secin."));
+    private CampaignPopulation Population => (CampaignPopulation)(population.SelectedItem ?? throw new InvalidOperationException("Alici kaynagi secin."));
+    private CampaignSnapshot Current => current ?? throw new InvalidOperationException("Once taslagi kaydedin veya kampanya secin.");
+    private AudienceSelection Selection => new(Population, contacts.SelectedItems.Cast<CampaignContactOption>().Select(c => c.ContactId).ToArray(), all.IsChecked == true);
+    private static void Add(Panel panel, string label, Control control)
+    {
+        panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 10, 0, 4) });
+        control.HorizontalAlignment = HorizontalAlignment.Stretch;
+        panel.Children.Add(control);
+    }
+    private void Actions(Panel panel, params (string Label, Func<Task> Action)[] actions)
+    {
+        var row = new WrapPanel { Margin = new Thickness(0, 8, 0, 4) };
+        foreach (var action in actions)
+        {
+            var button = new Button { Content = action.Label, Margin = new Thickness(0, 0, 8, 6), Padding = new Thickness(12, 7, 12, 7) };
+            button.Click += async (_, _) => await RunAsync(action.Action);
+            row.Children.Add(button);
+        }
+        panel.Children.Add(row);
+    }
+    private async Task RunAsync(Func<Task> action)
+    {
+        if (busy) { status.Text = "Islem suruyor; bitmesini bekleyin."; return; }
+        busy = true;
+        try { await action(); status.Text = $"Islem tamamlandi. Genel gonderim: {(service?.ExecutionEnabled == true ? "ACIK" : "KAPALI")}"; }
+        catch (OperationCanceledException) when (closing.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            status.Text = "Islem basarisiz: " + exception.Message;
+            MessageBox.Show(this, exception.Message, "Kampanya islemi basarisiz", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally { busy = false; }
+    }
+    private bool Confirm(string text) => MessageBox.Show(this, text, "Acik kullanici onayi", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+    private void Show(object value) => detail.Text = JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
+    private async Task LoadSendersAsync()
+    {
+        sender.ItemsSource = await Service.GetAvailableSendersAsync(Channel, closing.Token);
+        sender.SelectedIndex = 0;
+        if (sender.Items.Count == 0) detail.Text = "Gonderici bulunamadi. E-posta icin mevcut Microsoft hesabina uygulamanin Baglantilar alanindan giris yapin; WhatsApp icin Business API ayarlarini yapin.";
+    }
+    private async Task MailConsentAsync()
+    {
+        if (Channel != CampaignChannel.Email) throw new InvalidOperationException("Mail.Send yalnizca e-posta icindir.");
+        var chosen = sender.SelectedItem as CampaignSenderOption ?? throw new InvalidOperationException("Gonderici secin.");
+        if (!Confirm("Secili Microsoft hesabi icin Mail.Send izni istenecek ve tarayici acilabilir. Bu islem mesaj gondermez. Devam?")) return;
+        await Service.RequestMailSendConsentAsync(chosen.Identity, closing.Token);
+        Show(await Service.GetProviderReadinessAsync(Channel, chosen.Identity, closing.Token));
+    }
+    private Task SelectListedContactsAsync()
+    {
+        all.IsChecked = false;
+        contacts.SelectAll();
+        return Task.CompletedTask;
+    }
+
+    private async Task LoadContactsAsync() => contacts.ItemsSource = await Service.GetAudienceContactsAsync(Population, search.Text, 1000, closing.Token);
+    private async Task PreviewAsync() => Show(await Service.PreviewAudienceAsync(Selection, Channel, closing.Token));
+    private async Task ConsentAsync(bool granted)
+    {
+        var selected = contacts.SelectedItems.Cast<CampaignContactOption>().ToArray();
+        if (selected.Length == 0 || string.IsNullOrWhiteSpace(evidence.Text)) throw new InvalidOperationException("Musteri secin ve izin/ret kanitini girin. Izin varsayilmaz.");
+        if (!Confirm($"{selected.Length} secili kayit icin {Channel} {(granted ? "izin" : "ret")} kaydi yazilacak. Gercek kaniti kontrol ettiniz mi?")) return;
+        foreach (var contact in selected)
+            await Service.RecordConsentAsync(contact.Population, contact.ContactId, Channel, Channel == CampaignChannel.Email ? contact.Email : contact.Phone, granted, evidence.Text, closing.Token);
+        await ShowConsentsAsync();
+    }
+    private async Task ShowConsentsAsync()
+    {
+        var selected = contacts.SelectedItem as CampaignContactOption;
+        Show(await Service.GetConsentLedgerAsync(Population, selected?.ContactId, closing.Token));
+    }
+    private Task SaveBusinessAccountAsync()
+    {
+        if (Channel != CampaignChannel.WhatsApp) throw new InvalidOperationException("Once WhatsApp kanalini secin.");
+        if (!Confirm("WABA kimligi sifreli yerel WhatsApp ayarlarina yazilacak. Bu islem saglayiciya istek veya musteriye mesaj gondermez. Devam?")) return Task.CompletedTask;
+        new WhatsAppBusinessService().SetBusinessAccountId(businessAccount.Text);
+        verifiedTemplate = null;
+        detail.Text = "WABA kaydedildi. Sablonu acik dogrulama dugmesiyle kontrol edin.";
+        return Task.CompletedTask;
+    }
+    private async Task VerifyTemplateAsync()
+    {
+        if (Channel != CampaignChannel.WhatsApp) throw new InvalidOperationException("Once WhatsApp kanalini secin.");
+        if (!Confirm("Meta API'den sablon onay durumu okunacak. Sablon adi/dili saglayiciya iletilir; musteriye mesaj gonderilmez. Devam?")) return;
+        verifiedTemplate = await Service.VerifyWhatsAppTemplateAsync(template.Text, language.Text, closing.Token);
+        Show(verifiedTemplate);
+    }
+    private DateTimeOffset LocalUtc(string text)
+    {
+        var value = DateTime.SpecifyKind(DateTime.ParseExact(text.Trim(), "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), DateTimeKind.Unspecified);
+        var tz = CampaignWindowSchedule.ResolveTimeZone(zone.Text.Trim());
+        if (tz.IsInvalidTime(value) || tz.IsAmbiguousTime(value)) throw new InvalidOperationException("Secili saat yaz/kis saati gecisinde gecersiz veya belirsiz. Baska bir saat secin.");
+        return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(value, tz), TimeSpan.Zero);
+    }
+    private async Task SaveAsync()
+    {
+        var chosen = sender.SelectedItem as CampaignSenderOption ?? throw new InvalidOperationException("Gondericileri yenileyin ve secin.");
+        var ranges = windows.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Select(line =>
+        {
+            string[] parts = line.Trim().Split('-');
+            if (parts.Length != 2) throw new FormatException("Saat penceresi HH:mm-HH:mm biciminde olmali.");
+            return new CampaignDailyWindow(TimeOnly.ParseExact(parts[0].Trim(), "HH:mm", CultureInfo.InvariantCulture), TimeOnly.ParseExact(parts[1].Trim(), "HH:mm", CultureInfo.InvariantCulture));
+        }).ToArray();
+        WhatsAppTemplateApproval? selectedTemplate = null;
+        if (Channel == CampaignChannel.WhatsApp)
+        {
+            selectedTemplate = verifiedTemplate ?? throw new InvalidOperationException("WhatsApp sablonunu once dogrulayin.");
+            if (selectedTemplate.Name != template.Text.Trim() || selectedTemplate.LanguageCode != language.Text.Trim())
+                throw new InvalidOperationException("Sablon adi/dili degisti; yeniden dogrulayin.");
+        }
+        var values = parameters.Text.Length == 0 ? [] : parameters.Text.Replace("\r", "").Split('\n');
+        IReadOnlyList<WhatsAppTemplateComponent> components = Channel == CampaignChannel.WhatsApp && values.Length > 0 ? [new("body", values)] : [];
+        var input = new CampaignDraftInput(name.Text, Channel, Selection, chosen.Identity,
+            Channel == CampaignChannel.Email ? subject.Text : "", Channel == CampaignChannel.Email ? body.Text : "",
+            selectedTemplate, components, attachmentIds.ToArray(), zone.Text.Trim(), LocalUtc(start.Text),
+            string.IsNullOrWhiteSpace(end.Text) ? null : LocalUtc(end.Text), ranges,
+            TimeSpan.FromSeconds(double.Parse(spacing.Text, CultureInfo.InvariantCulture)), int.Parse(cap.Text, CultureInfo.InvariantCulture),
+            decimal.Parse(cost.Text, CultureInfo.InvariantCulture), costAcknowledged.IsChecked == true);
+        var saved = await Service.SaveDraftAsync(current?.Id, input, current?.Revision ?? 0, closing.Token);
+        current = await Service.GetAsync(saved.Id, closing.Token) ?? throw new InvalidOperationException("Kaydedilen kampanya okunamadi.");
+        approval = null;
+        Show(current);
+    }
+    private async Task AttachAsync()
+    {
+        var campaign = Current;
+        if (campaign.State != CampaignState.Draft) throw new InvalidOperationException("Yalnizca taslaga ek eklenebilir.");
+        var picker = new OpenFileDialog
+        {
+            Filter = Channel == CampaignChannel.WhatsApp ? "PDF (*.pdf)|*.pdf" : "Belgeler ve gorseller|*.pdf;*.docx;*.xlsx;*.pptx;*.txt;*.png;*.jpg;*.jpeg",
+            CheckFileExists = true
+        };
+        if (picker.ShowDialog(this) != true) return;
+        var attached = await Service.StageAttachmentAsync(campaign.Id, picker.FileName, closing.Token);
+        attachmentIds.Clear();
+        attachmentIds.Add(attached.Id);
+        await SaveAsync();
+        Show(attached);
+    }
+    private async Task RemoveAttachmentAsync() { attachmentIds.Clear(); await SaveAsync(); }
+    private async Task PrepareAsync() { approval = await Service.PrepareApprovalAsync(Current.Id, Current.Revision, closing.Token); Show(approval); }
+    private async Task ApproveAsync()
+    {
+        var preview = approval ?? throw new InvalidOperationException("Once kesin onay onizlemesini acin.");
+        if (!Confirm($"Dondurulan {preview.Audience.EligibleCount} alici, gonderici, PDF, mesaj ve saat plani onaylanacak. Onizleme sekmesindeki listenin tamamini kontrol ettiniz ve maliyeti kabul ettiniz mi? Gonderim henuz baslamaz.")) return;
+        current = await Service.ApproveAsync(Current.Id, Current.Revision, preview.ApprovalManifestHash, new(true, true, true), closing.Token);
+        approval = null;
+        Show(current);
+    }
+    private async Task RefreshAsync()
+    {
+        await Service.RefreshExecutionStateAsync(closing.Token);
+        var listed = new List<CampaignSnapshot>();
+        CampaignPage page;
+        do
+        {
+            page = await Service.ListAsync(new(listed.Count, 100), closing.Token);
+            listed.AddRange(page.Items);
+        } while (listed.Count < page.TotalCount && page.Items.Count > 0);
+        campaigns.ItemsSource = listed;
+        if (current is not null)
+        {
+            current = await Service.GetAsync(current.Id, closing.Token);
+            if (current is not null)
+            {
+                var outcomes = new List<CampaignRecipient>();
+                RecipientPage recipientPage;
+                do
+                {
+                    recipientPage = await Service.GetRecipientsAsync(current.Id, outcomes.Count, 500, closing.Token);
+                    outcomes.AddRange(recipientPage.Items);
+                } while (outcomes.Count < recipientPage.TotalCount && recipientPage.Items.Count > 0);
+                recipients.ItemsSource = outcomes;
+                Show(new { Campaign = current, ExecutionEnabled = Service.ExecutionEnabled, NextEligibleUtc = await Service.GetNextEligibleTimeAsync(current.Id, closing.Token) });
+            }
+        }
+    }
+    private async Task OpenSelectedAsync()
+    {
+        var chosen = campaigns.SelectedItem as CampaignSnapshot ?? throw new InvalidOperationException("Kampanya secin.");
+        current = await Service.GetAsync(chosen.Id, closing.Token) ?? throw new InvalidOperationException("Kampanya artik bulunamiyor.");
+        var input = current.Input;
+        name.Text = input.Name;
+        channel.SelectedItem = input.Channel;
+        population.SelectedItem = input.Audience.Population;
+        all.IsChecked = input.Audience.SelectAllEligible;
+        await LoadContactsAsync();
+        contacts.SelectedItems.Clear();
+        foreach (CampaignContactOption contact in contacts.Items)
+            if (input.Audience.ContactIds.Contains(contact.ContactId)) contacts.SelectedItems.Add(contact);
+        await LoadSendersAsync();
+        sender.SelectedItem = sender.Items.Cast<CampaignSenderOption>().FirstOrDefault(item => item.Identity == input.SenderIdentity);
+        subject.Text = input.Subject;
+        body.Text = input.Content;
+        verifiedTemplate = input.WhatsAppTemplate;
+        template.Text = verifiedTemplate?.Name ?? "";
+        language.Text = verifiedTemplate?.LanguageCode ?? "tr";
+        parameters.Text = string.Join(Environment.NewLine, input.WhatsAppComponents.SelectMany(c => c.Parameters));
+        attachmentIds.Clear();
+        attachmentIds.AddRange(input.AttachmentIds);
+        zone.Text = input.TimeZoneId;
+        var tz = CampaignWindowSchedule.ResolveTimeZone(input.TimeZoneId);
+        start.Text = TimeZoneInfo.ConvertTime(input.StartsAtUtc, tz).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        end.Text = input.EndsAtUtc is null ? "" : TimeZoneInfo.ConvertTime(input.EndsAtUtc.Value, tz).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        windows.Text = string.Join(Environment.NewLine, input.DailyWindows.Select(w => $"{w.Start:HH:mm}-{w.End:HH:mm}"));
+        spacing.Text = input.MinimumSpacing.TotalSeconds.ToString(CultureInfo.InvariantCulture);
+        cap.Text = input.MaximumRecipients.ToString(CultureInfo.InvariantCulture);
+        cost.Text = input.EstimatedCost.ToString(CultureInfo.InvariantCulture);
+        costAcknowledged.IsChecked = input.CostAcknowledged;
+        approval = null;
+        await RefreshAsync();
+    }
+    private Task NewAsync()
+    {
+        current = null;
+        approval = null;
+        attachmentIds.Clear();
+        costAcknowledged.IsChecked = false;
+        detail.Text = "Yeni taslak. Izin/onay/etkinlestirme ayridir.";
+        return Task.CompletedTask;
+    }
+    private async Task EnableAsync()
+    {
+        if (!Confirm("GENEL GONDERIM IZNI: onaylanmis ve etkin kampanyalar gercek musterilere mesaj gonderebilir, saglayici ucreti dogabilir. AI mesaj degistirmez; arka plan girisi sessizdir. Acilsin mi?")) return;
+        await Service.EnableExecutionAsync(new(true, true, true), closing.Token);
+        await RefreshAsync();
+    }
+    private async Task DisableAsync() { await Service.DisableExecutionAsync(closing.Token); await RefreshAsync(); }
+    private async Task ActivateAsync()
+    {
+        if (!Confirm("Secili kampanya kesin alici, gonderici, maliyet ve zamanlamayla GERCEK gonderim icin etkinlestirilecek. Devam?")) return;
+        current = await Service.ActivateAsync(Current.Id, Current.Revision, new(true, true, true), closing.Token);
+        await RefreshAsync();
+    }
+    private async Task PauseAsync() { current = await Service.PauseAsync(Current.Id, Current.Revision, closing.Token); await RefreshAsync(); }
+    private async Task ResumeAsync()
+    {
+        if (!Confirm("Kampanyanin gercek gonderimlerine onayli alici/gonderici/maliyet ile devam edilsin mi?")) return;
+        current = await Service.ResumeAsync(Current.Id, Current.Revision, new(true, true, true), closing.Token);
+        await RefreshAsync();
+    }
+    private async Task CancelAsync()
+    {
+        if (!Confirm("Kampanya iptal edilsin mi? Gonderilmis veya halen saglayicida islenen mesaj geri alinamaz.")) return;
+        current = await Service.CancelAsync(Current.Id, Current.Revision, closing.Token);
+        await RefreshAsync();
+    }
+}

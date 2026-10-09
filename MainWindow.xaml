@@ -61,6 +61,14 @@
                         <TextBlock Text="GENEL" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,0,0,7" />
                         <Button Content="İş merkezi" Style="{StaticResource SidebarButton}" Background="{StaticResource SidebarHoverBrush}" />
 
+                        <TextBlock Text="AJANLAR VE KAMPANYALAR" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,20,0,7" />
+                        <Button Content="Ajan Sohbeti" Click="AgentChat_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Ajan Yetkileri" Click="AgentPermissions_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Ajan Kontrol Merkezi" Click="AgentControlCenter_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Tahsilat Hatırlatmaları" Click="CollectionReminders_Click" Style="{StaticResource SidebarButton}" />
+                        <Button Content="Müşteri Kampanyaları" Click="Campaigns_Click" Style="{StaticResource SidebarButton}" />
+                        <Button x:Name="NvidiaNimButton" Content="NVIDIA NIM" Click="NvidiaNim_Click" Style="{StaticResource SidebarButton}" />
+
                         <TextBlock Text="MICROSOFT 365" FontSize="10" FontWeight="Bold" Foreground="#EAF4FB" Margin="10,20,0,7" />
                         <Button Content="Microsoft Giriş" Click="Login_Click" Style="{StaticResource SidebarButton}" />
                         <Button Content="İzinleri Yenile" Click="Consent_Click" Style="{StaticResource SidebarButton}" />
@@ -236,29 +244,48 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <Grid Grid.Row="2" Margin="0,14,0,0">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0" />
-                        <TextBlock x:Name="StatusText" Text="Başlatılıyor" FontSize="11" Foreground="{StaticResource MutedBrush}" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <TextBlock x:Name="MicrosoftSummary" Text="M365: oturum yok" FontSize="11" Foreground="{StaticResource MutedBrush}" />
-                        <TextBlock Text="  ·  " FontSize="11" Foreground="{StaticResource MutedBrush}" />
-                        <TextBlock x:Name="DatabaseSummary" Text="Yerel SQLite" FontSize="11" Foreground="{StaticResource MutedBrush}" />
-                    </StackPanel>
-                </Grid>
+                <StackPanel Grid.Row="2" Margin="0,10,0,0">
+                    <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="10,7" Margin="0,0,0,7">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="İSTEK TAKİBİ" FontSize="9" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <UniformGrid Grid.Row="1" Columns="2" Margin="0,4,0,0">
+                                <TextBlock Text="✓ Ajan Sohbeti: gizle → düğmeyle yeniden aç testi geçti" FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,10,2" />
+                                <TextBlock Text="✓ 8 pencere: çalışma alanı ve 8 px pay doğrulandı" FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,0,2" />
+                                <TextBlock Text="✓ 6 salt-okunur ekran: aç/kapat testi geçti" FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,10,2" />
+                                <TextBlock Text="✓ Gözcü yeni Ar-Ge raporlarını Ajan Sohbeti’ne aktarır" FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,0,2" />
+                                <TextBlock Text="◷ Rapor kaynak URL’leri için bağımsız doğrulama bekliyor" FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
+                                <TextBlock Text="◷ Yazma/dış işlem düğmeleri: yan etkisiz test bekliyor" FontSize="9" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
+                                <TextBlock Text="! Ses: konuşmacı doğrulaması yok; otomatik komut kapalı" FontSize="9" TextTrimming="CharacterEllipsis" Foreground="{StaticResource DangerBrush}" />
+                            </UniformGrid>
+                        </Grid>
+                    </Border>
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0" />
+                            <TextBlock x:Name="StatusText" Text="Başlatılıyor" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <TextBlock x:Name="MicrosoftSummary" Text="M365: oturum yok" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Text="  ·  " FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock x:Name="DatabaseSummary" Text="Yerel SQLite" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
             </Grid>
         </Border>
-            <Border x:Name="UnifiedStatusPanel" Panel.ZIndex="1100" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,18,0" Background="#F8FBFD" BorderBrush="#D1DCE6" BorderThickness="1" CornerRadius="8" Padding="10,7">
+        <Border x:Name="UnifiedStatusPanel" Grid.Row="0" Grid.Column="1" Panel.ZIndex="1100" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,150,0" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,5">
             <StackPanel Orientation="Horizontal">
-                <Ellipse x:Name="M365StatusDot" Width="11" Height="11" Fill="#C62828" Margin="0,0,5,0"/>
+                <Ellipse x:Name="M365StatusDot" Width="11" Height="11" Fill="{StaticResource DangerBrush}" Margin="0,0,5,0"/>
                 <TextBlock x:Name="M365StatusText" Text="Microsoft 365 (Ba&#x11F;l&#x131; de&#x11F;il)" FontSize="11" VerticalAlignment="Center"/>
-                <Ellipse x:Name="PermissionStatusDot" Width="11" Height="11" Fill="#C62828" Margin="12,0,5,0"/>
+                <Ellipse x:Name="PermissionStatusDot" Width="11" Height="11" Fill="{StaticResource DangerBrush}" Margin="12,0,5,0"/>
                 <TextBlock x:Name="PermissionStatusText" Text="&#x130;zinler (Eksik)" FontSize="11" VerticalAlignment="Center"/>
-                <Ellipse x:Name="ExcelStatusDot" Width="11" Height="11" Fill="#C62828" Margin="12,0,5,0"/>
+                <Ellipse x:Name="ExcelStatusDot" Width="11" Height="11" Fill="{StaticResource DangerBrush}" Margin="12,0,5,0"/>
                 <TextBlock x:Name="ExcelStatusText" Text="Excel (Se&#xE7;ilmedi)" FontSize="11" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
-<Button x:Name="NvidiaNimButton" Panel.ZIndex="1101" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,48,18,0" Padding="12,6" Content="NVIDIA NIM" Click="NvidiaNim_Click" Background="#76B900" Foreground="Black" FontWeight="SemiBold"/>
-</Grid>
+    </Grid>
 </Window>

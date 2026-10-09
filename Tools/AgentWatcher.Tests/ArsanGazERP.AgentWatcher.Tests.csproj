@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.Windows.SDK.NET.Ref" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.90.1" />
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.90.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Models\CampaignModels.cs" Link="CampaignModels.cs" />
+    <Compile Include="..\..\Services\CampaignStore.cs" Link="CampaignStore.cs" />
+    <Compile Include="..\..\Services\CampaignService.cs" Link="CampaignService.cs" />
+    <Compile Include="..\..\Services\CampaignScheduler.cs" Link="CampaignScheduler.cs" />
+    <Compile Include="..\..\Services\CampaignTransport.cs" Link="CampaignTransport.cs" />
+    <Compile Include="..\..\Services\WhatsAppBusinessService.cs" Link="WhatsAppBusinessService.cs" />
+    <Compile Include="..\AgentWatcher\GozcuAutonomy.cs" Link="GozcuAutonomy.cs" />
+    <Compile Include="..\AgentWatcher\AgentRecommendationPolicy.cs" Link="AgentRecommendationPolicy.cs" />
+    <Compile Include="..\AgentWatcher\LocalTestAutomation.cs" Link="LocalTestAutomation.cs" />
+    <Compile Include="..\AgentWatcher\AgentWatcherAgentProfiles.cs" Link="AgentWatcherAgentProfiles.cs" />
+    <Compile Include="..\AgentWatcher\AgentWatcherShutdown.cs" Link="AgentWatcherShutdown.cs" />
+    <Compile Include="..\AgentWatcher\AgentWatcherSettings.cs" Link="AgentWatcherSettings.cs" />
+    <Compile Include="..\AgentWatcher\CodingBridgeNames.cs" Link="CodingBridgeNames.cs" />
+    <Compile Include="..\AgentWatcher\AgentQueueManagement.cs" Link="AgentQueueManagement.cs" />
+    <Compile Include="..\AgentWatcher\AgentWatcherLog.cs" Link="AgentWatcherLog.cs" />
+    <Compile Include="..\AgentWatcher\TelegramBotService.cs" Link="TelegramBotService.cs" />
+    <Compile Include="..\AgentWatcher\TelegramQueuePolicy.cs" Link="TelegramQueuePolicy.cs" />
+    <Compile Include="..\AgentWatcher\TelegramWorkflowNotice.cs" Link="TelegramWorkflowNotice.cs" />
+    <Compile Include="..\AgentWatcher\WorkflowOrchestrator.cs" Link="WorkflowOrchestrator.cs" />
+    <Compile Include="..\AgentWatcher\TaskItem.cs" Link="TaskItem.cs" />
+    <Compile Include="..\AgentWatcher\AgentWatcherWorkspace.cs" Link="AgentWatcherWorkspace.cs" />
+    <Compile Include="..\AgentWatcher\WorkflowQueueApproval.cs" Link="WorkflowQueueApproval.cs" />
+    <Compile Include="..\AgentWatcher\WorkflowBridgePrompt.cs" Link="WorkflowBridgePrompt.cs" />
+    <Compile Include="..\AgentWatcher\WorkflowEvidenceVerifier.cs" Link="WorkflowEvidenceVerifier.cs" />
+    <Compile Include="..\AgentWatcher\TelegramCopilotInbox.cs" Link="TelegramCopilotInbox.cs" />
+    <Compile Include="..\AgentWatcher\BridgeCompatibility.cs" Link="BridgeCompatibility.cs" />
+    <Compile Include="..\AgentWatcher\AgentWatcherWorkGate.cs" Link="AgentWatcherWorkGate.cs" />
+    <Compile Include="..\AgentWatcher\HourlyLocalTestAutomation.cs" Link="HourlyLocalTestAutomation.cs" />
+    <Compile Include="..\AgentWatcher\HourlyLocalAutomationCommands.cs" Link="HourlyLocalAutomationCommands.cs" />
+    <Compile Include="..\AgentWatcher\CopilotSessionReporting.cs" Link="CopilotSessionReporting.cs" />
+    <Compile Include="..\..\Services\BackgroundWorkShutdown.cs" Link="BackgroundWorkShutdown.cs" />
+    <Compile Include="..\..\Services\AgentChatPromptBuilder.cs" Link="AgentChatPromptBuilder.cs" />
+    <Compile Include="..\..\Services\AgentChatRoutingPolicy.cs" Link="AgentChatRoutingPolicy.cs" />
+    <Compile Include="..\..\Services\AgentWatcherPaths.cs" Link="AgentWatcherPaths.cs" />
+    <Compile Include="..\AgentWatcher\AgentWatcherWindowLayout.cs" Link="AgentWatcherWindowLayout.cs" />
+    <Compile Include="..\AgentWatcher\AgentWatcherRestart.cs" Link="AgentWatcherRestart.cs" />
+    <Compile Include="..\AgentWatcher\AgentWatcherActivation.cs" Link="AgentWatcherActivation.cs" />
+    <Compile Include="..\AgentWatcher\AgentWatcherStartupScript.cs" Link="AgentWatcherStartupScript.cs" />
+  </ItemGroup>
+</Project>

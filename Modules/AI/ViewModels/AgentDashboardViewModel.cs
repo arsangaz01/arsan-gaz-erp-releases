@@ -25,7 +25,10 @@ public partial class AgentDashboardViewModel(IAgentService agent, ICrmAnalyticsS
     [RelayCommand] private async Task LoadDashboardAsync(CancellationToken ct)
     {
         if (IsBusy) return;
-        try { IsBusy = true; var s = await crm.GetDashboardStatisticsAsync(ct); TotalCustomers=s.TotalCustomers; ActiveOffers=s.ActiveOffers; OpenTasks=s.OpenTasks; MonthlySales=s.MonthlySales; TodayMeetings=await m365.GetTodayMeetingCountAsync(ct); Add("Dashboard", "Dashboard güncellendi."); }
+        try { IsBusy = true; var s = await crm.GetDashboardStatisticsAsync(ct); TotalCustomers=s.TotalCustomers; ActiveOffers=s.ActiveOffers; OpenTasks=s.OpenTasks; MonthlySales=s.MonthlySales;
+            try { TodayMeetings=await m365.GetTodayMeetingCountAsync(ct); }
+            catch(Exception ex) when (ex is not OperationCanceledException) { TodayMeetings=0; Add("Microsoft 365", "Takvim sayısı alınamadı: " + ex.Message); }
+            Add("Dashboard", "Dashboard güncellendi."); }
         catch(Exception ex) { AgentStatus="Hata"; Add("Hata", ex.Message); }
         finally { IsBusy=false; }
     }

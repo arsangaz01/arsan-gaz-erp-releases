@@ -10,6 +10,8 @@ using ArsanGazERP.Models;
 using ArsanGazERP.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Win32;
+using Drawing = System.Drawing;
+using Forms = System.Windows.Forms;
 
 namespace ArsanGazERP;
 
@@ -23,27 +25,100 @@ public partial class MainWindow : Window
 	private readonly UpdateService _update = new();
     private readonly NvidiaNimService _nvidiaNim = new();
 	private bool _isBusy;
+	private ArsanGazERP.Views.AgentChatWindow? _agentChatWindow;
+	private Forms.NotifyIcon? _trayIcon;
+	private Forms.ContextMenuStrip? _trayMenu;
+	private Drawing.Icon? _trayIconAsset;
 
 	public MainWindow()
 	{
 		InitializeComponent();
-        InstallAiDashboardButton();
+		InitializeTrayIcon();
+        WindowWorkAreaService.Fit(this);
+        UpdateNvidiaNimButton();
 		_graph = new GraphService(_auth);
-		Loaded += async (_, _) => { await LoadDashboardAsync(); RefreshUnifiedConnectionStatus(); };
+		Closing += (_, _) => _agentChatWindow?.CloseForOwnerShutdown();
+		Loaded += async (_, _) =>
+		{
+		    _ = Dispatcher.BeginInvoke(
+		        new Action(OpenAgentChat),
+		        System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+		    await LoadDashboardAsync();
+		    RefreshUnifiedConnectionStatus();
+		};
         var unifiedTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         unifiedTimer.Tick += (_, _) => RefreshUnifiedConnectionStatus();
         unifiedTimer.Start();
 	}
 
+	private void InitializeTrayIcon()
+	{
+		using Drawing.Icon? executableIcon = Environment.ProcessPath is string executablePath
+			? Drawing.Icon.ExtractAssociatedIcon(executablePath)
+			: null;
+		_trayIconAsset = executableIcon is null
+			? (Drawing.Icon)Drawing.SystemIcons.Application.Clone()
+			: (Drawing.Icon)executableIcon.Clone();
+		_trayMenu = new Forms.ContextMenuStrip();
+		_trayMenu.Items.Add("Arsan Gaz ERP'yi aç", null, (_, _) => ShowFromTray());
+		_trayMenu.Items.Add(new Forms.ToolStripSeparator());
+		_trayMenu.Items.Add("Yeniden başlat", null, (_, _) => ((App)Application.Current).Restart());
+		_trayMenu.Items.Add("Çıkış", null, (_, _) => Application.Current.Shutdown());
+		_trayIcon = new Forms.NotifyIcon
+		{
+			Icon = _trayIconAsset,
+			Text = "Arsan Gaz ERP",
+			ContextMenuStrip = _trayMenu,
+			Visible = true
+		};
+		_trayIcon.DoubleClick += (_, _) => ShowFromTray();
+		Closed += (_, _) => DisposeTrayIcon();
+	}
+
+	private void ShowFromTray()
+	{
+		ShowInTaskbar = true;
+		if (!IsVisible)
+		{
+			Show();
+		}
+
+		if (WindowState == WindowState.Minimized)
+		{
+			WindowState = WindowState.Normal;
+		}
+
+		Activate();
+	}
+
+	private void DisposeTrayIcon()
+	{
+		if (_trayIcon is not null)
+		{
+			_trayIcon.Visible = false;
+			_trayIcon.Dispose();
+			_trayIcon = null;
+		}
+
+		_trayMenu?.Dispose();
+		_trayMenu = null;
+		_trayIconAsset?.Dispose();
+		_trayIconAsset = null;
+	}
+
 	private void Window_SourceInitialized(object? sender, EventArgs e)
 	{
-		MaxWidth = SystemParameters.WorkArea.Width;
-		MaxHeight = SystemParameters.WorkArea.Height;
-		if (Top < SystemParameters.WorkArea.Top || Left < SystemParameters.WorkArea.Left)
-		{
-			Top = SystemParameters.WorkArea.Top;
-			Left = SystemParameters.WorkArea.Left;
-		}
+        WindowWorkAreaService.UseBorderlessMaximizedWorkArea(this);
+		Rect workArea = SystemParameters.WorkArea;
+        const double edgeMargin = 8;
+		MaxWidth = Math.Max(1, workArea.Width - edgeMargin * 2);
+		MaxHeight = Math.Max(1, workArea.Height - edgeMargin * 2);
+		MinWidth = Math.Min(MinWidth, MaxWidth);
+		MinHeight = Math.Min(MinHeight, MaxHeight);
+		Width = Math.Min(Width, MaxWidth);
+		Height = Math.Min(Height, MaxHeight);
+		Left = workArea.Left + edgeMargin + Math.Max(0, (workArea.Width - edgeMargin * 2 - Width) / 2);
+		Top = workArea.Top + edgeMargin + Math.Max(0, (workArea.Height - edgeMargin * 2 - Height) / 2);
 	}
 	private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
 	{
@@ -77,9 +152,23 @@ public partial class MainWindow : Window
 			isMaximized ? "Önceki boyuta dön" : "Ekranı kapla");
 	}
 
-	private void ToggleWindowState() => WindowState = WindowState == WindowState.Maximized
-		? WindowState.Normal
-		: WindowState.Maximized;
+	private void ToggleWindowState()
+	{
+		if (WindowState == WindowState.Maximized)
+		{
+			WindowState = WindowState.Normal;
+			Rect workArea = SystemParameters.WorkArea;
+            const double edgeMargin = 8;
+			MaxWidth = Math.Max(1, workArea.Width - edgeMargin * 2);
+			MaxHeight = Math.Max(1, workArea.Height - edgeMargin * 2);
+			return;
+		}
+
+		Rect maximizeArea = SystemParameters.WorkArea;
+		MaxWidth = maximizeArea.Width;
+		MaxHeight = maximizeArea.Height;
+		WindowState = WindowState.Maximized;
+	}
 
 	private async Task LoadDashboardAsync()
 	{
@@ -240,6 +329,36 @@ public partial class MainWindow : Window
 		await LoadDashboardAsync();
 	}
 
+	private void AgentChat_Click(object sender, RoutedEventArgs e)
+	{
+		OpenAgentChat();
+	}
+
+	private void OpenAgentChat()
+	{
+		if (_agentChatWindow is { IsLoaded: true })
+		{
+            if (!_agentChatWindow.IsVisible)
+            {
+                _agentChatWindow.Show();
+            }
+
+            if (_agentChatWindow.WindowState == WindowState.Minimized)
+            {
+                _agentChatWindow.WindowState = WindowState.Normal;
+            }
+
+			_agentChatWindow.Activate();
+            _agentChatWindow.Focus();
+			return;
+		}
+
+		ArsanGazERP.Views.AgentChatWindow window = new() { Owner = this };
+		_agentChatWindow = window;
+		window.Closed += (_, _) => _agentChatWindow = null;
+		window.Show();
+	}
+
 	private async void Backup_Click(object sender, RoutedEventArgs e) => await RunAsync(
 		() => Task.FromResult("Excel yedeği oluşturuldu:" + Environment.NewLine + _excel.CreateBackup()));
 
@@ -283,26 +402,24 @@ public partial class MainWindow : Window
     private void NvidiaNim_Click(object sender, RoutedEventArgs e)
     {
         new ArsanGazERP.Views.NvidiaNimWindow(_nvidiaNim) { Owner = this }.ShowDialog();
-        NvidiaNimButton.Content = _nvidiaNim.IsConfigured ? "NVIDIA NIM (Bagli)" : "NVIDIA NIM (Bagli degil)";
+        UpdateNvidiaNimButton();
     }
 
-    private void InstallAiDashboardButton()
+    private void UpdateNvidiaNimButton() =>
+        NvidiaNimButton.Content = _nvidiaNim.IsConfigured ? "NVIDIA NIM (Bağlı)" : "NVIDIA NIM (Bağlı değil)";
+
+    private void AgentPermissions_Click(object sender, RoutedEventArgs e) =>
+        new ArsanGazERP.Views.CloudAgentSettingsWindow { Owner = this }.ShowDialog();
+
+    private void AgentControlCenter_Click(object sender, RoutedEventArgs e) =>
+        new ArsanGazERP.Views.AgentControlCenterWindow { Owner = this }.ShowDialog();
+
+    private void Campaigns_Click(object sender, RoutedEventArgs e) =>
+        new ArsanGazERP.Views.CampaignWindow { Owner = this }.ShowDialog();
+
+    private async void CollectionReminders_Click(object sender, RoutedEventArgs e)
     {
-        if (Content is not System.Windows.Controls.Panel root || root.Children.OfType<System.Windows.Controls.Button>().Any(b => Equals(b.Tag, "AI-DASHBOARD"))) return;
-        var button = new System.Windows.Controls.Button
-        {
-            Tag = "AI-DASHBOARD",
-            Content = "AI Dashboard",
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 92, 18, 0),
-            Padding = new Thickness(14, 7, 14, 7),
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(24, 94, 166)),
-            Foreground = System.Windows.Media.Brushes.White,
-            FontWeight = FontWeights.SemiBold
-        };
-        System.Windows.Controls.Panel.SetZIndex(button, 1200);
-        button.Click += (_, _) => new ArsanGazERP.Views.AiDashboardWindow { Owner = this }.ShowDialog();
-        root.Children.Add(button);
+        new ArsanGazERP.Views.OperationsWindow(openCollections: true) { Owner = this }.ShowDialog();
+        await LoadDashboardAsync();
     }
 }

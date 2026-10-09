@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -12,7 +13,31 @@
     <Version>7.6.0</Version>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.Windows.SDK.NET.Ref" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.16" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.90.1" />
     <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.90.1" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Services\AgentWatcherPaths.cs" Link="AgentWatcherPaths.cs" />
+    <Compile Include="..\..\Services\DesktopShortcutService.cs" Link="DesktopShortcutService.cs" />
+    <Compile Include="..\..\Models\CampaignModels.cs" Link="CampaignModels.cs" />
+    <Compile Include="..\..\Services\CampaignStore.cs" Link="CampaignStore.cs" />
+    <Compile Include="..\..\Services\CampaignService.cs" Link="CampaignService.cs" />
+    <Compile Include="..\..\Services\CampaignScheduler.cs" Link="CampaignScheduler.cs" />
+    <Compile Include="..\..\Services\CampaignTransport.cs" Link="CampaignTransport.cs" />
+    <Compile Include="..\..\Services\WhatsAppBusinessService.cs" Link="WhatsAppBusinessService.cs" />
+    <Compile Include="..\..\Services\CopilotAgentRuntime.cs" Link="CopilotAgentRuntime.cs" />
+    <Compile Include="..\..\Services\CloudAgentClient.cs" Link="CloudAgentClient.cs" />
+    <Compile Include="..\..\Services\CloudAgentSettingsStore.cs" Link="CloudAgentSettingsStore.cs" />
+    <Compile Include="..\..\Services\AgentChatPromptBuilder.cs" Link="AgentChatPromptBuilder.cs" />
+    <Compile Include="..\..\Services\AgentChatRoutingPolicy.cs" Link="AgentChatRoutingPolicy.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="System.IO" />
   </ItemGroup>
 </Project>
