@@ -62,19 +62,7 @@ internal static class MobileConnectionHub
             hint);
     }
 
-    internal static string? ReadPublicUrl()
-    {
-        if (File.Exists(MobileApiPaths.TunnelUrlFile))
-        {
-            string fromFile = File.ReadAllText(MobileApiPaths.TunnelUrlFile).Trim();
-            if (fromFile.Length > 0)
-            {
-                return fromFile;
-            }
-        }
-
-        return string.IsNullOrWhiteSpace(TunnelService.CurrentUrl) ? null : TunnelService.CurrentUrl;
-    }
+    internal static string? ReadPublicUrl() => MobilePublicUrl.ReadPreferred();
 
     private static string BuildHint(bool erp, bool watcher, bool telegram, bool cursorBridge, string? publicUrl)
     {
@@ -90,7 +78,7 @@ internal static class MobileConnectionHub
 
         if (watcher && cursorBridge)
         {
-            return "Telegram ↔ PC (Watcher/Cursor) ↔ mobil ERP hattı aktif. Telegram'dan PC'ye, telefondan Ajan sekmesinden ERP ajanlarına yazabilirsiniz.";
+            return "Telegram ↔ PC (Watcher/Cursor) ↔ mobil ERP hattı aktif. Ajan sekmesinde \"Kime\" ile ERP ajanlarına veya Cursor'a yazabilirsiniz.";
         }
 
         if (watcher)
@@ -111,29 +99,41 @@ internal static class MobileConnectionHub
         try
         {
             string inbox = Path.Combine(AgentWatcherPaths.DataRoot, "CopilotInbox");
-            string statusPath = Path.Combine(inbox, "bridge-status.json");
-            if (!File.Exists(statusPath))
+            // ide-watch.ps1 refreshes its heartbeat every 3 s and bridge.js every 5 s.
+            if (IsFreshHeartbeat(Path.Combine(inbox, "ide-session-status.json"), TimeSpan.FromSeconds(90), requireReady: false))
             {
-                return (false, null);
+                return (true, "Cursor sohbeti dinliyor");
             }
 
-            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(statusPath));
-            JsonElement root = document.RootElement;
-            string? stage = root.TryGetProperty("stage", out JsonElement stageElement)
-                ? stageElement.GetString()
-                : root.TryGetProperty("Stage", out JsonElement legacyStage)
-                    ? legacyStage.GetString()
-                    : null;
-            bool active = root.TryGetProperty("connected", out JsonElement connected) && connected.ValueKind == JsonValueKind.True
-                || root.TryGetProperty("Connected", out JsonElement legacyConnected) && legacyConnected.ValueKind == JsonValueKind.True
-                || !string.IsNullOrWhiteSpace(stage);
-            return (active, stage);
+            return IsFreshHeartbeat(Path.Combine(inbox, "bridge-status.json"), TimeSpan.FromSeconds(60), requireReady: true)
+                ? (true, "Yedek Cursor köprüsü hazır")
+                : (false, null);
         }
         catch (Exception exception) when (exception is IOException or JsonException)
         {
             MobileLog.Write("Cursor bridge durumu okunamadı: " + exception.Message);
             return (false, null);
         }
+    }
+
+    private static bool IsFreshHeartbeat(string path, TimeSpan maxAge, bool requireReady)
+    {
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path));
+        JsonElement root = document.RootElement;
+        if (requireReady && !(root.TryGetProperty("ready", out JsonElement ready) && ready.ValueKind == JsonValueKind.True))
+        {
+            return false;
+        }
+
+        return root.TryGetProperty("updatedUtc", out JsonElement updated)
+            && updated.ValueKind == JsonValueKind.String
+            && DateTimeOffset.TryParse(updated.GetString(), out DateTimeOffset updatedUtc)
+            && DateTimeOffset.UtcNow - updatedUtc < maxAge;
     }
 
     private static bool IsProcessRunning(string processName)

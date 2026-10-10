@@ -23,6 +23,30 @@ internal static partial class WebResearchService
             return "Arama sorgusu 2-200 karakter olmalı.";
         }
 
+        List<(string Title, string Url, string Snippet)> results = await SearchResultsAsync(trimmed, cancellationToken);
+        if (results.Count == 0)
+        {
+            return $"\"{trimmed}\" için sonuç bulunamadı. Farklı kelimelerle tekrar dene.";
+        }
+
+        StringBuilder text = new();
+        int index = 1;
+        foreach ((string title, string url, string snippet) in results.Take(8))
+        {
+            text.AppendLine($"{index++}. {title}");
+            text.AppendLine($"   {url}");
+            if (snippet.Length > 0) text.AppendLine($"   {Truncate(snippet, 280)}");
+        }
+
+        return text.ToString().TrimEnd();
+    }
+
+    /// <summary>Keyless search: Bing RSS (original and diacritic-folded query), then DuckDuckGo HTML.</summary>
+    public static async Task<List<(string Title, string Url, string Snippet)>> SearchResultsAsync(
+        string query,
+        CancellationToken cancellationToken)
+    {
+        string trimmed = query.Trim();
         string folded = FoldTurkish(trimmed);
         Task<List<(string, string, string)>>[] searches = folded == trimmed
             ? [TryBingAsync(trimmed, cancellationToken)]
@@ -47,30 +71,69 @@ internal static partial class WebResearchService
             results = await SearchDuckDuckGoAsync(trimmed, cancellationToken);
         }
 
-        if (results.Count == 0)
+        return results;
+    }
+
+    /// <summary>
+    /// Reads a public page as plain text through the free Jina Reader (r.jina.ai, ~20 requests/minute without a key),
+    /// which also renders JavaScript-heavy pages. Returns an empty string when unavailable.
+    /// </summary>
+    public static async Task<string> ReadWithJinaAsync(string url, int maximumCharacters, CancellationToken cancellationToken)
+    {
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out Uri? uri) ||
+            (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) ||
+            uri.UserInfo.Length > 0 ||
+            !await IsPublicHostAsync(uri, cancellationToken))
         {
-            return $"\"{trimmed}\" için sonuç bulunamadı. Farklı kelimelerle tekrar dene.";
+            return string.Empty;
         }
 
-        StringBuilder text = new();
-        int index = 1;
-        foreach ((string title, string url, string snippet) in results.Take(8))
+        try
         {
-            text.AppendLine($"{index++}. {title}");
-            text.AppendLine($"   {url}");
-            if (snippet.Length > 0) text.AppendLine($"   {Truncate(snippet, 280)}");
+            using HttpRequestMessage request = new(HttpMethod.Get, "https://r.jina.ai/" + uri.AbsoluteUri);
+            request.Headers.TryAddWithoutValidation("X-Return-Format", "text");
+            using HttpResponseMessage response = await Http.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode) return string.Empty;
+            string text = await response.Content.ReadAsStringAsync(cancellationToken);
+            return Truncate(NewlineRegex().Replace(SpaceRegex().Replace(text, " "), "\n").Trim(), maximumCharacters);
         }
-
-        return text.ToString().TrimEnd();
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested &&
+                                          exception is HttpRequestException or TaskCanceledException)
+        {
+            return string.Empty;
+        }
     }
 
     public static async Task<string> FetchPageAsync(string url, CancellationToken cancellationToken)
+    {
+        RawPage page = await FetchHtmlAsync(url, cancellationToken);
+        if (page.Error is not null)
+        {
+            return page.Error;
+        }
+
+        Uri uri = page.Uri!;
+        string html = page.Html;
+        string title = WebUtility.HtmlDecode(TitleRegex().Match(html).Groups[1].Value).Trim();
+        string text = HtmlToText(html);
+        if (text.Length < 300)
+        {
+            string rendered = await ReadWithJinaAsync(uri.AbsoluteUri, MaximumPageCharacters, cancellationToken);
+            if (rendered.Length > text.Length) text = rendered;
+        }
+        return $"Sayfa: {uri.Host}{(title.Length > 0 ? " — " + title : string.Empty)}\n{Truncate(text, MaximumPageCharacters)}";
+    }
+
+    internal sealed record RawPage(Uri? Uri, string Html, string? Error);
+
+    /// <summary>Downloads a public http(s) page as raw HTML, following at most 4 validated redirects.</summary>
+    internal static async Task<RawPage> FetchHtmlAsync(string url, CancellationToken cancellationToken)
     {
         if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out Uri? uri) ||
             (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) ||
             uri.UserInfo.Length > 0)
         {
-            return "Geçersiz adres; yalnızca http(s) sayfaları okunabilir.";
+            return new RawPage(null, string.Empty, "Geçersiz adres; yalnızca http(s) sayfaları okunabilir.");
         }
 
         HttpResponseMessage? response = null;
@@ -78,7 +141,7 @@ internal static partial class WebResearchService
         {
             if (!await IsPublicHostAsync(uri, cancellationToken))
             {
-                return "Bu adres yerel/özel ağa işaret ediyor; güvenlik nedeniyle okunmadı.";
+                return new RawPage(null, string.Empty, "Bu adres yerel/özel ağa işaret ediyor; güvenlik nedeniyle okunmadı.");
             }
 
             response = await PageHttp.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -93,7 +156,7 @@ internal static partial class WebResearchService
             response.Dispose();
             if (redirect >= 4 || (next.Scheme != Uri.UriSchemeHttps && next.Scheme != Uri.UriSchemeHttp))
             {
-                return "Sayfa çok fazla/uygunsuz yönlendirme yaptı; okunmadı.";
+                return new RawPage(null, string.Empty, "Sayfa çok fazla/uygunsuz yönlendirme yaptı; okunmadı.");
             }
 
             uri = next;
@@ -102,7 +165,7 @@ internal static partial class WebResearchService
         using HttpResponseMessage _ = response;
         if (!response.IsSuccessStatusCode)
         {
-            return $"Sayfa açılamadı (HTTP {(int)response.StatusCode}).";
+            return new RawPage(null, string.Empty, $"Sayfa açılamadı (HTTP {(int)response.StatusCode}).");
         }
 
         string? mediaType = response.Content.Headers.ContentType?.MediaType;
@@ -111,7 +174,7 @@ internal static partial class WebResearchService
             !mediaType.Contains("xml", StringComparison.OrdinalIgnoreCase) &&
             !mediaType.Contains("json", StringComparison.OrdinalIgnoreCase))
         {
-            return $"Sayfa metin değil ({mediaType}); okunmadı.";
+            return new RawPage(null, string.Empty, $"Sayfa metin değil ({mediaType}); okunmadı.");
         }
 
         await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -123,10 +186,7 @@ internal static partial class WebResearchService
             buffer.Write(chunk, 0, read);
         }
 
-        string html = Encoding.UTF8.GetString(buffer.ToArray());
-        string title = WebUtility.HtmlDecode(TitleRegex().Match(html).Groups[1].Value).Trim();
-        string text = HtmlToText(html);
-        return $"Sayfa: {uri.Host}{(title.Length > 0 ? " — " + title : string.Empty)}\n{Truncate(text, MaximumPageCharacters)}";
+        return new RawPage(uri, Encoding.UTF8.GetString(buffer.ToArray()), null);
     }
 
     internal static string HtmlToText(string html)

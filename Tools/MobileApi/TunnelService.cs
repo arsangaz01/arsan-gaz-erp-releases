@@ -3,9 +3,28 @@ using System.Text.RegularExpressions;
 
 namespace ArsanGazERP.MobileApi;
 
+// Quick tunnel URLs change whenever cloudflared restarts, so cloudflared outlives MobileApi restarts:
+// a running tunnel is adopted instead of replaced, and only a dead tunnel gets a new address.
 internal sealed partial class TunnelService : BackgroundService
 {
+    private static readonly string TunnelLogFile = Path.Combine(MobileApiPaths.Root, "cloudflared.log");
+
     public static string? CurrentUrl { get; private set; }
+
+    internal static void ApplyPreferredPublicUrl()
+    {
+        if (MobilePublicUrl.ReadPreferred() is not { Length: > 0 } url)
+        {
+            return;
+        }
+
+        CurrentUrl = url;
+        if (MobilePublicUrl.IsStableConfigured)
+        {
+            File.WriteAllText(MobileApiPaths.TunnelUrlFile, url);
+            MobileLog.Write("Sabit mobil adres yüklendi: " + url);
+        }
+    }
 
     [GeneratedRegex(@"https://[a-z0-9-]+\.trycloudflare\.com", RegexOptions.IgnoreCase)]
     private static partial Regex QuickTunnelUrl();
@@ -25,7 +44,8 @@ internal sealed partial class TunnelService : BackgroundService
             DateTime started = DateTime.UtcNow;
             try
             {
-                await RunTunnelAsync(stoppingToken);
+                using Process tunnel = AdoptRunningTunnel() ?? await StartTunnelAsync(stoppingToken);
+                await tunnel.WaitForExitAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -45,80 +65,133 @@ internal sealed partial class TunnelService : BackgroundService
         }
     }
 
-    private static void StopOrphanedTunnels()
+    private static List<Process> FindOwnTunnels()
     {
+        List<Process> own = [];
         foreach (Process process in Process.GetProcessesByName("cloudflared"))
+        {
+            try
+            {
+                if (string.Equals(process.MainModule?.FileName, MobileApiPaths.CloudflaredExe, StringComparison.OrdinalIgnoreCase))
+                {
+                    own.Add(process);
+                    continue;
+                }
+            }
+            catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+            }
+
+            process.Dispose();
+        }
+
+        return own;
+    }
+
+    private static Process? AdoptRunningTunnel()
+    {
+        List<Process> running = FindOwnTunnels();
+        string? url = ReadUrlFromLog();
+        if (running.Count == 1 && url is not null)
+        {
+            MobileLog.Write($"Çalışan tünel devralındı (PID {running[0].Id}).");
+            Publish(url);
+            return running[0];
+        }
+
+        foreach (Process process in running)
         {
             using (process)
             {
                 try
                 {
-                    if (string.Equals(process.MainModule?.FileName, MobileApiPaths.CloudflaredExe, StringComparison.OrdinalIgnoreCase))
-                    {
-                        process.Kill(entireProcessTree: true);
-                        MobileLog.Write("Önceki çalışmadan kalan cloudflared kapatıldı (PID " + process.Id + ").");
-                    }
+                    process.Kill(entireProcessTree: true);
+                    MobileLog.Write("Adresi okunamayan eski cloudflared kapatıldı (PID " + process.Id + ").");
                 }
                 catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
                 {
                 }
             }
         }
+
+        return null;
     }
 
-    private static async Task RunTunnelAsync(CancellationToken stoppingToken)
+    private static async Task<Process> StartTunnelAsync(CancellationToken stoppingToken)
     {
-        StopOrphanedTunnels();
+        File.Delete(TunnelLogFile);
         ProcessStartInfo start = new(MobileApiPaths.CloudflaredExe)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
             WorkingDirectory = MobileApiPaths.Root
         };
-        foreach (string argument in new[] { "tunnel", "--no-autoupdate", "--url", $"http://127.0.0.1:{MobileApiPaths.Port}" })
+        foreach (string argument in new[]
+                 {
+                     "tunnel", "--no-autoupdate", "--logfile", TunnelLogFile,
+                     "--url", $"http://127.0.0.1:{MobileApiPaths.Port}"
+                 })
         {
             start.ArgumentList.Add(argument);
         }
 
-        using Process process = Process.Start(start) ?? throw new InvalidOperationException("cloudflared başlatılamadı.");
+        Process process = Process.Start(start) ?? throw new InvalidOperationException("cloudflared başlatılamadı.");
         MobileLog.Write("cloudflared başlatıldı (PID " + process.Id + ").");
-        process.OutputDataReceived += (_, e) => Inspect(e.Data);
-        process.ErrorDataReceived += (_, e) => Inspect(e.Data);
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        for (int attempt = 0; attempt < 120 && !process.HasExited; attempt++)
+        {
+            if (ReadUrlFromLog() is { } url)
+            {
+                Publish(url);
+                break;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken);
+        }
+
+        return process;
+    }
+
+    private static string? ReadUrlFromLog()
+    {
         try
         {
-            await process.WaitForExitAsync(stoppingToken);
-        }
-        finally
-        {
-            if (!process.HasExited)
+            if (!File.Exists(TunnelLogFile))
             {
-                process.Kill(entireProcessTree: true);
+                return null;
             }
+
+            using FileStream stream = new(TunnelLogFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using StreamReader reader = new(stream);
+            Match match = QuickTunnelUrl().Match(reader.ReadToEnd());
+            return match.Success ? match.Value : null;
+        }
+        catch (IOException)
+        {
+            return null;
         }
     }
 
-    private static void Inspect(string? line)
+    private static void Publish(string url)
     {
-        if (line is null || QuickTunnelUrl().Match(line) is not { Success: true } match || match.Value == CurrentUrl)
+        if (MobilePublicUrl.IsStableConfigured)
         {
+            CurrentUrl = MobilePublicUrl.ReadStable();
+            MobileLog.Write("Sabit mobil adres kullanılıyor; geçici tünel adresi yok sayıldı.");
             return;
         }
 
-        CurrentUrl = match.Value;
+        CurrentUrl = url;
         string? previous = File.Exists(MobileApiPaths.TunnelUrlFile) ? File.ReadAllText(MobileApiPaths.TunnelUrlFile).Trim() : null;
-        File.WriteAllText(MobileApiPaths.TunnelUrlFile, CurrentUrl);
-        MobileLog.Write("Uzaktan erişim adresi: " + CurrentUrl);
-        if (!string.Equals(previous, CurrentUrl, StringComparison.OrdinalIgnoreCase))
+        File.WriteAllText(MobileApiPaths.TunnelUrlFile, url);
+        MobileLog.Write("Uzaktan erişim adresi: " + url);
+        if (!string.Equals(previous, url, StringComparison.OrdinalIgnoreCase))
         {
+            string deepLink = MobilePublicUrl.BuildAppDeepLink(url);
             TelegramNotifier.Send(
-                "📱 Mobil ERP sunucu adresi değişti:\n" + CurrentUrl + "\n\n" +
-                "Telefonda Arsan Gaz ERP > Bağlantı sekmesinde \"Telegram'dan bağlan\"a basın (panoda adres varsa otomatik alınır). " +
-                "Eşleşme anahtarı değişmez.\n\n" +
-                "Güncelleme / APK: " + CurrentUrl + "/indir");
+                "📱 Mobil ERP sunucu adresi değişti:\n" + url + "\n\n" +
+                "Telefonda tek dokunuş:\n" + deepLink + "\n\n" +
+                "Eşleşmiş telefon uygulama açıkken adresi otomatik de günceller. Eşleşme anahtarı değişmez.\n\n" +
+                "Güncelleme / APK: " + url + "/indir");
         }
     }
 }

@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace ArsanGazERP.Services;
 
 internal static class JarvisAgentService
@@ -18,11 +20,17 @@ internal static class JarvisAgentService
         {
             bool lastStep = stepNumber == MaximumSteps;
             string transcript = JarvisAgentProtocol.BuildTranscript(history, userMessage, steps, lastStep, DateTime.Now);
-            JarvisAgentStep step = JarvisAgentProtocol.Parse(
-                await client.CompleteAgentStepAsync(transcript, cancellationToken));
+            string? response = await TryCompleteStepAsync(client, transcript, mustSucceed: steps.Count == 0, cancellationToken);
+            if (response is null)
+            {
+                progress?.Invoke("⚠ Bulut modeli bu adımda yanıt vermedi; topladığım bilgilerle yanıtı hazırlıyorum.");
+                return await SummarizeAsync(client, userMessage, steps, cancellationToken);
+            }
+
+            JarvisAgentStep step = JarvisAgentProtocol.Parse(response);
             if (step.Final is not null)
             {
-                return FormatFinal(step.Final, steps.Count);
+                return EscalateIfRefused(step.Final, userMessage, steps, progress);
             }
 
             if (step.Action is null || lastStep)
@@ -47,7 +55,9 @@ internal static class JarvisAgentService
                 progress?.Invoke(DescribeAction(step));
                 try
                 {
-                    observation = await ExecuteToolAsync(step, cancellationToken);
+                    observation = step.Action == "ask_cursor"
+                        ? AskCursor(userMessage, step, steps)
+                        : await ExecuteToolAsync(step, cancellationToken);
                 }
                 catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
                 {
@@ -59,12 +69,50 @@ internal static class JarvisAgentService
         }
 
         string forced = JarvisAgentProtocol.BuildTranscript(history, userMessage, steps, lastStep: true, DateTime.Now);
-        JarvisAgentStep closing = JarvisAgentProtocol.Parse(await client.CompleteAgentStepAsync(forced, cancellationToken));
-        if (closing.Final is { Length: > 0 } closingFinal)
+        string? closingResponse = await TryCompleteStepAsync(client, forced, mustSucceed: false, cancellationToken);
+        if (closingResponse is not null &&
+            JarvisAgentProtocol.Parse(closingResponse).Final is { Length: > 0 } closingFinal)
         {
-            return FormatFinal(closingFinal, steps.Count);
+            return EscalateIfRefused(closingFinal, userMessage, steps, progress);
         }
 
+        return await SummarizeAsync(client, userMessage, steps, cancellationToken);
+    }
+
+    private static async Task<string?> TryCompleteStepAsync(
+        CloudAgentClient client,
+        string transcript,
+        bool mustSucceed,
+        CancellationToken cancellationToken)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await client.CompleteAgentStepAsync(transcript, cancellationToken);
+            }
+            catch (Exception exception) when (
+                !cancellationToken.IsCancellationRequested &&
+                exception is System.Net.Http.HttpRequestException or InvalidOperationException or TaskCanceledException)
+            {
+                if (attempt < 2)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(1.5), cancellationToken);
+                    continue;
+                }
+
+                if (mustSucceed) throw;
+                return null;
+            }
+        }
+    }
+
+    private static async Task<string> SummarizeAsync(
+        CloudAgentClient client,
+        string userMessage,
+        List<(JarvisAgentStep Step, string Observation)> steps,
+        CancellationToken cancellationToken)
+    {
         string summaryPrompt =
             "Kullanıcının sorusunu aşağıdaki araştırma notlarını ve genel bilgini kullanarak TÜRKÇE, düzenli ve somut biçimde yanıtla. " +
             "Notlar yetersizse bildiklerinle en iyi öneriyi ver ve neyin doğrulanamadığını kısaca belirt.\n\n" +
@@ -75,12 +123,54 @@ internal static class JarvisAgentService
         return FormatFinal(await client.CompleteAsync("jarvis", summaryPrompt, cancellationToken), steps.Count);
     }
 
+    private static string AskCursor(
+        string userMessage,
+        JarvisAgentStep step,
+        List<(JarvisAgentStep Step, string Observation)> steps)
+    {
+        if (steps.Any(previous => previous.Step.Action == "ask_cursor"))
+        {
+            return "Bu istek zaten Cursor'a aktarıldı. Şimdi kullanıcıya kısa bir final yanıt ver.";
+        }
+
+        string reason = step.Input.TryGetValue("reason", out string? value) ? value : step.Thought;
+        string id = CursorEscalationService.Enqueue(userMessage, reason);
+        return $"İstek Cursor kodlama ajanına aktarıldı (kayıt: {id}). Sonuç Telegram'a gelecek. Kullanıcıya bunu kısaca söyle.";
+    }
+
+    private static string EscalateIfRefused(
+        string final,
+        string userMessage,
+        List<(JarvisAgentStep Step, string Observation)> steps,
+        Action<string>? progress)
+    {
+        if (steps.Any(previous => previous.Step.Action == "ask_cursor") || !CursorEscalationService.LooksLikeRefusal(final))
+        {
+            return FormatFinal(final, steps.Count);
+        }
+
+        try
+        {
+            string id = CursorEscalationService.Enqueue(userMessage, "Jarvis yanıtı: " + final);
+            progress?.Invoke("↗ Bu işi kendi araçlarımla yapamadım; Cursor'a aktarıyorum.");
+            return "Bu işi kendi araçlarımla yapamadım, bu yüzden isteğini bilgisayardaki Cursor ajanına aktardım " +
+                   $"(kayıt: {id}). Sonuç Telegram'a gelecek.";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return FormatFinal(final, steps.Count) + "\n\n(Cursor'a aktarılamadı: " + exception.Message + ")";
+        }
+    }
+
     private static async Task<string> ExecuteToolAsync(JarvisAgentStep step, CancellationToken cancellationToken)
     {
         string Arg(params string[] names) =>
             names.Select(name => step.Input.TryGetValue(name, out string? value) ? value : null)
                  .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim()
             ?? (step.Input.TryGetValue("value", out string? single) ? single.Trim() : string.Empty);
+        string? Optional(params string[] names) =>
+            names.Select(name => step.Input.TryGetValue(name, out string? value) ? value : null)
+                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
         switch (step.Action)
         {
@@ -121,6 +211,25 @@ internal static class JarvisAgentService
                     : "ERP özeti izni kapalı. Kullanıcıya Ajan Yetkileri → Jarvis → \"ERP özetini okuyabilir\" iznini açmasını söyle.";
             case "daily_briefing":
                 return await DailyBriefingService.BuildTextAsync(LiveInfoService.FindCity(Arg("city")), cancellationToken);
+            case "directions":
+            {
+                string destination = Arg("destination", "to", "place");
+                return destination.Length == 0
+                    ? "Varış noktası (destination) boş. Yer adını yazarak tekrar dene."
+                    : AgentChatService.ExecutePcCommand(PcCommandService.BuildDirections(
+                        destination, Optional("origin", "from"), Optional("mode", "travelmode")));
+            }
+            case "map_search":
+            {
+                string query = Arg("query", "place");
+                return query.Length == 0
+                    ? "Arama metni (query) boş."
+                    : AgentChatService.ExecutePcCommand(PcCommandService.BuildMapSearch(query));
+            }
+            case "open_url":
+                return PcCommandService.TryBuildUrl(Arg("url")) is { } page
+                    ? AgentChatService.ExecutePcCommand(page)
+                    : "Yalnızca http/https web adresleri açılabilir.";
             case "pc_command":
             {
                 PcCommand? parsed = PcCommandService.TryParse(Arg("command", "text"));
@@ -128,6 +237,20 @@ internal static class JarvisAgentService
                     ? "Bu komut izin listesinde değil veya anlaşılamadı.\n" + PcCommandService.DescribeAllowList()
                     : AgentChatService.ExecutePcCommand(parsed);
             }
+            case "crm_find_emails":
+            {
+                if (Optional("company", "name") is { } company)
+                {
+                    return await CrmEmailFinderService.FindForCompanyAsync(company, cancellationToken);
+                }
+
+                int limit = int.TryParse(Optional("limit", "count"), out int parsed) ? parsed : CrmEmailFinderService.DefaultBatch;
+                bool searchWeb = Optional("search_web", "searchweb") is { } flag &&
+                    (flag.Equals("true", StringComparison.OrdinalIgnoreCase) || flag is "1" or "evet");
+                return await CrmEmailFinderService.StartBatchAsync(limit, searchWeb, Optional("city"), cancellationToken);
+            }
+            case "crm_email_status":
+                return CrmEmailFinderService.ReadStatusText();
             default:
                 return $"Bilinmeyen araç: {step.Action}. Yalnızca listelenen araçları kullan.";
         }
@@ -145,6 +268,12 @@ internal static class JarvisAgentService
             "erp_summary" => "📊 ERP verilerini okuyorum",
             "daily_briefing" => "🗓 Günlük özeti hazırlıyorum",
             "pc_command" => "🖥 Bilgisayarda komut çalıştırıyorum",
+            "directions" => "🗺 Yol tarifini açıyorum",
+            "map_search" => "🗺 Haritada arıyorum",
+            "open_url" => "🌐 Sayfayı tarayıcıda açıyorum",
+            "crm_find_emails" => "📧 CRM firmalarının e-postalarını arıyorum",
+            "crm_email_status" => "📧 E-posta taramasının durumuna bakıyorum",
+            "ask_cursor" => "↗ İşi Cursor'a aktarıyorum",
             _ => "⚙ " + step.Action
         };
         string thought = step.Thought.Length > 0 ? $"\n💭 {JarvisAgentProtocol.Truncate(step.Thought, 220)}" : string.Empty;

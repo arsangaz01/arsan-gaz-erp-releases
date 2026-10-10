@@ -284,13 +284,12 @@ internal static class Paths
     public static readonly string Queue = Path.Combine(Root, "Queue");
     public static readonly string CopilotInbox = Path.Combine(Root, "CopilotInbox");
     public static readonly string TelegramOutbox = Path.Combine(Root, "TelegramOutbox");
+    public static readonly string TelegramFiles = Path.Combine(Root, "TelegramFiles");
     public static readonly string Reports = Path.Combine(Root, "Reports");
     public static readonly string Logs = Path.Combine(Root, "Logs");
     public static readonly string Settings = Path.Combine(Root, "settings.json");
     public static readonly string State = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ArsanGazERP", "connection-state.json");
     public static readonly string ErpExe = ResolveErpExecutable();
-    public static readonly string ErpExeCompat = Path.Combine(Project, "publish", "ArsanGazERP.exe");
-
     public static void Ensure()
     {
         string legacyRoot = Path.Combine(LegacyProject, "Tools", "AgentWatcherData");
@@ -667,7 +666,7 @@ internal sealed partial class ControlCenterForm : Form
         }
         provider.SelectedItem = settings.DefaultProvider;
         if (provider.SelectedIndex < 0) provider.SelectedIndex = 0;
-        Text = "Arsan Gaz ERP V7.6.0 Agent Control Center";
+        Text = "Arsan Gaz ERP Agent Control Center V7.8.15";
         Width = 1240; Height = 820; MinimumSize = RequestedMinimumSize; StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
         InitializeTrayIcon();
@@ -745,6 +744,15 @@ internal sealed partial class ControlCenterForm : Form
                 async () =>
                 {
                     await Task.WhenAll(new[] { scheduledTickTask, campaignPumpTask, cloudRelayTask }.OfType<Task>());
+                    try
+                    {
+                        using CancellationTokenSource release = new(TimeSpan.FromSeconds(5));
+                        await campaignService.Store.ReleaseWorkerLeaseAsync(release.Token);
+                    }
+                    catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or OperationCanceledException or IOException)
+                    {
+                        AppLog.Write("CAMPAIGN", "Lease release skipped: " + exception.GetType().Name);
+                    }
                     if (localTestAutomationTask is not null)
                     {
                         await localTestAutomationTask;
@@ -1163,6 +1171,14 @@ internal sealed partial class ControlCenterForm : Form
         queueGrid.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         queueGrid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
         queueGrid.DataBindingComplete += (_, _) => ConfigureTaskQueueColumns(queueGrid);
+        queueGrid.CellFormatting += (_, e) =>
+        {
+            if (e.ColumnIndex >= 0 && queueGrid.Columns[e.ColumnIndex].Name == "Status" && e.Value is string status)
+            {
+                e.Value = OutcomeLabel(status);
+                e.FormattingApplied = true;
+            }
+        };
         foreach (WatcherAgentProfile profile in AgentInstructionPolicy.ConfigurableAgents)
         {
             agentInstructionAgent.Items.Add($"{profile.Name} — {profile.Role}");
@@ -1764,14 +1780,33 @@ internal sealed partial class ControlCenterForm : Form
         localTestAutomationStatus.Text =
             $"{(status.Enabled ? "Açık" : "Kapalı")} · {status.RunsStarted}/{LocalTestAutomation.MaximumRuns} çalışma"
             + (status.WindowStartedUtc is { } started ? $" · bitiş {started.Add(LocalTestAutomation.MaximumWindow).ToLocalTime():g}" : "")
-            + $"\nSonuç: {status.LastOutcome}\n{status.Report}";
+            + $"\nSonuç: {OutcomeLabel(status.LastOutcome)}\n{status.Report}";
         HourlyLocalAutomationStatus hourly = hourlyLocalTestAutomation.Status;
         hourlyLocalTestAutomationStatus.Text =
             $"Saatlik mod: {(hourly.Enabled ? "Kurulu" : "Kapalı")} · {hourly.RunsInWindow}/{HourlyLocalTestAutomation.MaximumRunsPerWindow} koşu/24 saat"
             + (hourly.NextRunUtc is { } next ? $" · sonraki en erken: {next.ToLocalTime():g}" : "")
-            + $"\nSonuç: {hourly.LastOutcome} · {hourly.LastReport}"
-            + (hourly.IsUnavailable ? " · durum okunamadı; fail-closed" : "");
+            + $"\nSonuç: {OutcomeLabel(hourly.LastOutcome)} · {hourly.LastReport}"
+            + (hourly.IsUnavailable ? " · durum okunamadı; güvenli kapalı" : "");
     }
+
+    static string OutcomeLabel(string outcome) => outcome switch
+    {
+        "Never" => "Henüz çalışmadı",
+        "Uncertain" => "Belirsiz",
+        "Armed" => "Kuruldu",
+        "Running" => "Çalışıyor",
+        "LimitReached" => "Sınıra ulaşıldı",
+        "Passed" or "Succeeded" or "Success" => "Başarılı",
+        "Failed" or "Failure" => "Başarısız",
+        "Cancelled" or "Canceled" => "İptal edildi",
+        "TimedOut" => "Zaman aşımı",
+        "Queued" => "Sırada",
+        "Backoff" => "Bekleme süresinde",
+        "Unavailable" => "Kullanılamıyor",
+        "Completed" => "Tamamlandı",
+        "Paused" => "Duraklatıldı",
+        _ => outcome
+    };
 
     Task RefreshStatusAsync()
     {
@@ -1790,14 +1825,14 @@ internal sealed partial class ControlCenterForm : Form
         SetCard("Excel",excel?"Bağlı: "+Path.GetFileName(state.ExcelPath):"Seçilmedi",excel);
         SetCard("Copilot Pro","SDK hazır · oturum ilk istekte doğrulanır",false);
         SetCard("Cloudflare Workers AI",CloudAgentClient.IsConfigured?"Worker yapılandırıldı":"Worker/erişim anahtarı yapılandırılmadı",CloudAgentClient.IsConfigured);
-        SetCard("NVIDIA NIM",nv?"API anahtarı kayıtlı":"Bağlı değil",nv);
+        SetCard("NVIDIA NIM",nv?"API anahtarı kayıtlı":FreeLlmChain.AnyConfigured?"Bağlı değil · ücretsiz yedek sağlayıcılar kullanılır":"Bağlı değil",nv||FreeLlmChain.AnyConfigured);
         SetCard("Görev Kuyruğu",$"{q} bekleyen",true);
         SetCard("Telegram",telegram is null?"Chat ID veya bot yapılandırması eksik":telegram.StatusText,telegram?.IsConnected==true);
-        SetCard("Web Araştırma",googleResearch.IsConfigured?$"{settings.ResearchProvider} yapılandırıldı":$"{settings.ResearchProvider} anahtarı gerekli",googleResearch.IsConfigured);
+        SetCard("Web Araştırma",googleResearch.IsPaidProviderConfigured?$"{settings.ResearchProvider} yapılandırıldı":googleResearch.ActiveProviderName,googleResearch.IsConfigured);
         SetCard("ERP İyileştirme Araştırması",
             !settings.EnableDailyResearch ? "Kapalı" :
             !googleResearch.IsConfigured ? "Web arama sağlayıcısı yapılandırılmalı" :
-            $"Sürekli · {Math.Clamp(settings.ResearchIntervalHours, 12, 168)} saatte bir · {settings.ResearchProvider}",
+            $"Sürekli · {Math.Clamp(settings.ResearchIntervalHours, 12, 168)} saatte bir · {googleResearch.ActiveProviderName}",
             !settings.EnableDailyResearch || googleResearch.IsConfigured);
         SetCard("Otonom Günlük Yerel Rapor",settings.EnableDailyStatusReport?"Açık · AI kullanmaz":"Kapalı",settings.EnableDailyStatusReport);
         SetCard("Otonom Günlük İnceleme",settings.EnableDailyReview?"Açık · model kotası kullanır":"Kapalı",settings.EnableDailyReview);
@@ -1909,8 +1944,8 @@ internal sealed partial class ControlCenterForm : Form
         if (!googleResearch.IsConfigured) return "Kamuya açık web arama sağlayıcısı yapılandırılmamış.";
         if (selected == "Cloudflare Workers AI" && !CloudAgentClient.IsConfigured)
             return "Cloudflare Worker/erişim anahtarı yapılandırılmamış.";
-        if (selected == "NVIDIA NIM" && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NVIDIA_API_KEY", EnvironmentVariableTarget.User)))
-            return "NVIDIA API anahtarı yapılandırılmamış.";
+        if (selected == "NVIDIA NIM" && !HasNvidiaOrFreeFallback())
+            return "NVIDIA API anahtarı veya ücretsiz yedek sağlayıcı yapılandırılmamış.";
         return null;
     }
 
@@ -2316,7 +2351,8 @@ internal sealed partial class ControlCenterForm : Form
         long updateId,
         long chatId,
         string requestText,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<TelegramAttachment>? attachments = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(requestText))
@@ -2336,7 +2372,8 @@ internal sealed partial class ControlCenterForm : Form
             requestText,
             chatId,
             context,
-            cancellationToken: cancellationToken);
+            attachments,
+            cancellationToken);
 
         string bridgeName = CodingBridgeLauncher.Normalize(settings.CodingBridge);
         if (!IsCopilotBridgeResponsive())
@@ -3556,8 +3593,10 @@ internal sealed partial class ControlCenterForm : Form
         CancellationToken token = telegramCancellation.Token;
         telegramTask = bot.RunAsync(HandleTelegramCommandAsync, HandleTelegramCallbackAsync, Append, token,
             (updateId, caption, targetChatId, attachments, cancellationToken) =>
-                QueueTelegramTaskAsync(updateId, targetChatId, caption, "Sohbet", cancellationToken,
-                    "VS Code Copilot Chat", attachments));
+                settings.ForwardTelegramCommandsToCopilotChat && !caption.TrimStart().StartsWith("/", StringComparison.Ordinal)
+                    ? QueueTelegramCopilotRequestAsync(updateId, targetChatId, caption, cancellationToken, attachments)
+                    : QueueTelegramTaskAsync(updateId, targetChatId, caption, "Sohbet", cancellationToken,
+                        "VS Code Copilot Chat", attachments));
         await Task.Yield();
     }
 
@@ -3939,6 +3978,24 @@ internal sealed partial class ControlCenterForm : Form
                         throw new InvalidOperationException("Telegram raporu için izinli sohbet teslimat teyidi alınamadı.");
                     }
 
+                    if (outboxItem.DeliveredFileCount < 0 || outboxItem.DeliveredFileCount > outboxItem.FilePaths.Count)
+                    {
+                        throw new InvalidDataException("Telegram giden kutusu dosya ilerleme kaydı tutarsız.");
+                    }
+
+                    while (outboxItem.DeliveredFileCount < outboxItem.FilePaths.Count)
+                    {
+                        string filePath = ResolveOutboxFilePath(outboxItem.FilePaths[outboxItem.DeliveredFileCount]);
+                        TelegramDeliveryReceipt fileReceipt = await telegram.SendFileAsync(filePath, closing.Token);
+                        if (fileReceipt.ChatId != allowedChatId)
+                        {
+                            throw new InvalidOperationException("Telegram dosyası izinli sohbet dışında kabul edildi.");
+                        }
+
+                        outboxItem.DeliveredFileCount++;
+                        await WriteTelegramOutboxItemAsync(outboxPath, outboxItem, closing.Token);
+                    }
+
                     if (rateLimitedWorkflowNotice)
                     {
                         workflowNoticeSendAllowedUtc = TelegramWorkflowNotice.NextSendAllowedUtc(DateTime.UtcNow);
@@ -4143,6 +4200,19 @@ internal sealed partial class ControlCenterForm : Form
         {
             Append(message);
         }
+    }
+
+    // Only files staged in TelegramFiles may be sent, so an outbox record cannot exfiltrate arbitrary files.
+    static string ResolveOutboxFilePath(string filePath)
+    {
+        string root = Path.GetFullPath(Paths.TelegramFiles) + Path.DirectorySeparatorChar;
+        string fullPath = Path.GetFullPath(Path.IsPathRooted(filePath) ? filePath : Path.Combine(root, filePath));
+        if (!fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException("Telegram dosyası izinli TelegramFiles klasörünün dışında.");
+        }
+
+        return fullPath;
     }
 
     static async Task WriteTelegramOutboxItemAsync(
@@ -4958,10 +5028,10 @@ internal sealed partial class ControlCenterForm : Form
                     copilotException);
             }
 
-            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NVIDIA_API_KEY", EnvironmentVariableTarget.User)))
+            if (!HasNvidiaOrFreeFallback())
             {
                 throw new InvalidOperationException(
-                    "GitHub Copilot yanıt veremedi ve NVIDIA NIM yedeği yapılandırılmamış: " +
+                    "GitHub Copilot yanıt veremedi ve NVIDIA NIM/ücretsiz yedek yapılandırılmamış: " +
                     copilotException.GetBaseException().Message,
                     copilotException);
             }
@@ -5253,11 +5323,10 @@ internal sealed partial class ControlCenterForm : Form
                         copilotException);
                 }
 
-                if (string.IsNullOrWhiteSpace(
-                    Environment.GetEnvironmentVariable("NVIDIA_API_KEY", EnvironmentVariableTarget.User)))
+                if (!HasNvidiaOrFreeFallback())
                 {
                     throw new InvalidOperationException(
-                        "GitHub Copilot yanıt veremedi ve otomatik yedek için NVIDIA NIM yapılandırılmamış.",
+                        "GitHub Copilot yanıt veremedi ve otomatik yedek için NVIDIA NIM veya ücretsiz yedek yapılandırılmamış.",
                         copilotException);
                 }
 
@@ -5441,6 +5510,10 @@ internal sealed partial class ControlCenterForm : Form
 Task<string> AskNvidiaAsync(string prompt, CancellationToken cancellationToken = default) =>
     AskNvidiaAsync(null, prompt, cancellationToken);
 
+static bool HasNvidiaOrFreeFallback() =>
+    !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NVIDIA_API_KEY", EnvironmentVariableTarget.User))
+    || FreeLlmChain.AnyConfigured;
+
 async Task<string> AskNvidiaAsync(
     string? systemPrompt,
     string prompt,
@@ -5448,7 +5521,47 @@ async Task<string> AskNvidiaAsync(
     int maxTokens = 512)
 {
     string key = Environment.GetEnvironmentVariable("NVIDIA_API_KEY", EnvironmentVariableTarget.User) ?? "";
-    if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("NVIDIA API anahtarı yok.");
+    if (string.IsNullOrWhiteSpace(key))
+    {
+        if (!FreeLlmChain.AnyConfigured) throw new InvalidOperationException("NVIDIA API anahtarı yok.");
+        return await AskFreeFallbackAsync(systemPrompt, prompt, maxTokens, "NVIDIA anahtarı yok", cancellationToken);
+    }
+
+    try
+    {
+        return await AskNvidiaDirectAsync(key, systemPrompt, prompt, maxTokens, cancellationToken);
+    }
+    catch (Exception exception) when (
+        FreeLlmChain.AnyConfigured &&
+        !cancellationToken.IsCancellationRequested &&
+        exception is InvalidOperationException or HttpRequestException or TaskCanceledException or JsonException)
+    {
+        return await AskFreeFallbackAsync(systemPrompt, prompt, maxTokens, "NVIDIA yanıt vermedi", cancellationToken);
+    }
+}
+
+async Task<string> AskFreeFallbackAsync(
+    string? systemPrompt,
+    string prompt,
+    int maxTokens,
+    string reason,
+    CancellationToken cancellationToken)
+{
+    (string provider, string text) = await FreeLlmChain.CompleteAsync(
+        string.IsNullOrWhiteSpace(systemPrompt) ? null : Sanitize(systemPrompt),
+        Sanitize(prompt),
+        maxTokens,
+        cancellationToken);
+    return $"[{provider} · ücretsiz yedek; {reason}] {text}";
+}
+
+async Task<string> AskNvidiaDirectAsync(
+    string key,
+    string? systemPrompt,
+    string prompt,
+    int maxTokens,
+    CancellationToken cancellationToken)
+{
     using HttpRequestMessage request = new(HttpMethod.Post, "chat/completions");
     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
     List<Dictionary<string, string>> messages = [];
@@ -5522,7 +5635,7 @@ async Task<string> AskNvidiaAsync(
     static Button Button(string text,Func<Task> action){Button b=new(){Text=text,AutoSize=true,Height=38,Margin=new Padding(6),Padding=new Padding(10,0,10,0)};b.Click+=async(_,_)=>{try{b.Enabled=false;await action();}catch(Exception ex){MessageBox.Show(ex.GetBaseException().Message,"Hata");}finally{b.Enabled=true;}};return b;}
     static FlowLayoutPanel Flow(params Control[] c){FlowLayoutPanel f=new(){Dock=DockStyle.Top,AutoSize=true,WrapContents=true,Padding=new Padding(10)};f.Controls.AddRange(c);return f;}
     static Control Labeled(string label,Control c){Panel p=new(){Width=Math.Max(190,c.Width+20),Height=58,Margin=new Padding(5)};Label l=new(){Text=label,Dock=DockStyle.Top,Height=20};c.Dock=DockStyle.Bottom;p.Controls.Add(c);p.Controls.Add(l);return p;}
-    static GroupBox Group(string title,params Control[] c){GroupBox g=new(){Text=title,Dock=DockStyle.Top,Height=Math.Max(190,55*c.Length),Padding=new Padding(12),Margin=new Padding(8)};FlowLayoutPanel f=Flow(c);f.Dock=DockStyle.Fill;f.FlowDirection=FlowDirection.TopDown;g.Controls.Add(f);return g;}
+    static GroupBox Group(string title,params Control[] c){GroupBox g=new(){Text=title,Dock=DockStyle.Top,Height=Math.Max(190,62*c.Length+50),Padding=new Padding(12),Margin=new Padding(8)};FlowLayoutPanel f=Flow(c);f.Dock=DockStyle.Fill;f.FlowDirection=FlowDirection.TopDown;g.Controls.Add(f);return g;}
     static ComboBox NewCombo(params string[] values){ComboBox c=new(){Width=190,DropDownStyle=ComboBoxStyle.DropDownList};foreach(string v in values.Where(x=>!string.IsNullOrWhiteSpace(x)).Distinct())c.Items.Add(v);if(c.Items.Count>0)c.SelectedIndex=0;return c;}
     static void ConfigureTaskQueueColumns(DataGridView grid)
     {
@@ -5592,6 +5705,8 @@ internal sealed class TelegramOutboxItem
     public int Attempts { get; set; }
     public int DeliveredChunkCount { get; set; }
     public List<TelegramDeliveryReceipt> Receipts { get; set; } = [];
+    public List<string> FilePaths { get; set; } = [];
+    public int DeliveredFileCount { get; set; }
     public string? LastError { get; set; }
 }
 
@@ -5770,6 +5885,15 @@ internal static class MicrosoftGraph
             string.Equals(item.HomeAccountId?.Identifier, expectedAccountId, StringComparison.Ordinal));
         if (account is null)
             throw new CampaignAuthenticationException("Select a cached Microsoft account before granting Mail.Send.");
+        try
+        {
+            AuthenticationResult existing = await client.AcquireTokenSilent(["Mail.Send"], account).ExecuteAsync(cancellationToken);
+            if (string.Equals(existing.Account.HomeAccountId?.Identifier, expectedAccountId, StringComparison.Ordinal))
+                return new CampaignGraphToken(existing.AccessToken, expectedAccountId);
+        }
+        catch (MsalUiRequiredException)
+        {
+        }
         AuthenticationResult result = await client.AcquireTokenInteractive(["Mail.Send"])
             .WithAccount(account)
             .WithPrompt(Prompt.Consent)

@@ -52,7 +52,10 @@ public sealed record HubStatus(
     string MobileApiVersion,
     string IntegrationHint);
 
-public sealed class ApiException(string message) : Exception(message);
+public class ApiException(string message) : Exception(message);
+
+// The computer or tunnel could not be reached; the request never got an answer from the ERP.
+public sealed class ServerUnreachableException(string message) : ApiException(message);
 
 public sealed class ApiClient
 {
@@ -128,6 +131,11 @@ public sealed class ApiClient
                 ServerUrl = url;
             }
         }
+
+        if (json.TryGetProperty("autoManaged", out JsonElement auto) && auto.ValueKind == JsonValueKind.True)
+        {
+            ServerUrlCoordinator.AutoManaged = true;
+        }
     }
 
     public async Task<bool> TryApplyTelegramClipboardUrlAsync()
@@ -136,6 +144,25 @@ public sealed class ApiClient
         if (string.IsNullOrWhiteSpace(text))
         {
             return false;
+        }
+
+        System.Text.RegularExpressions.Match deepLink = System.Text.RegularExpressions.Regex.Match(
+            text,
+            @"arsangazerp://server\?[^\s]+",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (deepLink.Success
+            && Uri.TryCreate(deepLink.Value, UriKind.Absolute, out Uri? uri)
+            && ServerUrlCoordinator.TryApplyDeepLink(uri))
+        {
+            try
+            {
+                await HelloAsync();
+                return true;
+            }
+            catch (ApiException)
+            {
+                return false;
+            }
         }
 
         System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(
@@ -209,10 +236,71 @@ public sealed class ApiClient
         return await ReadAsync<List<AgentReply>>(response);
     }
 
-    public async Task<string> SendToCursorAsync(string message)
+    public async Task<string> SendToCursorAsync(string message, IReadOnlyList<string>? attachmentPaths = null)
     {
-        using HttpResponseMessage response = await SendAsync(HttpMethod.Post, "/api/cursor", new { message });
-        return (await ReadAsync<CursorQueued>(response)).Id;
+        if (attachmentPaths is { Count: > 0 })
+        {
+            using MultipartFormDataContent content = new();
+            content.Add(new StringContent(message), "message");
+            List<FileStream> streams = [];
+            try
+            {
+                foreach (string path in attachmentPaths)
+                {
+                    if (!File.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    FileStream stream = File.OpenRead(path);
+                    streams.Add(stream);
+                    content.Add(new StreamContent(stream), "files", Path.GetFileName(path));
+                }
+
+                if (streams.Count == 0)
+                {
+                    throw new ApiException("Seçilen ek dosyaları okunamadı.");
+                }
+
+                using HttpResponseMessage response = await SendMultipartAsync("/api/cursor", content);
+                return (await ReadAsync<CursorQueued>(response)).Id;
+            }
+            finally
+            {
+                foreach (FileStream stream in streams)
+                {
+                    await stream.DisposeAsync();
+                }
+            }
+        }
+
+        using HttpResponseMessage jsonResponse = await SendAsync(HttpMethod.Post, "/api/cursor", new { message });
+        return (await ReadAsync<CursorQueued>(jsonResponse)).Id;
+    }
+
+    private async Task<HttpResponseMessage> SendMultipartAsync(string path, HttpContent content)
+    {
+        string server = ServerUrl;
+        if (server.Length == 0)
+        {
+            throw new ApiException("Sunucu adresi girilmemiş. Bağlantı sekmesinden adresi girin.");
+        }
+
+        string token = await GetTokenAsync() ?? throw new ApiException("Bu telefon henüz eşleşmedi.");
+        using HttpRequestMessage request = new(HttpMethod.Post, server + path) { Content = content };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        try
+        {
+            return await _http.SendAsync(request);
+        }
+        catch (HttpRequestException exception)
+        {
+            throw new ApiException("Sunucuya ulaşılamadı: " + exception.Message);
+        }
+        catch (TaskCanceledException)
+        {
+            throw new ApiException("Sunucu zamanında yanıt vermedi.");
+        }
     }
 
     public Task<CursorStatus> CursorStatusAsync(string id) => GetAsync<CursorStatus>("/api/cursor/" + Uri.EscapeDataString(id));
@@ -263,11 +351,29 @@ public sealed class ApiClient
         }
         catch (HttpRequestException exception)
         {
-            throw new ApiException("Sunucuya ulaşılamadı. Bilgisayar açık mı, adres güncel mi? Telegram'dan Bağlantı > Telegram'dan bağlan kullanın. (" + exception.Message + ")");
+            await ServerUrlCoordinator.TryRecoverAfterFailureAsync();
+            if (!string.Equals(server, ServerUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                using HttpRequestMessage retry = new(method, ServerUrl + path);
+                if (authorize)
+                {
+                    string token = await GetTokenAsync() ?? throw new ApiException("Bu telefon henüz eşleşmedi.");
+                    retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                }
+
+                if (body is not null)
+                {
+                    retry.Content = JsonContent.Create(body, options: Json);
+                }
+
+                return await _http.SendAsync(retry);
+            }
+
+            throw new ServerUnreachableException("Sunucuya ulaşılamadı. Telegram'daki tek dokunuş bağlantısını deneyin veya uygulamayı yeniden açın. (" + exception.Message + ")");
         }
         catch (TaskCanceledException)
         {
-            throw new ApiException("Sunucu zamanında yanıt vermedi.");
+            throw new ServerUnreachableException("Sunucu zamanında yanıt vermedi.");
         }
     }
 
@@ -286,12 +392,17 @@ public sealed class ApiClient
             {
             }
 
+            if (error is null && response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.BadGateway
+                    or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout or (HttpStatusCode)530)
+            {
+                throw new ServerUnreachableException(response.StatusCode == HttpStatusCode.NotFound
+                    ? "Sunucu bulunamadı (404). Adres eski olabilir; Telegram'daki son adresi girin."
+                    : "Bilgisayardaki ERP sunucusuna ulaşılamıyor. Bilgisayar kapalı veya adres değişmiş olabilir.");
+            }
+
             throw new ApiException(response.StatusCode switch
             {
                 HttpStatusCode.Unauthorized => error ?? "Eşleşme geçersiz. Bağlantı'dan yeniden eşleştirin.",
-                HttpStatusCode.NotFound when error is null => "Sunucu bulunamadı (404). Adres eski olabilir; Telegram'daki son adresi girin.",
-                HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout or (HttpStatusCode)530 when error is null =>
-                    "Bilgisayardaki ERP sunucusuna ulaşılamıyor. Bilgisayar kapalı veya adres değişmiş olabilir.",
                 _ => error ?? $"Sunucu hatası ({(int)response.StatusCode})."
             });
         }

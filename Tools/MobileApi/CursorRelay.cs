@@ -15,7 +15,14 @@ internal static class CursorRelay
 
     public static string Inbox => Path.Combine(AgentWatcherPaths.DataRoot, "CopilotInbox");
 
-    public static string Enqueue(string text, string deviceName)
+    public static string CreatePendingId() =>
+        IdPrefix + DateTime.UtcNow.ToString("yyyyMMddHHmmss") + "-" + Guid.NewGuid().ToString("N")[..8];
+
+    public static string Enqueue(
+        string text,
+        string deviceName,
+        IReadOnlyList<SavedMobileAttachment>? attachments = null,
+        string? idOverride = null)
     {
         string message = text.Trim();
         if (message.Length is 0 or > MaximumLength)
@@ -24,7 +31,28 @@ internal static class CursorRelay
         }
 
         Directory.CreateDirectory(Inbox);
-        string id = IdPrefix + DateTime.UtcNow.ToString("yyyyMMddHHmmss") + "-" + Guid.NewGuid().ToString("N")[..8];
+        string id = idOverride ?? CreatePendingId();
+        if (!IsValidId(id))
+        {
+            throw new ArgumentException("İstek kimliği geçersiz.");
+        }
+        object? attachmentPayload = attachments?.Count > 0
+            ? attachments.Select(a => new { fileName = a.FileName, localPath = a.LocalPath, kind = a.Kind }).ToArray()
+            : null;
+        if (attachmentPayload is not null)
+        {
+            foreach (SavedMobileAttachment attachment in attachments!)
+            {
+                string root = Path.GetFullPath(MobileAttachmentStore.Root);
+                string attachmentPath = Path.GetFullPath(attachment.LocalPath);
+                if (!attachmentPath.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                    || !File.Exists(attachmentPath))
+                {
+                    throw new ArgumentException("Ek dosyası doğrulanamadı.");
+                }
+            }
+        }
+
         var request = new
         {
             Id = id,
@@ -33,7 +61,7 @@ internal static class CursorRelay
             Context = $"Bu istek Telegram'dan değil, Arsan Gaz ERP mobil uygulamasından ({deviceName}) geldi. " +
                       "Rapor telefonda okunacak; kısa ve sade yaz. Onay gereken işlerde 'Onaylıyor musun? Evet/Hayır yazın' diye sor.",
             TaskId = id,
-            Attachments = (object?)null
+            Attachments = attachmentPayload
         };
         string path = Path.Combine(Inbox, id + ".request.json");
         File.WriteAllText(path + ".tmp", JsonSerializer.Serialize(request, new JsonSerializerOptions { WriteIndented = true }), Utf8);
@@ -81,7 +109,7 @@ internal static class CursorRelay
     }
 
     public static bool IsValidId(string id) =>
-        id.StartsWith(IdPrefix, StringComparison.Ordinal)
+        (id.StartsWith(IdPrefix, StringComparison.Ordinal) || id.StartsWith(CursorEscalationService.IdPrefix, StringComparison.Ordinal))
         && id.Length <= 80
         && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
 }
@@ -101,7 +129,9 @@ internal sealed class CursorRelayNotifier : BackgroundService
                     continue;
                 }
 
-                foreach (string completion in Directory.EnumerateFiles(CursorRelay.Inbox, CursorRelay.IdPrefix + "*.completion.json"))
+                IEnumerable<string> completions = Directory.EnumerateFiles(CursorRelay.Inbox, CursorRelay.IdPrefix + "*.completion.json")
+                    .Concat(Directory.EnumerateFiles(CursorRelay.Inbox, CursorEscalationService.IdPrefix + "*.completion.json"));
+                foreach (string completion in completions)
                 {
                     string id = Path.GetFileName(completion)[..^".completion.json".Length];
                     string marker = Path.Combine(CursorRelay.Inbox, id + ".mobile-notified");
@@ -114,7 +144,9 @@ internal sealed class CursorRelayNotifier : BackgroundService
                     CursorRequestStatus? status = CursorRelay.GetStatus(id);
                     if (status?.Report is { Length: > 0 } report)
                     {
-                        TelegramNotifier.Send("📱 Telefondan gelen isteğin sonucu (Cursor):\n\n" + report);
+                        TelegramNotifier.Send((id.StartsWith(CursorEscalationService.IdPrefix, StringComparison.Ordinal)
+                            ? "🤖 Jarvis'in Cursor'a aktardığı isteğin sonucu:\n\n"
+                            : "📱 Telefondan gelen isteğin sonucu (Cursor):\n\n") + report);
                     }
                 }
             }

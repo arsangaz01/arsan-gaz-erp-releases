@@ -28,6 +28,9 @@ public sealed class ChatPage : ContentPage
     };
     private readonly Button _send;
     private readonly Button _mic;
+    private readonly Button _attach;
+    private readonly Label _attachments;
+    private readonly List<string> _pendingAttachments = [];
     private CancellationTokenSource? _speech;
 
     public ChatPage()
@@ -66,6 +69,9 @@ public sealed class ChatPage : ContentPage
         };
         _mic = new Button { Text = "🎤", FontSize = 22, WidthRequest = 58, BackgroundColor = Ui.Accent, TextColor = Colors.White };
         _mic.Clicked += async (_, _) => await ListenAsync();
+        _attach = new Button { Text = "📎", FontSize = 20, WidthRequest = 52 };
+        _attach.Clicked += async (_, _) => await PickAttachmentAsync();
+        _attachments = new Label { FontSize = 12, TextColor = Ui.Muted, LineBreakMode = LineBreakMode.WordWrap };
         _send = new Button { Text = "Gönder", WidthRequest = 90 };
         _send.Clicked += async (_, _) => await SendAsync(_input.Text);
         _speak.Toggled += (_, e) => Preferences.Default.Set("speak_replies", e.Value);
@@ -81,13 +87,18 @@ public sealed class ChatPage : ContentPage
 
         Grid inputRow = new()
         {
-            ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto)],
+            ColumnDefinitions =
+            [
+                new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto),
+                new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto)
+            ],
             ColumnSpacing = 6,
             Padding = new Thickness(8, 4, 8, 8)
         };
         inputRow.Add(_input, 0);
-        inputRow.Add(_send, 1);
-        inputRow.Add(_mic, 2);
+        inputRow.Add(_attach, 1);
+        inputRow.Add(_send, 2);
+        inputRow.Add(_mic, 3);
 
         HorizontalStackLayout options = new()
         {
@@ -113,13 +124,15 @@ public sealed class ChatPage : ContentPage
             RowDefinitions =
             [
                 new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto),
-                new RowDefinition(GridLength.Star), new RowDefinition(GridLength.Auto)
+                new RowDefinition(GridLength.Star), new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto)
             ]
         };
         root.Add(options, 0, 0);
         root.Add(targetRow, 0, 1);
         root.Add(_list, 0, 2);
-        root.Add(inputRow, 0, 3);
+        root.Add(_attachments, 0, 3);
+        root.Add(inputRow, 0, 4);
         Content = root;
         AddWelcome();
     }
@@ -129,12 +142,74 @@ public sealed class ChatPage : ContentPage
         Sender = "Jarvis",
         Text = "Merhaba! ERP ajanlarıyla konuşabilirsiniz. Örnekler: \"Bugün kimi aramalıyım?\", \"Adana'daki hastaneleri listele\", " +
                "\"@Defne /not Firma adı | Not\", \"@Defne /takip Firma adı | 2026-10-15\". 🎤 düğmesine basıp sesli komut verebilirsiniz.\n" +
-               "\"Kime: Cursor (bilgisayar)\" seçerseniz istek bilgisayardaki Cursor ajanına gider; yanıt hem burada hem Telegram'da görünür."
+               "\"Kime: Cursor (bilgisayar)\" seçerseniz istek bilgisayardaki Cursor ajanına gider; yanıt hem burada hem Telegram'da görünür.\n" +
+               "📎 ile fotoğraf, PDF veya video ekleyebilirsiniz (en fazla 5 dosya, dosya başına 15 MB; ekler Cursor hedefinde)."
     });
 
-    private async Task SendToCursorAsync(string message)
+    private void RefreshAttachmentLabel()
     {
-        string id = await ApiClient.Instance.SendToCursorAsync(message);
+        _attachments.Text = _pendingAttachments.Count == 0
+            ? string.Empty
+            : "Ekler: " + string.Join(", ", _pendingAttachments.Select(Path.GetFileName))
+              + "  (temizlemek için uzun basın)";
+    }
+
+    private async Task PickAttachmentAsync()
+    {
+        if (_pendingAttachments.Count >= 5)
+        {
+            await DisplayAlertAsync("Ek", "En fazla 5 dosya ekleyebilirsiniz.", "Tamam");
+            return;
+        }
+
+        string? choice = await DisplayActionSheetAsync("Dosya ekle", "İptal", "Ekleri temizle", "Fotoğraf", "Video", "PDF / dosya");
+        if (choice is null or "İptal")
+        {
+            return;
+        }
+
+        if (choice == "Ekleri temizle")
+        {
+            _pendingAttachments.Clear();
+            RefreshAttachmentLabel();
+            return;
+        }
+
+        try
+        {
+            FileResult? result = choice switch
+            {
+                "Fotoğraf" => await MediaPicker.Default.PickPhotoAsync(new MediaPickerOptions { Title = "Fotoğraf seç" }),
+                "Video" => await MediaPicker.Default.PickVideoAsync(new MediaPickerOptions { Title = "Video seç" }),
+                _ => await FilePicker.Default.PickAsync(new PickOptions
+                {
+                    PickerTitle = "PDF veya dosya",
+                    FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+                    {
+                        [DevicePlatform.Android] = ["application/pdf", "image/*", "video/*"],
+                        [DevicePlatform.iOS] = ["com.adobe.pdf", "public.image", "public.movie"],
+                        [DevicePlatform.WinUI] = [".pdf", ".jpg", ".jpeg", ".png", ".mp4"]
+                    })
+                })
+            };
+
+            if (result?.FullPath is not { Length: > 0 } path)
+            {
+                return;
+            }
+
+            _pendingAttachments.Add(path);
+            RefreshAttachmentLabel();
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Ek", exception.Message, "Tamam");
+        }
+    }
+
+    private async Task SendToCursorAsync(string message, IReadOnlyList<string>? attachments)
+    {
+        string id = await ApiClient.Instance.SendToCursorAsync(message, attachments);
         _messages.Add(new ChatMessage { Sender = "Cursor", Text = "İstek bilgisayara iletildi. Yanıt hazır olunca burada görünecek (birkaç dakika sürebilir)." });
         ScrollToEnd();
         _ = PollCursorAsync(id);
@@ -213,19 +288,39 @@ public sealed class ChatPage : ContentPage
     private async Task SendAsync(string? raw)
     {
         string message = (raw ?? string.Empty).Trim();
-        if (message.Length == 0 || _busy.IsRunning)
+        if ((message.Length == 0 && _pendingAttachments.Count == 0) || _busy.IsRunning)
         {
             return;
         }
 
+        if (_pendingAttachments.Count > 0 && _target.SelectedIndex != 1)
+        {
+            await DisplayAlertAsync("Ek", "Fotoğraf/PDF/video ekleri yalnızca \"Cursor (bilgisayar)\" hedefine gönderilir.", "Tamam");
+            return;
+        }
+
+        string[] attachments = _pendingAttachments.ToArray();
+        string display = message.Length > 0 ? message : "(ek dosyalar)";
+        if (attachments.Length > 0)
+        {
+            display += "\n📎 " + string.Join(", ", attachments.Select(Path.GetFileName));
+        }
+
         _input.Text = string.Empty;
-        _messages.Add(new ChatMessage { Sender = "Siz", Text = message, IsUser = true });
+        _messages.Add(new ChatMessage { Sender = "Siz", Text = display, IsUser = true });
         ScrollToEnd();
-        _send.IsEnabled = _mic.IsEnabled = false;
+        _send.IsEnabled = _mic.IsEnabled = _attach.IsEnabled = false;
         if (_target.SelectedIndex == 1)
         {
-            await Ui.RunAsync(this, _busy, () => SendToCursorAsync(message));
-            _send.IsEnabled = _mic.IsEnabled = true;
+            await Ui.RunAsync(this, _busy, async () =>
+            {
+                await SendToCursorAsync(
+                    message.Length > 0 ? message : "Mobil ekleri incele.",
+                    attachments.Length > 0 ? attachments : null);
+                _pendingAttachments.Clear();
+                RefreshAttachmentLabel();
+            });
+            _send.IsEnabled = _mic.IsEnabled = _attach.IsEnabled = true;
             return;
         }
 
@@ -248,7 +343,7 @@ public sealed class ChatPage : ContentPage
                 await SpeakAsync(first.Text);
             }
         });
-        _send.IsEnabled = _mic.IsEnabled = true;
+        _send.IsEnabled = _mic.IsEnabled = _attach.IsEnabled = true;
     }
 
     private async Task SpeakAsync(string text)

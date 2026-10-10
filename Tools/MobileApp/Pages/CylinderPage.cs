@@ -19,6 +19,8 @@ public sealed class CylinderPage : ContentPage
     private readonly Entry _customerSearch = new() { Placeholder = "Müşteri ara (ad, kod, şehir)", ReturnType = ReturnType.Search };
     private readonly Picker _customer = new() { Title = "Müşteri seçin" };
     private readonly Entry _note = new() { Placeholder = "Not (isteğe bağlı)" };
+    private readonly Label _pendingText = new() { FontSize = 13, TextColor = Ui.Accent };
+    private readonly VerticalStackLayout _pendingPanel;
     private readonly VerticalStackLayout _movePanel;
     private readonly VerticalStackLayout _customerPanel;
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
@@ -34,9 +36,15 @@ public sealed class CylinderPage : ContentPage
         }
 
         _action.SelectedIndexChanged += (_, _) => _customerPanel!.IsVisible = SelectedStatus == 3;
-        _code.Completed += async (_, _) => await LookupAsync(_code.Text);
+        _code.Completed += async (_, _) => await LookupAsync(_code.Text, quick: false);
         _customerSearch.Completed += async (_, _) => await SearchCustomersAsync();
 
+        _pendingPanel = new VerticalStackLayout
+        {
+            Spacing = 6,
+            IsVisible = false,
+            Children = { _pendingText, Ui.Secondary("Bekleyenleri şimdi gönder", async (_, _) => await FlushAsync(showResult: true)) }
+        };
         _customerPanel = new VerticalStackLayout
         {
             Spacing = 6,
@@ -53,7 +61,7 @@ public sealed class CylinderPage : ContentPage
                 _action,
                 _customerPanel,
                 _note,
-                Ui.Primary("Kaydet", async (_, _) => await MoveAsync())
+                Ui.Primary("Kaydet", async (_, _) => await MoveAsync(confirm: true))
             }
         };
 
@@ -65,18 +73,62 @@ public sealed class CylinderPage : ContentPage
                 Spacing = 10,
                 Children =
                 {
+                    _pendingPanel,
                     Ui.Primary("📷 Barkod / QR okut", async (_, _) => await ScanAsync()),
                     _code,
-                    Ui.Secondary("Sorgula", async (_, _) => await LookupAsync(_code.Text)),
+                    Ui.Secondary("Sorgula", async (_, _) => await LookupAsync(_code.Text, quick: false)),
                     _busy,
                     _detail,
                     _movePanel
                 }
             }
         };
+
+        OfflineMoves.Changed += () => MainThread.BeginInvokeOnMainThread(RefreshPending);
+        Connectivity.Current.ConnectivityChanged += async (_, e) =>
+        {
+            if (e.NetworkAccess == NetworkAccess.Internet)
+            {
+                await FlushAsync(showResult: false);
+            }
+        };
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        RefreshPending();
+        await FlushAsync(showResult: false);
     }
 
     private int? SelectedStatus => _action.SelectedIndex >= 0 ? Actions[_action.SelectedIndex].Status : null;
+
+    private void RefreshPending()
+    {
+        int count = OfflineMoves.Pending.Count;
+        _pendingPanel.IsVisible = count > 0;
+        _pendingText.Text = $"📶 Gönderilmeyi bekleyen {count} tüp hareketi var. Bağlantı gelince otomatik gönderilir.";
+    }
+
+    private async Task FlushAsync(bool showResult)
+    {
+        if (OfflineMoves.Pending.Count == 0)
+        {
+            return;
+        }
+
+        (int sent, string? error) = await OfflineMoves.FlushAsync();
+        if (error is not null)
+        {
+            await DisplayAlertAsync("Bekleyen hareket reddedildi", error, "Tamam");
+        }
+        else if (showResult || sent > 0)
+        {
+            int left = OfflineMoves.Pending.Count;
+            await DisplayAlertAsync("Bekleyen hareketler",
+                left == 0 ? $"{sent} hareket ERP'ye gönderildi." : $"{sent} gönderildi; {left} hareket bağlantı bekliyor.", "Tamam");
+        }
+    }
 
     private async Task ScanAsync()
     {
@@ -86,7 +138,7 @@ public sealed class CylinderPage : ContentPage
             if (value is not null)
             {
                 _code.Text = value;
-                await LookupAsync(value);
+                await LookupAsync(value, quick: true);
             }
         }
         catch (Exception exception)
@@ -95,7 +147,7 @@ public sealed class CylinderPage : ContentPage
         }
     }
 
-    private Task LookupAsync(string? code) => Ui.RunAsync(this, _busy, async () =>
+    private async Task LookupAsync(string? code, bool quick)
     {
         string value = (code ?? string.Empty).Trim();
         if (value.Length == 0)
@@ -106,12 +158,50 @@ public sealed class CylinderPage : ContentPage
         _current = null;
         _movePanel.IsVisible = false;
         _detail.Text = string.Empty;
-        _current = await ApiClient.Instance.CylinderAsync(value);
-        _detail.Text = _current.Detail;
         _action.SelectedIndex = -1;
         _note.Text = string.Empty;
-        _movePanel.IsVisible = true;
-    });
+        await Ui.RunAsync(this, _busy, async () =>
+        {
+            try
+            {
+                _current = await ApiClient.Instance.CylinderAsync(value);
+                _detail.Text = _current.Detail;
+            }
+            catch (ServerUnreachableException)
+            {
+                _current = new CylinderInfo(0, value, value, -1, "bilinmiyor", null, string.Empty);
+                _detail.Text = $"📶 Bağlantı yok. Tüp bilgisi alınamadı ({value}).\nHareketi yine de kaydedebilirsiniz; bağlantı gelince ERP'ye gönderilir.";
+            }
+
+            _movePanel.IsVisible = true;
+        });
+
+        if (quick && _current is not null)
+        {
+            await QuickMoveAsync();
+        }
+    }
+
+    private async Task QuickMoveAsync()
+    {
+        string? choice = await DisplayActionSheetAsync(
+            $"{_current!.SerialNumber} · {_current.StatusName}", "Kapat", null, Actions.Select(a => a.Label).ToArray());
+        int index = Array.FindIndex(Actions, a => a.Label == choice);
+        if (index < 0)
+        {
+            return;
+        }
+
+        _action.SelectedIndex = index;
+        if (Actions[index].Status == 3)
+        {
+            await DisplayAlertAsync("Müşteriye teslim", "Aşağıdan müşteriyi arayıp seçin, sonra Kaydet'e basın.", "Tamam");
+            _customerSearch.Focus();
+            return;
+        }
+
+        await MoveAsync(confirm: false);
+    }
 
     private Task SearchCustomersAsync() => Ui.RunAsync(this, _busy, async () =>
     {
@@ -127,7 +217,7 @@ public sealed class CylinderPage : ContentPage
         }
     });
 
-    private async Task MoveAsync()
+    private async Task MoveAsync(bool confirm)
     {
         if (_current is null || SelectedStatus is not int status)
         {
@@ -138,22 +228,31 @@ public sealed class CylinderPage : ContentPage
         CustomerItem? customer = status == 3 && _customer.SelectedIndex >= 0 ? _customers[_customer.SelectedIndex] : null;
         if (status == 3 && customer is null)
         {
-            await DisplayAlertAsync("Tüp", "Müşteriye teslim için müşteri seçin.", "Tamam");
+            await DisplayAlertAsync("Tüp", "Müşteriye teslim için müşteri seçin. Bağlantı yoksa önce bağlantılıyken müşteriyi aratın.", "Tamam");
             return;
         }
 
-        string summary = $"{_current.SerialNumber}: {_current.StatusName} → {_action.Items[_action.SelectedIndex]}" +
-                         (customer is null ? string.Empty : $" ({customer.Name})");
-        if (!await DisplayAlertAsync("Onay", summary + "\nKaydedilsin mi?", "Kaydet", "Vazgeç"))
+        string label = _action.Items[_action.SelectedIndex] + (customer is null ? string.Empty : $" ({customer.Name})");
+        if (confirm && !await DisplayAlertAsync("Onay", $"{_current.SerialNumber}: {_current.StatusName} → {label}\nKaydedilsin mi?", "Kaydet", "Vazgeç"))
         {
             return;
         }
 
+        CylinderInfo current = _current;
         await Ui.RunAsync(this, _busy, async () =>
         {
-            string message = await ApiClient.Instance.MoveCylinderAsync(_current.Barcode, status, customer?.Id, _note.Text);
-            await DisplayAlertAsync("Kaydedildi", message, "Tamam");
-            await LookupAsync(_current.Barcode);
+            try
+            {
+                string message = await ApiClient.Instance.MoveCylinderAsync(current.Barcode, status, customer?.Id, _note.Text);
+                await DisplayAlertAsync("Kaydedildi", message, "Tamam");
+                await LookupAsync(current.Barcode, quick: false);
+            }
+            catch (ServerUnreachableException)
+            {
+                OfflineMoves.Add(new PendingMove(current.Barcode, status, customer?.Id, _note.Text, label, DateTime.Now));
+                _movePanel.IsVisible = false;
+                _detail.Text = $"📶 Bağlantı yok: {current.SerialNumber} → {label} telefonda saklandı. Bağlantı gelince otomatik gönderilecek.";
+            }
         });
     }
 }

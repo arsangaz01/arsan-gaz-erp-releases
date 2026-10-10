@@ -51,19 +51,24 @@ internal static class MobileEndpoints
         app.MapGet("/api/yapilandirma", () =>
         {
             string? url = MobileConnectionHub.ReadPublicUrl();
+            bool stable = MobilePublicUrl.IsStableConfigured;
             return Results.Ok(new
             {
                 serverUrl = url,
-                message = url is { Length: > 0 }
-                    ? "Güncel sunucu adresi. Uygulama bunu otomatik kaydedebilir."
-                    : "Tünel adresi henüz yok; Telegram bildirimini bekleyin."
+                stable,
+                autoManaged = stable || url is { Length: > 0 },
+                message = stable
+                    ? "Sabit sunucu adresi kullanılıyor; telefonda elle değiştirmeniz gerekmez."
+                    : url is { Length: > 0 }
+                        ? "Güncel sunucu adresi. Eşleşmiş uygulama bunu otomatik kaydeder."
+                        : "Tünel adresi henüz yok; Telegram bildirimini bekleyin."
             });
         });
 
         app.MapGet("/api/hub", () => Results.Ok(MobileConnectionHub.GetHubStatus()));
 
         app.MapGet("/indir", () => File.Exists(MobileApiPaths.ApkFile)
-            ? Results.File(MobileApiPaths.ApkFile, "application/vnd.android.package-archive", "ArsanGazERP-Mobil.apk")
+            ? Results.File(MobileApiPaths.ApkFile, "application/vnd.android.package-archive", "ArsanGazERP-Mobil.apk", enableRangeProcessing: true)
             : Results.NotFound("APK henüz yüklenmedi."));
 
         app.MapPost("/api/pair/request", (PairingService pairing) => Results.Ok(new { message = pairing.RequestCode() }));
@@ -243,12 +248,34 @@ internal static class MobileEndpoints
             }
         });
 
-        app.MapPost("/api/cursor", (CursorRequest request, HttpContext context) =>
+        app.MapPost("/api/cursor", async (HttpContext context) =>
         {
             string device = context.Items["device"] is PairedDevice paired ? paired.Name : "Telefon";
             try
             {
-                return Results.Ok(new { id = CursorRelay.Enqueue(request.Message ?? string.Empty, device) });
+                if (context.Request.HasFormContentType)
+                {
+                    IFormCollection form = await context.Request.ReadFormAsync(context.RequestAborted);
+                    string message = form["message"].ToString().Trim();
+                    if (message.Length == 0)
+                    {
+                        message = form["text"].ToString().Trim();
+                    }
+
+                    string id = CursorRelay.CreatePendingId();
+                    IReadOnlyList<SavedMobileAttachment> saved = form.Files.Count > 0
+                        ? await MobileAttachmentStore.SaveAsync(id, form.Files, context.RequestAborted)
+                        : Array.Empty<SavedMobileAttachment>();
+                    string queued = CursorRelay.Enqueue(
+                        message.Length > 0 ? message : (saved.Count > 0 ? "Mobil ekleri incele." : string.Empty),
+                        device,
+                        saved,
+                        id);
+                    return Results.Ok(new { id = queued, attachments = saved.Count });
+                }
+
+                CursorRequest? request = await context.Request.ReadFromJsonAsync<CursorRequest>(context.RequestAborted);
+                return Results.Ok(new { id = CursorRelay.Enqueue(request?.Message ?? string.Empty, device) });
             }
             catch (ArgumentException exception)
             {

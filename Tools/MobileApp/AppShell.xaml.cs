@@ -30,15 +30,7 @@ public partial class AppShell : Shell
         base.OnAppearing();
         try
         {
-            if (ApiClient.Instance.ServerUrl.Length == 0)
-            {
-                await ApiClient.Instance.TryApplyTelegramClipboardUrlAsync();
-            }
-
-            if (await ApiClient.Instance.IsPairedAsync())
-            {
-                await ApiClient.Instance.TryRefreshServerUrlFromPcAsync();
-            }
+            await ServerUrlCoordinator.BootstrapAsync();
         }
         catch (ApiException)
         {

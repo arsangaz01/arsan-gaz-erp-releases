@@ -16,6 +16,7 @@ if (!firstInstance)
 }
 
 MobileApiPaths.Ensure();
+TunnelService.ApplyPreferredPublicUrl();
 MobileLog.Write("Mobil sunucu başlatılıyor.");
 
 WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
@@ -25,7 +26,7 @@ WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicat
 });
 builder.Logging.ClearProviders();
 builder.WebHost.UseUrls($"http://127.0.0.1:{MobileApiPaths.Port}");
-builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 256 * 1024);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 80 * 1024 * 1024);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;

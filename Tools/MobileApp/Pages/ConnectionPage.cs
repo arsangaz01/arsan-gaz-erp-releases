@@ -28,10 +28,11 @@ public sealed class ConnectionPage : ContentPage
                     Ui.Secondary("Durumu yenile", async (_, _) => await RefreshHubAsync()),
                     Ui.Title("Güncelleme"),
                     _update,
+                    Ui.Primary("Güncelle", async (_, _) => await UpdateNowAsync()),
                     Ui.Secondary("Güncellemeyi denetle", async (_, _) => await CheckUpdateAsync()),
-                    Ui.Secondary("APK indir (tarayıcı)", async (_, _) => await OpenDownloadAsync()),
+                    Ui.Secondary("APK indir (tarayıcı, yedek yol)", async (_, _) => await OpenDownloadAsync()),
                     Ui.Title("Sunucu"),
-                    Ui.Note("Adres Telegram'a otomatik gider. Panoda adres varsa tek dokunuşla bağlanın; eşleştikten sonra adres PC'den otomatik güncellenir."),
+                    Ui.Note("Eşleştikten sonra adres PC'den otomatik güncellenir. Telegram'daki tek dokunuş bağlantısı (arsangazerp://) veya sabit adres dosyası ile elle değiştirmeniz gerekmez."),
                     _server,
                     new HorizontalStackLayout
                     {
@@ -121,21 +122,56 @@ public sealed class ConnectionPage : ContentPage
         {
             UpdateInfo info = await ApiClient.Instance.GetUpdateInfoAsync();
             string local = AppInfo.Current.VersionString;
-            int localBuild = AppInfo.Current.Version.Build;
-            bool newer = info.PublishedMobileBuild > localBuild
-                || string.Compare(info.PublishedMobileVersion, local, StringComparison.Ordinal) > 0;
+            // On Android BuildString is the versionCode; Version.Build is not populated from it.
+            bool newer = int.TryParse(AppInfo.Current.BuildString, out int localBuild)
+                ? info.PublishedMobileBuild > localBuild
+                : string.Compare(info.PublishedMobileVersion, local, StringComparison.Ordinal) > 0;
             _update.Text = newer
-                ? $"Yeni sürüm var: {info.PublishedMobileVersion} (build {info.PublishedMobileBuild}). Telefon: {local}."
-                : $"Telefon sürümü güncel ({local}). Sunucu APK: {info.PublishedMobileVersion}.";
-            if (showAlerts && newer && !info.ApkReady)
+                ? $"Yeni sürüm var: {info.PublishedMobileVersion}. Telefondaki: {local}. \"Güncelle\"ye basın."
+                : $"Telefon sürümü güncel ({local}).";
+            if (newer && !info.ApkReady)
             {
-                await DisplayAlertAsync("Güncelleme", "Sunucuda APK dosyası henüz yok; bilgisayarda mobil paket yayımlanmalı.", "Tamam");
+                _update.Text += " Sunucuda APK dosyası henüz yok.";
+            }
+            else if (newer && !showAlerts && !_updatePrompted)
+            {
+                _updatePrompted = true;
+                if (await DisplayAlertAsync("Güncelleme", $"Yeni sürüm {info.PublishedMobileVersion} hazır. Şimdi güncellensin mi?", "Güncelle", "Sonra"))
+                {
+                    await UpdateNowAsync();
+                }
             }
         }
         catch (ApiException exception)
         {
             _update.Text = exception.Message;
         }
+    }
+
+    private bool _updatePrompted;
+
+    private async Task UpdateNowAsync()
+    {
+        string server = ApiClient.Instance.ServerUrl;
+        if (server.Length == 0)
+        {
+            await DisplayAlertAsync("Güncelleme", "Önce sunucu adresini ayarlayın.", "Tamam");
+            return;
+        }
+
+        await Ui.RunAsync(this, _busy, async () =>
+        {
+            Progress<string> progress = new(text => _update.Text = text);
+            try
+            {
+                await ApkUpdater.DownloadAndInstallAsync(server, progress);
+                _update.Text = "Kurulum ekranında \"Güncelle\"ye basın; uygulama yeni sürümle açılır, eşleşme korunur.";
+            }
+            catch (Exception exception) when (exception is HttpRequestException or IOException or TaskCanceledException)
+            {
+                throw new ApiException("Güncelleme indirilemedi: " + exception.Message);
+            }
+        });
     }
 
     private async Task OpenDownloadAsync()
