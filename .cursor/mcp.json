@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "arsangaz-erp": {
+      "type": "stdio",
+      "command": "${workspaceFolder}/Tools/ErpMcpServer/bin/Release/net10.0/ArsanGazERP.ErpMcpServer.exe",
+      "args": []
+    }
+  }
+}
