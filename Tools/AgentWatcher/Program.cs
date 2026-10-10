@@ -18,6 +18,38 @@ namespace ArsanGazERP.AgentWatcher;
 
 internal static class Program
 {
+    private static readonly TimeSpan CursorBridgeSupervisionInterval = TimeSpan.FromMinutes(1);
+
+    // bridge.js is the fallback that answers Telegram/mobile requests when the IDE chat does not; restart it if it dies.
+    private static async Task SuperviseCursorBridgeAsync()
+    {
+        string? lastMessage = null;
+        while (true)
+        {
+            string message;
+            try
+            {
+                AppSettings current = AppSettings.Load(Paths.Settings);
+                message = CodingBridgeLauncher.Normalize(current.CodingBridge) == CodingBridgeLauncher.Cursor
+                    ? CodingBridgeLauncher.StartCursorBridge()
+                    : string.Empty;
+            }
+            catch (Exception exception)
+            {
+                message = "Cursor köprüsü başlatılamadı: " + exception.Message;
+            }
+
+            bool alreadyRunning = message.StartsWith("Cursor köprüsü zaten çalışıyor", StringComparison.Ordinal);
+            if (message.Length > 0 && (!alreadyRunning || lastMessage is null) && message != lastMessage)
+            {
+                AppLog.Write("CURSOR_BRIDGE", message);
+            }
+
+            lastMessage = alreadyRunning ? "running" : message;
+            await Task.Delay(CursorBridgeSupervisionInterval);
+        }
+    }
+
     [STAThread]
     static void Main(string[] args)
     {
@@ -112,20 +144,7 @@ internal static class Program
             ApproveLocalWorkflowAsync(args, settings).GetAwaiter().GetResult();
             return;
         }
-        if (CodingBridgeLauncher.Normalize(settings.CodingBridge) == CodingBridgeLauncher.Cursor)
-        {
-            _ = Task.Run(() =>
-            {
-                try
-                {
-                    AppLog.Write("CURSOR_BRIDGE", CodingBridgeLauncher.StartCursorBridge());
-                }
-                catch (Exception exception)
-                {
-                    AppLog.Write("CURSOR_BRIDGE", "Cursor köprüsü başlatılamadı: " + exception.Message);
-                }
-            });
-        }
+        _ = Task.Run(SuperviseCursorBridgeAsync);
         bool backgroundMode = args.Contains("--background", StringComparer.OrdinalIgnoreCase);
         bool restartRequested;
         using (ControlCenterForm form = new(backgroundMode, settings))

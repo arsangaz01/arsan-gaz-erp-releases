@@ -14,6 +14,8 @@ const REQUEST_MAX_BYTES = 65_536;
 const DEFAULT_MODEL = "composer-2.5";
 // The open Cursor IDE chat (Tools/CursorIdeBridge/ide-watch.ps1) refreshes its heartbeat every 3 s.
 const IDE_SESSION_STALE_MS = 90_000;
+// A monitored shell does not guarantee the IDE chat gets a turn; unstarted claims fall back to this bridge.
+const IDE_CLAIM_START_GRACE_MS = 180_000;
 
 const projectRoot = findProjectRoot(__dirname);
 const dataRoot = resolveDataRoot(projectRoot);
@@ -133,8 +135,51 @@ async function writeProgress(id, stage) {
 
 async function isIdeSessionActive() {
   const status = await readJson(path.join(inboxDirectory, "ide-session-status.json")).catch(() => null);
+  return isHeartbeatFresh(status, Date.now());
+}
+
+function isHeartbeatFresh(status, nowMs) {
   const updated = Date.parse(status?.updatedUtc ?? "");
-  return Number.isFinite(updated) && Date.now() - updated < IDE_SESSION_STALE_MS;
+  return Number.isFinite(updated) && nowMs - updated < IDE_SESSION_STALE_MS;
+}
+
+// Returns why the bridge should take over an IDE-claimed request, or null to leave it to the IDE chat.
+function claimTakeoverReason({ claim, started, ideStatus, nowMs }) {
+  if (started) return null;
+  if (!isHeartbeatFresh(ideStatus, nowMs)) return "IDE izleyicisi çalışmıyor";
+  const claimPid = Number(claim?.pid);
+  if (Number.isInteger(claimPid) && claimPid > 0 && Number(ideStatus?.pid) !== claimPid) {
+    return "isteği sahiplenen IDE izleyicisi kapanmış";
+  }
+  const claimed = Date.parse(claim?.claimedUtc ?? "");
+  if (!Number.isFinite(claimed)) return "IDE sahiplenme kaydı okunamadı";
+  if (nowMs - claimed >= IDE_CLAIM_START_GRACE_MS) return "IDE sohbeti 3 dakika içinde işe başlamadı";
+  return null;
+}
+
+async function releaseStaleIdeClaim(id, names) {
+  if (!names.includes(`${id}.ide-claim.json`)) return true;
+  const claimPath = path.join(inboxDirectory, `${id}.ide-claim.json`);
+  const startedPath = path.join(inboxDirectory, `${id}.ide-started.json`);
+  const dispatchPath = path.join(inboxDirectory, `${id}.dispatch.json`);
+  const reason = claimTakeoverReason({
+    claim: await readJson(claimPath).catch(() => null),
+    started: fsSync.existsSync(startedPath),
+    ideStatus: await readJson(path.join(inboxDirectory, "ide-session-status.json")).catch(() => null),
+    nowMs: Date.now(),
+  });
+  if (!reason) return false;
+  // The dispatch marker stops ide-watch.ps1 and Start-Request.ps1 from taking the request back.
+  await writeJsonAtomically(dispatchPath, {
+    id, status: "dispatching", takeover: reason, createdUtc: new Date().toISOString(),
+  });
+  if (fsSync.existsSync(startedPath)) {
+    await fs.unlink(dispatchPath).catch(() => undefined);
+    return false;
+  }
+  await fs.unlink(claimPath).catch(() => undefined);
+  log(`IDE sohbetinin sahiplendiği istek köprüye alındı (${reason}): ${id}`);
+  return true;
 }
 
 async function appendJournal(id, text, report) {
@@ -146,12 +191,16 @@ async function appendJournal(id, text, report) {
 async function listPendingRequests() {
   const names = await fs.readdir(inboxDirectory).catch(() => []);
   const requests = [];
-  if (await isIdeSessionActive()) return requests;
+  const ideActive = await isIdeSessionActive();
   for (const name of names) {
     const match = /^([A-Za-z0-9_-]{1,80})\.request\.json$/.exec(name);
     if (!match) continue;
     const id = match[1];
     if (names.includes(`${id}.completion.json`)) continue;
+    const claimed = names.includes(`${id}.ide-claim.json`);
+    // ide-watch.ps1 claims new requests within seconds while it runs.
+    if (!claimed && ideActive && !names.includes(`${id}.dispatch.json`)) continue;
+    if (claimed && !(await releaseStaleIdeClaim(id, names))) continue;
     const stat = await fs.stat(path.join(inboxDirectory, name)).catch(() => null);
     if (stat) requests.push({ id, requestPath: path.join(inboxDirectory, name), mtimeMs: stat.mtimeMs, names });
   }
@@ -188,11 +237,18 @@ function validateRequest(id, request) {
     throw new Error("/ek etkin çalışmaya ekleme olarak desteklenmiyor; isteği ayrı bir mesaj olarak gönderin.");
   }
   if (!Array.isArray(attachments) || attachments.length > 10) throw new Error("Ek listesi geçersiz.");
-  const attachmentRoot = path.resolve(dataRoot, "telegram-attachments");
+  // TelegramBotService stores downloads next to telegram-offset.txt (%LOCALAPPDATA%\ArsanGazERP\AgentWatcher).
+  const attachmentRoots = [
+    path.resolve(dataRoot, "telegram-attachments"),
+    path.resolve(process.env.LOCALAPPDATA ?? dataRoot, "ArsanGazERP", "AgentWatcher", "telegram-attachments"),
+  ];
   const attachmentPaths = attachments.map((attachment) => {
     const localPath = path.resolve(pick(attachment, "localPath") ?? "");
-    const relative = path.relative(attachmentRoot, localPath);
-    if (relative.startsWith("..") || path.isAbsolute(relative) || !fsSync.existsSync(localPath)) {
+    const inside = attachmentRoots.some((root) => {
+      const relative = path.relative(root, localPath);
+      return relative && !relative.startsWith("..") && !path.isAbsolute(relative);
+    });
+    if (!inside || !fsSync.existsSync(localPath)) {
       throw new Error("Telegram eki izinli ek klasöründe değil veya bulunamadı.");
     }
     return localPath;
@@ -261,12 +317,21 @@ function describeError(error) {
 
 async function processRequest(entry) {
   const { id, requestPath } = entry;
+  if (fsSync.existsSync(path.join(inboxDirectory, `${id}.ide-claim.json`))
+    || fsSync.existsSync(path.join(inboxDirectory, `${id}.ide-started.json`))) {
+    log(`İstek IDE sohbetine bırakıldı: ${id}`);
+    return;
+  }
   let submitted = false;
   let agent;
   try {
     const raw = await fs.readFile(requestPath, "utf8");
     if (Buffer.byteLength(raw, "utf8") > REQUEST_MAX_BYTES) throw new Error("İstek boyut sınırını aşıyor.");
     const { taskId, text, context, attachmentPaths } = validateRequest(id, parseJson(raw));
+    // ide-watch.ps1 skips requests with a dispatch marker, so write it before the slow agent startup.
+    await writeJsonAtomically(path.join(inboxDirectory, `${id}.dispatch.json`), {
+      id, taskId, status: "dispatching", createdUtc: new Date().toISOString(),
+    });
 
     const auth = await Cursor.auth.status();
     if (auth.status !== "logged-in" && !process.env.CURSOR_API_KEY) {
@@ -275,9 +340,6 @@ async function processRequest(entry) {
 
     const config = await loadConfig();
     agent = await openAgent(config);
-    await writeJsonAtomically(path.join(inboxDirectory, `${id}.dispatch.json`), {
-      id, taskId, status: "dispatching", createdUtc: new Date().toISOString(),
-    });
     const run = await agent.send(buildPrompt(text, context, attachmentPaths));
     submitted = true;
     await writeAcknowledgement(id, "submitted");
@@ -404,8 +466,12 @@ async function main() {
   process.on("SIGTERM", shutdown);
 }
 
-main().catch((error) => {
-  const detail = error instanceof CursorAgentError ? describeError(error) : error?.stack ?? String(error);
-  log(`Köprü hatası: ${detail}`);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    const detail = error instanceof CursorAgentError ? describeError(error) : error?.stack ?? String(error);
+    log(`Köprü hatası: ${detail}`);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { claimTakeoverReason, IDE_CLAIM_START_GRACE_MS, IDE_SESSION_STALE_MS };

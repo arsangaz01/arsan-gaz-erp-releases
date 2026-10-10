@@ -1,6 +1,7 @@
 # Runs inside the open Cursor IDE chat as a monitored background shell.
 # While it runs, Telegram requests in CopilotInbox are claimed for the IDE chat
 # (bridge.js stays idle) and new ERP research reports wake the chat.
+# The chat must run Start-Request.ps1 within bridge.js's grace period, otherwise bridge.js takes the request over.
 param([int]$IntervalSeconds = 3)
 
 $ErrorActionPreference = 'Continue'
@@ -56,6 +57,7 @@ while ($true) {
         if ($id -notmatch '^[A-Za-z0-9_-]{1,80}$') { continue }
         if (Test-Path (Join-Path $inbox "$id.completion.json")) { continue }
         if (Test-Path (Join-Path $inbox "$id.ack.json")) { continue }
+        if (Test-Path (Join-Path $inbox "$id.dispatch.json")) { continue }
         $claimPath = Join-Path $inbox "$id.ide-claim.json"
         $claimed = Test-Path $claimPath
         if ($claimed -and -not $firstPass) { continue }

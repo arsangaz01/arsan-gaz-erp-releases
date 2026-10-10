@@ -17,22 +17,36 @@ Metni UTF-8 bir dosyaya yaz (ör. `%TEMP%\cursor-telegram.txt`), sonra:
 AgentWatcher çalışıyorsa mesaj birkaç saniye içinde iletilir.
 
 ## Ne zaman gönderilir
-- Bilgisayardan verilen her görev bitince: kısa Türkçe rapor (ne yapıldı, derleme/test sonucu, kalan risk, kullanıcının yapması gereken).
-- Onay gerektiren her durumda (ERP'yi kapatıp güncelleme, deploy, commit/push, geri alınamaz işlem): soruyu hem sohbette
-  sor hem Telegram'a "Onaylıyor musun? Evet/Hayır yazın" diye gönder. Telegram'dan gelen "evet/hayır" cevabı yeni bir istek
-  olarak bu sohbete düşer; onu onay sayabilirsin.
+- Sohbetteki her son cevap `.cursor/hooks/telegram-final-response.js` (afterAgentResponse) ile otomatik olarak Telegram'a
+  gider; son cevap için `Send-Telegram.ps1` çalıştırma (çift mesaj olur). Son cevabı Telegram'da da okunacak biçimde,
+  kendi başına anlaşılır yaz.
+- `Send-Telegram.ps1` yalnızca iş sürerken ara bildirim veya onay sorusu göndermek için kullanılır.
+- Onay gerektiren her durumda (ERP'yi kapatıp güncelleme, deploy, commit/push, geri alınamaz işlem): soruyu
+  "Onaylıyor musun? Evet/Hayır yazın" diye sor; son cevap olarak Telegram'a da gider. Telegram'dan gelen "evet/hayır"
+  cevabı yeni bir istek olarak bu sohbete düşer; onu onay sayabilirsin. AskQuestion kartı Telegram'a gitmez; onay
+  sorularını düz metin olarak yaz.
 - Cursor'un kendi "Auto-review" onay kartları yalnızca bilgisayardan onaylanabilir; böyle bir onay beklerken bunu Telegram'da açıkça belirt.
 
 ## Telegram'dan gelen istekler (IDE sohbeti açıkken)
 `Tools/CursorIdeBridge/ide-watch.ps1` bu sohbette arka planda izlenir ve şu satırları basar:
-- `AGENT_LOOP_WAKE_ide_request {"id":...,"path":...}` → istek dosyasını (`Text`, `Context`, `Attachments`) oku, işi yap,
-  raporu dosyaya yazıp `Complete-Request.ps1 -Id <id> -ReportPath <dosya>` çalıştır (rapor Telegram'a gider).
+- `AGENT_LOOP_WAKE_ide_request {"id":...,"path":...}` → önce `Start-Request.ps1 -Id <id>` çalıştır. `STARTED` yazarsa
+ istek dosyasını (`Text`, `Context`, `Attachments`) oku, işi yap, raporu dosyaya yazıp
+ `Complete-Request.ps1 -Id <id> -ReportPath <dosya>` çalıştır (rapor Telegram'a gider). `TAKEN` yazarsa isteği yedek köprü
+ (bridge.js) devralmıştır; dokunma. Sohbet 3 dakika içinde `Start-Request` çalıştırmazsa veya izleyici kapanırsa köprü işi
+ otomatik devralır; bu sayede istek hiçbir zaman sahipsiz kalmaz. `mobile-` ile başlayan istekler telefondaki uygulamadan gelir.
 - `AGENT_LOOP_WAKE_ide_report {"name":...,"path":...}` → ERP ajan sohbetindeki araştırma raporunu incele.
   Önerileri tek tek değerlendir: ERP'ye uygun, kanıtlı ve düşük riskli olanları kodla, derle ve testleri çalıştır;
   zayıf, spekülatif veya kapsam dışı olanları gerekçesiyle ele. Değerlendirmeyi Telegram'a gönder. Yayınlamak için
   ERP'nin kapatılması gerekiyorsa önce onay iste.
 - Sohbet kapalıyken istekleri `Tools/CursorTelegramBridge/bridge.js` (ayrı bir Cursor ajanı) işler. Ne yaptığını görmek için
   `cursor-journal.md` dosyasının sonunu oku.
+
+## Önce analiz, sonra rapor
+Bu proje daha önce başka bir platformda (VS Code + Copilot) geliştirildi; eski köprüler, yarım kalmış özellikler ve
+belgelerle uyuşmayan kodlar olabilir. Her görevde:
+- Değiştirmeden önce ilgili kodu, çağıranları, veri dosyalarını ve logları oku; varsayım yapma, mevcut davranışı doğrula.
+- Değişiklikten sonra derle, testleri çalıştır ve mümkünse gerçek akışı (log, çıktı dosyası, Telegram teslim kaydı) kontrol et.
+- Sonuçtan emin olmadan "tamamlandı" deme. Raporda neyin doğrulandığını ve neyin doğrulanamadığını açıkça ayır.
 
 ## Sınırlar
 Müşterilere e-posta/WhatsApp gönderme, ödeme veya silme gibi geri alınamaz işlemleri onaysız yapma. Gizli anahtarları
