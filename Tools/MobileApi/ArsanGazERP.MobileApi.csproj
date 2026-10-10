@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.90.1" />
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.90.1" />
     <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
   </ItemGroup>
@@ -25,6 +27,12 @@
     <Compile Include="..\..\Services\AgentChatPromptBuilder.cs" Link="Shared\AgentChatPromptBuilder.cs" />
     <Compile Include="..\..\Services\AgentChatRoutingPolicy.cs" Link="Shared\AgentChatRoutingPolicy.cs" />
     <Compile Include="..\..\Services\AgentWatcherPaths.cs" Link="Shared\AgentWatcherPaths.cs" />
+    <Compile Include="..\..\Services\CampaignScheduler.cs" Link="Shared\CampaignScheduler.cs" />
+    <Compile Include="..\..\Services\CampaignService.cs" Link="Shared\CampaignService.cs" />
+    <Compile Include="..\..\Services\CampaignStore.cs" Link="Shared\CampaignStore.cs" />
+    <Compile Include="..\..\Services\CampaignTransport.cs" Link="Shared\CampaignTransport.cs" />
+    <Compile Include="..\..\Services\GmailSenderService.cs" Link="Shared\GmailSenderService.cs" />
+    <Compile Include="..\..\Services\WhatsAppBusinessService.cs" Link="Shared\WhatsAppBusinessService.cs" />
     <Compile Include="..\..\Services\CloudAgentClient.cs" Link="Shared\CloudAgentClient.cs" />
     <Compile Include="..\..\Services\CloudAgentSettingsStore.cs" Link="Shared\CloudAgentSettingsStore.cs" />
     <Compile Include="..\..\Services\CollectionReminderService.cs" Link="Shared\CollectionReminderService.cs" />

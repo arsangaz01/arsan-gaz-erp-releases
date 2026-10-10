@@ -1,5 +1,9 @@
-# Queues a message for the authorized Telegram chat; the running AgentWatcher sends it.
-param([Parameter(Mandatory = $true)][string]$Path)
+# Queues a message (and optional files) for the authorized Telegram chat; the running AgentWatcher sends it.
+# Images up to 10 MB arrive as photos, other files up to 50 MB as documents.
+param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [string[]]$Files = @()
+)
 
 $ErrorActionPreference = 'Stop'
 $data = Join-Path $env:LOCALAPPDATA 'ArsanGazERP\AgentWatcherData'
@@ -17,6 +21,19 @@ $outbox = Join-Path $data 'TelegramOutbox'
 New-Item -ItemType Directory -Force -Path $outbox | Out-Null
 $id = 'cursor-ide-' + [guid]::NewGuid().ToString('N')
 $now = (Get-Date).ToUniversalTime().ToString('o')
+
+$filePaths = @()
+if ($Files.Count -gt 0) {
+    $staging = Join-Path (Join-Path $data 'TelegramFiles') $id
+    New-Item -ItemType Directory -Force -Path $staging | Out-Null
+    foreach ($file in $Files) {
+        $source = Get-Item -LiteralPath $file
+        if ($source.Length -eq 0 -or $source.Length -gt 50MB) { throw "File is empty or larger than 50 MB: $file" }
+        $target = Join-Path $staging $source.Name
+        Copy-Item -LiteralPath $source.FullName -Destination $target
+        $filePaths += $target
+    }
+}
 $item = [ordered]@{
     Id = $id
     Kind = 'telegram-copilot-direct-response'
@@ -28,6 +45,8 @@ $item = [ordered]@{
     Attempts = 0
     DeliveredChunkCount = 0
     Receipts = @()
+    FilePaths = @($filePaths)
+    DeliveredFileCount = 0
     LastError = $null
 } | ConvertTo-Json
 $destination = Join-Path $outbox "$id.json"

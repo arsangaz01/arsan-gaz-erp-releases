@@ -29,10 +29,11 @@ internal static class MobileConnectionHub
     internal static MobileUpdateInfo GetUpdateInfo()
     {
         long? size = File.Exists(MobileApiPaths.ApkFile) ? new FileInfo(MobileApiPaths.ApkFile).Length : null;
+        MobileApkVersion published = MobileApkPublishInfo.ResolvePublishedVersion();
         return new MobileUpdateInfo(
             MobileReleaseInfo.ApiVersion,
-            MobileReleaseInfo.PublishedMobileVersion,
-            MobileReleaseInfo.PublishedMobileBuild,
+            published.VersionName,
+            published.VersionCode,
             size is > 0,
             size,
             "/indir");

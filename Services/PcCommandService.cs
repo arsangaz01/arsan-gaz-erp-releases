@@ -49,6 +49,22 @@ internal static class PcCommandService
         ("OneDrive", "https://onedrive.live.com", null, ["onedrive"])
     ];
 
+    private const int MaximumUrlLength = 2000;
+    private static readonly string[] DirectionTriggers =
+    [
+        "yol tarifi", "yol tarif", "nasil giderim", "nasil gidilir", "nasil gidebilirim", "nasil gideriz",
+        "navigasyon", "goturen", "goturecek", "yol goster", "rota ciz", "rota olustur", "rotasi", "rotayi"
+    ];
+    private static readonly HashSet<string> DirectionFiller = new(StringComparer.Ordinal)
+    {
+        "bana", "beni", "bize", "bir", "yol", "yolu", "yolunu", "tarifi", "tarif", "tarifini", "al", "ver", "goster",
+        "gosterir", "gosterebilir", "misin", "musun", "mi", "mu", "nasil", "giderim", "gidilir", "gidebilirim", "gideriz",
+        "goturen", "goturecek", "navigasyon", "navigasyonu", "rota", "rotasi", "rotayi", "ciz", "olustur", "lutfen",
+        "jarvis", "icin", "hemen", "simdi", "ac", "acar", "haritada", "harita", "haritalar", "haritalarda", "google",
+        "google'da", "ile", "arabayla", "araba", "arabala", "yuruyerek", "yurume", "toplu", "tasima", "tasimayla",
+        "otobusle", "metroyla", "en", "yakin", "kisa", "ye", "ya", "e", "a", "na", "ne", "kadar", "olan"
+    };
+
     private static readonly string[] OpenVerbs = ["ac", "acar misin", "acabilir misin", "baslat", "calistir", "git"];
     private static readonly string[] SearchVerbs = ["ara", "arat", "bul"];
     private static readonly string[] FolderVerbs = ["olustur", "yarat", "yap"];
@@ -64,6 +80,11 @@ internal static class PcCommandService
 
         string folded = Fold(text);
         string[] words = folded.Split([' ', '\t', ',', '.', '!', '?'], StringSplitOptions.RemoveEmptyEntries);
+
+        if (DirectionTriggers.Any(trigger => ContainsWord(folded, trigger)))
+        {
+            return TryParseDirections(text);
+        }
 
         if (ContainsWord(folded, "klasor") && FolderVerbs.Any(verb => EndsWithVerb(folded, verb)))
         {
@@ -133,6 +154,92 @@ internal static class PcCommandService
                 throw new InvalidOperationException("Desteklenmeyen bilgisayar komutu.");
         }
     }
+
+    public static PcCommand BuildDirections(string destination, string? origin = null, string? mode = null)
+    {
+        string target = destination.Trim();
+        string travelMode = NormalizeTravelMode(mode);
+        string url = "https://www.google.com/maps/dir/?api=1&destination=" + Uri.EscapeDataString(target) +
+                     "&travelmode=" + travelMode;
+        if (!string.IsNullOrWhiteSpace(origin))
+        {
+            url += "&origin=" + Uri.EscapeDataString(origin.Trim());
+        }
+
+        string from = string.IsNullOrWhiteSpace(origin) ? "bulunduğunuz konumdan" : origin.Trim() + " çıkışlı";
+        return new PcCommand(PcCommandKind.OpenSite, $"Google Haritalar yol tarifi: {target} ({from}, {DescribeTravelMode(travelMode)})", url);
+    }
+
+    public static PcCommand BuildMapSearch(string query) =>
+        new(PcCommandKind.OpenSite, $"Google Haritalar araması: {query.Trim()}",
+            "https://www.google.com/maps/search/?api=1&query=" + Uri.EscapeDataString(query.Trim()));
+
+    public static PcCommand? TryBuildUrl(string url)
+    {
+        string trimmed = url.Trim();
+        return trimmed.Length <= MaximumUrlLength &&
+               Uri.TryCreate(trimmed, UriKind.Absolute, out Uri? uri) &&
+               (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp) &&
+               uri.UserInfo.Length == 0
+            ? new PcCommand(PcCommandKind.OpenSite, uri.Host, uri.AbsoluteUri)
+            : null;
+    }
+
+    private static PcCommand? TryParseDirections(string text)
+    {
+        string folded = Fold(text);
+        string? mode = ContainsWord(folded, "yuruyerek") || ContainsWord(folded, "yurume") ? "walking"
+            : ContainsWord(folded, "toplu tasima") || ContainsWord(folded, "otobusle") || ContainsWord(folded, "metroyla") ? "transit"
+            : null;
+
+        List<string> place = [];
+        foreach (string raw in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string token = raw.Trim(',', '.', '!', '?', '"', '“', '”');
+            int apostrophe = token.IndexOfAny(['\'', '’']);
+            string suffix = apostrophe > 0 ? Fold(token[(apostrophe + 1)..]) : string.Empty;
+            if (suffix is "dan" or "den" or "tan" or "ten")
+            {
+                return null;
+            }
+
+            if (apostrophe > 0)
+            {
+                token = token[..apostrophe];
+            }
+
+            if (token.Length > 0 && !DirectionFiller.Contains(Fold(token)))
+            {
+                place.Add(token);
+            }
+        }
+
+        if (place.Count == 0 || place.Count > 6)
+        {
+            return null;
+        }
+
+        string destination = string.Join(' ', place);
+        return ContainsWord(folded, "en yakin")
+            ? BuildMapSearch("en yakın " + destination)
+            : BuildDirections(destination, null, mode);
+    }
+
+    private static string NormalizeTravelMode(string? mode) => Fold(mode ?? string.Empty).Trim() switch
+    {
+        "walking" or "yuruyerek" or "yaya" => "walking",
+        "transit" or "toplu tasima" or "otobus" or "metro" => "transit",
+        "bicycling" or "bisiklet" => "bicycling",
+        _ => "driving"
+    };
+
+    private static string DescribeTravelMode(string mode) => mode switch
+    {
+        "walking" => "yürüyerek",
+        "transit" => "toplu taşımayla",
+        "bicycling" => "bisikletle",
+        _ => "araçla"
+    };
 
     public static string DescribeAllowList() =>
         "İzinli uygulamalar: " + string.Join(", ", Apps.Select(app => app.Label)) + Environment.NewLine +

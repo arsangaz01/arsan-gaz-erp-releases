@@ -1,0 +1,12 @@
+**
+!package.json
+!README.md
+!extension.js
+!bridge-io.js
+!completion-contract.js
+!prompt-builder.js
+!response-capture.js
+!request-scheduler.js
+!session-readiness.js
+!session-timestamp.js
+!terminal-observer.js

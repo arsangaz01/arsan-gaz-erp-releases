@@ -53,38 +53,22 @@ public sealed class AgentChatWindow : Window
     };
     private readonly Button _voiceSettings = new()
     {
-        Content = "Ses ayarları (ElevenLabs)…",
+        Content = "Ses ayarları…",
         Padding = new Thickness(10, 3, 10, 3),
         Margin = new Thickness(16, 0, 0, 0)
     };
     private ElevenLabsSpeechService? _cloudVoice;
+    private PiperSpeechService? _piperVoice;
     private DateTime _wakeArmedUntil = DateTime.MinValue;
     private readonly WrapPanel _agentButtons = new() { Margin = new Thickness(0, 6, 0, 0) };
-    private readonly Ellipse _orbCore = new()
+    private readonly HolographicFace _face = new()
     {
-        Width = 44,
-        Height = 44,
-        Fill = new RadialGradientBrush(
-            Color.FromRgb(72, 222, 255),
-            Color.FromRgb(7, 37, 58)),
-        Effect = new DropShadowEffect
-        {
-            Color = Color.FromRgb(34, 211, 238),
-            BlurRadius = 16,
-            ShadowDepth = 0,
-            Opacity = 0.85
-        }
-    };
-    private readonly TextBlock _orbMode = new()
-    {
-        Text = "IDLE",
-        Foreground = Brushes.White,
-        FontSize = 8,
-        FontWeight = FontWeights.SemiBold,
-        HorizontalAlignment = HorizontalAlignment.Center,
+        Width = 130,
+        Height = 150,
+        Margin = new Thickness(12, 0, 0, 0),
+        HorizontalAlignment = HorizontalAlignment.Right,
         VerticalAlignment = VerticalAlignment.Center
     };
-    private readonly ScaleTransform _orbScale = new(1, 1);
     private readonly Queue<string> _pendingMessages = new();
     private readonly Queue<string> _pendingSpeech = new();
     private readonly System.Windows.Threading.DispatcherTimer _researchReportTimer = new()
@@ -182,8 +166,10 @@ public sealed class AgentChatWindow : Window
             _pendingSpeech.Clear();
             _speechOutput?.Stop();
             _cloudVoice?.Stop();
+            _piperVoice?.Stop();
             if (_speechOutput is not null) await _speechOutput.DisposeAsync();
             if (_cloudVoice is not null) await _cloudVoice.DisposeAsync();
+            if (_piperVoice is not null) await _piperVoice.DisposeAsync();
             await _service.DisposeAsync();
         };
         Closing += (_, eventArgs) =>
@@ -334,121 +320,11 @@ public sealed class AgentChatWindow : Window
         return root;
     }
 
-    private UIElement BuildJarvisOrb()
-    {
-        Grid wrapper = new()
-        {
-            Width = 78,
-            Height = 78,
-            Margin = new Thickness(12, 0, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid rings = new()
-        {
-            Width = 72,
-            Height = 72,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        RotateTransform outerRotation = new();
-        Ellipse outerRing = new()
-        {
-            Width = 70,
-            Height = 70,
-            Stroke = new SolidColorBrush(Color.FromRgb(83, 218, 247)),
-            StrokeThickness = 1.4,
-            StrokeDashArray = new DoubleCollection { 1, 3 },
-            RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = outerRotation
-        };
-        outerRotation.BeginAnimation(
-            RotateTransform.AngleProperty,
-            new DoubleAnimation(0, 360, TimeSpan.FromSeconds(28))
-            {
-                RepeatBehavior = RepeatBehavior.Forever
-            });
-
-        RotateTransform innerRotation = new();
-        Ellipse innerRing = new()
-        {
-            Width = 56,
-            Height = 56,
-            Stroke = new SolidColorBrush(Color.FromRgb(20, 184, 166)),
-            StrokeThickness = 1,
-            StrokeDashArray = new DoubleCollection { 3, 4 },
-            RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = innerRotation
-        };
-        innerRotation.BeginAnimation(
-            RotateTransform.AngleProperty,
-            new DoubleAnimation(360, 0, TimeSpan.FromSeconds(19))
-            {
-                RepeatBehavior = RepeatBehavior.Forever
-            });
-
-        _orbCore.HorizontalAlignment = HorizontalAlignment.Center;
-        _orbCore.VerticalAlignment = VerticalAlignment.Center;
-        _orbCore.RenderTransformOrigin = new Point(0.5, 0.5);
-        _orbCore.RenderTransform = _orbScale;
-        rings.Children.Add(outerRing);
-        rings.Children.Add(innerRing);
-        rings.Children.Add(_orbCore);
-        rings.Children.Add(_orbMode);
-        wrapper.Children.Add(rings);
-        return wrapper;
-    }
+    private UIElement BuildJarvisOrb() => _face;
 
     private void SetOrbMode(string mode)
     {
-        Color glowColor = mode switch
-        {
-            "LISTENING" => Color.FromRgb(53, 212, 255),
-            "THINKING" => Color.FromRgb(92, 184, 255),
-            "SPEAKING" => Color.FromRgb(139, 242, 255),
-            _ => Color.FromRgb(20, 184, 166)
-        };
-        double pulse = mode switch
-        {
-            "LISTENING" => 1.045,
-            "THINKING" => 1.085,
-            "SPEAKING" => 1.07,
-            _ => 1.018
-        };
-        double periodSeconds = mode switch
-        {
-            "THINKING" => 0.55,
-            "SPEAKING" => 0.42,
-            "LISTENING" => 1.1,
-            _ => 3.8
-        };
-
-        _orbMode.Text = mode;
-        _orbMode.Foreground = Brushes.White;
-        _orbCore.Fill = new RadialGradientBrush(
-            Color.FromRgb(100, 230, 255),
-            Color.FromRgb(5, 29, 47));
-        if (_orbCore.Effect is DropShadowEffect glow)
-        {
-            glow.Color = glowColor;
-        }
-
-        Duration pulseDuration = TimeSpan.FromSeconds(periodSeconds);
-        _orbScale.BeginAnimation(
-            ScaleTransform.ScaleXProperty,
-            new DoubleAnimation(1, pulse, pulseDuration)
-            {
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever
-            });
-        _orbScale.BeginAnimation(
-            ScaleTransform.ScaleYProperty,
-            new DoubleAnimation(1, pulse, pulseDuration)
-            {
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever
-            });
+        if (_face.Mode != mode) _face.SetMode(mode);
     }
 
     private void InsertMention(ErpAgentProfile profile)
@@ -742,10 +618,21 @@ public sealed class AgentChatWindow : Window
         return _speechOutput is not null;
     }
 
-    private bool CanSpeak => _speechOutput is not null || _cloudVoice is not null;
+    private bool CanSpeak => _speechOutput is not null || _cloudVoice is not null || _piperVoice is not null;
 
     private void ConfigureCloudVoice()
     {
+        if (PiperSpeechService.IsActive)
+        {
+            _piperVoice ??= new PiperSpeechService();
+        }
+        else if (_piperVoice is not null)
+        {
+            _piperVoice.Stop();
+            _ = _piperVoice.DisposeAsync();
+            _piperVoice = null;
+        }
+
         if (ElevenLabsSettingsStore.IsActive)
         {
             _cloudVoice ??= new ElevenLabsSpeechService();
@@ -758,9 +645,11 @@ public sealed class AgentChatWindow : Window
         }
 
         _speakReplies.IsEnabled = CanSpeak;
-        _speakReplies.ToolTip = _cloudVoice is not null
-            ? "ElevenLabs sesi etkin (hata/kota durumunda: " + _speechStatus + ")"
-            : _speechStatus;
+        _speakReplies.ToolTip = _piperVoice is not null
+            ? "Ücretsiz yerel Piper sesi etkin (hata durumunda: " + _speechStatus + ")"
+            : _cloudVoice is not null
+                ? "ElevenLabs sesi etkin (hata/kota durumunda: " + _speechStatus + ")"
+                : _speechStatus;
     }
 
     private static string PrepareSpeech(string text)
@@ -782,6 +671,19 @@ public sealed class AgentChatWindow : Window
     private async Task SpeakOneAsync(string text)
     {
         string spoken = PrepareSpeech(text);
+        if (_piperVoice is not null)
+        {
+            try
+            {
+                await _piperVoice.SpeakAsync(spoken);
+                return;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _status.Text = "Piper sesi kullanılamadı; yedek sese geçildi: " + exception.GetBaseException().Message;
+            }
+        }
+
         if (_cloudVoice is not null)
         {
             try
@@ -862,8 +764,8 @@ public sealed class AgentChatWindow : Window
             Text = isUser ? author : $"{author} · {role}",
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(isUser
-                ? Color.FromRgb(24, 74, 122)
-                : Color.FromRgb(29, 83, 67)),
+                ? Color.FromRgb(0, 194, 242)
+                : Color.FromRgb(43, 227, 160)),
             Margin = new Thickness(0, 0, 0, 4)
         });
         bubbleContent.Children.Add(new TextBlock
@@ -877,11 +779,11 @@ public sealed class AgentChatWindow : Window
         {
             Child = bubbleContent,
             Background = new SolidColorBrush(isUser
-                ? Color.FromRgb(231, 241, 251)
-                : Color.FromRgb(244, 248, 246)),
+                ? Color.FromRgb(12, 38, 58)
+                : Color.FromRgb(10, 32, 36)),
             BorderBrush = new SolidColorBrush(isUser
-                ? Color.FromRgb(202, 222, 240)
-                : Color.FromRgb(218, 232, 224)),
+                ? Color.FromRgb(0, 120, 160)
+                : Color.FromRgb(22, 110, 90)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(12, 9, 12, 9),

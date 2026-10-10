@@ -3,6 +3,6 @@
 internal static class MobileReleaseInfo
 {
     internal const string ApiVersion = "1.6.0";
-    internal const string PublishedMobileVersion = "1.6";
-    internal const int PublishedMobileBuild = 7;
+    internal const string PublishedMobileVersion = "1.6.2";
+    internal const int PublishedMobileBuild = 10;
 }

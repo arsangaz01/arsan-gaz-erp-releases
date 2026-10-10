@@ -1,7 +1,10 @@
 #define MyAppName "Arsan Gaz ERP"
-#define MyAppVersion "8.1.0"
+#define MyAppVersion "9.0.0"
 #define MyAppPublisher "Arsan Gaz"
 #define MyAppExeName "ArsanGazERP.exe"
+#ifndef MyAppSourceDir
+  #define MyAppSourceDir "..\artifacts\app"
+#endif
 [Setup]
 AppId={{87C4E7B7-4F39-4ED6-8B4F-ARSANGAZ7900}
 AppName={#MyAppName}
@@ -18,11 +21,13 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\{#MyAppExeName}
 [Files]
-Source: "..\artifacts\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MyAppSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+[Dirs]
+Name: "{commondocs}\ArsanGazERP\CRM"; Permissions: users-modify
 [Icons]
-Name: "{autoprograms}\Arsan Gaz ERP"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\Arsan Gaz ERP"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-[Tasks]
-Name: desktopicon; Description: "Masaüstü kısayolu oluştur"; Flags: unchecked
+Name: "{autoprograms}\Arsan Gaz ERP"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
+Name: "{autoprograms}\Arsan Gaz AgentWatcher"; Filename: "{app}\AgentWatcher\ArsanGazERP.AgentWatcher.exe"; Parameters: "--background"; WorkingDir: "{app}\AgentWatcher"
+Name: "{autodesktop}\Arsan Gaz ERP"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
+Name: "{autodesktop}\Arsan Gaz AgentWatcher"; Filename: "{app}\AgentWatcher\ArsanGazERP.AgentWatcher.exe"; Parameters: "--background"; WorkingDir: "{app}\AgentWatcher"
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Arsan Gaz ERP'yi başlat"; Flags: nowait postinstall skipifsilent

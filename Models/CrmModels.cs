@@ -17,6 +17,12 @@ public sealed class CrmCompany
     public int Score { get; set; }
     public string Status { get; set; } = "Yeni";
     public string? AssignedTo { get; set; }
+    public decimal ExpectedValue { get; set; }
+    public DateTime? FollowUpAtUtc { get; set; }
+    public bool WhatsAppMarketingOptIn { get; set; }
+    public DateTime? WhatsAppOptInAtUtc { get; set; }
+    public string? WhatsAppOptInEvidence { get; set; }
+    public DateTime? WhatsAppOptOutAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? LastContactAtUtc { get; set; }
     public ICollection<CrmActivity> Activities { get; set; } = new List<CrmActivity>();

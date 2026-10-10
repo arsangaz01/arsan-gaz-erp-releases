@@ -20,12 +20,26 @@ public sealed class ChatPage : ContentPage
     private readonly Editor _input;
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
     private readonly Switch _speak = new() { IsToggled = Preferences.Default.Get("speak_replies", true), OnColor = Ui.Accent };
-    private readonly Picker _target = new()
+    private readonly Switch _muteJarvis = new() { IsToggled = Preferences.Default.Get("mute_jarvis_tts", false), OnColor = Ui.Accent };
+    private readonly Picker _target = CreateTargetPicker();
+
+    private static Picker CreateTargetPicker()
     {
-        ItemsSource = new[] { "ERP ajanları", "Cursor (bilgisayar)" },
-        SelectedIndex = Preferences.Default.Get("chat_target", 0),
-        WidthRequest = 170
-    };
+        string[] items = ["ERP ajanları", "Cursor (bilgisayar)"];
+        int index = Preferences.Default.Get("chat_target", 0);
+        if (index < 0 || index >= items.Length)
+        {
+            index = 0;
+            Preferences.Default.Set("chat_target", 0);
+        }
+
+        return new Picker
+        {
+            ItemsSource = items,
+            SelectedIndex = index,
+            WidthRequest = 170
+        };
+    }
     private readonly Button _send;
     private readonly Button _mic;
     private readonly Button _attach;
@@ -75,6 +89,7 @@ public sealed class ChatPage : ContentPage
         _send = new Button { Text = "Gönder", WidthRequest = 90 };
         _send.Clicked += async (_, _) => await SendAsync(_input.Text);
         _speak.Toggled += (_, e) => Preferences.Default.Set("speak_replies", e.Value);
+        _muteJarvis.Toggled += (_, e) => Preferences.Default.Set("mute_jarvis_tts", e.Value);
         _target.SelectedIndexChanged += (_, _) => Preferences.Default.Set("chat_target", _target.SelectedIndex);
 
         Button clear = new() { Text = "Yeni sohbet", FontSize = 12, Padding = new Thickness(8, 2) };
@@ -106,18 +121,27 @@ public sealed class ChatPage : ContentPage
             Padding = new Thickness(10, 4),
             Children =
             {
-                new Label { Text = "Yanıtları sesli oku", VerticalOptions = LayoutOptions.Center },
+                new Label { Text = "Sesli oku", VerticalOptions = LayoutOptions.Center },
                 _speak,
-                _busy,
-                clear
+                new Label { Text = "Jarvis sustur", VerticalOptions = LayoutOptions.Center },
+                _muteJarvis,
+                Ui.Secondary("Durdur", (_, _) => _speech?.Cancel()),
+                _busy
             }
         };
-        HorizontalStackLayout targetRow = new()
+        Grid targetRow = new()
         {
-            Spacing = 8,
-            Padding = new Thickness(10, 0),
-            Children = { new Label { Text = "Kime:", VerticalOptions = LayoutOptions.Center }, _target }
+            ColumnDefinitions =
+            [
+                new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(GridLength.Auto)
+            ],
+            ColumnSpacing = 8,
+            Padding = new Thickness(10, 0)
         };
+        targetRow.Add(new Label { Text = "Kime:", VerticalOptions = LayoutOptions.Center }, 0);
+        targetRow.Add(_target, 1);
+        targetRow.Add(clear, 2);
 
         Grid root = new()
         {
@@ -143,7 +167,8 @@ public sealed class ChatPage : ContentPage
         Text = "Merhaba! ERP ajanlarıyla konuşabilirsiniz. Örnekler: \"Bugün kimi aramalıyım?\", \"Adana'daki hastaneleri listele\", " +
                "\"@Defne /not Firma adı | Not\", \"@Defne /takip Firma adı | 2026-10-15\". 🎤 düğmesine basıp sesli komut verebilirsiniz.\n" +
                "\"Kime: Cursor (bilgisayar)\" seçerseniz istek bilgisayardaki Cursor ajanına gider; yanıt hem burada hem Telegram'da görünür.\n" +
-               "📎 ile fotoğraf, PDF veya video ekleyebilirsiniz (en fazla 5 dosya, dosya başına 15 MB; ekler Cursor hedefinde)."
+               "📎 ile fotoğraf, PDF veya video ekleyebilirsiniz (en fazla 5 dosya, dosya başına 15 MB; ekler Cursor hedefinde).\n" +
+               "Uzun Jarvis yanıtları için \"Jarvis sustur\" açık kalabilir; \"Durdur\" okumayı keser."
     });
 
     private void RefreshAttachmentLabel()
@@ -238,7 +263,7 @@ public sealed class ChatPage : ContentPage
                 {
                     _messages.Add(new ChatMessage { Sender = "Cursor", Text = report });
                     ScrollToEnd();
-                    if (_speak.IsToggled)
+                    if (ShouldSpeak("Cursor"))
                     {
                         await SpeakAsync(report);
                     }
@@ -338,13 +363,17 @@ public sealed class ChatPage : ContentPage
             }
 
             ScrollToEnd();
-            if (_speak.IsToggled && replies.FirstOrDefault(r => r.Ok) is { } first)
+            if (replies.FirstOrDefault(r => r.Ok && ShouldSpeak(r.Agent)) is { } toSpeak)
             {
-                await SpeakAsync(first.Text);
+                await SpeakAsync(toSpeak.Text);
             }
         });
         _send.IsEnabled = _mic.IsEnabled = _attach.IsEnabled = true;
     }
+
+    private bool ShouldSpeak(string agentName) =>
+        _speak.IsToggled
+        && !(_muteJarvis.IsToggled && agentName.Equals("Jarvis", StringComparison.OrdinalIgnoreCase));
 
     private async Task SpeakAsync(string text)
     {

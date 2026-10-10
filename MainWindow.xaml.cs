@@ -33,6 +33,7 @@ public partial class MainWindow : Window
 	public MainWindow()
 	{
 		InitializeComponent();
+		DashboardFaceHost.Child = new Views.HolographicFace();
 		InitializeTrayIcon();
         WindowWorkAreaService.Fit(this);
         UpdateNvidiaNimButton();
@@ -334,6 +335,11 @@ public partial class MainWindow : Window
 		OpenAgentChat();
 	}
 
+	private void DashboardFace_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+	{
+		OpenAgentChat();
+	}
+
 	private void OpenAgentChat()
 	{
 		if (_agentChatWindow is { IsLoaded: true })
@@ -391,9 +397,9 @@ public partial class MainWindow : Window
         bool m365 = !string.IsNullOrWhiteSpace(s.Account);
         bool permissions = s.PermissionsGranted;
         bool excel = !string.IsNullOrWhiteSpace(s.ExcelPath) && File.Exists(s.ExcelPath);
-        M365StatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(m365 ? "#2E7D32" : "#C62828"));
-        PermissionStatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(permissions ? "#2E7D32" : m365 ? "#F9A825" : "#C62828"));
-        ExcelStatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(excel ? "#2E7D32" : "#C62828"));
+        M365StatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(m365 ? "#2BE3A0" : "#FF5468"));
+        PermissionStatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(permissions ? "#2BE3A0" : m365 ? "#FFC24B" : "#FF5468"));
+        ExcelStatusDot.Fill = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(excel ? "#2BE3A0" : "#FF5468"));
         M365StatusText.Text = m365 ? $"Microsoft 365 (Ba\u011Fl\u0131: {s.Account})" : "Microsoft 365 (Ba\u011Fl\u0131 de\u011Fil)";
         PermissionStatusText.Text = permissions ? "\u0130zinler (Verildi)" : "\u0130zinler (Eksik)";
         ExcelStatusText.Text = excel ? $"Excel (Ba\u011Fl\u0131: {Path.GetFileName(s.ExcelPath)})" : "Excel (Se\u00E7ilmedi)";

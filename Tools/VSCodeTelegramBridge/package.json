@@ -1,0 +1,34 @@
+{
+  "name": "arsangaz-telegram-copilot-bridge",
+  "displayName": "Arsan Gaz Telegram Copilot Bridge",
+  "description": "Routes authorized Arsan Gaz ERP Telegram requests into the open VS Code Copilot Chat.",
+  "version": "0.2.18",
+  "publisher": "arsangaz",
+  "engines": {
+    "vscode": "^1.140.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "scripts": {
+    "test": "node --test",
+    "package:vsix": "vsce package"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "workspaceContains:**/ArsanGazERP.csproj",
+    "workspaceContains:**/ArsanGazERP.sln"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "arsangaz.telegramCopilotBridge.status",
+        "title": "Arsan Gaz: Telegram Copilot Bridge Status"
+      }
+    ]
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^4.0.0"
+  }
+}

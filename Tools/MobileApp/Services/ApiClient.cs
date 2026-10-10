@@ -52,6 +52,67 @@ public sealed record HubStatus(
     string MobileApiVersion,
     string IntegrationHint);
 
+public sealed record CampaignStatusInfo(
+    string? Email,
+    string? EmailIdentity,
+    string? EmailSetupHint,
+    bool WhatsAppConfigured,
+    string WhatsAppHint,
+    bool ExecutionEnabled,
+    int MaxEmailAttachmentKb,
+    string OptOut);
+
+public sealed record NameCount(string Name, int Count);
+
+public sealed record CampaignFilters(int Total, int WithEmail, int WithMobile, List<NameCount> Cities, List<NameCount> Sectors, List<NameCount> Statuses);
+
+public sealed record GroupPreview(int Count, int WithEmail, int WithMobile, List<string> Sample);
+
+public sealed record CampaignGroupItem(Guid Id, string Name, int Count, string? Updated)
+{
+    public override string ToString() => $"{Name} ({Count} firma)";
+}
+
+public sealed record WhatsAppContact(int Id, string Name, string Phone);
+
+public sealed record WhatsAppList(List<WhatsAppContact> Contacts, int SkippedOptOut, int SkippedNoMobile);
+
+public sealed record UploadedPdf(string Token, string Name, long SizeKb, bool EmailOk);
+
+public sealed record PreparedCampaign(
+    Guid CampaignId,
+    long Revision,
+    string ManifestHash,
+    int GroupSize,
+    int Eligible,
+    string Exclusions,
+    int OptedOutSkipped,
+    List<string> Attachments,
+    string Sender,
+    string StartsAt,
+    string Window,
+    int SpacingSeconds,
+    int EstimatedDays,
+    string Preview);
+
+public sealed record CampaignListItem(
+    Guid Id,
+    string Name,
+    string Channel,
+    string State,
+    string StateCode,
+    long Revision,
+    string StartsAt,
+    int Total,
+    int Sent,
+    int Failed,
+    int Pending,
+    string? Error)
+{
+    public string Summary => $"{Channel} · {State} · {Sent}/{Total} gönderildi" +
+        (Failed > 0 ? $" · {Failed} başarısız" : string.Empty) + $" · başlangıç {StartsAt}";
+}
+
 public class ApiException(string message) : Exception(message);
 
 // The computer or tunnel could not be reached; the request never got an answer from the ERP.
@@ -304,6 +365,51 @@ public sealed class ApiClient
     }
 
     public Task<CursorStatus> CursorStatusAsync(string id) => GetAsync<CursorStatus>("/api/cursor/" + Uri.EscapeDataString(id));
+
+    public Task<CampaignStatusInfo> CampaignStatusAsync() => GetAsync<CampaignStatusInfo>("/api/kampanya/durum");
+
+    public Task<CampaignFilters> CampaignFiltersAsync() => GetAsync<CampaignFilters>("/api/kampanya/filtreler");
+
+    public Task<List<CampaignGroupItem>> CampaignGroupsAsync() => GetAsync<List<CampaignGroupItem>>("/api/kampanya/gruplar");
+
+    public Task<GroupPreview> PreviewGroupAsync(object filter) => PostAsync<GroupPreview>("/api/kampanya/grup/onizle", filter);
+
+    public Task<CampaignGroupItem> CreateGroupAsync(object filter) => PostAsync<CampaignGroupItem>("/api/kampanya/grup", filter);
+
+    public Task<WhatsAppList> GroupWhatsAppAsync(Guid groupId) => GetAsync<WhatsAppList>($"/api/kampanya/grup/{groupId}/whatsapp");
+
+    public Task<string> MarkWhatsAppSentAsync(int contactId, string? note) =>
+        PostMessageAsync("/api/kampanya/whatsapp-gonderildi", new { contactId, note });
+
+    public Task<string> MarkOptOutAsync(int contactId, string? channel) =>
+        PostMessageAsync("/api/kampanya/ret", new { contactId, channel });
+
+    public Task<PreparedCampaign> PrepareCampaignAsync(object request) => PostAsync<PreparedCampaign>("/api/kampanya/hazirla", request);
+
+    public Task<string> LaunchCampaignAsync(Guid id, long revision, string manifestHash) =>
+        PostMessageAsync($"/api/kampanya/{id}/baslat", new { revision, manifestHash, confirm = true });
+
+    public Task<List<CampaignListItem>> CampaignsAsync() => GetAsync<List<CampaignListItem>>("/api/kampanya/liste");
+
+    public Task<string> ChangeCampaignAsync(Guid id, string action, long revision) =>
+        PostMessageAsync($"/api/kampanya/{id}/{action}", new { revision });
+
+    public async Task<UploadedPdf> UploadCampaignPdfAsync(string path)
+    {
+        using MultipartFormDataContent content = new();
+        await using FileStream stream = File.OpenRead(path);
+        StreamContent file = new(stream);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        content.Add(file, "file", Path.GetFileName(path));
+        using HttpResponseMessage response = await SendMultipartAsync("/api/kampanya/ek", content);
+        return await ReadAsync<UploadedPdf>(response);
+    }
+
+    private async Task<T> PostAsync<T>(string path, object body)
+    {
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Post, path, body);
+        return await ReadAsync<T>(response);
+    }
 
     private async Task<string> GetTextAsync(string path)
     {

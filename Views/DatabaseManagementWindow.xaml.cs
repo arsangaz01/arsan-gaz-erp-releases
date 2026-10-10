@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using System.Windows;
 using ArsanGazERP.Data;
+using ArsanGazERP.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace ArsanGazERP.Views;
@@ -11,6 +12,8 @@ public partial class DatabaseManagementWindow : Window
 	public DatabaseManagementWindow()
 	{
 		InitializeComponent();
+        WindowWorkAreaService.Fit(this);
+		DataGridColumnLocalizer.Attach(CustomersGrid, ProductsGrid, CylindersGrid, QuotesGrid, InvoicesGrid, TasksGrid);
 		Loaded += async (_, _) => await LoadAsync();
 	}
 

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterAgentResponse": [
+      {
+        "command": "node .cursor/hooks/telegram-final-response.js",
+        "timeout": 15
+      }
+    ]
+  }
+}

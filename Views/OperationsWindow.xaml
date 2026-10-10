@@ -108,6 +108,7 @@
                 <Grid Margin="4,14,4,4">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="14" Margin="0,0,0,12">
@@ -133,17 +134,185 @@
                             <TextBox x:Name="CylinderCapacity" Grid.Row="1" Grid.Column="3" />
                             <StackPanel Grid.RowSpan="2" Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="12,0,0,0">
                                 <Button Content="Tüp ekle" Click="AddCylinder_Click" Margin="0,0,6,0" />
-                                <Button Content="Depoya al" Click="MoveWarehouse_Click" Style="{StaticResource SecondaryButton}" Margin="0" />
+                                <Button Content="Depoya al" Click="MoveWarehouse_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,6,0" />
+                                <Button Content="Etiket bas" Click="PrintCylinderLabel_Click" Style="{StaticResource SecondaryButton}" Margin="0" ToolTip="Seçili tüp için QR ve barkod etiketi" />
                             </StackPanel>
                         </Grid>
                     </Border>
-                    <DataGrid x:Name="Cylinders" Grid.Row="1" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                    <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="14" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.2*" />
+                                <ColumnDefinition Width="1*" />
+                                <ColumnDefinition Width="1.6*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="BARKODLA HIZLI HAREKET · OKUT" FontSize="10" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
+                            <TextBlock Grid.Column="1" Text="İŞLEM" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="2" Text="MÜŞTERİ (YALNIZCA TESLİMDE)" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBox x:Name="ScanCode" Grid.Row="1" KeyDown="ScanCode_KeyDown" ToolTip="Barkod okuyucuyla okutun veya seri numarasını yazıp Enter'a basın" AutomationProperties.Name="Okutulan tüp barkodu" />
+                            <ComboBox x:Name="ScanAction" Grid.Row="1" Grid.Column="1" AutomationProperties.Name="Tüp hareketi" SelectionChanged="ScanAction_SelectionChanged">
+                                <ComboBoxItem Content="Müşteriye teslim" Tag="Customer" IsSelected="True" />
+                                <ComboBoxItem Content="Depoya iade" Tag="Warehouse" />
+                                <ComboBoxItem Content="Araca yükle" Tag="Vehicle" />
+                                <ComboBoxItem Content="Dolum" Tag="Filling" />
+                                <ComboBoxItem Content="Servis / test" Tag="Service" />
+                            </ComboBox>
+                            <ComboBox x:Name="ScanCustomer" Grid.Row="1" Grid.Column="2" IsEditable="True" IsTextSearchEnabled="True" DisplayMemberPath="CompanyName" AutomationProperties.Name="Teslim edilecek müşteri" />
+                            <Button Grid.Row="1" Grid.Column="3" Content="Uygula" Click="ApplyScan_Click" Margin="12,0,0,0" />
+                        </Grid>
+                    </Border>
+                    <DataGrid x:Name="Cylinders" Grid.Row="2" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Geciken tahsilatlar">
+            <TabItem Header="Sipariş tahmini">
                 <Grid Margin="4,14,4,4">
-                    <DataGrid x:Name="OverdueInvoices" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel LastChildFill="False" Margin="0,0,0,10">
+                        <Button Content="Yenile" Click="RefreshForecasts_Click" Margin="0,0,12,0" />
+                        <TextBlock x:Name="ForecastSummary" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" />
+                    </DockPanel>
+                    <DataGrid x:Name="Forecasts" Grid.Row="1" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Single" SelectionUnit="FullRow" AutomationProperties.Name="Yeniden sipariş tahminleri">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Müşteri" Binding="{Binding CustomerName}" Width="2*" />
+                            <DataGridTextColumn Header="Beklenen alım" Binding="{Binding ExpectedNext, StringFormat={}{0:dd.MM.yyyy}}" Width="1*" />
+                            <DataGridTextColumn Header="Durum" Binding="{Binding Timing}" Width="1*" />
+                            <DataGridTextColumn Header="Genelde kaç günde bir" Binding="{Binding TypicalIntervalDays}" Width="1*" />
+                            <DataGridTextColumn Header="Son teslim" Binding="{Binding LastDelivery, StringFormat={}{0:dd.MM.yyyy}}" Width="1*" />
+                            <DataGridTextColumn Header="Teslim günü sayısı" Binding="{Binding DeliveryDays}" Width="1*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <TabItem x:Name="CollectionsTab" Header="Tahsilat hatırlatmaları">
+                <Grid Margin="4,14,4,4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="14" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.6*" />
+                                <ColumnDefinition Width="0.9*" />
+                                <ColumnDefinition Width="0.6*" />
+                                <ColumnDefinition Width="1*" />
+                                <ColumnDefinition Width="0.7*" />
+                                <ColumnDefinition Width="1.6*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="MÜŞTERİ" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="1" Text="TUTAR" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="2" Text="BİRİM" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="3" Text="ÖDEME GÜNÜ" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="4" Text="KAÇ GÜN ÖNCE" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="5" Text="NOT" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBox x:Name="ReminderCustomer" Grid.Row="1" AutomationProperties.Name="Tahsilat müşterisi" />
+                            <TextBox x:Name="ReminderAmount" Grid.Row="1" Grid.Column="1" ToolTip="Örnek: 12.500,00" AutomationProperties.Name="Tahsilat tutarı" />
+                            <ComboBox x:Name="ReminderCurrency" Grid.Row="1" Grid.Column="2" AutomationProperties.Name="Para birimi">
+                                <ComboBoxItem Content="TRY" IsSelected="True" />
+                                <ComboBoxItem Content="USD" />
+                                <ComboBoxItem Content="EUR" />
+                                <ComboBoxItem Content="GBP" />
+                            </ComboBox>
+                            <DatePicker x:Name="ReminderDueDate" Grid.Row="1" Grid.Column="3" AutomationProperties.Name="Ödeme günü" />
+                            <TextBox x:Name="ReminderDaysBefore" Grid.Row="1" Grid.Column="4" Text="1" ToolTip="Ödeme gününden kaç gün önce hatırlatılsın (0-30)" AutomationProperties.Name="Kaç gün önce hatırlatılsın" />
+                            <TextBox x:Name="ReminderNote" Grid.Row="1" Grid.Column="5" AutomationProperties.Name="Tahsilat notu" />
+                            <Button Grid.Row="1" Grid.Column="6" Content="Hatırlatma ekle" Click="AddReminder_Click" Margin="12,0,0,0" />
+                            <CheckBox x:Name="ReminderRepeatMonthly" Grid.Row="2" Grid.ColumnSpan="4" Margin="0,10,0,0" Content="Her ay aynı gün tekrarla (tahsil edildi işaretlenince sonraki ay otomatik eklenir)" />
+                        </Grid>
+                    </Border>
+                    <DockPanel Grid.Row="1" LastChildFill="False" Margin="0,0,0,10">
+                        <Button Content="Tahsil edildi" Click="CollectReminder_Click" Margin="0,0,6,0" />
+                        <Button Content="7 gün ertele" Click="PostponeReminder_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,6,0" />
+                        <Button Content="Hatırlatmayı iptal et" Click="CancelReminder_Click" Style="{StaticResource DangerButton}" Margin="0,0,12,0" />
+                        <CheckBox x:Name="ShowClosedReminders" Content="Kapananları da göster" VerticalAlignment="Center" Checked="ShowClosedReminders_Changed" Unchecked="ShowClosedReminders_Changed" />
+                        <TextBlock x:Name="ReminderSummary" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" />
+                    </DockPanel>
+                    <DataGrid x:Name="Reminders" Grid.Row="2" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Single" SelectionUnit="FullRow" AutomationProperties.Name="Tahsilat hatırlatmaları listesi">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Müşteri" Binding="{Binding CustomerName}" Width="1.6*" />
+                            <DataGridTextColumn Header="Tutar" Binding="{Binding Amount}" Width="1*" />
+                            <DataGridTextColumn Header="Ödeme günü" Binding="{Binding DueDate, StringFormat={}{0:dd.MM.yyyy}}" Width="0.9*" />
+                            <DataGridTextColumn Header="Kalan" Binding="{Binding Timing}" Width="0.9*" />
+                            <DataGridTextColumn Header="Tekrar" Binding="{Binding Repeat}" Width="0.6*" />
+                            <DataGridTextColumn Header="Durum" Binding="{Binding Status}" Width="0.8*" />
+                            <DataGridTextColumn Header="Not" Binding="{Binding Note}" Width="2*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Geciken faturalar">
+                <Grid Margin="4,14,4,4">
+                    <DataGrid x:Name="OverdueInvoices" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" ColumnWidth="*">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Fatura no" Binding="{Binding InvoiceNumber}" />
+                            <DataGridTextColumn Header="Müşteri" Binding="{Binding Customer.CompanyName}" Width="2*" />
+                            <DataGridTextColumn Header="Vade" Binding="{Binding DueDate, StringFormat={}{0:dd.MM.yyyy}}" />
+                            <DataGridTextColumn Header="Tutar" Binding="{Binding TotalAmount, StringFormat={}{0:N2}}" />
+                            <DataGridTextColumn Header="Ödenen" Binding="{Binding PaidAmount, StringFormat={}{0:N2}}" />
+                            <DataGridTextColumn Header="Durum" Binding="{Binding Status}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Öncelikli işler">
+                <Grid Margin="4,14,4,4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,10">
+                        <DockPanel LastChildFill="False">
+                            <TextBox x:Name="TaskSearch" Width="200" Margin="0,0,10,0" VerticalContentAlignment="Center" ToolTip="Görev başlığı veya kategorisinde ara" AutomationProperties.Name="Görevlerde ara" TextChanged="TaskSearch_TextChanged" />
+                            <ComboBox x:Name="TaskPriorityFilter" Width="130" Margin="0,0,10,0" ToolTip="Önceliğe göre filtrele" AutomationProperties.Name="Öncelik filtresi" SelectionChanged="TaskFilter_SelectionChanged">
+                                <ComboBoxItem Content="Tüm öncelikler" IsSelected="True" />
+                                <ComboBoxItem Content="Acil" />
+                                <ComboBoxItem Content="Yüksek" />
+                                <ComboBoxItem Content="Normal" />
+                                <ComboBoxItem Content="Düşük" />
+                            </ComboBox>
+                            <ComboBox x:Name="TaskDueFilter" Width="140" Margin="0,0,10,0" ToolTip="Son tarihe göre filtrele" AutomationProperties.Name="Son tarih filtresi" SelectionChanged="TaskFilter_SelectionChanged">
+                                <ComboBoxItem Content="Tüm tarihler" IsSelected="True" />
+                                <ComboBoxItem Content="Geciken" />
+                                <ComboBoxItem Content="Bugün" />
+                                <ComboBoxItem Content="7 gün içinde" />
+                                <ComboBoxItem Content="Tarihi olmayan" />
+                            </ComboBox>
+                            <ComboBox x:Name="TaskStatusFilter" Width="135" Margin="0,0,10,0" ToolTip="Duruma göre filtrele" AutomationProperties.Name="Görev durumu filtresi" SelectionChanged="TaskFilter_SelectionChanged">
+                                <ComboBoxItem Content="Açık" IsSelected="True" />
+                                <ComboBoxItem Content="Tüm durumlar" />
+                            </ComboBox>
+                            <Button Content="Yenile" Click="RefreshTasks_Click" Margin="0" ToolTip="Görev listesini veritabanından yenile" />
+                            <TextBlock x:Name="TaskSummary" DockPanel.Dock="Bottom" Margin="0,10,0,0" Foreground="{StaticResource MutedBrush}" AutomationProperties.LiveSetting="Polite" />
+                        </DockPanel>
+                    </Border>
+                    <DataGrid x:Name="PriorityTasks" Grid.Row="1" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Single" SelectionUnit="FullRow" ColumnWidth="*" AutomationProperties.Name="Öncelikli işler listesi">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Görev" Binding="{Binding Title}" Width="2*" />
+                            <DataGridTextColumn Header="Kategori" Binding="{Binding Category}" Width="1*" />
+                            <DataGridTextColumn Header="Öncelik" Binding="{Binding Priority}" Width="0.8*" />
+                            <DataGridTextColumn Header="Son tarih" Binding="{Binding DueDate, StringFormat={}{0:dd.MM.yyyy}}" Width="1*" />
+                            <DataGridTextColumn Header="Durum" Binding="{Binding Status}" Width="0.8*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </Grid>
             </TabItem>
         </TabControl>

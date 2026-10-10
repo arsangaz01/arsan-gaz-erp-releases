@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using ArsanGazMobile.Services;
 
 namespace ArsanGazMobile;
 
@@ -11,6 +11,24 @@ public partial class App : Application
 
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
-		return new Window(new AppShell());
+		Window window = new();
+		string? previous = CrashLog.TakeLast();
+		window.Page = previous is null
+			? CreateShell()
+			: CrashLog.ErrorPage("Önceki açılışta hata oluştu", previous, () => window.Page = CreateShell());
+		return window;
+	}
+
+	private static Page CreateShell()
+	{
+		try
+		{
+			return new AppShell();
+		}
+		catch (Exception exception)
+		{
+			CrashLog.Write(exception, "AppShell");
+			return CrashLog.ErrorPage("Uygulama açılamadı", exception.ToString());
+		}
 	}
 }

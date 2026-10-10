@@ -26,6 +26,7 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        WindowThemeService.Register();
         _singleInstanceMutex = new Mutex(true, @"Local\ArsanGazERP.SingleInstance.V1", out bool isFirstInstance);
         _ownsSingleInstanceMutex = isFirstInstance;
         if (!isFirstInstance)

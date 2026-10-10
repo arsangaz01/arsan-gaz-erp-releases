@@ -17,6 +17,7 @@ public partial class ProspectHunterWindow : Window
     public ProspectHunterWindow()
     {
         InitializeComponent();
+        WindowWorkAreaService.Fit(this);
         AutoScanCheckBox.IsChecked = ProspectAutoRunner.IsEnabled();
         Loaded += async (_, _) => await LoadAsync();
     }
@@ -51,7 +52,7 @@ public partial class ProspectHunterWindow : Window
             await LoadAsync();
         }
         catch (OperationCanceledException) { StatusText.Text = "Tarama durduruldu."; }
-        catch (Exception exception) { StatusText.Text = exception.GetBaseException().Message; }
+        catch (Exception exception) { StatusText.Text = exception.Message; }
         finally
         {
             _scanCancellation.Dispose();

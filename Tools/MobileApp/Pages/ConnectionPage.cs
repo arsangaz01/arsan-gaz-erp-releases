@@ -122,23 +122,37 @@ public sealed class ConnectionPage : ContentPage
         {
             UpdateInfo info = await ApiClient.Instance.GetUpdateInfoAsync();
             string local = AppInfo.Current.VersionString;
+            int.TryParse(AppInfo.Current.BuildString, out int localBuild);
             // On Android BuildString is the versionCode; Version.Build is not populated from it.
-            bool newer = int.TryParse(AppInfo.Current.BuildString, out int localBuild)
+            bool newer = localBuild > 0
                 ? info.PublishedMobileBuild > localBuild
                 : string.Compare(info.PublishedMobileVersion, local, StringComparison.Ordinal) > 0;
+            string buildHint = localBuild > 0 ? $" (build {localBuild})" : string.Empty;
             _update.Text = newer
-                ? $"Yeni sürüm var: {info.PublishedMobileVersion}. Telefondaki: {local}. \"Güncelle\"ye basın."
-                : $"Telefon sürümü güncel ({local}).";
+                ? $"Yeni sürüm: {info.PublishedMobileVersion} (build {info.PublishedMobileBuild}). Telefondaki: {local}{buildHint}."
+                : $"Telefon sürümü güncel ({local}{buildHint}).";
             if (newer && !info.ApkReady)
             {
                 _update.Text += " Sunucuda APK dosyası henüz yok.";
             }
             else if (newer && !showAlerts && !_updatePrompted)
             {
-                _updatePrompted = true;
-                if (await DisplayAlertAsync("Güncelleme", $"Yeni sürüm {info.PublishedMobileVersion} hazır. Şimdi güncellensin mi?", "Güncelle", "Sonra"))
+                int dismissed = Preferences.Default.Get(DismissedUpdateBuildKey, 0);
+                if (info.PublishedMobileBuild <= dismissed)
                 {
-                    await UpdateNowAsync();
+                    _update.Text += " Bağlantı sekmesinden \"Güncelle\" ile kurabilirsiniz.";
+                }
+                else
+                {
+                    _updatePrompted = true;
+                    if (await DisplayAlertAsync("Güncelleme", $"Yeni sürüm {info.PublishedMobileVersion} (build {info.PublishedMobileBuild}) hazır. Şimdi güncellensin mi?", "Güncelle", "Sonra"))
+                    {
+                        await UpdateNowAsync();
+                    }
+                    else
+                    {
+                        Preferences.Default.Set(DismissedUpdateBuildKey, info.PublishedMobileBuild);
+                    }
                 }
             }
         }
@@ -147,6 +161,8 @@ public sealed class ConnectionPage : ContentPage
             _update.Text = exception.Message;
         }
     }
+
+    private const string DismissedUpdateBuildKey = "dismissed_mobile_update_build";
 
     private bool _updatePrompted;
 

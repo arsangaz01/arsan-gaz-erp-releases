@@ -1,5 +1,5 @@
 param(
-    [string]$ExecutablePath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'publish\ArsanGazERP.exe')
+    [string]$ExecutablePath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'publish\current\ArsanGazERP.exe')
 )
 
 $ErrorActionPreference = 'Stop'

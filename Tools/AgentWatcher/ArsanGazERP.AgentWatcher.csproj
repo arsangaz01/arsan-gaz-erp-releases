@@ -31,11 +31,15 @@
     <Compile Include="..\..\Services\CampaignScheduler.cs" Link="CampaignScheduler.cs" />
     <Compile Include="..\..\Services\CampaignTransport.cs" Link="CampaignTransport.cs" />
     <Compile Include="..\..\Services\WhatsAppBusinessService.cs" Link="WhatsAppBusinessService.cs" />
+    <Compile Include="..\..\Services\GmailSenderService.cs" Link="GmailSenderService.cs" />
     <Compile Include="..\..\Services\CopilotAgentRuntime.cs" Link="CopilotAgentRuntime.cs" />
     <Compile Include="..\..\Services\CloudAgentClient.cs" Link="CloudAgentClient.cs" />
+    <Compile Include="..\..\Services\JarvisAgentProtocol.cs" Link="JarvisAgentProtocol.cs" />
     <Compile Include="..\..\Services\CloudAgentSettingsStore.cs" Link="CloudAgentSettingsStore.cs" />
     <Compile Include="..\..\Services\AgentChatPromptBuilder.cs" Link="AgentChatPromptBuilder.cs" />
     <Compile Include="..\..\Services\AgentChatRoutingPolicy.cs" Link="AgentChatRoutingPolicy.cs" />
+    <Compile Include="..\..\Services\FreeLlmProviders.cs" Link="FreeLlmProviders.cs" />
+    <Compile Include="..\..\Services\WebResearchService.cs" Link="WebResearchService.cs" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="System.IO" />

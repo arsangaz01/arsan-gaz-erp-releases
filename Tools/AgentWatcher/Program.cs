@@ -612,7 +612,8 @@ internal sealed partial class ControlCenterForm : Form
             MicrosoftGraph.GetCampaignTokenAsync,
             campaignWhatsApp,
             getGraphSendersAsync: MicrosoftGraph.GetCampaignSendersAsync,
-            requestGraphConsentAsync: MicrosoftGraph.RequestCampaignMailSendConsentAsync);
+            requestGraphConsentAsync: MicrosoftGraph.RequestCampaignMailSendConsentAsync,
+            gmail: new GmailSenderService());
         campaignService = new CampaignService(campaignStore, campaignTransport);
         campaignScheduler = new CampaignScheduler(
             campaignService,

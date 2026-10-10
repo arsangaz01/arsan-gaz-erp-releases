@@ -9,7 +9,7 @@ public sealed class ProspectAutoRunner
 {
     private readonly ProspectDiscoveryService _discovery = new();
     private static string StateDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ArsanGazERP", "ProspectHunter");
-    private static string LastRunPath => Path.Combine(StateDirectory, "last-run-free.txt");
+    private static string LastRunPath => Path.Combine(StateDirectory, "last-run-local-osm.txt");
     private static string LogPath => Path.Combine(StateDirectory, "prospect-hunter-free.log");
 
     public async Task<string> RunIfDueSafeAsync(CancellationToken cancellationToken = default)
@@ -30,9 +30,13 @@ public sealed class ProspectAutoRunner
             await AppendLogAsync(result.ToString());
             return result.ToString();
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return "Ücretsiz otomatik tarama uygulama kapanırken iptal edildi.";
+        }
         catch (Exception exception)
         {
-            string message = "Ücretsiz otomatik tarama çalışmadı: " + exception.GetBaseException().Message;
+            string message = "Ücretsiz otomatik tarama çalışmadı: " + exception.Message;
             await AppendLogAsync(message);
             return message;
         }

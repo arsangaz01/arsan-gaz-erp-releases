@@ -301,6 +301,7 @@ public sealed class AgentChatService : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         bool nimAvailable = profile.Id != "researcher" && IsNimConfigured(_nim);
+        bool freeAvailable = profile.Id != "researcher" && FreeLlmChain.AnyConfigured;
         if (CloudAgentClient.IsConfigured)
         {
             try
@@ -309,35 +310,62 @@ public sealed class AgentChatService : IAsyncDisposable
                        await _cloudAgent.CompleteAsync(profile.Id, prompt, cancellationToken, searchQuery);
             }
             catch (Exception exception) when (
-                nimAvailable &&
+                (nimAvailable || freeAvailable) &&
                 !cancellationToken.IsCancellationRequested &&
                 exception is HttpRequestException or InvalidOperationException or InvalidDataException)
             {
-                return "[NVIDIA NIM · Cloudflare yanıt vermedi] " +
-                       await CompleteWithNimAsync(profile, prompt, cancellationToken);
+                return await CompleteWithBackupsAsync(profile, prompt, nimAvailable, " · Cloudflare yanıt vermedi", cancellationToken);
             }
         }
 
-        if (nimAvailable)
+        if (nimAvailable || freeAvailable)
         {
-            return "[NVIDIA NIM] " + await CompleteWithNimAsync(profile, prompt, cancellationToken);
+            return await CompleteWithBackupsAsync(profile, prompt, nimAvailable, string.Empty, cancellationToken);
         }
 
         throw new InvalidOperationException(profile.Id == "researcher"
             ? "Araştırmacı kaynaklı arama için Cloudflare Worker gerektirir. Ajan Yetkileri ve Bulut bölümünden yapılandırın."
-            : "Hiçbir yapay zeka sağlayıcısı yapılandırılmadı. Ajan Yetkileri ve Bulut bölümünden Cloudflare Worker'ı veya NVIDIA NIM ekranından API anahtarını ayarlayın.");
+            : "Hiçbir yapay zeka sağlayıcısı yapılandırılmadı. Ajan Yetkileri ve Bulut bölümünden Cloudflare Worker'ı, NVIDIA NIM ekranından API anahtarını veya ücretsiz yedek sağlayıcıları ayarlayın.");
+    }
+
+    private async Task<string> CompleteWithBackupsAsync(
+        ErpAgentProfile profile,
+        string prompt,
+        bool nimAvailable,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        if (nimAvailable)
+        {
+            try
+            {
+                return $"[NVIDIA NIM{reason}] " + await CompleteWithNimAsync(profile, prompt, cancellationToken);
+            }
+            catch (Exception exception) when (
+                FreeLlmChain.AnyConfigured &&
+                !cancellationToken.IsCancellationRequested &&
+                exception is HttpRequestException or InvalidOperationException or TaskCanceledException)
+            {
+                reason = " · NVIDIA yanıt vermedi";
+            }
+        }
+
+        (string provider, string text) = await FreeLlmChain.CompleteAsync(SystemPrompt(profile), prompt, 1200, cancellationToken);
+        return $"[{provider} · ücretsiz yedek{reason}] {text}";
     }
 
     private Task<string> CompleteWithNimAsync(ErpAgentProfile profile, string prompt, CancellationToken cancellationToken)
     {
-        string system = $"Sen Arsan Gaz ERP içindeki {profile.Name} adlı ajansın. {profile.SystemPrompt} " +
-                        "Yalnızca kullanıcının mesajını ve mesajda 'ERP özeti' olarak verilen salt-okunur veriyi kullan. " +
-                        "Kayıt, müşteri iletişimi, ödeme veya başka bir harici işlemi yapmış gibi gösterme. " +
-                        "Türkçe, açık ve uygulanabilir yanıt ver; belirsizliği belirt.";
         return _nim.CompleteChatAsync(
-            [new NvidiaNimService.ChatMessage("system", system), new NvidiaNimService.ChatMessage("user", prompt)],
+            [new NvidiaNimService.ChatMessage("system", SystemPrompt(profile)), new NvidiaNimService.ChatMessage("user", prompt)],
             cancellationToken);
     }
+
+    private static string SystemPrompt(ErpAgentProfile profile) =>
+        $"Sen Arsan Gaz ERP içindeki {profile.Name} adlı ajansın. {profile.SystemPrompt} " +
+        "Yalnızca kullanıcının mesajını ve mesajda 'ERP özeti' olarak verilen salt-okunur veriyi kullan. " +
+        "Kayıt, müşteri iletişimi, ödeme veya başka bir harici işlemi yapmış gibi gösterme. " +
+        "Türkçe, açık ve uygulanabilir yanıt ver; belirsizliği belirt.";
 
     private static bool IsNimConfigured(NvidiaNimService nim)
     {

@@ -13,15 +13,42 @@ public class MainActivity : MauiAppCompatActivity
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
-        ApplyDeepLink(Intent);
-        if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu
-            && CheckSelfPermission(Android.Manifest.Permission.PostNotifications) != Permission.Granted)
+        try
         {
-            RequestPermissions([Android.Manifest.Permission.PostNotifications], 4713);
+            ApplyDeepLink(Intent);
+            if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu
+                && CheckSelfPermission(Android.Manifest.Permission.PostNotifications) != Permission.Granted)
+            {
+                RequestPermissions([Android.Manifest.Permission.PostNotifications], 4713);
+            }
+
+            _ = SafeStartupAsync();
+        }
+        catch (Exception exception)
+        {
+            CrashLog.Write(exception, "MainActivity");
+        }
+    }
+
+    private async Task SafeStartupAsync()
+    {
+        try
+        {
+            FollowUpReminder.Schedule(this);
+        }
+        catch (Exception exception)
+        {
+            CrashLog.Write(exception, "Takip zamanlayıcı");
         }
 
-        FollowUpReminder.Schedule(this);
-        _ = FollowUpReminder.CheckAsync(ApplicationContext!, onceToday: true);
+        try
+        {
+            await FollowUpReminder.CheckAsync(ApplicationContext!, onceToday: true);
+        }
+        catch (Exception exception)
+        {
+            CrashLog.Write(exception, "Takip hatırlatma");
+        }
     }
 
     protected override void OnNewIntent(Intent? intent)

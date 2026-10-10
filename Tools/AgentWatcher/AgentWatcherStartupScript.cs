@@ -1,0 +1,36 @@
+using System.Text;
+
+namespace ArsanGazERP.AgentWatcher;
+
+internal static class AgentWatcherStartupScript
+{
+    internal static string Build(
+        string watcherExecutable,
+        string? erpExecutable,
+        bool startErp,
+        bool startMinimized)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(watcherExecutable);
+
+        StringBuilder script = new();
+        script.AppendLine("@echo off");
+        script.AppendLine("timeout /t 8 /nobreak >nul");
+        script.AppendLine($"set \"WATCHER_EXE={Path.GetFullPath(watcherExecutable)}\"");
+        script.AppendLine("if not exist \"%WATCHER_EXE%\" exit /b 1");
+        script.AppendLine("for %%I in (\"%WATCHER_EXE%\") do set \"WATCHER_DIR=%%~dpI\"");
+        script.AppendLine("start \"\" /D \"%WATCHER_DIR%\" \"%WATCHER_EXE%\" --background");
+
+        if (startErp && !string.IsNullOrWhiteSpace(erpExecutable))
+        {
+            string minimize = startMinimized ? "/min " : string.Empty;
+            string fullErpPath = Path.GetFullPath(erpExecutable);
+            script.AppendLine($"set \"ERP_EXE={fullErpPath}\"");
+            script.AppendLine("if exist \"%ERP_EXE%\" (");
+            script.AppendLine("  for %%I in (\"%ERP_EXE%\") do set \"ERP_DIR=%%~dpI\"");
+            script.AppendLine($"  start {minimize}\"\" /D \"%ERP_DIR%\" \"%ERP_EXE%\"");
+            script.AppendLine(")");
+        }
+
+        return script.ToString();
+    }
+}

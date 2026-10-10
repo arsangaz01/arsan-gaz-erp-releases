@@ -2,7 +2,6 @@
 using ArsanGazERP.Models;
 using ArsanGazERP.Services;
 using Microsoft.EntityFrameworkCore;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -16,8 +15,7 @@ namespace ArsanGazERP.Views;
 
 public sealed class AiDashboardWindow : Window
 {
-    private const string Project = @"C:\ArsanGazERP\ArsanGazERP_V2_Duzeltilmis";
-    private static readonly string Queue = Path.Combine(Project, "Tools", "AgentWatcherData", "Queue");
+    private static string Queue => AgentWatcherPaths.QueueDirectory;
     private readonly TextBlock customerValue = ValueText();
     private readonly TextBlock invoiceValue = ValueText();
     private readonly TextBlock overdueValue = ValueText();
@@ -28,12 +26,32 @@ public sealed class AiDashboardWindow : Window
 
     private readonly TextBox output = new() { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(10), MinHeight = 160 };
 
+    private static TextBlock ValueText() => new()
+    {
+        FontSize = 28,
+        FontWeight = FontWeights.Bold
+    };
+
+    private static TextBlock BodyText() => new()
+    {
+        FontSize = 13,
+        TextWrapping = TextWrapping.Wrap
+    };
+
     public AiDashboardWindow()
     {
-        Title = "Arsan Gaz ERP V7.6.1 AI Dashboard";
+        Title = "Arsan Gaz ERP — AI Dashboard";
         Width = 1160; Height = 760; MinWidth = 980; MinHeight = 680;
+        WindowWorkAreaService.Fit(this);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(246, 248, 251));
+        Background = (Brush)FindResource("CanvasBrush");
+        customerValue.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
+        invoiceValue.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
+        overdueValue.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
+        agentRunValue.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
+        m365Value.SetResourceReference(TextBlock.ForegroundProperty, "MutedBrush");
+        excelValue.SetResourceReference(TextBlock.ForegroundProperty, "MutedBrush");
+        nvidiaValue.SetResourceReference(TextBlock.ForegroundProperty, "MutedBrush");
         Content = Build();
         Loaded += async (_, _) => await RefreshAsync();
     }
@@ -50,8 +68,8 @@ public sealed class AiDashboardWindow : Window
         Button refresh = ActionButton("Yenile", async () => await RefreshAsync());
         DockPanel.SetDock(refresh, Dock.Right); header.Children.Add(refresh);
         StackPanel titles = new();
-        titles.Children.Add(new TextBlock { Text = "AI Dashboard", FontSize = 26, FontWeight = FontWeights.Bold, Foreground = Brushes.Black });
-        titles.Children.Add(new TextBlock { Text = "CRM, Microsoft 365 ve AI görevlerini tek merkezden yönetin", FontSize = 13, Foreground = Brushes.DimGray, Margin = new Thickness(0, 4, 0, 0) });
+        titles.Children.Add(new TextBlock { Text = "AI Dashboard", FontSize = 26, FontWeight = FontWeights.Bold });
+        titles.Children.Add(new TextBlock { Text = "CRM, Microsoft 365 ve AI görevlerini tek merkezden yönetin", FontSize = 13, Foreground = (Brush)FindResource("MutedBrush"), Margin = new Thickness(0, 4, 0, 0) });
         header.Children.Add(titles); Grid.SetRow(header, 0); root.Children.Add(header);
 
         UniformGrid stats = new() { Columns = 4, Margin = new Thickness(0, 0, 0, 14) };
@@ -74,7 +92,7 @@ public sealed class AiDashboardWindow : Window
         Button control = ActionButton("Agent Control Center'ı Aç", OpenControlCenter); control.Margin = new Thickness(0, 16, 0, 0); actions.Children.Add(control);
         lower.Children.Add(actions);
 
-        Border logCard = new() { Background = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromRgb(215, 220, 228)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(12) };
+        Border logCard = new() { Background = (Brush)FindResource("SurfaceBrush"), BorderBrush = (Brush)FindResource("BorderBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(12) };
         Grid logGrid = new(); logGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); logGrid.RowDefinitions.Add(new RowDefinition());
         logGrid.Children.Add(Section("Sonuç ve Etkinlik")); Grid.SetRow(output, 1); logGrid.Children.Add(output); logCard.Child = logGrid; Grid.SetColumn(logCard, 1); lower.Children.Add(logCard);
         Grid.SetRow(lower, 3); root.Children.Add(lower); return root;
@@ -96,8 +114,14 @@ public sealed class AiDashboardWindow : Window
 
             var s = UnifiedConnectionStateService.Load();
             m365Value.Text = string.IsNullOrWhiteSpace(s.Account) ? "Bağlı değil" : "Bağlı: " + s.Account;
+            m365Value.SetResourceReference(TextBlock.ForegroundProperty, string.IsNullOrWhiteSpace(s.Account) ? "DangerBrush" : "SuccessBrush");
             excelValue.Text = !string.IsNullOrWhiteSpace(s.ExcelPath) && File.Exists(s.ExcelPath) ? "Bağlı: " + Path.GetFileName(s.ExcelPath) : "Seçilmedi";
-            NvidiaNimService nim = new(); nvidiaValue.Text = nim.IsConfigured ? "Yapılandırıldı: " + nim.Model : "Bağlı değil";
+            excelValue.SetResourceReference(
+                TextBlock.ForegroundProperty,
+                !string.IsNullOrWhiteSpace(s.ExcelPath) && File.Exists(s.ExcelPath) ? "SuccessBrush" : "MutedBrush");
+            NvidiaNimService nim = new();
+            nvidiaValue.Text = nim.IsConfigured ? "Yapılandırıldı: " + nim.Model : "Bağlı değil";
+            nvidiaValue.SetResourceReference(TextBlock.ForegroundProperty, nim.IsConfigured ? "SuccessBrush" : "DangerBrush");
 
             output.Text = $"Dashboard güncellendi: {DateTime.Now:dd.MM.yyyy HH:mm:ss}";
         }
@@ -120,22 +144,18 @@ public sealed class AiDashboardWindow : Window
 
     private void OpenControlCenter()
     {
-        string exe = Path.Combine(Project, "Tools", "AgentWatcher", "publish", "ArsanGazERP.AgentWatcher.exe");
-        if (!File.Exists(exe)) { output.Text = "Agent Control Center bulunamadı: " + exe; return; }
-        if (Process.GetProcessesByName("ArsanGazERP.AgentWatcher").Length == 0) Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe)! });
-        else output.Text = "Agent Control Center zaten çalışıyor.";
+        AgentControlCenterWindow window = new() { Owner = this };
+        window.Show();
     }
 
-    private static Border Card(string title, UIElement value)
+    private Border Card(string title, UIElement value)
     {
         StackPanel p = new();
-        p.Children.Add(new TextBlock { Text = title, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = Brushes.DimGray, Margin = new Thickness(0, 0, 0, 8) });
+        p.Children.Add(new TextBlock { Text = title, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("MutedBrush"), Margin = new Thickness(0, 0, 0, 8) });
         p.Children.Add(value);
-        return new Border { Child = p, Background = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromRgb(215, 220, 228)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(14), Margin = new Thickness(5) };
+        return new Border { Child = p, Background = (Brush)FindResource("SurfaceBrush"), BorderBrush = (Brush)FindResource("BorderBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(14), Margin = new Thickness(5) };
     }
 
-    private static TextBlock ValueText() => new() { FontSize = 28, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(24, 94, 166)) };
-    private static TextBlock BodyText() => new() { FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DarkGreen };
     private static TextBlock Section(string text) => new() { Text = text, FontSize = 16, FontWeight = FontWeights.Bold, Margin = new Thickness(4, 4, 4, 10) };
     private static Button ActionButton(string text, Action action) { Button b = BaseButton(text); b.Click += (_, _) => action(); return b; }
     private static Button ActionButton(string text, Func<Task> action) { Button b = BaseButton(text); b.Click += async (_, _) => { b.IsEnabled = false; try { await action(); } finally { b.IsEnabled = true; } }; return b; }

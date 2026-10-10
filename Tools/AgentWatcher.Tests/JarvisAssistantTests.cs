@@ -34,6 +34,25 @@ internal static class JarvisAssistantTests
             "Google search must carry the query.");
         Assert(PcCommandService.TryParse("Outlook web aç") is { Target: "https://outlook.office.com/mail" }, "Outlook web must be the site.");
 
+        PcCommand? route = PcCommandService.TryParse("bana avm ye götüren bir yol tarifi al");
+        Assert(route is { Kind: PcCommandKind.OpenSite } &&
+               route.Target == "https://www.google.com/maps/dir/?api=1&destination=avm&travelmode=driving",
+            "Directions must open Google Maps to the named place: " + route?.Target);
+        route = PcCommandService.TryParse("Adana Park AVM'ye nasıl giderim");
+        Assert(route is not null && route.Target.Contains("destination=Adana%20Park%20AVM&", StringComparison.Ordinal),
+            "Apostrophe suffix must be removed: " + route?.Target);
+        route = PcCommandService.TryParse("Optimum'a yürüyerek yol tarifi");
+        Assert(route is not null && route.Target.EndsWith("travelmode=walking", StringComparison.Ordinal), "Walking mode.");
+        route = PcCommandService.TryParse("en yakın eczaneye yol tarifi");
+        Assert(route is not null && route.Target.StartsWith("https://www.google.com/maps/search/?api=1&query=en%20yak", StringComparison.Ordinal),
+            "Nearest requests must search the map: " + route?.Target);
+        Assert(PcCommandService.TryParse("Arsan Gaz'dan Optimum'a yol tarifi") is null, "Origin requests go to the agent.");
+        Assert(PcCommandService.TryParse("yol tarifi") is null, "Missing destination must not open anything.");
+        Assert(PcCommandService.TryBuildUrl("https://maps.google.com/x") is { Target: "https://maps.google.com/x" }, "https URL.");
+        Assert(PcCommandService.TryBuildUrl("file:///C:/Windows/system32/cmd.exe") is null, "file URLs must be rejected.");
+        Assert(PcCommandService.TryBuildUrl("javascript:alert(1)") is null, "script URLs must be rejected.");
+        Assert(PcCommandService.TryBuildUrl("https://user:pass@evil.example") is null, "Credential URLs must be rejected.");
+
         string[] rejected =
         [
             "cmd aç", "powershell çalıştır", "format c: çalıştır", "Teklif dosyasını aç", "/not Excel aç",

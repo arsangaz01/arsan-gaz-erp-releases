@@ -13,7 +13,10 @@ namespace ArsanGazERP.Services;
 public sealed class CampaignStore
 {
     public const int MaximumAudienceSize = 1000;
-    public const int MaximumEmailAttachmentBytes = 2 * 1024 * 1024;
+    // Graph me/sendMail rejects JSON requests above 4 MB; base64 inflates attachments by a third.
+    public const int MaximumEmailAttachmentBytes = 2560 * 1024;
+    public const int MaximumEmailAttachmentCount = 5;
+    public const int MaximumRepeatEveryDays = 365;
     public const int MaximumWhatsAppAttachmentBytes = 5 * 1024 * 1024;
     private const int ClaimLeaseSeconds = 120;
     private const int WorkerLeaseSeconds = 120;
@@ -199,6 +202,15 @@ CREATE TABLE IF NOT EXISTS CampaignRuntimeSettings(
  ExecutionEnabled INTEGER NOT NULL DEFAULT 0,
  UpdatedUtc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS CampaignGroups(
+ Id TEXT NOT NULL PRIMARY KEY,
+ OwnerSid TEXT NOT NULL,
+ Name TEXT NOT NULL COLLATE NOCASE,
+ Population TEXT NOT NULL,
+ MembersJson TEXT NOT NULL,
+ UpdatedUtc TEXT NOT NULL,
+ UNIQUE(OwnerSid, Name)
+);
 """;
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
@@ -208,6 +220,129 @@ CREATE TABLE IF NOT EXISTS CampaignRuntimeSettings(
             initializationGate.Release();
         }
     }
+
+    public async Task<IReadOnlyList<CampaignGroup>> ListGroupsAsync(CancellationToken cancellationToken)
+    {
+        await InitializeAsync(cancellationToken);
+        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT Id, Name, Population, MembersJson, UpdatedUtc FROM CampaignGroups WHERE OwnerSid=$owner ORDER BY Name;";
+        command.Parameters.AddWithValue("$owner", ownerSid);
+        List<CampaignGroup> groups = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            groups.Add(ReadGroup(reader));
+        return groups;
+    }
+
+    public async Task<CampaignGroup> GetGroupAsync(Guid id, CancellationToken cancellationToken)
+    {
+        await InitializeAsync(cancellationToken);
+        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT Id, Name, Population, MembersJson, UpdatedUtc FROM CampaignGroups WHERE Id=$id AND OwnerSid=$owner;";
+        command.Parameters.AddWithValue("$id", id.ToString("D"));
+        command.Parameters.AddWithValue("$owner", ownerSid);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? ReadGroup(reader)
+            : throw new KeyNotFoundException("Grup bulunamadı.");
+    }
+
+    public async Task<CampaignGroup> SaveGroupAsync(
+        Guid? id,
+        string name,
+        CampaignPopulation population,
+        IReadOnlyList<int> contactIds,
+        CancellationToken cancellationToken)
+    {
+        string trimmed = name?.Trim() ?? string.Empty;
+        if (trimmed.Length is < 1 or > 80)
+            throw new ArgumentException("Grup adı 1-80 karakter olmalıdır.", nameof(name));
+        if (contactIds is null || contactIds.Any(item => item <= 0) || contactIds.Distinct().Count() != contactIds.Count)
+            throw new ArgumentException("Grup üyeleri geçersiz veya tekrarlı.", nameof(contactIds));
+        if (contactIds.Count > MaximumAudienceSize)
+            throw new ArgumentException($"Bir grupta en fazla {MaximumAudienceSize} müşteri olabilir.", nameof(contactIds));
+        HashSet<int> known = (await ReadCandidatesAsync(population, cancellationToken)).Select(item => item.Id).ToHashSet();
+        if (contactIds.Any(item => !known.Contains(item)))
+            throw new InvalidOperationException("Gruptaki bazı müşteriler artık kayıtlı değil; listeyi yenileyin.");
+
+        await InitializeAsync(cancellationToken);
+        DateTimeOffset now = UtcNow;
+        Guid groupId = id ?? Guid.NewGuid();
+        int[] members = contactIds.OrderBy(item => item).ToArray();
+        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        try
+        {
+            int changed = id is null
+                ? await ExecuteAsync(connection, null, """
+INSERT INTO CampaignGroups(Id, OwnerSid, Name, Population, MembersJson, UpdatedUtc)
+VALUES($id,$owner,$name,$population,$members,$now);
+""", cancellationToken, ("$id", groupId.ToString("D")), ("$owner", ownerSid), ("$name", trimmed),
+                    ("$population", population.ToString()), ("$members", Serialize(members)), ("$now", Stamp(now)))
+                : await ExecuteAsync(connection, null, """
+UPDATE CampaignGroups SET Name=$name, Population=$population, MembersJson=$members, UpdatedUtc=$now
+WHERE Id=$id AND OwnerSid=$owner;
+""", cancellationToken, ("$id", groupId.ToString("D")), ("$owner", ownerSid), ("$name", trimmed),
+                    ("$population", population.ToString()), ("$members", Serialize(members)), ("$now", Stamp(now)));
+            if (changed != 1)
+                throw new KeyNotFoundException("Grup bulunamadı.");
+        }
+        catch (SqliteException exception) when (exception.SqliteErrorCode == 19)
+        {
+            throw new InvalidOperationException($"'{trimmed}' adında bir grup zaten var.", exception);
+        }
+        return new CampaignGroup(groupId, trimmed, population, members, now);
+    }
+
+    public async Task DeleteGroupAsync(Guid id, CancellationToken cancellationToken)
+    {
+        await InitializeAsync(cancellationToken);
+        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await ExecuteAsync(connection, null, "DELETE FROM CampaignGroups WHERE Id=$id AND OwnerSid=$owner;",
+            cancellationToken, ("$id", id.ToString("D")), ("$owner", ownerSid));
+    }
+
+    public async Task<IReadOnlyList<CampaignContactOption>> GetContactsByIdsAsync(
+        CampaignPopulation population,
+        IReadOnlyCollection<int> ids,
+        CancellationToken cancellationToken)
+    {
+        HashSet<int> wanted = ids.ToHashSet();
+        return (await ReadCandidatesAsync(population, cancellationToken))
+            .Where(candidate => wanted.Contains(candidate.Id))
+            .Select(candidate => new CampaignContactOption(
+                candidate.Population, candidate.Id, candidate.DisplayName, candidate.Email, candidate.Phone, candidate.IsActive))
+            .ToArray();
+    }
+
+    public async Task<bool> StartNextRoundAsync(Guid campaignId, long expectedRevision, DateTimeOffset nextRoundUtc, CancellationToken cancellationToken)
+    {
+        await InitializeAsync(cancellationToken);
+        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        CampaignSnapshot? current = await ReadSnapshotAsync(connection, transaction, campaignId, cancellationToken);
+        if (current is null || current.Revision != expectedRevision || current.State != CampaignState.Active ||
+            current.Input.RepeatEveryDays <= 0 ||
+            await HasRetryableRecipientsAsync(connection, transaction, campaignId, cancellationToken))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+        await ExecuteAsync(connection, transaction, """
+UPDATE CampaignRecipients SET State='Pending', Attempts=0, NextAttemptUtc=$next, ClaimToken=NULL, ClaimExpiresUtc=NULL,
+ LastOutcomeCode='NextRoundScheduled', ProviderMessageId=NULL, AcceptedUtc=NULL, DeliveryConfirmed=NULL
+WHERE CampaignId=$campaign AND State IN ('Accepted','Rejected','Skipped','Unknown');
+UPDATE Campaigns SET UpdatedUtc=$now WHERE Id=$campaign AND OwnerSid=$owner;
+""", cancellationToken, ("$next", Stamp(nextRoundUtc)), ("$campaign", campaignId.ToString("D")),
+            ("$now", Stamp(UtcNow)), ("$owner", ownerSid));
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
+    private static CampaignGroup ReadGroup(SqliteDataReader reader) =>
+        new(Guid.Parse(reader.GetString(0)), reader.GetString(1), Enum.Parse<CampaignPopulation>(reader.GetString(2)),
+            Deserialize<int[]>(reader.GetString(3)), ParseStamp(reader.GetString(4)));
 
     public async Task<CampaignDraft> SaveDraftAsync(Guid? campaignId, CampaignDraftInput input, long expectedRevision, CancellationToken cancellationToken)
     {
@@ -237,7 +372,10 @@ VALUES($id,$owner,1,'Draft',$draft,$now,$now);
         await using (SqliteCommand attempts = connection.CreateCommand())
         {
             attempts.Transaction = transaction;
-            attempts.CommandText = "SELECT COALESCE(SUM(Attempts),0), SUM(CASE WHEN State='Sending' THEN 1 ELSE 0 END) FROM CampaignRecipients WHERE CampaignId=$id;";
+            attempts.CommandText = """
+SELECT COALESCE(SUM(Attempts),0) + (SELECT COUNT(*) FROM CampaignAttempts WHERE CampaignId=$id),
+ SUM(CASE WHEN State='Sending' THEN 1 ELSE 0 END) FROM CampaignRecipients WHERE CampaignId=$id;
+""";
             attempts.Parameters.AddWithValue("$id", id.ToString("D"));
             await using SqliteDataReader reader = await attempts.ExecuteReaderAsync(cancellationToken);
             await reader.ReadAsync(cancellationToken);
@@ -872,7 +1010,8 @@ WHERE r.CampaignId=$id AND c.OwnerSid=$owner ORDER BY r.Id LIMIT $limit OFFSET $
         command.CommandText = """
 SELECT RecipientJson FROM CampaignRecipients r JOIN Campaigns c ON c.Id=r.CampaignId
 WHERE r.CampaignId=$id AND c.OwnerSid=$owner
- AND (r.State='Pending' OR r.State='Rejected' AND r.NextAttemptUtc IS NOT NULL AND r.NextAttemptUtc <= $now)
+ AND (r.State='Pending' AND (r.NextAttemptUtc IS NULL OR r.NextAttemptUtc <= $now)
+  OR r.State='Rejected' AND r.NextAttemptUtc IS NOT NULL AND r.NextAttemptUtc <= $now)
 ORDER BY r.Id;
 """;
         command.Parameters.AddWithValue("$id", campaignId.ToString("D"));
@@ -894,7 +1033,8 @@ ORDER BY r.Id;
 UPDATE CampaignRecipients
 SET State='Claimed', ClaimToken=$token, ClaimExpiresUtc=$expiry
 WHERE CampaignId=$campaign AND ContactKey=$contact
- AND (State='Pending' OR State='Rejected' AND NextAttemptUtc IS NOT NULL AND NextAttemptUtc <= $now)
+ AND (State='Pending' AND (NextAttemptUtc IS NULL OR NextAttemptUtc <= $now)
+  OR State='Rejected' AND NextAttemptUtc IS NOT NULL AND NextAttemptUtc <= $now)
  AND EXISTS(SELECT 1 FROM Campaigns c WHERE c.Id=$campaign AND c.OwnerSid=$owner AND c.Revision=$revision AND c.State='Active');
 """, cancellationToken, ("$token", token), ("$expiry", Stamp(now.AddSeconds(ClaimLeaseSeconds))),
             ("$campaign", campaignId.ToString("D")), ("$contact", contactKey), ("$now", Stamp(now)),
@@ -1678,7 +1818,7 @@ JOIN Campaigns c ON c.Id=a.CampaignId WHERE c.OwnerSid=$owner AND a.CampaignId=$
         return await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private static string NormalizeEndpoint(CampaignChannel channel, string endpoint)
+    internal static string NormalizeEndpoint(CampaignChannel channel, string endpoint)
     {
         if (channel == CampaignChannel.Email)
             return NormalizeEmail(endpoint);
@@ -1695,7 +1835,7 @@ JOIN Campaigns c ON c.Id=a.CampaignId WHERE c.OwnerSid=$owner AND a.CampaignId=$
                 return string.Empty;
             return address.Address.ToLowerInvariant();
         }
-        catch (FormatException)
+        catch (Exception exception) when (exception is FormatException or ArgumentException)
         {
             return string.Empty;
         }
@@ -1706,6 +1846,12 @@ JOIN Campaigns c ON c.Id=a.CampaignId WHERE c.OwnerSid=$owner AND a.CampaignId=$
         string normalized = new(endpoint.Where(character => character is not (' ' or '-' or '(' or ')' or '.')).ToArray());
         if (normalized.StartsWith('+'))
             normalized = normalized[1..];
+        else if (normalized.StartsWith("00", StringComparison.Ordinal))
+            normalized = normalized[2..];
+        else if (normalized.Length == 11 && normalized.StartsWith("05", StringComparison.Ordinal))
+            normalized = "90" + normalized[1..];
+        else if (normalized.Length == 10 && normalized.StartsWith('5'))
+            normalized = "90" + normalized;
         return normalized.Length is >= 8 and <= 15 && normalized.All(char.IsAsciiDigit) && normalized[0] != '0'
             ? normalized
             : string.Empty;

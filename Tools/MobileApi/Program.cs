@@ -41,6 +41,7 @@ builder.Services.AddHostedService<CursorRelayNotifier>();
 WebApplication app = builder.Build();
 app.UseMiddleware<DeviceAuthMiddleware>();
 MobileEndpoints.Map(app);
+MobileCampaignEndpoints.Map(app);
 
 try
 {

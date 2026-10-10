@@ -30,6 +30,31 @@ public sealed class MojibakeRepairService
             if (changed) changedRecords++;
         }
 
+        foreach (var product in await db.Products.ToListAsync())
+        {
+            bool changed = false;
+            changed |= AssignIfChanged(product.Name, value => product.Name = value);
+            changed |= AssignIfChanged(product.Unit, value => product.Unit = value);
+            if (changed) changedRecords++;
+        }
+
+        foreach (var customer in await db.Customers.ToListAsync())
+        {
+            bool changed = false;
+            changed |= AssignIfChanged(customer.CompanyName, value => customer.CompanyName = value);
+            changed |= AssignIfChanged(customer.ContactName, value => customer.ContactName = value);
+            changed |= AssignIfChanged(customer.City, value => customer.City = value);
+            changed |= AssignIfChanged(customer.District, value => customer.District = value);
+            changed |= AssignIfChanged(customer.Address, value => customer.Address = value);
+            changed |= AssignIfChanged(customer.TaxOffice, value => customer.TaxOffice = value);
+            if (changed) changedRecords++;
+        }
+
+        foreach (var cylinder in await db.Cylinders.ToListAsync())
+        {
+            if (AssignIfChanged(cylinder.GasType, value => cylinder.GasType = value)) changedRecords++;
+        }
+
         if (changedRecords > 0) await db.SaveChangesAsync();
         return changedRecords;
     }

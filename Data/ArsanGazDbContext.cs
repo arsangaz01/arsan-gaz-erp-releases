@@ -20,6 +20,7 @@ public sealed class ArsanGazDbContext : DbContext
  public DbSet<CrmCompany> CrmCompanies => Set<CrmCompany>();
  public DbSet<CrmActivity> CrmActivities => Set<CrmActivity>();
  public DbSet<CrmNote> CrmNotes => Set<CrmNote>();
+ public DbSet<CollectionReminder> CollectionReminders => Set<CollectionReminder>();
  public string DatabasePath { get; }
  public ArsanGazDbContext()
  {
@@ -48,6 +49,7 @@ public sealed class ArsanGazDbContext : DbContext
   b.Entity<Prospect>().HasIndex(x=>new { x.City, x.OpportunityScore });
   b.Entity<CrmCompany>().HasIndex(x=>x.SourceProspectId).IsUnique();
   b.Entity<CrmCompany>().HasIndex(x=>new { x.Status, x.Score });
+  b.Entity<CrmCompany>().HasIndex(x=>x.FollowUpAtUtc);
   b.Entity<CrmCompany>().HasMany(x=>x.Activities).WithOne(x=>x.Company).HasForeignKey(x=>x.CrmCompanyId).OnDelete(DeleteBehavior.Cascade);
   b.Entity<CrmCompany>().HasMany(x=>x.Notes).WithOne(x=>x.Company).HasForeignKey(x=>x.CrmCompanyId).OnDelete(DeleteBehavior.Cascade);
   b.Entity<Payment>().HasOne(x=>x.Invoice).WithMany(x=>x.Payments).HasForeignKey(x=>x.InvoiceId).OnDelete(DeleteBehavior.Restrict);

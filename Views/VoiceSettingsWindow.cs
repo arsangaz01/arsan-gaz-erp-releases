@@ -16,10 +16,16 @@ public sealed class VoiceSettingsWindow : Window
     private readonly Button _remove = new() { Content = "Anahtarı kaldır", Padding = new Thickness(12, 6, 12, 6), Margin = new Thickness(8, 0, 0, 0) };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
     private readonly ElevenLabsSpeechService _player = new();
+    private readonly CheckBox _piperEnabled = new() { Content = "Yanıtları ücretsiz yerel Piper sesiyle oku (öncelikli; açıkken ElevenLabs kullanılmaz)" };
+    private readonly ComboBox _piperVoices = new() { Padding = new Thickness(6, 4, 6, 4) };
+    private readonly Button _piperTest = new() { Content = "Dinle", Padding = new Thickness(12, 6, 12, 6) };
+    private readonly Button _piperSave = new() { Content = "Kaydet", Padding = new Thickness(12, 6, 12, 6), Margin = new Thickness(8, 0, 0, 0) };
+    private readonly TextBlock _piperStatus = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
+    private readonly PiperSpeechService _piperPlayer = new();
 
     public VoiceSettingsWindow()
     {
-        Title = "Jarvis Ses Ayarları — ElevenLabs";
+        Title = "Jarvis Ses Ayarları";
         Width = 640;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
@@ -45,7 +51,44 @@ public sealed class VoiceSettingsWindow : Window
             _voices.Text = string.Empty;
             _status.Text = "ElevenLabs anahtarı ve ayarları silindi; Jarvis Windows sesini kullanacak.";
         };
-        Closed += async (_, _) => await _player.DisposeAsync();
+        PiperSettings piper = PiperSpeechService.LoadSettings();
+        foreach (string voice in PiperSpeechService.Voices()) _piperVoices.Items.Add(voice);
+        _piperVoices.SelectedItem = _piperVoices.Items.Contains(piper.Voice) ? piper.Voice : _piperVoices.Items.Count > 0 ? _piperVoices.Items[0] : null;
+        _piperEnabled.IsChecked = piper.Enabled && PiperSpeechService.IsInstalled;
+        _piperEnabled.IsEnabled = _piperTest.IsEnabled = _piperSave.IsEnabled = PiperSpeechService.IsInstalled;
+        _piperStatus.Text = PiperSpeechService.IsInstalled
+            ? "Piper bu bilgisayarda kurulu; metin internete gönderilmez."
+            : "Piper kurulu değil: " + PiperSpeechService.Folder;
+        _piperTest.Click += async (_, _) =>
+        {
+            _piperTest.IsEnabled = false;
+            _piperStatus.Text = "Deneme sesi hazırlanıyor…";
+            try
+            {
+                await _piperPlayer.SpeakAsync("Merhaba, ben Jarvis. Arsan Gaz ERP sesli asistanınız hazır.", _piperVoices.SelectedItem as string);
+                _piperStatus.Text = "Deneme tamamlandı. Beğendiyseniz Kaydet'e basın.";
+            }
+            catch (Exception exception)
+            {
+                _piperStatus.Text = "Deneme başarısız: " + exception.GetBaseException().Message;
+            }
+            finally
+            {
+                _piperTest.IsEnabled = true;
+            }
+        };
+        _piperSave.Click += (_, _) =>
+        {
+            PiperSpeechService.SaveSettings(_piperEnabled.IsChecked == true, _piperVoices.SelectedItem as string ?? string.Empty);
+            _piperStatus.Text = _piperEnabled.IsChecked == true
+                ? "Kaydedildi. Ajan Sohbeti'nde \"Yanıtları seslendir\" açıkken Jarvis Piper sesiyle konuşur."
+                : "Kaydedildi (Piper kapalı).";
+        };
+        Closed += async (_, _) =>
+        {
+            await _player.DisposeAsync();
+            await _piperPlayer.DisposeAsync();
+        };
     }
 
     private UIElement BuildLayout()
@@ -53,7 +96,26 @@ public sealed class VoiceSettingsWindow : Window
         StackPanel root = new() { Margin = new Thickness(18) };
         root.Children.Add(new TextBlock
         {
-            Text = "ElevenLabs ses seçeneği",
+            Text = "Ücretsiz yerel ses (Piper)",
+            FontSize = 21,
+            FontWeight = FontWeights.Bold,
+            Foreground = ThemeBrush("InkBrush")
+        });
+        root.Children.Add(Label("Türkçe ses"));
+        root.Children.Add(_piperVoices);
+        _piperEnabled.Margin = new Thickness(0, 10, 0, 0);
+        _piperEnabled.Foreground = ThemeBrush("InkBrush");
+        root.Children.Add(_piperEnabled);
+        StackPanel piperButtons = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
+        piperButtons.Children.Add(_piperTest);
+        piperButtons.Children.Add(_piperSave);
+        root.Children.Add(piperButtons);
+        _piperStatus.Foreground = ThemeBrush("MutedBrush");
+        root.Children.Add(_piperStatus);
+        root.Children.Add(new Separator { Margin = new Thickness(0, 16, 0, 12) });
+        root.Children.Add(new TextBlock
+        {
+            Text = "ElevenLabs ses seçeneği (ücretli)",
             FontSize = 21,
             FontWeight = FontWeights.Bold,
             Foreground = ThemeBrush("InkBrush")
