@@ -1,3 +1,4 @@
+using ArsanGazMobile.Services;
 using ZXing.Net.Maui;
 using ZXing.Net.Maui.Controls;
 
@@ -26,10 +27,22 @@ public sealed class ScanPage : ContentPage
         };
         _reader.BarcodesDetected += OnDetected;
 
-        Button cancel = new() { Text = continuous ? "Bitti" : "Vazgeç", Margin = new Thickness(16) };
+        Button cancel = new() { Text = continuous ? "Bitti" : "Vazgeç" };
         cancel.Clicked += async (_, _) => await CloseAsync(continuous ? _codes : null);
-        Button torch = new() { Text = "🔦 Fener", Margin = new Thickness(16) };
+        Button torch = new() { Text = "🔦 Fener" };
         torch.Clicked += (_, _) => _reader.IsTorchOn = !_reader.IsTorchOn;
+        Button photo = new() { Text = "🖼 Fotoğraftan" };
+        photo.Clicked += async (_, _) => await ReadFromPhotoAsync();
+
+        Grid buttons = new()
+        {
+            Padding = new Thickness(12, 12, 12, 20),
+            ColumnSpacing = 8,
+            ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star)]
+        };
+        buttons.Add(torch, 0, 0);
+        buttons.Add(photo, 1, 0);
+        buttons.Add(cancel, 2, 0);
 
         Grid root = new()
         {
@@ -43,7 +56,7 @@ public sealed class ScanPage : ContentPage
         }
 
         root.Add(_reader, 0, 1);
-        root.Add(new HorizontalStackLayout { HorizontalOptions = LayoutOptions.Center, Children = { torch, cancel } }, 0, 2);
+        root.Add(buttons, 0, 2);
         Content = root;
     }
 
@@ -95,6 +108,68 @@ public sealed class ScanPage : ContentPage
             Buzz();
             await CloseAsync([value]);
         });
+    }
+
+    private async Task ReadFromPhotoAsync()
+    {
+        string? source = await DisplayActionSheetAsync("Barkodu görüntüden oku", "Vazgeç", null, "Galeriden seç", "Fotoğraf çek");
+        if (source is not ("Galeriden seç" or "Fotoğraf çek"))
+        {
+            return;
+        }
+
+        _reader.IsDetecting = false;
+        try
+        {
+            FileResult? file = source == "Fotoğraf çek"
+                ? await MediaPicker.Default.CapturePhotoAsync(new MediaPickerOptions { Title = "Barkodun fotoğrafı" })
+                : (await MediaPicker.Default.PickPhotosAsync(new MediaPickerOptions { Title = "Barkodlu görüntü", SelectionLimit = 1 }))?.FirstOrDefault();
+            if (file is null)
+            {
+                return;
+            }
+
+            IReadOnlyList<string> found;
+            await using (Stream stream = await file.OpenReadAsync())
+            {
+                found = await ImageBarcodeReader.ReadAsync(stream);
+            }
+
+            if (found.Count == 0)
+            {
+                await DisplayAlertAsync("Barkod bulunamadı",
+                    "Görüntüde okunabilir barkod veya QR kod yok. Barkodun net, düz ve tamamen göründüğü bir fotoğraf deneyin.", "Tamam");
+                return;
+            }
+
+            Buzz();
+            if (_continuous)
+            {
+                List<string> fresh = found.Where(code => !_codes.Contains(code, StringComparer.OrdinalIgnoreCase)).ToList();
+                _codes.AddRange(fresh);
+                _counter.Text = $"🖼 Görüntüden {found.Count} kod bulundu, {fresh.Count} yeni · toplam {_codes.Count} tüp";
+                return;
+            }
+
+            string? chosen = found.Count == 1
+                ? found[0]
+                : await DisplayActionSheetAsync("Görüntüde birden çok kod var", "Vazgeç", null, found.ToArray());
+            if (chosen is not null && found.Contains(chosen))
+            {
+                await CloseAsync([chosen]);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await DisplayAlertAsync("Görüntü", exception.Message, "Tamam");
+        }
+        finally
+        {
+            if (!_result.Task.IsCompleted)
+            {
+                _reader.IsDetecting = true;
+            }
+        }
     }
 
     private static void Buzz()
