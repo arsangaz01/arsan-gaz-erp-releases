@@ -9,6 +9,22 @@ if (args is ["--yerel-eslestir", { Length: > 0 } localDeviceName, { Length: > 0 
     return;
 }
 
+if (args is ["--panel-sifre-ayarla", { Length: > 0 } panelUser])
+{
+    MobileApiPaths.Ensure();
+    string? panelPassword = Console.In.ReadLine();
+    if (string.IsNullOrEmpty(panelPassword) || panelPassword.Length < 8)
+    {
+        Console.Error.WriteLine("Şifre en az 8 karakter olmalı (standart girişten okunur).");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    WebPanelAuth.SaveCredentials(WebPanelAuth.CreateCredentials(panelUser, panelPassword));
+    MobileLog.Write("Web panel kullanıcısı ayarlandı: " + panelUser);
+    return;
+}
+
 using Mutex singleInstance = new(true, @"Local\ArsanGazERP.MobileApi", out bool firstInstance);
 if (!firstInstance)
 {
@@ -50,6 +66,7 @@ WebApplication app = builder.Build();
 app.UseMiddleware<DeviceAuthMiddleware>();
 MobileEndpoints.Map(app);
 MobileCampaignEndpoints.Map(app);
+WebPanelEndpoints.Map(app);
 
 try
 {

@@ -56,4 +56,9 @@
     <Compile Include="..\ErpMcpServer\ErpTools.cs" Link="Shared\ErpTools.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="WebPanel\panel.html" LogicalName="WebPanel.panel.html" />
+    <EmbeddedResource Include="WebPanel\panel.js" LogicalName="WebPanel.panel.js" />
+  </ItemGroup>
+
 </Project>
