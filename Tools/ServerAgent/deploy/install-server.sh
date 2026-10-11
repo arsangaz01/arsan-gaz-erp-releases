@@ -13,12 +13,12 @@ install -d -m 0700 -o arsangaz -g arsangaz "$PROD" "$PROD/ArsanGazERP" "$PROD/Ar
 
 install -d -m 0755 -o root -g root /opt/arsangaz/bin
 install -m 0755 -o root -g root "$HERE/inbox-sync.sh" /opt/arsangaz/bin/inbox-sync.sh
-install -m 0700 -o root -g root "$HERE/set-secret.sh" /opt/arsangaz/bin/set-secret.sh
+install -m 0700 -o root -g root "$HERE/set-agent-value.sh" /opt/arsangaz/bin/set-agent-value.sh
 
 if [ ! -f /etc/arsangaz/serveragent.env ]; then
   umask 077
   cat > /etc/arsangaz/serveragent.env <<'EOF'
-# ArsanGazERP sunucu ajanı. Gizli değerleri Tools/ServerAgent/Set-ServerSecret.ps1 ile yazın; elle düzenlemeyin.
+# ArsanGazERP sunucu ajanı. Gizli değerleri Tools/ServerAgent/Set-ServerAgentValue.ps1 ile yazın; elle düzenlemeyin.
 # Telegram dinleme (getUpdates) yalnızca Switch-TelegramListener.ps1 ile açılır: aynı anda tek dinleyici olabilir.
 SERVERAGENT_TELEGRAM_POLLING=0
 SERVERAGENT_CAMPAIGNS=0

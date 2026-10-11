@@ -19,9 +19,9 @@ PC tarafı: `%LOCALAPPDATA%\ArsanGazERP\MobileApi\tunnel-disabled.txt` PC'deki t
 
 ## Gizli değerler (yalnızca PC'den, gizli giriş)
 ```powershell
-.\Tools\ServerAgent\Set-ServerSecret.ps1 -Status
-.\Tools\ServerAgent\Set-ServerSecret.ps1 -Key TELEGRAM_BOT_TOKEN
-.\Tools\ServerAgent\Set-ServerSecret.ps1 -Key CLOUD_RELAY_TOKEN
+.\Tools\ServerAgent\Set-ServerAgentValue.ps1 -Status
+.\Tools\ServerAgent\Set-ServerAgentValue.ps1 -Key TELEGRAM_BOT_TOKEN
+.\Tools\ServerAgent\Set-ServerAgentValue.ps1 -Key CLOUD_RELAY_TOKEN
 .\Tools\ServerAgent\Switch-TelegramListener.ps1 -To Server   # iki token da girildikten sonra
 ```
 

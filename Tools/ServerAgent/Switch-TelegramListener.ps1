@@ -5,7 +5,7 @@
       -To Server: stop AgentWatcher, set TelegramPollingDisabled=true (PC keeps sending in send-only mode), copy the
                   update offset to the server, enable SERVERAGENT_TELEGRAM_POLLING, start AgentWatcher again.
       -To Pc:     disable server polling first, copy the offset back, clear the flag and restart AgentWatcher.
-    Refuses -To Server until the bot token and the relay token are stored on the server (Set-ServerSecret.ps1).
+    Refuses -To Server until the bot token and the relay token are stored on the server (Set-ServerAgentValue.ps1).
 #>
 [CmdletBinding()]
 param(
@@ -56,10 +56,10 @@ function Get-ServerStatus {
 }
 
 if ($To -eq 'Server') {
-    $secrets = Invoke-Server 'sudo /opt/arsangaz/bin/set-secret.sh --status'
+    $secrets = Invoke-Server 'sudo /opt/arsangaz/bin/set-agent-value.sh --status'
     foreach ($required in 'TELEGRAM_BOT_TOKEN=set', 'TELEGRAM_CHAT_ID=set', 'CLOUD_RELAY_URL=set', 'CLOUD_RELAY_TOKEN=set') {
         if ($secrets -notcontains $required) {
-            throw "Sunucuda eksik ayar: $($required -replace '=set$', ''). Once Set-ServerSecret.ps1 ile girin; gecis yapilmadi."
+            throw "Sunucuda eksik ayar: $($required -replace '=set$', ''). Once Set-ServerAgentValue.ps1 ile girin; gecis yapilmadi."
         }
     }
 
@@ -73,7 +73,7 @@ if ($To -eq 'Server') {
                 Invoke-Server "mkdir -p `$(dirname $serverOffset) && tr -d '\r\n' > $serverOffset.tmp && mv -f $serverOffset.tmp $serverOffset" $offset | Out-Null
             }
         }
-        Invoke-Server 'sudo /opt/arsangaz/bin/set-secret.sh SERVERAGENT_TELEGRAM_POLLING' '1' | Out-Null
+        Invoke-Server 'sudo /opt/arsangaz/bin/set-agent-value.sh SERVERAGENT_TELEGRAM_POLLING' '1' | Out-Null
         Invoke-Server 'sudo systemctl restart arsangaz-serveragent' | Out-Null
     }
     finally {
@@ -86,7 +86,7 @@ if ($To -eq 'Server') {
     if (-not $status.pollingConnected) { Write-Warning 'Sunucu dinlemesi henuz bagli gorunmuyor; journalctl -u arsangaz-serveragent kontrol edin. Geri almak icin: -To Pc' }
 }
 else {
-    Invoke-Server 'sudo /opt/arsangaz/bin/set-secret.sh SERVERAGENT_TELEGRAM_POLLING' '0' | Out-Null
+    Invoke-Server 'sudo /opt/arsangaz/bin/set-agent-value.sh SERVERAGENT_TELEGRAM_POLLING' '0' | Out-Null
     Invoke-Server 'sudo systemctl restart arsangaz-serveragent' | Out-Null
     $offset = (Invoke-Server "cat $serverOffset 2>/dev/null || true" | Select-Object -Last 1)
     Stop-Watcher
