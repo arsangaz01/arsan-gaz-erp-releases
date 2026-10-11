@@ -601,13 +601,7 @@ internal sealed partial class ControlCenterForm : Form
         this.backgroundMode = backgroundMode;
         this.settings = settings;
         paused = settings.QueuePaused;
-        string crmDatabasePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments),
-            "ArsanGazERP", "CRM", "arsangaz-crm.db");
-        string erpDatabasePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ArsanGazERP", "Data", "arsangaz-erp-v3.db");
-        CampaignStore campaignStore = new(crmDatabasePath, erpDatabasePath);
+        CampaignStore campaignStore = CampaignStore.CreateForCurrentWindowsUser();
         campaignWhatsApp = new WhatsAppBusinessService();
         campaignTransport = new CampaignTransport(
             MicrosoftGraph.GetCampaignTokenAsync,
@@ -751,7 +745,7 @@ internal sealed partial class ControlCenterForm : Form
                         using CancellationTokenSource release = new(TimeSpan.FromSeconds(5));
                         await campaignService.Store.ReleaseWorkerLeaseAsync(release.Token);
                     }
-                    catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or OperationCanceledException or IOException)
+                    catch (Exception exception) when (exception is System.Data.Common.DbException or OperationCanceledException or IOException)
                     {
                         AppLog.Write("CAMPAIGN", "Lease release skipped: " + exception.GetType().Name);
                     }

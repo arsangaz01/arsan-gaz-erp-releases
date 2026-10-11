@@ -22,18 +22,18 @@ public sealed class ArsanGazDbContext : DbContext
  public DbSet<CrmActivity> CrmActivities => Set<CrmActivity>();
  public DbSet<CrmNote> CrmNotes => Set<CrmNote>();
  public DbSet<CollectionReminder> CollectionReminders => Set<CollectionReminder>();
+ // SQLite file path; on PostgreSQL a description of the server database (no secrets).
  public string DatabasePath { get; }
  public ArsanGazDbContext()
  {
-  if(Environment.GetEnvironmentVariable("ARSANGAZ_ERP_DB") is { Length: > 0 } custom){DatabasePath=custom;return;}
-  string d=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"ArsanGazERP","Data");
-  Directory.CreateDirectory(d); DatabasePath=Path.Combine(d,"arsangaz-erp-v3.db");
+  if(ArsanDatabase.IsPostgres){DatabasePath=ArsanDatabase.Describe(DatabaseKind.Erp);return;}
+  DatabasePath=ArsanDatabase.SqlitePath(DatabaseKind.Erp);
+  if(Environment.GetEnvironmentVariable("ARSANGAZ_ERP_DB") is not { Length: > 0 })Directory.CreateDirectory(Path.GetDirectoryName(DatabasePath)!);
  }
  protected override void OnConfiguring(DbContextOptionsBuilder b)
     {
-        b
-            .UseSqlite($"Data Source={DatabasePath};Foreign Keys=True")
-            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+        ArsanDbEf.Configure(b, DatabaseKind.Erp, $"Data Source={DatabasePath};Foreign Keys=True");
+        b.ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
     }
  protected override void OnModelCreating(ModelBuilder b)
  {
@@ -57,5 +57,6 @@ public sealed class ArsanGazDbContext : DbContext
   b.Entity<CrmCompany>().HasMany(x=>x.Activities).WithOne(x=>x.Company).HasForeignKey(x=>x.CrmCompanyId).OnDelete(DeleteBehavior.Cascade);
   b.Entity<CrmCompany>().HasMany(x=>x.Notes).WithOne(x=>x.Company).HasForeignKey(x=>x.CrmCompanyId).OnDelete(DeleteBehavior.Cascade);
   b.Entity<Payment>().HasOne(x=>x.Invoice).WithMany(x=>x.Payments).HasForeignKey(x=>x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+  ArsanDbEf.ApplyPostgresConventions(b, DatabaseKind.Erp);
  }
 }

@@ -46,6 +46,12 @@ CREATE INDEX IF NOT EXISTS IX_CollectionReminders_Status_DueDate ON CollectionRe
     public static async Task EnsureSchemaAsync(CancellationToken cancellationToken = default)
     {
         await using ArsanGazDbContext db = new();
+        if (ArsanDatabase.IsPostgres)
+        {
+            await ArsanDbEf.EnsurePostgresSchemaAsync(db, DatabaseKind.Erp, cancellationToken);
+            return;
+        }
+
         await db.Database.ExecuteSqlRawAsync(SchemaSql, cancellationToken);
     }
 

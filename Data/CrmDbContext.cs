@@ -7,14 +7,8 @@ namespace ArsanGazERP.Data;
 
 internal sealed class CrmDbContext : DbContext
 {
-    public static string SharedDatabasePath =>
-        Environment.GetEnvironmentVariable("ARSANGAZ_CRM_DB") is { Length: > 0 } custom
-            ? custom
-            : Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments),
-                "ArsanGazERP",
-                "CRM",
-                "arsangaz-crm.db");
+    // SQLite file path of the shared CRM database (unused when ArsanDatabase.IsPostgres).
+    public static string SharedDatabasePath => ArsanDatabase.SqlitePath(DatabaseKind.Crm);
 
     public DbSet<CrmCompany> CrmCompanies => Set<CrmCompany>();
     public DbSet<CrmActivity> CrmActivities => Set<CrmActivity>();
@@ -23,9 +17,8 @@ internal sealed class CrmDbContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder options)
     {
-        options
-            .UseSqlite($"Data Source={SharedDatabasePath};Foreign Keys=True;Default Timeout=30")
-            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+        ArsanDbEf.Configure(options, DatabaseKind.Crm, $"Data Source={SharedDatabasePath};Foreign Keys=True;Default Timeout=30");
+        options.ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -44,5 +37,6 @@ internal sealed class CrmDbContext : DbContext
             .HasForeignKey(note => note.CrmCompanyId)
             .OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<CrmImportMarker>().HasKey(marker => marker.UserSid);
+        ArsanDbEf.ApplyPostgresConventions(modelBuilder, DatabaseKind.Crm);
     }
 }

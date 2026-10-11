@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.90.1" />
     <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.90.1" />
     <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
@@ -36,6 +37,9 @@
   <ItemGroup>
     <Compile Include="..\..\Data\ArsanGazDbContext.cs" Link="Shared\ArsanGazDbContext.cs" />
     <Compile Include="..\..\Data\CrmDbContext.cs" Link="Shared\CrmDbContext.cs" />
+    <Compile Include="..\..\Data\ArsanDatabase.cs" Link="Shared\ArsanDatabase.cs" />
+    <Compile Include="..\..\Data\ArsanDbEf.cs" Link="Shared\ArsanDbEf.cs" />
+    <Compile Include="..\..\Data\PostgresSchema.cs" Link="Shared\PostgresSchema.cs" />
     <Compile Include="..\..\Models\*.cs" Link="Shared\Models\%(Filename).cs" />
     <Compile Include="..\..\Services\AgentChatService.cs" Link="Shared\AgentChatService.cs" />
     <Compile Include="..\..\Services\AgentChatPromptBuilder.cs" Link="Shared\AgentChatPromptBuilder.cs" />

@@ -10,6 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.90.1" />
     <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.90.1" />
@@ -17,6 +18,8 @@
   <ItemGroup>
     <Compile Include="..\..\Models\CampaignModels.cs" Link="CampaignModels.cs" />
     <Compile Include="..\..\Services\CampaignStore.cs" Link="CampaignStore.cs" />
+    <Compile Include="..\..\Data\ArsanDatabase.cs" Link="ArsanDatabase.cs" />
+    <Compile Include="..\..\Data\PostgresSchema.cs" Link="PostgresSchema.cs" />
     <Compile Include="..\..\Services\CampaignService.cs" Link="CampaignService.cs" />
     <Compile Include="..\..\Services\CampaignScheduler.cs" Link="CampaignScheduler.cs" />
     <Compile Include="..\..\Services\CampaignTransport.cs" Link="CampaignTransport.cs" />

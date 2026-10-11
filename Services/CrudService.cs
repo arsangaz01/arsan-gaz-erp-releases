@@ -89,7 +89,7 @@ public sealed class CrudService
    await using var crm=new CrmDbContext();
    return await crm.CrmCompanies.AsNoTracking().Select(x=>new CrmCompany{Id=x.Id,CompanyName=x.CompanyName,Phone=x.Phone,Email=x.Email,City=x.City,Address=x.Address}).ToListAsync();
   }
-  catch(Exception exception) when(exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+  catch(Exception exception) when(exception is System.Data.Common.DbException or InvalidOperationException)
   {
    return [];
   }

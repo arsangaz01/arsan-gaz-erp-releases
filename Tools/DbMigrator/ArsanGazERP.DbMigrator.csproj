@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ArsanGazERP.DbMigrator</RootNamespace>
+    <AssemblyName>ArsanGazERP.DbMigrator</AssemblyName>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Data\ArsanGazDbContext.cs" Link="Shared\ArsanGazDbContext.cs" />
+    <Compile Include="..\..\Data\CrmDbContext.cs" Link="Shared\CrmDbContext.cs" />
+    <Compile Include="..\..\Data\ArsanDatabase.cs" Link="Shared\ArsanDatabase.cs" />
+    <Compile Include="..\..\Data\ArsanDbEf.cs" Link="Shared\ArsanDbEf.cs" />
+    <Compile Include="..\..\Data\PostgresSchema.cs" Link="Shared\PostgresSchema.cs" />
+    <Compile Include="..\..\Models\*.cs" Link="Shared\Models\%(Filename).cs" />
+  </ItemGroup>
+
+</Project>

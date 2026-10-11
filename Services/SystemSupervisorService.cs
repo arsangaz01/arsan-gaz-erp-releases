@@ -95,8 +95,8 @@ public sealed class SystemSupervisorService : IDisposable
         List<SupervisorCheck> checks = [];
 
         await using ArsanGazDbContext erp = new();
-        checks.Add(await CheckSqliteAsync("ERP veritabanı", erp.DatabasePath, cancellationToken));
-        checks.Add(await CheckSqliteAsync("Ortak CRM veritabanı", CrmDbContext.SharedDatabasePath, cancellationToken));
+        checks.Add(await CheckDatabaseAsync("ERP veritabanı", DatabaseKind.Erp, cancellationToken));
+        checks.Add(await CheckDatabaseAsync("Ortak CRM veritabanı", DatabaseKind.Crm, cancellationToken));
 
         DateTime localDayStart = DateTime.Today;
         DateTime todayStartUtc = localDayStart.ToUniversalTime();
@@ -262,11 +262,30 @@ public sealed class SystemSupervisorService : IDisposable
         return null;
     }
 
-    private static async Task<SupervisorCheck> CheckSqliteAsync(
+    private static async Task<SupervisorCheck> CheckDatabaseAsync(
         string name,
-        string databasePath,
+        DatabaseKind kind,
         CancellationToken cancellationToken)
     {
+        if (ArsanDatabase.IsPostgres)
+        {
+            try
+            {
+                await using System.Data.Common.DbConnection server = await ArsanDatabase.OpenAsync(kind, readOnly: true, cancellationToken);
+                await using System.Data.Common.DbCommand ping = ArsanDatabase.Command(server, null,
+                    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema();");
+                long tables = Convert.ToInt64(await ping.ExecuteScalarAsync(cancellationToken));
+                return new(name, tables > 0, tables > 0
+                    ? $"PostgreSQL bağlantısı başarılı ({ArsanDatabase.Describe(kind)}, {tables} tablo)."
+                    : $"PostgreSQL şemasında tablo yok: {ArsanDatabase.Describe(kind)}");
+            }
+            catch (Exception exception) when (exception is System.Data.Common.DbException or TimeoutException or InvalidOperationException)
+            {
+                return new(name, false, $"PostgreSQL'e bağlanılamadı ({ArsanDatabase.Describe(kind)}): {exception.GetBaseException().Message}");
+            }
+        }
+
+        string databasePath = ArsanDatabase.SqlitePath(kind);
         if (!File.Exists(databasePath))
         {
             return new(name, false, $"Veritabanı bulunamadı: {databasePath}");

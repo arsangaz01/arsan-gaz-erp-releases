@@ -5,7 +5,8 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
+using ArsanGazERP.Data;
 
 namespace ArsanGazERP.Services;
 
@@ -63,7 +64,7 @@ internal static partial class CrmEmailFinderService
     /// <summary>Starts a background batch and returns immediately with a short Turkish status line.</summary>
     public static async Task<string> StartBatchAsync(int limit, bool searchWeb, string? city, CancellationToken cancellationToken)
     {
-        if (!File.Exists(CrmDatabasePath)) return "CRM veritabanı bulunamadı: " + CrmDatabasePath;
+        if (!ArsanDatabase.Exists(DatabaseKind.Crm)) return "CRM veritabanı bulunamadı: " + CrmDatabasePath;
         int batch = Math.Clamp(limit <= 0 ? DefaultBatch : limit, 1, MaximumBatch);
         Directory.CreateDirectory(StateDirectory);
         if (Interlocked.CompareExchange(ref running, 1, 0) != 0)
@@ -148,20 +149,18 @@ internal static partial class CrmEmailFinderService
     /// <summary>Looks up one company by name and fills its e-mail synchronously (used for single requests).</summary>
     public static async Task<string> FindForCompanyAsync(string name, CancellationToken cancellationToken)
     {
-        if (!File.Exists(CrmDatabasePath)) return "CRM veritabanı bulunamadı.";
+        if (!ArsanDatabase.Exists(DatabaseKind.Crm)) return "CRM veritabanı bulunamadı.";
         string trimmed = name.Trim();
         if (trimmed.Length < 3) return "Firma adı en az 3 karakter olmalı.";
         List<CrmEmailCandidate> matches = [];
         List<string> existing = [];
-        await using (SqliteConnection connection = await OpenAsync(readOnly: true, cancellationToken))
-        await using (SqliteCommand command = connection.CreateCommand())
-        {
-            command.CommandText = """
+        await using (DbConnection connection = await OpenAsync(readOnly: true, cancellationToken))
+        await using (DbCommand command = ArsanDatabase.Command(connection, null, $"""
                 SELECT Id, CompanyName, City, Website, Email FROM CrmCompanies
-                WHERE CompanyName LIKE $name ESCAPE '\' ORDER BY length(CompanyName) LIMIT 5
-                """;
-            command.Parameters.AddWithValue("$name", "%" + trimmed.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%");
-            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+                WHERE CompanyName {ArsanDatabase.Like} $name ESCAPE '\' ORDER BY length(CompanyName) LIMIT 5
+                """, ("$name", "%" + trimmed.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%")))
+        {
+            await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
                 string email = reader.IsDBNull(4) ? string.Empty : reader.GetString(4).Trim();
@@ -245,7 +244,7 @@ internal static partial class CrmEmailFinderService
                         }
                     }
                     catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or IOException
-                                                          or SqliteException or UriFormatException or InvalidOperationException)
+                                                          or DbException or UriFormatException or InvalidOperationException)
                     {
                         AppendLog($"{candidate.Name}: {exception.GetBaseException().Message}");
                     }
@@ -470,15 +469,13 @@ internal static partial class CrmEmailFinderService
     {
         List<CrmEmailCandidate> withSite = [];
         List<CrmEmailCandidate> withoutSite = [];
-        await using SqliteConnection connection = await OpenAsync(readOnly: true, cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        await using DbConnection connection = await OpenAsync(readOnly: true, cancellationToken);
+        await using DbCommand command = ArsanDatabase.Command(connection, null, $"""
             SELECT Id, CompanyName, City, Website FROM CrmCompanies
-            WHERE ifnull(trim(Email), '') = '' AND ($city = '' OR City LIKE $city)
+            WHERE COALESCE(trim(Email), '') = '' AND ($city = '' OR City {ArsanDatabase.Like} $city)
             ORDER BY Score DESC, Id
-            """;
-        command.Parameters.AddWithValue("$city", string.IsNullOrWhiteSpace(city) ? string.Empty : city.Trim());
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            """, ("$city", string.IsNullOrWhiteSpace(city) ? string.Empty : city.Trim()));
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         DateTime cutoff = DateTime.UtcNow - RetryAfter;
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -495,17 +492,13 @@ internal static partial class CrmEmailFinderService
 
     private static async Task<bool> SaveAsync(CrmEmailCandidate candidate, CrmEmailFinding finding, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenAsync(readOnly: false, cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        await using DbConnection connection = await OpenAsync(readOnly: false, cancellationToken);
+        await using DbCommand command = ArsanDatabase.Command(connection, null, """
             UPDATE CrmCompanies
             SET Email = $email,
-                Website = CASE WHEN ifnull(trim(Website), '') = '' AND $website IS NOT NULL THEN $website ELSE Website END
-            WHERE Id = $id AND ifnull(trim(Email), '') = ''
-            """;
-        command.Parameters.AddWithValue("$email", finding.Email);
-        command.Parameters.AddWithValue("$website", (object?)finding.DiscoveredWebsite ?? DBNull.Value);
-        command.Parameters.AddWithValue("$id", candidate.Id);
+                Website = CASE WHEN COALESCE(trim(Website), '') = '' AND CAST($website AS TEXT) IS NOT NULL THEN CAST($website AS TEXT) ELSE Website END
+            WHERE Id = $id AND COALESCE(trim(Email), '') = ''
+            """, ("$email", finding.Email), ("$website", finding.DiscoveredWebsite), ("$id", candidate.Id));
         bool saved = await command.ExecuteNonQueryAsync(cancellationToken) == 1;
         if (saved)
         {
@@ -533,17 +526,8 @@ internal static partial class CrmEmailFinderService
         return saved;
     }
 
-    private static async Task<SqliteConnection> OpenAsync(bool readOnly, CancellationToken cancellationToken)
-    {
-        SqliteConnection connection = new(new SqliteConnectionStringBuilder
-        {
-            DataSource = CrmDatabasePath,
-            Mode = readOnly ? SqliteOpenMode.ReadOnly : SqliteOpenMode.ReadWrite,
-            DefaultTimeout = 30
-        }.ToString());
-        await connection.OpenAsync(cancellationToken);
-        return connection;
-    }
+    private static Task<DbConnection> OpenAsync(bool readOnly, CancellationToken cancellationToken) =>
+        ArsanDatabase.OpenAsync(DatabaseKind.Crm, readOnly, cancellationToken);
 
     private static async Task<Dictionary<int, DateTime>> ReadAttemptsAsync(CancellationToken cancellationToken)
     {

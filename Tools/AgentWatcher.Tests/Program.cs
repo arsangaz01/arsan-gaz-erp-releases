@@ -12,6 +12,12 @@ if (args.Contains("--startup-paths-only", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--database-provider-only", StringComparer.Ordinal))
+{
+    await ArsanGazERP.AgentWatcher.Tests.DatabaseProviderTests.RunAsync();
+    return;
+}
+
 if (args.Length == 2 && args[0] == "--watcher-activation-send")
 {
     AgentWatcherActivation.RequestShow(args[1], TimeSpan.FromSeconds(2));
@@ -166,6 +172,7 @@ await ArsanGazERP.AgentWatcher.Tests.TelegramWorkflowNoticeTests.RunAsync();
 await WorkflowApprovalTests.RunAsync();
 await WorkflowDispatchPromptTests.RunAsync();
 await WorkflowActivationIntegrationTests.RunAsync();
+await ArsanGazERP.AgentWatcher.Tests.DatabaseProviderTests.RunAsync();
 await ArsanGazERP.AgentWatcher.Tests.CampaignTests.RunAsync();
 Console.WriteLine("PASS: existing ERP/AgentWatcher regressions and expanded offline campaign correctness/safety/transport regressions.");
 

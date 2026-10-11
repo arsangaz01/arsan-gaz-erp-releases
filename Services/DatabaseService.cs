@@ -8,7 +8,8 @@ public sealed class DatabaseService
  public async Task InitializeAsync()
  {
   await using ArsanGazDbContext db=new();
-  await db.Database.MigrateAsync();
+  if(ArsanDatabase.IsPostgres)await ArsanDbEf.EnsurePostgresSchemaAsync(db,DatabaseKind.Erp);
+  else await db.Database.MigrateAsync();
   if(!await db.Products.AnyAsync())
   {
    db.Products.AddRange(New("OKSIJEN","Oksijen"),New("AZOT","Azot"),New("ARGON","Argon"),New("HELYUM","Helyum"),New("ASETILEN","Asetilen"),New("HIDROJEN","Hidrojen"),New("KURU-HAVA","Kuru Hava"),New("BALON-GAZI","Balon Gazı"));

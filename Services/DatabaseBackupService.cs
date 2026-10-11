@@ -10,6 +10,9 @@ public sealed class DatabaseBackupService
  public DatabaseBackupService(GraphService graph)=>_graph=graph;
  public async Task<string> BackupToOneDriveAsync()
  {
+  if(ArsanDatabase.IsPostgres)
+   return "Veriler sunucudaki PostgreSQL veritabanında ("+ArsanDatabase.Describe(DatabaseKind.Erp)+"). Yedekler sunucuda pg_dump ile alınır "+
+    "(her gece 30 gün saklanır, saatlik yedek 2 gün). Bu modda OneDrive'a dosya yedeği atlandı.";
   await new CrmSchemaService().EnsureAsync();
   await using ArsanGazDbContext db=new();
   string[] sources=[db.DatabasePath,CrmDbContext.SharedDatabasePath];

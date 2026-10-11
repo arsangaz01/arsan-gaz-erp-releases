@@ -32,6 +32,13 @@ CREATE INDEX IF NOT EXISTS IX_Cylinders_Status ON Cylinders(Status);
     public static async Task EnsureAsync(CancellationToken cancellationToken = default)
     {
         await using ArsanGazDbContext db = new();
+        if (ArsanDatabase.IsPostgres)
+        {
+            // PostgreSQL tables come from the current EF model, which already has these columns and CylinderAudits.
+            await ArsanDbEf.EnsurePostgresSchemaAsync(db, DatabaseKind.Erp, cancellationToken);
+            return;
+        }
+
         SqliteConnection connection = (SqliteConnection)db.Database.GetDbConnection();
         await connection.OpenAsync(cancellationToken);
         try

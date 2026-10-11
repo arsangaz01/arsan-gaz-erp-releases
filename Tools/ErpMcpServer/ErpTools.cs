@@ -1,8 +1,9 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Text;
+using System.Data.Common;
+using ArsanGazERP.Data;
 using ArsanGazERP.Services;
-using Microsoft.Data.Sqlite;
 using ModelContextProtocol.Server;
 
 namespace ArsanGazERP.ErpMcpServer;
@@ -12,25 +13,22 @@ public static class ErpTools
 {
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
 
-    public static string DatabasePath =>
-        Environment.GetEnvironmentVariable("ARSANGAZ_ERP_DB") is { Length: > 0 } custom
-            ? custom
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ArsanGazERP", "Data", "arsangaz-erp-v3.db");
+    public static string DatabasePath => ArsanDatabase.Describe(DatabaseKind.Erp);
 
     [McpServerTool(Name = "erp_ozet", ReadOnly = true), Description("ERP'nin genel durumu: müşteri sayısı, durumlarına göre tüp sayıları, testi 30 gün içinde dolacak tüpler ve son 30 günün hareket sayısı. Salt okunur.")]
     public static string Summary()
     {
-        using SqliteConnection connection = Open();
+        using DbConnection connection = Open();
         StringBuilder text = new();
-        text.AppendLine($"Aktif müşteri: {Scalar(connection, "SELECT COUNT(*) FROM Customers WHERE IsActive = 1")}");
+        text.AppendLine($"Aktif müşteri: {Scalar(connection, "SELECT COUNT(*) FROM Customers WHERE IsActive = TRUE")}");
         text.AppendLine("Tüpler (aktif):");
-        using (SqliteCommand command = connection.CreateCommand())
+        using (DbCommand command = connection.CreateCommand())
         {
-            command.CommandText = """
-                SELECT Status, COUNT(*), SUM(CASE WHEN IsFull = 1 THEN 1 ELSE 0 END), SUM(CASE WHEN IsFull = 0 THEN 1 ELSE 0 END)
-                FROM Cylinders WHERE IsActive = 1 GROUP BY Status ORDER BY Status
-                """;
-            using SqliteDataReader reader = command.ExecuteReader();
+            command.CommandText = ArsanDatabase.Sql("""
+                SELECT Status, COUNT(*), SUM(CASE WHEN IsFull = TRUE THEN 1 ELSE 0 END), SUM(CASE WHEN IsFull = FALSE THEN 1 ELSE 0 END)
+                FROM Cylinders WHERE IsActive = TRUE GROUP BY Status ORDER BY Status
+                """);
+            using DbDataReader reader = command.ExecuteReader();
             while (reader.Read())
             {
                 long full = reader.GetInt64(2);
@@ -40,9 +38,9 @@ public static class ErpTools
             }
         }
 
-        text.AppendLine($"{CylinderTracking.LongAtCustomerDays} günden uzun süredir müşteride: {Scalar(connection, "SELECT COUNT(*) FROM Cylinders WHERE IsActive = 1 AND Status = 3 AND LastMovementAt IS NOT NULL AND LastMovementAt < $limit", ("$limit", DateTime.Today.AddDays(-CylinderTracking.LongAtCustomerDays)))}");
+        text.AppendLine($"{CylinderTracking.LongAtCustomerDays} günden uzun süredir müşteride: {Scalar(connection, "SELECT COUNT(*) FROM Cylinders WHERE IsActive = TRUE AND Status = 3 AND LastMovementAt IS NOT NULL AND LastMovementAt < $limit", ("$limit", DateTime.Today.AddDays(-CylinderTracking.LongAtCustomerDays)))}");
         DateTime limit = DateTime.Today.AddDays(30);
-        text.AppendLine($"Testi 30 gün içinde dolacak veya geçmiş tüp: {Scalar(connection, "SELECT COUNT(*) FROM Cylinders WHERE IsActive = 1 AND TestDueDate IS NOT NULL AND TestDueDate <= $limit", ("$limit", limit))}");
+        text.AppendLine($"Testi 30 gün içinde dolacak veya geçmiş tüp: {Scalar(connection, "SELECT COUNT(*) FROM Cylinders WHERE IsActive = TRUE AND TestDueDate IS NOT NULL AND TestDueDate <= $limit", ("$limit", limit))}");
         text.AppendLine($"Son 30 günde tüp hareketi: {Scalar(connection, "SELECT COUNT(*) FROM CylinderMovements WHERE MovementDate >= $since", ("$since", DateTime.Today.AddDays(-30)))}");
         return text.ToString();
     }
@@ -56,16 +54,16 @@ public static class ErpTools
             return "Arama metni boş olamaz.";
         }
 
-        using SqliteConnection connection = Open();
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        using DbConnection connection = Open();
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = ArsanDatabase.Sql("""
             SELECT c.Id, c.Code, c.CompanyName, c.City, c.Phone, c.IsActive,
                    (SELECT COUNT(*) FROM Cylinders y WHERE y.CurrentCustomerId = c.Id AND y.Status = 3)
             FROM Customers c
             ORDER BY c.CompanyName
-            """;
+            """);
         List<string> rows = [];
-        using SqliteDataReader reader = command.ExecuteReader();
+        using DbDataReader reader = command.ExecuteReader();
         while (reader.Read() && rows.Count < 25)
         {
             string code = reader.GetString(1);
@@ -86,18 +84,18 @@ public static class ErpTools
     public static string FindCylinder([Description("Tüp barkodu veya seri numarası")] string kod)
     {
         string code = kod.Trim();
-        using SqliteConnection connection = Open();
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        using DbConnection connection = Open();
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = ArsanDatabase.Sql("""
             SELECT y.Id, y.SerialNumber, y.Barcode, y.GasType, y.Capacity, y.CapacityUnit, y.Status, y.TestDueDate, y.LastMovementAt, c.CompanyName, y.IsFull, y.VehiclePlate
             FROM Cylinders y LEFT JOIN Customers c ON c.Id = y.CurrentCustomerId
-            WHERE y.Barcode = $code COLLATE NOCASE OR y.SerialNumber = $code COLLATE NOCASE
+            WHERE lower(y.Barcode) = lower($code) OR lower(y.SerialNumber) = lower($code)
             LIMIT 1
-            """;
-        command.Parameters.AddWithValue("$code", code);
+            """);
+        ArsanDatabase.AddParameter(command, "$code", code);
         StringBuilder text = new();
         int id;
-        using (SqliteDataReader reader = command.ExecuteReader())
+        using (DbDataReader reader = command.ExecuteReader())
         {
             if (!reader.Read())
             {
@@ -112,14 +110,14 @@ public static class ErpTools
             text.AppendLine($"Test tarihi: {Date(reader, 7)} · son hareket: {Date(reader, 8)}");
         }
 
-        using SqliteCommand movements = connection.CreateCommand();
-        movements.CommandText = """
+        using DbCommand movements = connection.CreateCommand();
+        movements.CommandText = ArsanDatabase.Sql("""
             SELECT m.MovementDate, m.MovementType, m.FromStatus, m.ToStatus, c.CompanyName, m.Description, m.VehiclePlate
             FROM CylinderMovements m LEFT JOIN Customers c ON c.Id = m.CustomerId
             WHERE m.CylinderId = $id ORDER BY m.MovementDate DESC LIMIT 10
-            """;
-        movements.Parameters.AddWithValue("$id", id);
-        using SqliteDataReader rows = movements.ExecuteReader();
+            """);
+        ArsanDatabase.AddParameter(movements, "$id", id);
+        using DbDataReader rows = movements.ExecuteReader();
         text.AppendLine("Son hareketler:");
         bool any = false;
         while (rows.Read())
@@ -139,16 +137,16 @@ public static class ErpTools
     [McpServerTool(Name = "musterideki_tupler", ReadOnly = true), Description("Şu an müşterilerde duran tüpleri müşteri bazında listeler; en uzun süredir dönmeyenler önce. İsteğe bağlı müşteri adı filtresi. Salt okunur.")]
     public static string CylindersAtCustomers([Description("İsteğe bağlı müşteri adı parçası; boşsa tüm müşteriler")] string? musteri = null)
     {
-        using SqliteConnection connection = Open();
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        using DbConnection connection = Open();
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = ArsanDatabase.Sql("""
             SELECT c.CompanyName, y.SerialNumber, y.GasType, y.LastMovementAt
             FROM Cylinders y JOIN Customers c ON c.Id = y.CurrentCustomerId
-            WHERE y.Status = 3 AND y.IsActive = 1
+            WHERE y.Status = 3 AND y.IsActive = TRUE
             ORDER BY y.LastMovementAt
-            """;
+            """);
         List<string> rows = [];
-        using SqliteDataReader reader = command.ExecuteReader();
+        using DbDataReader reader = command.ExecuteReader();
         while (reader.Read() && rows.Count < 100)
         {
             string name = reader.GetString(0);
@@ -171,17 +169,17 @@ public static class ErpTools
     public static string LongAtCustomer([Description("Kaç günden uzun (7-365, varsayılan 60)")] int gun = CylinderTracking.LongAtCustomerDays)
     {
         int days = Math.Clamp(gun, 7, 365);
-        using SqliteConnection connection = Open();
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        using DbConnection connection = Open();
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = ArsanDatabase.Sql("""
             SELECT c.CompanyName, y.SerialNumber, y.GasType, y.LastMovementAt
             FROM Cylinders y JOIN Customers c ON c.Id = y.CurrentCustomerId
-            WHERE y.Status = 3 AND y.IsActive = 1 AND y.LastMovementAt IS NOT NULL AND y.LastMovementAt < $limit
+            WHERE y.Status = 3 AND y.IsActive = TRUE AND y.LastMovementAt IS NOT NULL AND y.LastMovementAt < $limit
             ORDER BY y.LastMovementAt LIMIT 200
-            """;
-        command.Parameters.AddWithValue("$limit", DateTime.Today.AddDays(-days));
+            """);
+        ArsanDatabase.AddParameter(command, "$limit", DateTime.Today.AddDays(-days));
         List<string> rows = [];
-        using SqliteDataReader reader = command.ExecuteReader();
+        using DbDataReader reader = command.ExecuteReader();
         while (reader.Read())
         {
             rows.Add($"- {reader.GetString(0)} · {reader.GetString(1)} ({reader.GetString(2)}) · {(DateTime.Today - reader.GetDateTime(3).Date).Days} gündür müşteride");
@@ -194,17 +192,17 @@ public static class ErpTools
     public static string TestDue([Description("Kaç gün ilerisine bakılacak (1-365, varsayılan 30)")] int gun = 30)
     {
         int days = Math.Clamp(gun, 1, 365);
-        using SqliteConnection connection = Open();
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        using DbConnection connection = Open();
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = ArsanDatabase.Sql("""
             SELECT y.SerialNumber, y.GasType, y.TestDueDate, y.Status, c.CompanyName
             FROM Cylinders y LEFT JOIN Customers c ON c.Id = y.CurrentCustomerId
-            WHERE y.IsActive = 1 AND y.TestDueDate IS NOT NULL AND y.TestDueDate <= $limit
+            WHERE y.IsActive = TRUE AND y.TestDueDate IS NOT NULL AND y.TestDueDate <= $limit
             ORDER BY y.TestDueDate LIMIT 200
-            """;
-        command.Parameters.AddWithValue("$limit", DateTime.Today.AddDays(days));
+            """);
+        ArsanDatabase.AddParameter(command, "$limit", DateTime.Today.AddDays(days));
         List<string> rows = [];
-        using SqliteDataReader reader = command.ExecuteReader();
+        using DbDataReader reader = command.ExecuteReader();
         while (reader.Read())
         {
             DateTime due = reader.GetDateTime(2).Date;
@@ -219,15 +217,15 @@ public static class ErpTools
     [McpServerTool(Name = "siparis_tahmini", ReadOnly = true), Description("Müşterilerin geçmiş teslim aralıklarına göre bir sonraki alım tarihini tahmin eder; gecikmişler önce. En az 3 farklı günde teslim kaydı gerekir. Salt okunur.")]
     public static string ReorderForecasts()
     {
-        using SqliteConnection connection = Open();
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        using DbConnection connection = Open();
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = ArsanDatabase.Sql("""
             SELECT m.CustomerId, c.CompanyName, m.MovementDate
             FROM CylinderMovements m JOIN Customers c ON c.Id = m.CustomerId
             WHERE m.ToStatus = 3
-            """;
+            """);
         List<CustomerDelivery> deliveries = [];
-        using (SqliteDataReader reader = command.ExecuteReader())
+        using (DbDataReader reader = command.ExecuteReader())
         {
             while (reader.Read())
             {
@@ -246,19 +244,19 @@ public static class ErpTools
     public static string RecentMovements([Description("Kaç gün geriye bakılacak (1-90, varsayılan 7)")] int gun = 7)
     {
         int days = Math.Clamp(gun, 1, 90);
-        using SqliteConnection connection = Open();
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        using DbConnection connection = Open();
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = ArsanDatabase.Sql("""
             SELECT m.MovementDate, y.SerialNumber, m.MovementType, m.FromStatus, m.ToStatus, c.CompanyName
             FROM CylinderMovements m
             JOIN Cylinders y ON y.Id = m.CylinderId
             LEFT JOIN Customers c ON c.Id = m.CustomerId
             WHERE m.MovementDate >= $since
             ORDER BY m.MovementDate DESC LIMIT 200
-            """;
-        command.Parameters.AddWithValue("$since", DateTime.Today.AddDays(-days));
+            """);
+        ArsanDatabase.AddParameter(command, "$since", DateTime.Today.AddDays(-days));
         List<string> rows = [];
-        using SqliteDataReader reader = command.ExecuteReader();
+        using DbDataReader reader = command.ExecuteReader();
         while (reader.Read())
         {
             rows.Add($"- {Date(reader, 0, "dd.MM.yyyy HH:mm")} · {reader.GetString(1)} · {reader.GetString(2)} · {StatusName(reader.GetInt32(3))} → {StatusName(reader.GetInt32(4))}{(reader.IsDBNull(5) ? "" : " · " + reader.GetString(5))}");
@@ -267,22 +265,19 @@ public static class ErpTools
         return rows.Count == 0 ? $"Son {days} günde tüp hareketi yok." : string.Join(Environment.NewLine, rows);
     }
 
-    public static string CrmDatabasePath =>
-        Environment.GetEnvironmentVariable("ARSANGAZ_CRM_DB") is { Length: > 0 } custom
-            ? custom
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments), "ArsanGazERP", "CRM", "arsangaz-crm.db");
+    public static string CrmDatabasePath => ArsanDatabase.Describe(DatabaseKind.Crm);
 
     [McpServerTool(Name = "crm_ozet", ReadOnly = true), Description("CRM'deki firma sayıları (duruma göre), bugüne kadar takibi gelmiş firmalar ve son 7 günün aktivite sayısı. Salt okunur.")]
     public static string CrmSummary()
     {
-        using SqliteConnection connection = Open(CrmDatabasePath);
+        using DbConnection connection = Open(DatabaseKind.Crm);
         StringBuilder text = new();
         text.AppendLine($"Toplam firma: {Scalar(connection, "SELECT COUNT(*) FROM CrmCompanies")}");
         text.AppendLine("Duruma göre:");
-        using (SqliteCommand command = connection.CreateCommand())
+        using (DbCommand command = connection.CreateCommand())
         {
-            command.CommandText = "SELECT Status, COUNT(*) FROM CrmCompanies GROUP BY Status ORDER BY COUNT(*) DESC";
-            using SqliteDataReader reader = command.ExecuteReader();
+            command.CommandText = ArsanDatabase.Sql("SELECT Status, COUNT(*) FROM CrmCompanies GROUP BY Status ORDER BY COUNT(*) DESC");
+            using DbDataReader reader = command.ExecuteReader();
             while (reader.Read())
             {
                 text.AppendLine($"- {Text(reader, 0)}: {reader.GetInt64(1)}");
@@ -303,16 +298,16 @@ public static class ErpTools
             return "Arama metni boş olamaz.";
         }
 
-        using SqliteConnection connection = Open(CrmDatabasePath);
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        using DbConnection connection = Open(DatabaseKind.Crm);
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = ArsanDatabase.Sql("""
             SELECT c.Id, c.CompanyName, c.City, c.Sector, c.Status, c.Score, c.Phone, c.FollowUpAtUtc,
                    (SELECT a.ActivityType || ': ' || a.Description FROM CrmActivities a WHERE a.CrmCompanyId = c.Id ORDER BY a.ActivityAtUtc DESC LIMIT 1)
             FROM CrmCompanies c
             ORDER BY c.Score DESC, c.CompanyName
-            """;
+            """);
         List<string> rows = [];
-        using SqliteDataReader reader = command.ExecuteReader();
+        using DbDataReader reader = command.ExecuteReader();
         while (reader.Read() && rows.Count < 25)
         {
             string name = reader.GetString(1);
@@ -333,17 +328,17 @@ public static class ErpTools
     public static string CrmFollowUps([Description("Kaç gün ilerisine bakılacak (0-60, varsayılan 7)")] int gun = 7)
     {
         int days = Math.Clamp(gun, 0, 60);
-        using SqliteConnection connection = Open(CrmDatabasePath);
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        using DbConnection connection = Open(DatabaseKind.Crm);
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = ArsanDatabase.Sql("""
             SELECT CompanyName, City, Status, Phone, FollowUpAtUtc
             FROM CrmCompanies
             WHERE FollowUpAtUtc IS NOT NULL AND FollowUpAtUtc <= $limit
             ORDER BY FollowUpAtUtc LIMIT 100
-            """;
-        command.Parameters.AddWithValue("$limit", DateTime.UtcNow.Date.AddDays(days + 1));
+            """);
+        ArsanDatabase.AddParameter(command, "$limit", DateTime.UtcNow.Date.AddDays(days + 1));
         List<string> rows = [];
-        using SqliteDataReader reader = command.ExecuteReader();
+        using DbDataReader reader = command.ExecuteReader();
         while (reader.Read())
         {
             DateTime due = reader.GetDateTime(4).ToLocalTime().Date;
@@ -358,26 +353,23 @@ public static class ErpTools
     private static string Shorten(string value, int length) =>
         value.Length <= length ? value : value[..length] + "…";
 
-    private static SqliteConnection Open(string? databasePath = null)
+    private static DbConnection Open(DatabaseKind kind = DatabaseKind.Erp)
     {
-        string path = databasePath ?? DatabasePath;
-        if (!File.Exists(path))
+        if (!ArsanDatabase.Exists(kind))
         {
-            throw new InvalidOperationException("Veritabanı bulunamadı: " + path);
+            throw new InvalidOperationException("Veritabanı bulunamadı: " + ArsanDatabase.Describe(kind));
         }
 
-        SqliteConnection connection = new(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadOnly, DefaultTimeout = 15 }.ToString());
-        connection.Open();
-        return connection;
+        return ArsanDatabase.Open(kind, readOnly: true, new SqliteOptions(TimeoutSeconds: 15));
     }
 
-    private static long Scalar(SqliteConnection connection, string sql, params (string Name, object Value)[] parameters)
+    private static long Scalar(DbConnection connection, string sql, params (string Name, object Value)[] parameters)
     {
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = sql;
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = ArsanDatabase.Sql(sql);
         foreach ((string name, object value) in parameters)
         {
-            command.Parameters.AddWithValue(name, value);
+            ArsanDatabase.AddParameter(command, name, value);
         }
 
         return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
@@ -386,9 +378,9 @@ public static class ErpTools
     private static bool Contains(string value, string term) =>
         Turkish.CompareInfo.IndexOf(value, term, CompareOptions.IgnoreCase) >= 0;
 
-    private static string Text(SqliteDataReader reader, int index) => reader.IsDBNull(index) ? "-" : reader.GetString(index);
+    private static string Text(DbDataReader reader, int index) => reader.IsDBNull(index) ? "-" : reader.GetString(index);
 
-    private static string Date(SqliteDataReader reader, int index, string format = "dd.MM.yyyy") =>
+    private static string Date(DbDataReader reader, int index, string format = "dd.MM.yyyy") =>
         reader.IsDBNull(index) ? "-" : reader.GetDateTime(index).ToString(format, Turkish);
 
     public static string StatusName(int status) => CylinderTracking.StatusName(status);

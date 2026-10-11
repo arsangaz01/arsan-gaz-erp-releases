@@ -1,0 +1,43 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- Headless check of the desktop data code (CrudService, CustomerChoices, CampaignStore) against PostgreSQL.
+       Switches the provider only inside its own process; the installed ERP is not touched. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ArsanGazERP.PgHarness</RootNamespace>
+    <AssemblyName>ArsanGazERP.PgHarness</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.90.1" />
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.90.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Data\ArsanGazDbContext.cs" Link="Shared\ArsanGazDbContext.cs" />
+    <Compile Include="..\..\Data\CrmDbContext.cs" Link="Shared\CrmDbContext.cs" />
+    <Compile Include="..\..\Data\ArsanDatabase.cs" Link="Shared\ArsanDatabase.cs" />
+    <Compile Include="..\..\Data\ArsanDbEf.cs" Link="Shared\ArsanDbEf.cs" />
+    <Compile Include="..\..\Data\PostgresSchema.cs" Link="Shared\PostgresSchema.cs" />
+    <Compile Include="..\..\Models\*.cs" Link="Shared\Models\%(Filename).cs" />
+    <Compile Include="..\..\Services\CrudService.cs" Link="Shared\CrudService.cs" />
+    <Compile Include="..\..\Services\CylinderTracking.cs" Link="Shared\CylinderTracking.cs" />
+    <Compile Include="..\..\Services\ReorderPrediction.cs" Link="Shared\ReorderPrediction.cs" />
+    <Compile Include="..\..\Services\CampaignStore.cs" Link="Shared\CampaignStore.cs" />
+    <Compile Include="..\..\Services\CampaignScheduler.cs" Link="Shared\CampaignScheduler.cs" />
+    <Compile Include="..\..\Services\CampaignService.cs" Link="Shared\CampaignService.cs" />
+    <Compile Include="..\..\Services\CampaignTransport.cs" Link="Shared\CampaignTransport.cs" />
+    <Compile Include="..\..\Services\WhatsAppBusinessService.cs" Link="Shared\WhatsAppBusinessService.cs" />
+    <Compile Include="..\..\Services\GmailSenderService.cs" Link="Shared\GmailSenderService.cs" />
+    <Compile Include="..\..\Services\LocalDataProtector.cs" Link="Shared\LocalDataProtector.cs" />
+    <Compile Include="..\MobileApi\CustomerChoices.cs" Link="Shared\CustomerChoices.cs" />
+    <Compile Include="..\MobileApi\MobileApiPaths.cs" Link="Shared\MobileApiPaths.cs" />
+  </ItemGroup>
+
+</Project>

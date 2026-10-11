@@ -5,6 +5,8 @@ using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
+using System.Data.Common;
+using ArsanGazERP.Data;
 using ArsanGazERP.Models;
 using Microsoft.Data.Sqlite;
 
@@ -28,14 +30,30 @@ public sealed class CampaignStore
     private readonly string ownerSid;
     private readonly Func<DateTimeOffset> utcNow;
     private readonly SemaphoreSlim initializationGate = new(1, 1);
+    // True: ERP/CRM data live in the PostgreSQL server database (erp / crm schemas); the file paths are unused.
+    private readonly bool postgres;
+    private bool postgresInitialized;
 
+    // Explicit SQLite files (tests, tools). CreateForCurrentWindowsUser follows the configured provider instead.
     public CampaignStore(
         string crmDatabasePath,
         string? erpDatabasePath = null,
         string? attachmentRoot = null,
         string? ownerSid = null,
         Func<DateTimeOffset>? utcNow = null)
+        : this(false, crmDatabasePath, erpDatabasePath, attachmentRoot, ownerSid, utcNow)
     {
+    }
+
+    private CampaignStore(
+        bool postgres,
+        string crmDatabasePath,
+        string? erpDatabasePath,
+        string? attachmentRoot,
+        string? ownerSid,
+        Func<DateTimeOffset>? utcNow)
+    {
+        this.postgres = postgres;
         this.crmDatabasePath = Path.GetFullPath(crmDatabasePath);
         this.erpDatabasePath = erpDatabasePath is null ? null : Path.GetFullPath(erpDatabasePath);
         this.attachmentRoot = Path.GetFullPath(attachmentRoot ?? Path.Combine(
@@ -49,22 +67,27 @@ public sealed class CampaignStore
 
     public async Task<bool> GetExecutionEnabledAsync(CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(crmDatabasePath))
+        if (!CrmExists)
             return false;
-        await using SqliteConnection connection = new(new SqliteConnectionStringBuilder
-        {
-            DataSource = crmDatabasePath,
-            Mode = SqliteOpenMode.ReadOnly,
-            Cache = SqliteCacheMode.Private,
-            DefaultTimeout = 5
-        }.ToString());
-        await connection.OpenAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='CampaignRuntimeSettings');";
+        await using DbConnection connection = postgres
+            ? await ArsanDatabase.OpenPostgresAsync(DatabaseKind.Crm, readOnly: true, cancellationToken)
+            : new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = crmDatabasePath,
+                Mode = SqliteOpenMode.ReadOnly,
+                Cache = SqliteCacheMode.Private,
+                DefaultTimeout = 5
+            }.ToString());
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = postgres
+            ? "SELECT to_regclass('campaignruntimesettings') IS NOT NULL;"
+            : "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='CampaignRuntimeSettings');";
         if (Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) != 1)
             return false;
-        command.CommandText = "SELECT COALESCE((SELECT ExecutionEnabled FROM CampaignRuntimeSettings WHERE OwnerSid=$owner),0);";
-        command.Parameters.AddWithValue("$owner", ownerSid);
+        command.CommandText = Sql("SELECT COALESCE((SELECT ExecutionEnabled FROM CampaignRuntimeSettings WHERE OwnerSid=$owner),0);");
+        AddParameter(command, "$owner", ownerSid);
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) == 1;
     }
 
@@ -72,7 +95,7 @@ public sealed class CampaignStore
     {
         await InitializeAsync(cancellationToken);
         DateTimeOffset now = UtcNow;
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         await ExecuteAsync(connection, null, """
 INSERT INTO CampaignRuntimeSettings(OwnerSid, ExecutionEnabled, UpdatedUtc)
 VALUES($owner,$enabled,$now)
@@ -80,20 +103,16 @@ ON CONFLICT(OwnerSid) DO UPDATE SET ExecutionEnabled=excluded.ExecutionEnabled, 
 """, cancellationToken, ("$owner", ownerSid), ("$enabled", enabled ? 1 : 0), ("$now", Stamp(now)));
     }
 
-    public static CampaignStore CreateForCurrentWindowsUser()
-    {
-        string crmDatabasePath = Environment.GetEnvironmentVariable("ARSANGAZ_CRM_DB") is { Length: > 0 } crm
-            ? crm
-            : Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments),
-                "ArsanGazERP", "CRM", "arsangaz-crm.db");
-        string erpDatabasePath = Environment.GetEnvironmentVariable("ARSANGAZ_ERP_DB") is { Length: > 0 } erp
-            ? erp
-            : Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ArsanGazERP", "Data", "arsangaz-erp-v3.db");
-        return new CampaignStore(crmDatabasePath, erpDatabasePath);
-    }
+    public static CampaignStore CreateForCurrentWindowsUser() =>
+        new(ArsanDatabase.IsPostgres, ArsanDatabase.SqlitePath(DatabaseKind.Crm), ArsanDatabase.SqlitePath(DatabaseKind.Erp), null, null, null);
+
+    // Campaign storage on the PostgreSQL server database regardless of the configured provider (tests, tools).
+    public static CampaignStore CreateForPostgres(string? attachmentRoot = null, string? ownerSid = null, Func<DateTimeOffset>? utcNow = null) =>
+        new(true, ArsanDatabase.SqlitePath(DatabaseKind.Crm), ArsanDatabase.SqlitePath(DatabaseKind.Erp), attachmentRoot, ownerSid, utcNow);
+
+    public bool UsesPostgres => postgres;
+
+    private bool CrmExists => postgres || File.Exists(crmDatabasePath);
 
     // Campaign rows are keyed by the Windows SID of the office PC user; the Linux server has no Windows identity, so
     // it must be told which owner's data it serves (ARSANGAZ_OWNER_SID), otherwise campaigns stay unavailable there.
@@ -110,13 +129,26 @@ ON CONFLICT(OwnerSid) DO UPDATE SET ExecutionEnabled=excluded.ExecutionEnabled, 
         await initializationGate.WaitAsync(cancellationToken);
         try
         {
+            if (postgres)
+            {
+                if (!postgresInitialized)
+                {
+                    await using DbConnection server = await OpenCrmAsync(cancellationToken);
+                    await using DbCommand create = server.CreateCommand();
+                    create.CommandText = PostgresSchema.Campaign;
+                    await create.ExecuteNonQueryAsync(cancellationToken);
+                    postgresInitialized = true;
+                }
+                return;
+            }
+
             if (!File.Exists(crmDatabasePath))
                 throw new FileNotFoundException("The shared CRM database must exist before campaign storage can be initialized.", crmDatabasePath);
 
-            await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-            await using (SqliteCommand command = connection.CreateCommand())
+            await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+            await using (DbCommand command = connection.CreateCommand())
             {
-                command.CommandText = """
+                command.CommandText = Sql("""
 PRAGMA journal_mode=WAL;
 CREATE TABLE IF NOT EXISTS Campaigns(
  Id TEXT NOT NULL PRIMARY KEY,
@@ -222,7 +254,7 @@ CREATE TABLE IF NOT EXISTS CampaignGroups(
  UpdatedUtc TEXT NOT NULL,
  UNIQUE(OwnerSid, Name)
 );
-""";
+""");
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
         }
@@ -235,12 +267,12 @@ CREATE TABLE IF NOT EXISTS CampaignGroups(
     public async Task<IReadOnlyList<CampaignGroup>> ListGroupsAsync(CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Name, Population, MembersJson, UpdatedUtc FROM CampaignGroups WHERE OwnerSid=$owner ORDER BY Name;";
-        command.Parameters.AddWithValue("$owner", ownerSid);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = Sql($"SELECT Id, Name, Population, MembersJson, UpdatedUtc FROM CampaignGroups WHERE OwnerSid=$owner ORDER BY {(postgres ? "lower(Name)" : "Name")};");
+        AddParameter(command, "$owner", ownerSid);
         List<CampaignGroup> groups = [];
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
             groups.Add(ReadGroup(reader));
         return groups;
@@ -249,12 +281,12 @@ CREATE TABLE IF NOT EXISTS CampaignGroups(
     public async Task<CampaignGroup> GetGroupAsync(Guid id, CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Name, Population, MembersJson, UpdatedUtc FROM CampaignGroups WHERE Id=$id AND OwnerSid=$owner;";
-        command.Parameters.AddWithValue("$id", id.ToString("D"));
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = Sql("SELECT Id, Name, Population, MembersJson, UpdatedUtc FROM CampaignGroups WHERE Id=$id AND OwnerSid=$owner;");
+        AddParameter(command, "$id", id.ToString("D"));
+        AddParameter(command, "$owner", ownerSid);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken)
             ? ReadGroup(reader)
             : throw new KeyNotFoundException("Grup bulunamadı.");
@@ -282,7 +314,7 @@ CREATE TABLE IF NOT EXISTS CampaignGroups(
         DateTimeOffset now = UtcNow;
         Guid groupId = id ?? Guid.NewGuid();
         int[] members = contactIds.OrderBy(item => item).ToArray();
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         try
         {
             int changed = id is null
@@ -299,7 +331,7 @@ WHERE Id=$id AND OwnerSid=$owner;
             if (changed != 1)
                 throw new KeyNotFoundException("Grup bulunamadı.");
         }
-        catch (SqliteException exception) when (exception.SqliteErrorCode == 19)
+        catch (DbException exception) when (ArsanDatabase.IsUniqueViolation(exception))
         {
             throw new InvalidOperationException($"'{trimmed}' adında bir grup zaten var.", exception);
         }
@@ -309,7 +341,7 @@ WHERE Id=$id AND OwnerSid=$owner;
     public async Task DeleteGroupAsync(Guid id, CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         await ExecuteAsync(connection, null, "DELETE FROM CampaignGroups WHERE Id=$id AND OwnerSid=$owner;",
             cancellationToken, ("$id", id.ToString("D")), ("$owner", ownerSid));
     }
@@ -330,8 +362,8 @@ WHERE Id=$id AND OwnerSid=$owner;
     public async Task<bool> StartNextRoundAsync(Guid campaignId, long expectedRevision, DateTimeOffset nextRoundUtc, CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
         CampaignSnapshot? current = await ReadSnapshotAsync(connection, transaction, campaignId, cancellationToken);
         if (current is null || current.Revision != expectedRevision || current.State != CampaignState.Active ||
             current.Input.RepeatEveryDays <= 0 ||
@@ -351,7 +383,7 @@ UPDATE Campaigns SET UpdatedUtc=$now WHERE Id=$campaign AND OwnerSid=$owner;
         return true;
     }
 
-    private static CampaignGroup ReadGroup(SqliteDataReader reader) =>
+    private static CampaignGroup ReadGroup(DbDataReader reader) =>
         new(Guid.Parse(reader.GetString(0)), reader.GetString(1), Enum.Parse<CampaignPopulation>(reader.GetString(2)),
             Deserialize<int[]>(reader.GetString(3)), ParseStamp(reader.GetString(4)));
 
@@ -360,8 +392,8 @@ UPDATE Campaigns SET UpdatedUtc=$now WHERE Id=$campaign AND OwnerSid=$owner;
         await InitializeAsync(cancellationToken);
         DateTimeOffset now = UtcNow;
         Guid id = campaignId ?? Guid.NewGuid();
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
         CampaignDraft? existing = await ReadDraftAsync(connection, transaction, id, cancellationToken);
         if (existing is null)
         {
@@ -380,15 +412,15 @@ VALUES($id,$owner,1,'Draft',$draft,$now,$now);
             throw new InvalidOperationException($"Campaign revision conflict: expected {expectedRevision}, current revision is {existing.Revision}.");
         if (existing.State is not (CampaignState.Draft or CampaignState.Approved or CampaignState.Paused))
             throw new InvalidOperationException("Only a draft, an unstarted approval, or a paused campaign can be revised.");
-        await using (SqliteCommand attempts = connection.CreateCommand())
+        await using (DbCommand attempts = connection.CreateCommand())
         {
             attempts.Transaction = transaction;
-            attempts.CommandText = """
+            attempts.CommandText = Sql("""
 SELECT COALESCE(SUM(Attempts),0) + (SELECT COUNT(*) FROM CampaignAttempts WHERE CampaignId=$id),
  SUM(CASE WHEN State='Sending' THEN 1 ELSE 0 END) FROM CampaignRecipients WHERE CampaignId=$id;
-""";
-            attempts.Parameters.AddWithValue("$id", id.ToString("D"));
-            await using SqliteDataReader reader = await attempts.ExecuteReaderAsync(cancellationToken);
+""");
+            AddParameter(attempts, "$id", id.ToString("D"));
+            await using DbDataReader reader = await attempts.ExecuteReaderAsync(cancellationToken);
             await reader.ReadAsync(cancellationToken);
             if (reader.GetInt64(0) > 0 || !reader.IsDBNull(1) && reader.GetInt64(1) > 0)
                 throw new InvalidOperationException("A campaign with dispatch attempts cannot be edited; create a new campaign to preserve its immutable send history.");
@@ -410,7 +442,7 @@ WHERE Id=$id AND OwnerSid=$owner AND Revision=$expected;
     public async Task<CampaignDraft> GetDraftAsync(Guid id, CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         CampaignDraft? draft = await ReadDraftAsync(connection, null, id, cancellationToken);
         return draft ?? throw new KeyNotFoundException("Campaign draft was not found for this Windows owner.");
     }
@@ -420,18 +452,18 @@ WHERE Id=$id AND OwnerSid=$owner AND Revision=$expected;
         await InitializeAsync(cancellationToken);
         if (ids.Count == 0)
             return [];
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         List<CampaignAttachment> results = [];
         foreach (Guid id in ids.Distinct())
         {
-            await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = """
+            await using DbCommand command = connection.CreateCommand();
+            command.CommandText = Sql("""
 SELECT FileName, ContentType, Length, Sha256, StagedPath
 FROM CampaignAttachments WHERE Id=$id AND OwnerSid=$owner;
-""";
-            command.Parameters.AddWithValue("$id", id.ToString("D"));
-            command.Parameters.AddWithValue("$owner", ownerSid);
-            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+""");
+            AddParameter(command, "$id", id.ToString("D"));
+            AddParameter(command, "$owner", ownerSid);
+            await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             if (!await reader.ReadAsync(cancellationToken))
                 throw new InvalidOperationException("A selected attachment is missing or belongs to another Windows owner.");
             results.Add(new CampaignAttachment(id, reader.GetString(0), reader.GetString(1), reader.GetInt64(2), reader.GetString(3), reader.GetString(4)));
@@ -495,7 +527,7 @@ FROM CampaignAttachments WHERE Id=$id AND OwnerSid=$owner;
         await InitializeAsync(cancellationToken);
         try
         {
-            await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+            await using DbConnection connection = await OpenCrmAsync(cancellationToken);
             await ExecuteAsync(connection, null, """
 INSERT INTO CampaignAttachments(Id, OwnerSid, FileName, ContentType, Length, Sha256, StagedPath, CreatedUtc)
 VALUES($id,$owner,$name,$type,$length,$hash,$path,$now);
@@ -683,8 +715,8 @@ VALUES($id,$owner,$name,$type,$length,$hash,$path,$now);
 
         await InitializeAsync(cancellationToken);
         DateTimeOffset now = UtcNow;
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
         if (population == CampaignPopulation.CrmCompanies && channel == CampaignChannel.WhatsApp)
         {
             AudienceCandidate? current = await ReadCandidateAsync(connection, transaction, population, contactId, cancellationToken);
@@ -704,12 +736,12 @@ VALUES($owner,$population,$contact,$channel,$endpoint,$normalized,$granted,$evid
         if (population == CampaignPopulation.CrmCompanies && channel == CampaignChannel.WhatsApp)
         {
             await ExecuteAsync(connection, transaction, """
-UPDATE CrmCompanies SET WhatsAppMarketingOptIn=$granted,
+UPDATE CrmCompanies SET WhatsAppMarketingOptIn=$grantedFlag,
  WhatsAppOptInAtUtc=CASE WHEN $granted=1 THEN $now ELSE WhatsAppOptInAtUtc END,
  WhatsAppOptInEvidence=CASE WHEN $granted=1 THEN $evidence ELSE WhatsAppOptInEvidence END,
  WhatsAppOptOutAtUtc=CASE WHEN $granted=1 THEN NULL ELSE $now END
 WHERE Id=$contact;
-""", cancellationToken, ("$granted", granted ? 1 : 0), ("$now", Stamp(now)),
+""", cancellationToken, ("$granted", granted ? 1 : 0), ("$grantedFlag", FlagValue(granted)), ("$now", TimestampValue(now)),
                 ("$evidence", evidence.Trim()), ("$contact", contactId));
         }
         await transaction.CommitAsync(cancellationToken);
@@ -731,7 +763,7 @@ WHERE Id=$contact;
             throw new InvalidDataException("Only a recent provider-verified approved marketing template can be recorded.");
 
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         await ExecuteAsync(connection, null, """
 INSERT INTO CampaignVerifiedWhatsAppTemplates(OwnerSid, Name, LanguageCode, TemplateJson, VerifiedUtc)
 VALUES($owner,$name,$language,$template,$verified)
@@ -751,16 +783,21 @@ ON CONFLICT(OwnerSid,Name,LanguageCode) DO UPDATE SET
         CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = Sql(postgres
+            ? """
+SELECT TemplateJson, VerifiedUtc FROM CampaignVerifiedWhatsAppTemplates
+WHERE OwnerSid=$owner AND lower(Name)=lower($name) AND lower(LanguageCode)=lower($language);
+"""
+            : """
 SELECT TemplateJson, VerifiedUtc FROM CampaignVerifiedWhatsAppTemplates
 WHERE OwnerSid=$owner AND Name=$name COLLATE NOCASE AND LanguageCode=$language COLLATE NOCASE;
-""";
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        command.Parameters.AddWithValue("$name", name);
-        command.Parameters.AddWithValue("$language", languageCode);
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+""");
+        AddParameter(command, "$owner", ownerSid);
+        AddParameter(command, "$name", name);
+        AddParameter(command, "$language", languageCode);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
             return null;
         WhatsAppTemplateApproval template = Deserialize<WhatsAppTemplateApproval>(reader.GetString(0));
@@ -771,20 +808,20 @@ WHERE OwnerSid=$owner AND Name=$name COLLATE NOCASE AND LanguageCode=$language C
     public async Task<IReadOnlyList<CampaignConsent>> GetConsentsAsync(CampaignPopulation? population, int? contactId, CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = Sql("""
 SELECT Population, ContactId, Channel, Endpoint, Granted, Evidence, RecordedUtc, IsWithdrawal
 FROM CampaignConsents WHERE OwnerSid=$owner
- AND ($population IS NULL OR Population=$population)
- AND ($contact IS NULL OR ContactId=$contact)
+ AND (CAST($population AS TEXT) IS NULL OR Population=$population)
+ AND (CAST($contact AS INTEGER) IS NULL OR ContactId=$contact)
 ORDER BY Id DESC;
-""";
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        command.Parameters.AddWithValue("$population", population?.ToString() ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("$contact", contactId ?? (object)DBNull.Value);
+""");
+        AddParameter(command, "$owner", ownerSid);
+        AddParameter(command, "$population", population?.ToString() ?? (object)DBNull.Value);
+        AddParameter(command, "$contact", contactId ?? (object)DBNull.Value);
         List<CampaignConsent> items = [];
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
             items.Add(new CampaignConsent(Enum.Parse<CampaignPopulation>(reader.GetString(0)), reader.GetInt32(1),
                 Enum.Parse<CampaignChannel>(reader.GetString(2)), reader.GetString(3), reader.GetInt32(4) == 1,
@@ -829,8 +866,8 @@ ORDER BY Id DESC;
 
     public async Task<CampaignSnapshot> ApproveAsync(CampaignApprovalManifest manifest, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
         CampaignDraft? draft = await ReadDraftAsync(connection, transaction, manifest.CampaignId, cancellationToken);
         if (draft is null || draft.Revision != manifest.Revision || draft.State != CampaignState.Draft ||
             !string.Equals(Serialize(draft.Input), Serialize(manifest.Draft), StringComparison.Ordinal) ||
@@ -863,8 +900,8 @@ WHERE Id=$id AND OwnerSid=$owner AND Revision=$revision AND State='Draft';
     public async Task<CampaignSnapshot> ChangeStateAsync(Guid id, long expectedRevision, CampaignState target, CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
         CampaignSnapshot current = await ReadSnapshotAsync(connection, transaction, id, cancellationToken)
             ?? throw new KeyNotFoundException("Campaign was not found for this Windows owner.");
         if (current.Revision != expectedRevision)
@@ -906,7 +943,7 @@ WHERE Id=$id AND OwnerSid=$owner AND Revision=$revision;
     public async Task<CampaignSnapshot?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         return await ReadSnapshotAsync(connection, null, id, cancellationToken);
     }
 
@@ -915,27 +952,27 @@ WHERE Id=$id AND OwnerSid=$owner AND Revision=$revision;
         await InitializeAsync(cancellationToken);
         int offset = Math.Max(0, query.Offset);
         int limit = Math.Clamp(query.Limit, 1, 200);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         int total;
-        await using (SqliteCommand count = connection.CreateCommand())
+        await using (DbCommand count = connection.CreateCommand())
         {
-            count.CommandText = "SELECT COUNT(*) FROM Campaigns WHERE OwnerSid=$owner AND ($state IS NULL OR State=$state);";
-            count.Parameters.AddWithValue("$owner", ownerSid);
-            count.Parameters.AddWithValue("$state", query.State?.ToString() ?? (object)DBNull.Value);
+            count.CommandText = Sql("SELECT COUNT(*) FROM Campaigns WHERE OwnerSid=$owner AND (CAST($state AS TEXT) IS NULL OR State=$state);");
+            AddParameter(count, "$owner", ownerSid);
+            AddParameter(count, "$state", query.State?.ToString() ?? (object)DBNull.Value);
             total = Convert.ToInt32(await count.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
         }
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = Sql("""
 SELECT Id, Revision, State, DraftJson, ManifestHash, UpdatedUtc, LastErrorCode
-FROM Campaigns WHERE OwnerSid=$owner AND ($state IS NULL OR State=$state)
+FROM Campaigns WHERE OwnerSid=$owner AND (CAST($state AS TEXT) IS NULL OR State=$state)
 ORDER BY UpdatedUtc DESC LIMIT $limit OFFSET $offset;
-""";
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        command.Parameters.AddWithValue("$state", query.State?.ToString() ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("$limit", limit);
-        command.Parameters.AddWithValue("$offset", offset);
+""");
+        AddParameter(command, "$owner", ownerSid);
+        AddParameter(command, "$state", query.State?.ToString() ?? (object)DBNull.Value);
+        AddParameter(command, "$limit", limit);
+        AddParameter(command, "$offset", offset);
         List<CampaignSnapshot> results = [];
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
             results.Add(new CampaignSnapshot(Guid.Parse(reader.GetString(0)), reader.GetInt64(1),
                 Enum.Parse<CampaignState>(reader.GetString(2)), ownerSid,
@@ -947,22 +984,22 @@ ORDER BY UpdatedUtc DESC LIMIT $limit OFFSET $offset;
     public async Task<RecipientPage> GetRecipientsAsync(Guid campaignId, int offset, int limit, CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         int safeOffset = Math.Max(0, offset);
         int safeLimit = Math.Clamp(limit, 1, 500);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = Sql("""
 SELECT r.RecipientJson, r.State, r.Attempts, r.NextAttemptUtc, r.LastOutcomeCode, r.ProviderMessageId, r.AcceptedUtc, r.DeliveryConfirmed
 FROM CampaignRecipients r JOIN Campaigns c ON c.Id=r.CampaignId
 WHERE r.CampaignId=$id AND c.OwnerSid=$owner ORDER BY r.Id LIMIT $limit OFFSET $offset;
-""";
-        command.Parameters.AddWithValue("$id", campaignId.ToString("D"));
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        command.Parameters.AddWithValue("$limit", safeLimit);
-        command.Parameters.AddWithValue("$offset", safeOffset);
+""");
+        AddParameter(command, "$id", campaignId.ToString("D"));
+        AddParameter(command, "$owner", ownerSid);
+        AddParameter(command, "$limit", safeLimit);
+        AddParameter(command, "$offset", safeOffset);
         {
             List<CampaignRecipient> items = [];
-            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
                 CampaignRecipient saved = Deserialize<CampaignRecipient>(reader.GetString(0));
@@ -978,10 +1015,10 @@ WHERE r.CampaignId=$id AND c.OwnerSid=$owner ORDER BY r.Id LIMIT $limit OFFSET $
                 });
             }
             await reader.DisposeAsync();
-            await using SqliteCommand count = connection.CreateCommand();
-            count.CommandText = "SELECT COUNT(*) FROM CampaignRecipients r JOIN Campaigns c ON c.Id=r.CampaignId WHERE r.CampaignId=$id AND c.OwnerSid=$owner;";
-            count.Parameters.AddWithValue("$id", campaignId.ToString("D"));
-            count.Parameters.AddWithValue("$owner", ownerSid);
+            await using DbCommand count = connection.CreateCommand();
+            count.CommandText = Sql("SELECT COUNT(*) FROM CampaignRecipients r JOIN Campaigns c ON c.Id=r.CampaignId WHERE r.CampaignId=$id AND c.OwnerSid=$owner;");
+            AddParameter(count, "$id", campaignId.ToString("D"));
+            AddParameter(count, "$owner", ownerSid);
             int total = Convert.ToInt32(await count.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
             return new RecipientPage(items, total);
         }
@@ -990,12 +1027,12 @@ WHERE r.CampaignId=$id AND c.OwnerSid=$owner ORDER BY r.Id LIMIT $limit OFFSET $
     public async Task<IReadOnlyList<CampaignSnapshot>> GetRunnableCampaignsAsync(CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Revision, State, DraftJson, ManifestHash, UpdatedUtc, LastErrorCode FROM Campaigns WHERE OwnerSid=$owner AND State IN ('Active','Scheduled','CancelRequested') ORDER BY UpdatedUtc;";
-        command.Parameters.AddWithValue("$owner", ownerSid);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = Sql("SELECT Id, Revision, State, DraftJson, ManifestHash, UpdatedUtc, LastErrorCode FROM Campaigns WHERE OwnerSid=$owner AND State IN ('Active','Scheduled','CancelRequested') ORDER BY UpdatedUtc;");
+        AddParameter(command, "$owner", ownerSid);
         List<CampaignSnapshot> results = [];
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
             results.Add(new CampaignSnapshot(Guid.Parse(reader.GetString(0)), reader.GetInt64(1),
                 Enum.Parse<CampaignState>(reader.GetString(2)), ownerSid,
@@ -1007,11 +1044,11 @@ WHERE r.CampaignId=$id AND c.OwnerSid=$owner ORDER BY r.Id LIMIT $limit OFFSET $
     public async Task<CampaignApprovalManifest> GetApprovedManifestAsync(Guid id, CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT SnapshotJson FROM Campaigns WHERE Id=$id AND OwnerSid=$owner AND SnapshotJson IS NOT NULL;";
-        command.Parameters.AddWithValue("$id", id.ToString("D"));
-        command.Parameters.AddWithValue("$owner", ownerSid);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = Sql("SELECT SnapshotJson FROM Campaigns WHERE Id=$id AND OwnerSid=$owner AND SnapshotJson IS NOT NULL;");
+        AddParameter(command, "$id", id.ToString("D"));
+        AddParameter(command, "$owner", ownerSid);
         object? value = await command.ExecuteScalarAsync(cancellationToken);
         if (value is not string json)
             throw new InvalidOperationException("Approved campaign snapshot is unavailable.");
@@ -1020,20 +1057,20 @@ WHERE r.CampaignId=$id AND c.OwnerSid=$owner ORDER BY r.Id LIMIT $limit OFFSET $
 
     public async Task<IReadOnlyList<CampaignRecipient>> GetPendingRecipientsAsync(Guid campaignId, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = Sql("""
 SELECT RecipientJson FROM CampaignRecipients r JOIN Campaigns c ON c.Id=r.CampaignId
 WHERE r.CampaignId=$id AND c.OwnerSid=$owner
  AND (r.State='Pending' AND (r.NextAttemptUtc IS NULL OR r.NextAttemptUtc <= $now)
   OR r.State='Rejected' AND r.NextAttemptUtc IS NOT NULL AND r.NextAttemptUtc <= $now)
 ORDER BY r.Id;
-""";
-        command.Parameters.AddWithValue("$id", campaignId.ToString("D"));
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        command.Parameters.AddWithValue("$now", Stamp(UtcNow));
+""");
+        AddParameter(command, "$id", campaignId.ToString("D"));
+        AddParameter(command, "$owner", ownerSid);
+        AddParameter(command, "$now", Stamp(UtcNow));
         List<CampaignRecipient> results = [];
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
             results.Add(Deserialize<CampaignRecipient>(reader.GetString(0)));
         return results;
@@ -1041,8 +1078,8 @@ ORDER BY r.Id;
 
     public async Task<string?> TryClaimAsync(Guid campaignId, string contactKey, long revision, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
         string token = Guid.NewGuid().ToString("N");
         int changed = await ExecuteAsync(connection, transaction, """
 UPDATE CampaignRecipients
@@ -1063,8 +1100,8 @@ WHERE CampaignId=$campaign AND ContactKey=$contact
         if (!await TryAcquireWorkerLeaseAsync(cancellationToken))
             return;
         DateTimeOffset now = UtcNow;
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
         await ExecuteAsync(connection, transaction, """
 UPDATE CampaignRecipients SET State='Pending', ClaimToken=NULL, ClaimExpiresUtc=NULL
 WHERE State='Claimed' AND ClaimExpiresUtc <= $now
@@ -1076,16 +1113,16 @@ WHERE State='Claimed' AND ClaimExpiresUtc <= $now
     public async Task<bool> TryAcquireWorkerLeaseAsync(CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
         DateTimeOffset now = UtcNow;
         bool abandoned = true;
-        await using (SqliteCommand read = connection.CreateCommand())
+        await using (DbCommand read = connection.CreateCommand())
         {
             read.Transaction = transaction;
-            read.CommandText = "SELECT WorkerId, ExpiresUtc FROM CampaignWorkerLeases WHERE OwnerSid=$owner;";
-            read.Parameters.AddWithValue("$owner", ownerSid);
-            await using SqliteDataReader row = await read.ExecuteReaderAsync(cancellationToken);
+            read.CommandText = Sql("SELECT WorkerId, ExpiresUtc FROM CampaignWorkerLeases WHERE OwnerSid=$owner;");
+            AddParameter(read, "$owner", ownerSid);
+            await using DbDataReader row = await read.ExecuteReaderAsync(cancellationToken);
             if (await row.ReadAsync(cancellationToken) && ParseStamp(row.GetString(1)) > now)
             {
                 if (row.GetString(0) != workerId)
@@ -1115,7 +1152,7 @@ ON CONFLICT(OwnerSid) DO UPDATE SET WorkerId=excluded.WorkerId, ExpiresUtc=exclu
 
     public async Task<bool> RenewWorkerLeaseAsync(CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         DateTimeOffset now = UtcNow;
         return await ExecuteAsync(connection, null, """
 UPDATE CampaignWorkerLeases SET ExpiresUtc=$expiry
@@ -1126,9 +1163,9 @@ WHERE OwnerSid=$owner AND WorkerId=$worker AND ExpiresUtc>$now;
 
     public async Task ReleaseWorkerLeaseAsync(CancellationToken cancellationToken)
     {
-        if (!File.Exists(crmDatabasePath))
+        if (!CrmExists)
             return;
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         await ExecuteAsync(connection, null, """
 UPDATE CampaignWorkerLeases SET ExpiresUtc=$now WHERE OwnerSid=$owner AND WorkerId=$worker;
 """, cancellationToken, ("$owner", ownerSid), ("$worker", workerId), ("$now", Stamp(UtcNow)));
@@ -1136,7 +1173,7 @@ UPDATE CampaignWorkerLeases SET ExpiresUtc=$now WHERE OwnerSid=$owner AND Worker
 
     public async Task ReleaseClaimAsync(Guid campaignId, string contactKey, string token, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         await ExecuteAsync(connection, null, """
 UPDATE CampaignRecipients SET State='Pending', ClaimToken=NULL, ClaimExpiresUtc=NULL
 WHERE CampaignId=$campaign AND ContactKey=$contact AND State='Claimed' AND ClaimToken=$token
@@ -1147,22 +1184,22 @@ WHERE CampaignId=$campaign AND ContactKey=$contact AND State='Claimed' AND Claim
 
     public async Task<bool> HasRetryableRecipientsAsync(Guid campaignId, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         return await HasRetryableRecipientsAsync(connection, null, campaignId, cancellationToken);
     }
 
-    private async Task<bool> HasRetryableRecipientsAsync(SqliteConnection connection, SqliteTransaction? transaction,
+    private async Task<bool> HasRetryableRecipientsAsync(DbConnection connection, DbTransaction? transaction,
         Guid campaignId, CancellationToken cancellationToken)
     {
-        await using SqliteCommand command = connection.CreateCommand();
+        await using DbCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = """
+        command.CommandText = Sql("""
 SELECT EXISTS(SELECT 1 FROM CampaignRecipients r JOIN Campaigns c ON c.Id=r.CampaignId
  WHERE c.OwnerSid=$owner AND r.CampaignId=$campaign AND
  (r.State IN ('Pending','Claimed','Sending') OR r.State='Rejected' AND r.Attempts<3 AND r.NextAttemptUtc IS NOT NULL));
-""";
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        command.Parameters.AddWithValue("$campaign", campaignId.ToString("D"));
+""");
+        AddParameter(command, "$owner", ownerSid);
+        AddParameter(command, "$campaign", campaignId.ToString("D"));
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) == 1;
     }
 
@@ -1178,15 +1215,15 @@ SELECT EXISTS(SELECT 1 FROM CampaignRecipients r JOIN Campaigns c ON c.Id=r.Camp
             await ReleaseClaimAsync(campaign.Id, recipient.ContactKey, claimToken, cancellationToken);
             return null;
         }
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
-        await using (SqliteCommand leader = connection.CreateCommand())
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
+        await using (DbCommand leader = connection.CreateCommand())
         {
             leader.Transaction = transaction;
-            leader.CommandText = "SELECT EXISTS(SELECT 1 FROM CampaignWorkerLeases WHERE OwnerSid=$owner AND WorkerId=$worker AND ExpiresUtc>$now);";
-            leader.Parameters.AddWithValue("$owner", ownerSid);
-            leader.Parameters.AddWithValue("$worker", workerId);
-            leader.Parameters.AddWithValue("$now", Stamp(now));
+            leader.CommandText = Sql("SELECT EXISTS(SELECT 1 FROM CampaignWorkerLeases WHERE OwnerSid=$owner AND WorkerId=$worker AND ExpiresUtc>$now);");
+            AddParameter(leader, "$owner", ownerSid);
+            AddParameter(leader, "$worker", workerId);
+            AddParameter(leader, "$now", Stamp(now));
             if (Convert.ToInt32(await leader.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) != 1)
             {
                 await transaction.RollbackAsync(cancellationToken);
@@ -1202,11 +1239,11 @@ SELECT EXISTS(SELECT 1 FROM CampaignRecipients r JOIN Campaigns c ON c.Id=r.Camp
             await ReleaseClaimAsync(campaign.Id, recipient.ContactKey, claimToken, cancellationToken);
             return null;
         }
-        await using (SqliteCommand execution = connection.CreateCommand())
+        await using (DbCommand execution = connection.CreateCommand())
         {
             execution.Transaction = transaction;
-            execution.CommandText = "SELECT ExecutionEnabled FROM CampaignRuntimeSettings WHERE OwnerSid=$owner;";
-            execution.Parameters.AddWithValue("$owner", ownerSid);
+            execution.CommandText = Sql("SELECT ExecutionEnabled FROM CampaignRuntimeSettings WHERE OwnerSid=$owner;");
+            AddParameter(execution, "$owner", ownerSid);
             if (Convert.ToInt32(await execution.ExecuteScalarAsync(cancellationToken) ?? 0, CultureInfo.InvariantCulture) != 1)
             {
                 await transaction.RollbackAsync(cancellationToken);
@@ -1231,15 +1268,15 @@ SELECT EXISTS(SELECT 1 FROM CampaignRecipients r JOIN Campaigns c ON c.Id=r.Camp
             throw new InvalidDataException("Recipient is outside the immutable approved audience.");
         }
 
-        await using SqliteCommand rowCommand = connection.CreateCommand();
+        await using DbCommand rowCommand = connection.CreateCommand();
         rowCommand.Transaction = transaction;
-        rowCommand.CommandText = """
+        rowCommand.CommandText = Sql("""
 SELECT Id, State, ClaimToken, ClaimExpiresUtc, Attempts FROM CampaignRecipients
 WHERE CampaignId=$campaign AND ContactKey=$contact;
-""";
-        rowCommand.Parameters.AddWithValue("$campaign", campaign.Id.ToString("D"));
-        rowCommand.Parameters.AddWithValue("$contact", recipient.ContactKey);
-        await using SqliteDataReader row = await rowCommand.ExecuteReaderAsync(cancellationToken);
+""");
+        AddParameter(rowCommand, "$campaign", campaign.Id.ToString("D"));
+        AddParameter(rowCommand, "$contact", recipient.ContactKey);
+        await using DbDataReader row = await rowCommand.ExecuteReaderAsync(cancellationToken);
         if (!await row.ReadAsync(cancellationToken) || row.GetString(1) != "Claimed" ||
             row.GetString(2) != claimToken || row.IsDBNull(3) || ParseStamp(row.GetString(3)) <= now)
         {
@@ -1354,7 +1391,7 @@ ON CONFLICT(CrmCompanyId) DO UPDATE SET LastAttemptAtUtc=excluded.LastAttemptAtU
                 await ExecuteAsync(connection, transaction, """
 INSERT INTO CrmActivities(CrmCompanyId, ActivityType, Description, ActivityAtUtc, UserName)
 VALUES($contact,'WhatsAppCampaignAttempt','Campaign attempt authorized', $now, $username);
-""", cancellationToken, ("$contact", recipient.ContactId), ("$now", Stamp(now)), ("$username", Environment.UserName));
+""", cancellationToken, ("$contact", recipient.ContactId), ("$now", TimestampValue(now)), ("$username", Environment.UserName));
         }
         await transaction.CommitAsync(cancellationToken);
         return new CampaignSendAuthorization(attemptId, manifest, frozen, attemptCount + 1);
@@ -1367,20 +1404,20 @@ VALUES($contact,'WhatsAppCampaignAttempt','Campaign attempt authorized', $now, $
         TimeSpan minimumSpacing,
         CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
         bool recoveredAttempt;
-        await using (SqliteCommand attempt = connection.CreateCommand())
+        await using (DbCommand attempt = connection.CreateCommand())
         {
             attempt.Transaction = transaction;
-            attempt.CommandText = """
+            attempt.CommandText = Sql("""
 SELECT a.State,a.OutcomeCode FROM CampaignAttempts a JOIN Campaigns c ON c.Id=a.CampaignId
 WHERE a.Id=$attempt AND c.OwnerSid=$owner AND a.CampaignId=$campaign;
-""";
-            attempt.Parameters.AddWithValue("$attempt", authorization.AttemptId);
-            attempt.Parameters.AddWithValue("$owner", ownerSid);
-            attempt.Parameters.AddWithValue("$campaign", authorization.Manifest.CampaignId.ToString("D"));
-            await using SqliteDataReader row = await attempt.ExecuteReaderAsync(cancellationToken);
+""");
+            AddParameter(attempt, "$attempt", authorization.AttemptId);
+            AddParameter(attempt, "$owner", ownerSid);
+            AddParameter(attempt, "$campaign", authorization.Manifest.CampaignId.ToString("D"));
+            await using DbDataReader row = await attempt.ExecuteReaderAsync(cancellationToken);
             if (!await row.ReadAsync(cancellationToken))
                 throw new InvalidOperationException("Campaign attempt is not owned by this worker's Windows owner.");
             recoveredAttempt = row.GetString(0) == "Unknown" && !row.IsDBNull(1) &&
@@ -1428,22 +1465,22 @@ WHERE OwnerSid=$owner AND Channel=$channel AND NormalizedEndpoint=$endpoint AND 
 
     public async Task<DateTimeOffset?> GetNextDispatchUtcAsync(Guid campaignId, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         return await ReadCampaignSpacingAsync(connection, null, campaignId, cancellationToken);
     }
 
     public async Task<bool> HasOutstandingSendsAsync(Guid campaignId, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT EXISTS(SELECT 1 FROM CampaignRecipients WHERE CampaignId=$campaign AND State IN ('Claimed','Sending'));";
-        command.Parameters.AddWithValue("$campaign", campaignId.ToString("D"));
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = Sql("SELECT EXISTS(SELECT 1 FROM CampaignRecipients WHERE CampaignId=$campaign AND State IN ('Claimed','Sending'));");
+        AddParameter(command, "$campaign", campaignId.ToString("D"));
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) == 1;
     }
 
     public async Task SkipClaimAsync(Guid campaignId, string contactKey, string claimToken, string outcomeCode, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         int changed = await ExecuteAsync(connection, null, """
 UPDATE CampaignRecipients SET State='Skipped', ClaimToken=NULL, ClaimExpiresUtc=NULL, LastOutcomeCode=$code
 WHERE CampaignId=$campaign AND ContactKey=$contact AND State='Claimed' AND ClaimToken=$token
@@ -1456,8 +1493,8 @@ WHERE CampaignId=$campaign AND ContactKey=$contact AND State='Claimed' AND Claim
 
     public async Task CloseExpiredCampaignAsync(Guid campaignId, long expectedRevision, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
         CampaignSnapshot? current = await ReadSnapshotAsync(connection, transaction, campaignId, cancellationToken);
         if (current is null || current.Revision != expectedRevision || current.State is not (CampaignState.Active or CampaignState.Scheduled))
         {
@@ -1478,8 +1515,8 @@ WHERE Id=$campaign AND OwnerSid=$owner AND Revision=$revision;
 
     public async Task MarkCampaignFaultedAsync(Guid campaignId, long expectedRevision, string errorCode, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbTransaction transaction = await BeginWriteAsync(connection, cancellationToken);
         CampaignSnapshot? current = await ReadSnapshotAsync(connection, transaction, campaignId, cancellationToken);
         if (current is null || current.Revision != expectedRevision || current.State is not (CampaignState.Active or CampaignState.Scheduled))
         {
@@ -1507,7 +1544,7 @@ WHERE Id=$campaign AND OwnerSid=$owner AND Revision=$revision;
         return GetConsentDecision(current, channel, recipient.NormalizedEndpoint, group) == ConsentDecision.Granted;
     }
 
-    private async Task<bool> IsStillEligibleAsync(SqliteConnection connection, SqliteTransaction transaction, CampaignRecipient recipient, CampaignChannel channel, CancellationToken cancellationToken)
+    private async Task<bool> IsStillEligibleAsync(DbConnection connection, DbTransaction transaction, CampaignRecipient recipient, CampaignChannel channel, CancellationToken cancellationToken)
     {
         AudienceCandidate? current = await ReadCandidateAsync(connection, transaction, recipient.Population, recipient.ContactId, cancellationToken);
         if (current is null || !current.IsActive ||
@@ -1519,21 +1556,21 @@ WHERE Id=$campaign AND OwnerSid=$owner AND Revision=$revision;
 
     private async Task<ConsentGroup> ReadConsentGroupAsync(CampaignPopulation population, CampaignChannel channel, string normalizedEndpoint, CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
         return await ReadConsentGroupAsync(connection, null, population, channel, normalizedEndpoint, cancellationToken);
     }
 
     private async Task<Dictionary<string, List<string>>> ReadCrmCooldownsAsync(CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = Sql("""
 SELECT company.Phone, cooldown.LastAttemptAtUtc
 FROM CrmWhatsAppSendCooldowns cooldown
 JOIN CrmCompanies company ON company.Id=cooldown.CrmCompanyId;
-""";
+""");
         Dictionary<string, List<string>> results = new(StringComparer.OrdinalIgnoreCase);
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
             if (reader.IsDBNull(0))
@@ -1549,21 +1586,21 @@ JOIN CrmCompanies company ON company.Id=cooldown.CrmCompanyId;
     }
 
     private async Task<CrmCooldownState> ReadCrmCooldownStateAsync(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
+        DbConnection connection,
+        DbTransaction transaction,
         string normalizedEndpoint,
         CancellationToken cancellationToken)
     {
-        await using SqliteCommand command = connection.CreateCommand();
+        await using DbCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = """
+        command.CommandText = Sql("""
 SELECT company.Id, company.Phone, cooldown.LastAttemptAtUtc
 FROM CrmCompanies company
 LEFT JOIN CrmWhatsAppSendCooldowns cooldown ON cooldown.CrmCompanyId=company.Id;
-""";
+""");
         List<int> matchingContactIds = [];
         DateTimeOffset? latest = null;
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
             if (reader.IsDBNull(1) || NormalizePhone(reader.GetString(1)) != normalizedEndpoint)
@@ -1580,21 +1617,21 @@ LEFT JOIN CrmWhatsAppSendCooldowns cooldown ON cooldown.CrmCompanyId=company.Id;
         return new CrmCooldownState(matchingContactIds, latest);
     }
 
-    private async Task<ConsentGroup> ReadConsentGroupAsync(SqliteConnection connection, SqliteTransaction? transaction, CampaignPopulation population, CampaignChannel channel, string normalizedEndpoint, CancellationToken cancellationToken)
+    private async Task<ConsentGroup> ReadConsentGroupAsync(DbConnection connection, DbTransaction? transaction, CampaignPopulation population, CampaignChannel channel, string normalizedEndpoint, CancellationToken cancellationToken)
     {
-        await using SqliteCommand command = connection.CreateCommand();
+        await using DbCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = """
+        command.CommandText = Sql("""
 SELECT ContactId, Granted, IsWithdrawal FROM CampaignConsents
 WHERE OwnerSid=$owner AND Population=$population AND Channel=$channel AND NormalizedEndpoint=$endpoint
 ORDER BY Id;
-""";
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        command.Parameters.AddWithValue("$population", population.ToString());
-        command.Parameters.AddWithValue("$channel", channel.ToString());
-        command.Parameters.AddWithValue("$endpoint", normalizedEndpoint);
+""");
+        AddParameter(command, "$owner", ownerSid);
+        AddParameter(command, "$population", population.ToString());
+        AddParameter(command, "$channel", channel.ToString());
+        AddParameter(command, "$endpoint", normalizedEndpoint);
         Dictionary<int, bool> latestByContact = [];
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
             latestByContact[reader.GetInt32(0)] = reader.GetInt32(1) == 1 && reader.GetInt32(2) == 0;
         await reader.DisposeAsync();
@@ -1604,8 +1641,8 @@ ORDER BY Id;
             // CRM card withdrawals are shared endpoint suppression, even for an ERP audience
             // or a duplicate contact that was not selected for this campaign.
             command.Parameters.Clear();
-            command.CommandText = "SELECT Phone FROM CrmCompanies WHERE WhatsAppOptOutAtUtc IS NOT NULL;";
-            await using SqliteDataReader withdrawals = await command.ExecuteReaderAsync(cancellationToken);
+            command.CommandText = Sql("SELECT Phone FROM CrmCompanies WHERE WhatsAppOptOutAtUtc IS NOT NULL;");
+            await using DbDataReader withdrawals = await command.ExecuteReaderAsync(cancellationToken);
             while (await withdrawals.ReadAsync(cancellationToken))
             {
                 if (!withdrawals.IsDBNull(0) && NormalizeEndpoint(channel, withdrawals.GetString(0)) == normalizedEndpoint)
@@ -1632,57 +1669,57 @@ ORDER BY Id;
     {
         if (population == CampaignPopulation.CrmCompanies)
         {
-            await using SqliteConnection connection = await OpenCrmAsync(cancellationToken);
-            await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = """
+            await using DbConnection connection = await OpenCrmAsync(cancellationToken);
+            await using DbCommand command = connection.CreateCommand();
+            command.CommandText = Sql("""
 SELECT Id, CompanyName, Phone, Email, WhatsAppMarketingOptIn, WhatsAppOptInAtUtc,
  WhatsAppOptInEvidence, WhatsAppOptOutAtUtc
 FROM CrmCompanies ORDER BY Id;
-""";
+""");
             List<AudienceCandidate> results = [];
-            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
                 results.Add(ReadCrmCandidate(reader));
             return results;
         }
 
-        await using SqliteConnection erp = await OpenErpReadOnlyAsync(cancellationToken);
-        await using SqliteCommand erpCommand = erp.CreateCommand();
-        erpCommand.CommandText = "SELECT Id, CompanyName, Phone, Email, IsActive FROM Customers ORDER BY Id;";
+        await using DbConnection erp = await OpenErpReadOnlyAsync(cancellationToken);
+        await using DbCommand erpCommand = erp.CreateCommand();
+        erpCommand.CommandText = Sql("SELECT Id, CompanyName, Phone, Email, IsActive FROM Customers ORDER BY Id;");
         List<AudienceCandidate> erpResults = [];
-        await using SqliteDataReader erpReader = await erpCommand.ExecuteReaderAsync(cancellationToken);
+        await using DbDataReader erpReader = await erpCommand.ExecuteReaderAsync(cancellationToken);
         while (await erpReader.ReadAsync(cancellationToken))
             erpResults.Add(new AudienceCandidate(CampaignPopulation.ErpCustomers, erpReader.GetInt32(0),
                 erpReader.GetString(1), erpReader.IsDBNull(2) ? string.Empty : erpReader.GetString(2),
-                erpReader.IsDBNull(3) ? string.Empty : erpReader.GetString(3), erpReader.GetInt32(4) == 1,
+                erpReader.IsDBNull(3) ? string.Empty : erpReader.GetString(3), ArsanDatabase.ReadFlag(erpReader, 4),
                 false, null, null, null));
         return erpResults;
     }
 
-    private async Task<AudienceCandidate?> ReadCandidateAsync(SqliteConnection crm, SqliteTransaction transaction, CampaignPopulation population, int id, CancellationToken cancellationToken)
+    private async Task<AudienceCandidate?> ReadCandidateAsync(DbConnection crm, DbTransaction transaction, CampaignPopulation population, int id, CancellationToken cancellationToken)
     {
         if (population == CampaignPopulation.CrmCompanies)
         {
-            await using SqliteCommand command = crm.CreateCommand();
+            await using DbCommand command = crm.CreateCommand();
             command.Transaction = transaction;
-            command.CommandText = """
+            command.CommandText = Sql("""
 SELECT Id, CompanyName, Phone, Email, WhatsAppMarketingOptIn, WhatsAppOptInAtUtc,
  WhatsAppOptInEvidence, WhatsAppOptOutAtUtc FROM CrmCompanies WHERE Id=$id;
-""";
-            command.Parameters.AddWithValue("$id", id);
-            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+""");
+            AddParameter(command, "$id", id);
+            await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             return await reader.ReadAsync(cancellationToken) ? ReadCrmCandidate(reader) : null;
         }
 
-        await using SqliteConnection erp = await OpenErpReadOnlyAsync(cancellationToken);
-        await using SqliteCommand erpCommand = erp.CreateCommand();
-        erpCommand.CommandText = "SELECT Id, CompanyName, Phone, Email, IsActive FROM Customers WHERE Id=$id;";
-        erpCommand.Parameters.AddWithValue("$id", id);
-        await using SqliteDataReader erpReader = await erpCommand.ExecuteReaderAsync(cancellationToken);
+        await using DbConnection erp = await OpenErpReadOnlyAsync(cancellationToken);
+        await using DbCommand erpCommand = erp.CreateCommand();
+        erpCommand.CommandText = Sql("SELECT Id, CompanyName, Phone, Email, IsActive FROM Customers WHERE Id=$id;");
+        AddParameter(erpCommand, "$id", id);
+        await using DbDataReader erpReader = await erpCommand.ExecuteReaderAsync(cancellationToken);
         return await erpReader.ReadAsync(cancellationToken)
             ? new AudienceCandidate(CampaignPopulation.ErpCustomers, erpReader.GetInt32(0), erpReader.GetString(1),
                 erpReader.IsDBNull(2) ? string.Empty : erpReader.GetString(2), erpReader.IsDBNull(3) ? string.Empty : erpReader.GetString(3),
-                erpReader.GetInt32(4) == 1, false, null, null, null)
+                ArsanDatabase.ReadFlag(erpReader, 4), false, null, null, null)
             : null;
     }
 
@@ -1693,18 +1730,18 @@ SELECT Id, CompanyName, Phone, Email, WhatsAppMarketingOptIn, WhatsAppOptInAtUtc
         Dictionary<int, string> segments = [];
         try
         {
-            await using SqliteConnection connection = population == CampaignPopulation.CrmCompanies
+            await using DbConnection connection = population == CampaignPopulation.CrmCompanies
                 ? await OpenCrmAsync(cancellationToken)
                 : await OpenErpReadOnlyAsync(cancellationToken);
-            await using SqliteCommand command = connection.CreateCommand();
+            await using DbCommand command = connection.CreateCommand();
             command.CommandText = population == CampaignPopulation.CrmCompanies
                 ? "SELECT Id, COALESCE(City,'') || ' ' || COALESCE(Sector,'') || ' ' || COALESCE(Status,'') FROM CrmCompanies;"
                 : "SELECT Id, COALESCE(City,'') FROM Customers;";
-            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
                 segments[reader.GetInt32(0)] = reader.GetString(1);
         }
-        catch (SqliteException)
+        catch (DbException)
         {
             // Older schemas without city/sector/status columns fall back to name, email and phone search.
             segments.Clear();
@@ -1712,18 +1749,33 @@ SELECT Id, CompanyName, Phone, Email, WhatsAppMarketingOptIn, WhatsAppOptInAtUtc
         return segments;
     }
 
-    private static AudienceCandidate ReadCrmCandidate(SqliteDataReader reader) =>
+    private static AudienceCandidate ReadCrmCandidate(DbDataReader reader) =>
         new(CampaignPopulation.CrmCompanies, reader.GetInt32(0), reader.GetString(1),
             reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
             reader.IsDBNull(3) ? string.Empty : reader.GetString(3), true,
-            !reader.IsDBNull(4) && reader.GetInt32(4) == 1,
-            reader.IsDBNull(5) ? null : ParseConsentDate(reader.GetString(5)),
+            ArsanDatabase.ReadFlag(reader, 4),
+            ArsanDatabase.ReadUtc(reader, 5),
             reader.IsDBNull(6) ? null : reader.GetString(6),
-            reader.IsDBNull(7) ? null : ParseConsentDate(reader.GetString(7)));
+            ArsanDatabase.ReadUtc(reader, 7));
 
-    private async Task<SqliteConnection> OpenCrmAsync(CancellationToken cancellationToken)
+    private string Sql(string sql) => postgres ? ArsanDatabase.ToPostgresSql(sql) : sql;
+
+    private object FlagValue(bool value) => postgres ? value : value ? 1 : 0;
+
+    // EF-managed CRM timestamp columns: ISO text on SQLite (as before), a UTC timestamp on PostgreSQL.
+    private object TimestampValue(DateTimeOffset value) => postgres ? value.UtcDateTime : Stamp(value);
+
+    private static void AddParameter(DbCommand command, string name, object? value) =>
+        ArsanDatabase.AddParameter(command, name, value);
+
+    private Task<DbTransaction> BeginWriteAsync(DbConnection connection, CancellationToken cancellationToken) =>
+        ArsanDatabase.BeginWriteTransactionAsync(connection, cancellationToken);
+
+    private async Task<DbConnection> OpenCrmAsync(CancellationToken cancellationToken)
     {
-        SqliteConnection connection = new(new SqliteConnectionStringBuilder
+        if (postgres)
+            return await ArsanDatabase.OpenPostgresAsync(DatabaseKind.Crm, readOnly: false, cancellationToken);
+        DbConnection connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
             DataSource = crmDatabasePath,
             Mode = SqliteOpenMode.ReadWrite,
@@ -1735,11 +1787,13 @@ SELECT Id, CompanyName, Phone, Email, WhatsAppMarketingOptIn, WhatsAppOptInAtUtc
         return connection;
     }
 
-    private async Task<SqliteConnection> OpenErpReadOnlyAsync(CancellationToken cancellationToken)
+    private async Task<DbConnection> OpenErpReadOnlyAsync(CancellationToken cancellationToken)
     {
+        if (postgres)
+            return await ArsanDatabase.OpenPostgresAsync(DatabaseKind.Erp, readOnly: true, cancellationToken);
         if (erpDatabasePath is null || !File.Exists(erpDatabasePath))
             throw new FileNotFoundException("The selected ERP customer database is missing; it was not created.", erpDatabasePath);
-        SqliteConnection connection = new(new SqliteConnectionStringBuilder
+        DbConnection connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
             DataSource = erpDatabasePath,
             Mode = SqliteOpenMode.ReadOnly,
@@ -1750,31 +1804,31 @@ SELECT Id, CompanyName, Phone, Email, WhatsAppMarketingOptIn, WhatsAppOptInAtUtc
         return connection;
     }
 
-    private async Task<CampaignDraft?> ReadDraftAsync(SqliteConnection connection, SqliteTransaction? transaction, Guid id, CancellationToken cancellationToken)
+    private async Task<CampaignDraft?> ReadDraftAsync(DbConnection connection, DbTransaction? transaction, Guid id, CancellationToken cancellationToken)
     {
-        await using SqliteCommand command = connection.CreateCommand();
+        await using DbCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = "SELECT Revision, State, DraftJson, UpdatedUtc FROM Campaigns WHERE Id=$id AND OwnerSid=$owner;";
-        command.Parameters.AddWithValue("$id", id.ToString("D"));
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        command.CommandText = Sql("SELECT Revision, State, DraftJson, UpdatedUtc FROM Campaigns WHERE Id=$id AND OwnerSid=$owner;");
+        AddParameter(command, "$id", id.ToString("D"));
+        AddParameter(command, "$owner", ownerSid);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken)
             ? new CampaignDraft(id, reader.GetInt64(0), Enum.Parse<CampaignState>(reader.GetString(1)),
                 Deserialize<CampaignDraftInput>(reader.GetString(2)), ParseStamp(reader.GetString(3)))
             : null;
     }
 
-    private async Task<CampaignSnapshot?> ReadSnapshotAsync(SqliteConnection connection, SqliteTransaction? transaction, Guid id, CancellationToken cancellationToken)
+    private async Task<CampaignSnapshot?> ReadSnapshotAsync(DbConnection connection, DbTransaction? transaction, Guid id, CancellationToken cancellationToken)
     {
-        await using SqliteCommand command = connection.CreateCommand();
+        await using DbCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = """
+        command.CommandText = Sql("""
 SELECT Revision, State, DraftJson, ManifestHash, UpdatedUtc, LastErrorCode
 FROM Campaigns WHERE Id=$id AND OwnerSid=$owner;
-""";
-        command.Parameters.AddWithValue("$id", id.ToString("D"));
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+""");
+        AddParameter(command, "$id", id.ToString("D"));
+        AddParameter(command, "$owner", ownerSid);
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken)
             ? new CampaignSnapshot(id, reader.GetInt64(0), Enum.Parse<CampaignState>(reader.GetString(1)), ownerSid,
                 Deserialize<CampaignDraftInput>(reader.GetString(2)), reader.IsDBNull(3) ? null : reader.GetString(3),
@@ -1782,39 +1836,39 @@ FROM Campaigns WHERE Id=$id AND OwnerSid=$owner;
             : null;
     }
 
-    private static async Task<CampaignApprovalManifest> ReadManifestAsync(SqliteConnection connection, SqliteTransaction transaction, Guid id, CancellationToken cancellationToken)
+    private async Task<CampaignApprovalManifest> ReadManifestAsync(DbConnection connection, DbTransaction transaction, Guid id, CancellationToken cancellationToken)
     {
-        await using SqliteCommand command = connection.CreateCommand();
+        await using DbCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = "SELECT SnapshotJson FROM Campaigns WHERE Id=$id;";
-        command.Parameters.AddWithValue("$id", id.ToString("D"));
+        command.CommandText = Sql("SELECT SnapshotJson FROM Campaigns WHERE Id=$id;");
+        AddParameter(command, "$id", id.ToString("D"));
         object? value = await command.ExecuteScalarAsync(cancellationToken);
         return value is string json ? Deserialize<CampaignApprovalManifest>(json)
             : throw new InvalidDataException("Approved campaign snapshot is missing.");
     }
 
-    private async Task<DateTimeOffset?> ReadEndpointReservationAsync(SqliteConnection connection, SqliteTransaction transaction, CampaignRecipient recipient, CampaignChannel channel, TimeSpan minimumSpacing, CancellationToken cancellationToken)
+    private async Task<DateTimeOffset?> ReadEndpointReservationAsync(DbConnection connection, DbTransaction transaction, CampaignRecipient recipient, CampaignChannel channel, TimeSpan minimumSpacing, CancellationToken cancellationToken)
     {
-        await using SqliteCommand command = connection.CreateCommand();
+        await using DbCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = "SELECT LastAttemptUtc FROM CampaignEndpointReservations WHERE OwnerSid=$owner AND Channel=$channel AND NormalizedEndpoint=$endpoint;";
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        command.Parameters.AddWithValue("$channel", channel.ToString());
-        command.Parameters.AddWithValue("$endpoint", recipient.NormalizedEndpoint);
+        command.CommandText = Sql("SELECT LastAttemptUtc FROM CampaignEndpointReservations WHERE OwnerSid=$owner AND Channel=$channel AND NormalizedEndpoint=$endpoint;");
+        AddParameter(command, "$owner", ownerSid);
+        AddParameter(command, "$channel", channel.ToString());
+        AddParameter(command, "$endpoint", recipient.NormalizedEndpoint);
         object? value = await command.ExecuteScalarAsync(cancellationToken);
         return value is string stamp ? ParseStamp(stamp).Add(minimumSpacing) : null;
     }
 
-    private async Task<DateTimeOffset?> ReadCampaignSpacingAsync(SqliteConnection connection, SqliteTransaction? transaction, Guid id, CancellationToken cancellationToken)
+    private async Task<DateTimeOffset?> ReadCampaignSpacingAsync(DbConnection connection, DbTransaction? transaction, Guid id, CancellationToken cancellationToken)
     {
-        await using SqliteCommand command = connection.CreateCommand();
+        await using DbCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = """
+        command.CommandText = Sql("""
 SELECT MAX(COALESCE(a.CompletedUtc,a.AuthorizedUtc)) FROM CampaignAttempts a
 JOIN Campaigns c ON c.Id=a.CampaignId WHERE c.OwnerSid=$owner AND a.CampaignId=$campaign;
-""";
-        command.Parameters.AddWithValue("$owner", ownerSid);
-        command.Parameters.AddWithValue("$campaign", id.ToString("D"));
+""");
+        AddParameter(command, "$owner", ownerSid);
+        AddParameter(command, "$campaign", id.ToString("D"));
         object? value = await command.ExecuteScalarAsync(cancellationToken);
         if (value is not string stamp)
             return null;
@@ -1823,13 +1877,13 @@ JOIN Campaigns c ON c.Id=a.CampaignId WHERE c.OwnerSid=$owner AND a.CampaignId=$
         return snapshot is null ? null : last.Add(snapshot.Input.MinimumSpacing);
     }
 
-    private async Task<int> ExecuteAsync(SqliteConnection connection, SqliteTransaction? transaction, string sql, CancellationToken cancellationToken, params (string Name, object? Value)[] parameters)
+    private async Task<int> ExecuteAsync(DbConnection connection, DbTransaction? transaction, string sql, CancellationToken cancellationToken, params (string Name, object? Value)[] parameters)
     {
-        await using SqliteCommand command = connection.CreateCommand();
+        await using DbCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = sql;
+        command.CommandText = Sql(sql);
         foreach ((string name, object? value) in parameters)
-            command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+            AddParameter(command, name, value ?? DBNull.Value);
         return await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -1870,13 +1924,6 @@ JOIN Campaigns c ON c.Id=a.CampaignId WHERE c.OwnerSid=$owner AND a.CampaignId=$
         return normalized.Length is >= 8 and <= 15 && normalized.All(char.IsAsciiDigit) && normalized[0] != '0'
             ? normalized
             : string.Empty;
-    }
-
-    private static DateTimeOffset? ParseConsentDate(string value)
-    {
-        if (!DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTimeOffset parsed))
-            return null;
-        return parsed.ToUniversalTime();
     }
 
     private static string Stamp(DateTimeOffset value) => value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);

@@ -51,6 +51,19 @@ CREATE TABLE IF NOT EXISTS CrmImportMarkers (
 
     public async Task EnsureAsync()
     {
+        if (ArsanDatabase.IsPostgres)
+        {
+            await using (ArsanGazDbContext legacyErp = new())
+            {
+                await ArsanDbEf.EnsurePostgresSchemaAsync(legacyErp, DatabaseKind.Erp);
+            }
+
+            await using CrmDbContext sharedCrm = new();
+            await ArsanDbEf.EnsurePostgresSchemaAsync(sharedCrm, DatabaseKind.Crm);
+            await ImportOnceForCurrentUserAsync(sharedCrm);
+            return;
+        }
+
         await using (ArsanGazDbContext legacyDb = new())
         {
             await legacyDb.Database.ExecuteSqlRawAsync(SchemaSql);
@@ -80,7 +93,11 @@ CREATE TABLE IF NOT EXISTS CrmImportMarkers (
         await sharedDb.Database.ExecuteSqlRawAsync(SchemaSql);
         await EnsureCrmColumnsAsync(sharedDb);
         await EnsureCrmIndexesAsync(sharedDb);
+        await ImportOnceForCurrentUserAsync(sharedDb);
+    }
 
+    private static async Task ImportOnceForCurrentUserAsync(CrmDbContext sharedDb)
+    {
         string userSid = WindowsIdentity.GetCurrent().User?.Value
             ?? throw new InvalidOperationException("Windows kullanıcı kimliği alınamadı; CRM verisi içe aktarılamadı.");
 
