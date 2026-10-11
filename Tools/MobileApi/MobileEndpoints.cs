@@ -8,8 +8,8 @@ using Microsoft.EntityFrameworkCore;
 namespace ArsanGazERP.MobileApi;
 
 internal sealed record PairRequest(string Code, string? DeviceName);
-internal sealed record MoveRequest(string Code, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null);
-internal sealed record BulkMoveRequest(List<string?>? Codes, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null);
+internal sealed record MoveRequest(string Code, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null, bool ConfirmCustomerChange = false);
+internal sealed record BulkMoveRequest(List<string?>? Codes, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null, bool ConfirmCustomerChange = false);
 internal sealed record AuditRequest(int CustomerId, List<string?>? Codes, string? Note);
 internal sealed record NewCylinderRequest(string? SerialNumber, string? Barcode, string? GasType, decimal Capacity, string? CapacityUnit, bool? IsFull, DateTime? TestDueDate);
 internal sealed record CrmNoteRequest(string Text);
@@ -213,17 +213,26 @@ internal static class MobileEndpoints
                 return Results.NotFound(new { error = "Tüp bulunamadı." });
             }
 
+            string? warning;
             try
             {
                 string note = string.IsNullOrWhiteSpace(request.Note) ? $"Mobil ({DeviceName(context)})" : request.Note.Trim();
-                await crud.MoveCylinderAsync(cylinder.Id, request.Status, request.CustomerId, note, "Mobil hareket", request.Plate, request.IsFull);
+                warning = await crud.MoveCylinderAsync(cylinder.Id, request.Status, request.CustomerId, note, "Mobil hareket", request.Plate, request.IsFull, request.ConfirmCustomerChange);
+            }
+            catch (CylinderConflictException conflict)
+            {
+                return ConflictResult(conflict);
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
 
-            return Results.Ok(new { message = $"{cylinder.SerialNumber}: {ErpTools.StatusName((int)cylinder.Status)} → {ErpTools.StatusName((int)request.Status)} kaydedildi." });
+            return Results.Ok(new
+            {
+                message = $"{cylinder.SerialNumber}: {ErpTools.StatusName((int)cylinder.Status)} → {ErpTools.StatusName((int)request.Status)} kaydedildi."
+                    + (warning is null ? string.Empty : "\n" + warning)
+            });
         });
 
         app.MapPost("/api/tup/toplu-hareket", async (BulkMoveRequest request, HttpContext context) =>
@@ -232,7 +241,7 @@ internal static class MobileEndpoints
             {
                 string note = string.IsNullOrWhiteSpace(request.Note) ? $"Mobil toplu ({DeviceName(context)})" : request.Note.Trim();
                 List<CylinderBulkResult> results = await new CrudService().MoveCylindersAsync(
-                    request.Codes ?? [], request.Status, request.CustomerId, note, "Mobil toplu hareket", request.Plate, request.IsFull);
+                    request.Codes ?? [], request.Status, request.CustomerId, note, "Mobil toplu hareket", request.Plate, request.IsFull, request.ConfirmCustomerChange);
                 int ok = results.Count(r => r.Ok);
                 return Results.Ok(new
                 {
@@ -241,6 +250,10 @@ internal static class MobileEndpoints
                     failed = results.Count - ok,
                     results
                 });
+            }
+            catch (CylinderConflictException conflict)
+            {
+                return ConflictResult(conflict);
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
@@ -377,6 +390,13 @@ internal static class MobileEndpoints
         FollowUp = c.FollowUpAtUtc?.ToLocalTime().ToString("dd.MM.yyyy", Turkish),
         FollowUpDays = c.FollowUpAtUtc is DateTime due ? (due.ToLocalTime().Date - DateTime.Today).Days : (int?)null
     };
+
+    // 409 tells the phone that nothing was saved and the same request may be repeated with ConfirmCustomerChange.
+    private static IResult ConflictResult(CylinderConflictException conflict) => Results.Json(new
+    {
+        error = conflict.Message,
+        conflicts = conflict.Conflicts.Select(c => new { c.Code, c.SerialNumber, c.CurrentCustomer, c.TargetCustomer, c.Days, c.Text })
+    }, statusCode: StatusCodes.Status409Conflict);
 
     private static IResult Text(Func<string> build)
     {

@@ -22,13 +22,16 @@ public static class OfflineMoves
     }
 
     // Returns how many movements were sent; stops at the first failure so order is preserved.
-    public static async Task<(int Sent, string? Error)> FlushAsync()
+    // Offline deliveries already happened physically, so a customer change is recorded and reported instead of blocked.
+    public static async Task<(int Sent, string? Error, string? Warning)> FlushAsync()
     {
         if (!await Gate.WaitAsync(0))
         {
-            return (0, null);
+            return (0, null, null);
         }
 
+        List<string> warnings = [];
+        string? Warning() => warnings.Count == 0 ? null : string.Join("\n", warnings);
         try
         {
             int sent = 0;
@@ -39,22 +42,26 @@ public static class OfflineMoves
                 string note = $"{move.Note} (telefonda çevrimdışı kaydedildi: {move.SavedAt:dd.MM.yyyy HH:mm})".Trim();
                 try
                 {
-                    await ApiClient.Instance.MoveCylinderAsync(move.Code, move.Status, move.CustomerId, note, move.Plate, move.IsFull);
+                    string message = await ApiClient.Instance.MoveCylinderAsync(move.Code, move.Status, move.CustomerId, note, move.Plate, move.IsFull, confirmCustomerChange: true);
+                    if (message.Contains('⚠'))
+                    {
+                        warnings.Add($"{move.Code} – {move.Label}: {message}");
+                    }
                 }
                 catch (ServerUnreachableException)
                 {
-                    return (sent, null);
+                    return (sent, null, Warning());
                 }
                 catch (ApiException exception) when (!IsPermanentRejection(exception.StatusCode))
                 {
-                    return (sent, $"{move.Code} – {move.Label}: {exception.Message} (kayıt kuyrukta bekliyor)");
+                    return (sent, $"{move.Code} – {move.Label}: {exception.Message} (kayıt kuyrukta bekliyor)", Warning());
                 }
                 catch (ApiException exception)
                 {
                     // The ERP rejected this movement (e.g. unknown barcode); drop it so later ones are not blocked.
                     moves.RemoveAt(0);
                     Save(moves);
-                    return (sent, $"{move.Code} – {move.Label}: {exception.Message}");
+                    return (sent, $"{move.Code} – {move.Label}: {exception.Message}", Warning());
                 }
 
                 moves.RemoveAt(0);
@@ -62,7 +69,7 @@ public static class OfflineMoves
                 sent++;
             }
 
-            return (sent, null);
+            return (sent, null, Warning());
         }
         finally
         {

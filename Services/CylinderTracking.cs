@@ -51,6 +51,40 @@ public sealed record CylinderAuditReport(int AuditId, string Customer, int Expec
     }
 }
 
+public sealed record CylinderCustomerConflict(
+    string SerialNumber,
+    string CurrentCustomer,
+    DateTime? Since,
+    int? Days,
+    bool? IsFull,
+    string TargetCustomer,
+    string? Code = null)
+{
+    public string Text
+    {
+        get
+        {
+            string since = Since is DateTime date ? $"{date:dd.MM.yyyy}" + (Days switch { 0 => " (bugün)", int days => $" ({days} gündür)", null => string.Empty }) : "tarih bilinmiyor";
+            List<string> lines =
+            [
+                $"⚠ {SerialNumber} tüpü sistemde hâlâ {CurrentCustomer} müşterisinde görünüyor.",
+                $"• {CurrentCustomer} müşterisinde: {since}" + (IsFull is null ? string.Empty : $", son bilinen: {CylinderTracking.FullnessName(IsFull)}"),
+                $"• Şimdi {TargetCustomer} müşterisine teslim edilmek isteniyor.",
+                $"Olası nedenler: tüp {CurrentCustomer} müşterisinden iade alındı ama iade kaydedilmedi, yanlış tüp okutuldu veya tüp müşteriler arasında el değiştirdi.",
+                $"Devam ederseniz tüp {CurrentCustomer} kaydından düşülür ve {TargetCustomer} müşterisine yazılır; {CurrentCustomer} için ayrıca iade hareketi oluşmaz."
+            ];
+            return string.Join(Environment.NewLine, lines);
+        }
+    }
+}
+
+// Thrown when a movement would silently take a cylinder away from the customer it is registered to.
+public sealed class CylinderConflictException(IReadOnlyList<CylinderCustomerConflict> conflicts)
+    : InvalidOperationException(string.Join(Environment.NewLine + Environment.NewLine, conflicts.Select(c => c.Text)))
+{
+    public IReadOnlyList<CylinderCustomerConflict> Conflicts { get; } = conflicts;
+}
+
 public static class CylinderTracking
 {
     public const int Warehouse = 1;
@@ -147,6 +181,33 @@ public static class CylinderTracking
 
     public static int? DaysSince(DateTime? value, DateTime today) =>
         value is DateTime date ? Math.Max(0, (today.Date - date.Date).Days) : null;
+
+    // A cylinder registered to one customer is about to be delivered to a different one.
+    public static CylinderCustomerConflict? CustomerConflict(
+        string serialNumber,
+        int currentStatus,
+        int? currentCustomerId,
+        string? currentCustomerName,
+        DateTime? lastMovementAt,
+        bool? isFull,
+        int targetStatus,
+        int? targetCustomerId,
+        string? targetCustomerName,
+        DateTime today)
+    {
+        if (currentStatus != Customer || currentCustomerId is null || targetStatus != Customer || targetCustomerId == currentCustomerId)
+        {
+            return null;
+        }
+
+        return new CylinderCustomerConflict(
+            serialNumber,
+            string.IsNullOrWhiteSpace(currentCustomerName) ? $"#{currentCustomerId}" : currentCustomerName.Trim(),
+            lastMovementAt,
+            DaysSince(lastMovementAt, today),
+            isFull,
+            string.IsNullOrWhiteSpace(targetCustomerName) ? $"#{targetCustomerId}" : targetCustomerName.Trim());
+    }
 
     public static IReadOnlyList<string> CommonGasTypes { get; } =
         ["Oksijen", "Medikal Oksijen", "Azot", "Argon", "Karbondioksit", "Argon/CO2 karışım", "Asetilen", "Helyum", "Hidrojen", "Kuru hava"];

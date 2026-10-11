@@ -11,6 +11,27 @@ internal static class CylinderTrackingTests
         AuditSplitsFoundMissingAndUnexpected();
         CodesAreCleaned();
         NewCylindersAreValidated();
+        CustomerChangesAreDetected();
+    }
+
+    private static void CustomerChangesAreDetected()
+    {
+        DateTime today = new(2026, 10, 11);
+        DateTime since = new(2026, 8, 1);
+        CylinderCustomerConflict? conflict = CylinderTracking.CustomerConflict(
+            "AG-1", CylinderTracking.Customer, 5, "Test Sanayi", since, true, CylinderTracking.Customer, 9, "Deneme Kaynak", today);
+        Assert(conflict is not null, "Delivering a cylinder held by one customer to another is a conflict.");
+        Assert(conflict!.Days == 71, "The conflict reports how long the cylinder has been at the customer.");
+        Assert(conflict.Text.Contains("Test Sanayi") && conflict.Text.Contains("Deneme Kaynak") && conflict.Text.Contains("01.08.2026"),
+            "The warning names both customers and the delivery date.");
+        Assert(CylinderTracking.CustomerConflict("AG-1", CylinderTracking.Customer, 5, "Test Sanayi", since, true, CylinderTracking.Customer, 5, "Test Sanayi", today) is null,
+            "Re-delivering to the same customer is not a conflict.");
+        Assert(CylinderTracking.CustomerConflict("AG-1", CylinderTracking.Customer, 5, "Test Sanayi", since, true, CylinderTracking.Warehouse, null, null, today) is null,
+            "Taking a cylinder back from the customer is not a conflict.");
+        Assert(CylinderTracking.CustomerConflict("AG-1", CylinderTracking.Vehicle, null, null, since, true, CylinderTracking.Customer, 9, "Deneme Kaynak", today) is null,
+            "Delivering a cylinder from a vehicle is not a conflict.");
+        CylinderConflictException exception = new([conflict, conflict with { SerialNumber = "AG-2" }]);
+        Assert(exception is InvalidOperationException && exception.Message.Contains("AG-2"), "The conflict exception lists every cylinder.");
     }
 
     private static void NewCylindersAreValidated()

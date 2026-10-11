@@ -57,20 +57,33 @@ public sealed class CrudService
    .ToListAsync();
   return ReorderPrediction.Compute(deliveries,DateTime.Today);
  }
- public async Task MoveCylinderAsync(int cylinderId,CylinderStatus target,int? customerId,string note,string movementType="Durum Değişikliği",string? vehiclePlate=null,bool? isFull=null)
+ public async Task<CylinderCustomerConflict?> CustomerConflictAsync(int cylinderId,CylinderStatus target,int? customerId)
+ {
+  if(target!=CylinderStatus.Customer||customerId is null)return null;
+  await using var db=new ArsanGazDbContext();
+  var c=await db.Cylinders.AsNoTracking().Include(x=>x.CurrentCustomer).FirstOrDefaultAsync(x=>x.Id==cylinderId);
+  if(c is null)return null;
+  string? targetName=await db.Customers.AsNoTracking().Where(x=>x.Id==customerId).Select(x=>x.CompanyName).FirstOrDefaultAsync();
+  return CylinderTracking.CustomerConflict(c.SerialNumber,(int)c.Status,c.CurrentCustomerId,c.CurrentCustomer?.CompanyName,c.LastMovementAt,c.IsFull,(int)target,customerId,targetName,DateTime.Today);
+ }
+ public async Task<string?> MoveCylinderAsync(int cylinderId,CylinderStatus target,int? customerId,string note,string movementType="Durum Değişikliği",string? vehiclePlate=null,bool? isFull=null,bool confirmedCustomerChange=false)
  {
   if(!Enum.IsDefined(target))throw new ArgumentOutOfRangeException(nameof(target),"Geçersiz tüp durumu.");
   string? plate=target==CylinderStatus.Vehicle?CylinderTracking.NormalizePlate(vehiclePlate):null;
   int? movementCustomerId=null;
+  string? targetName=null;
   await using var db=new ArsanGazDbContext();
   if(target==CylinderStatus.Customer)
   {
    int id=customerId??throw new ArgumentException("Müşteriye teslim durumunda müşteri seçilmelidir.",nameof(customerId));
-   if(!await db.Customers.AnyAsync(x=>x.Id==id))throw new InvalidOperationException($"Müşteri bulunamadı: {id}.");
+   targetName=await db.Customers.Where(x=>x.Id==id).Select(x=>x.CompanyName).FirstOrDefaultAsync()??throw new InvalidOperationException($"Müşteri bulunamadı: {id}.");
    movementCustomerId=id;
   }
 
-  var c=await db.Cylinders.FindAsync(cylinderId)??throw new InvalidOperationException("Tüp bulunamadı.");
+  var c=await db.Cylinders.Include(x=>x.CurrentCustomer).FirstOrDefaultAsync(x=>x.Id==cylinderId)??throw new InvalidOperationException("Tüp bulunamadı.");
+  var conflict=CylinderTracking.CustomerConflict(c.SerialNumber,(int)c.Status,c.CurrentCustomerId,c.CurrentCustomer?.CompanyName,c.LastMovementAt,c.IsFull,(int)target,movementCustomerId,targetName,DateTime.Today);
+  if(conflict!=null&&!confirmedCustomerChange)throw new CylinderConflictException([conflict]);
+  if(conflict!=null)note=$"{note} · Uyarı onaylandı: tüp önceden {conflict.CurrentCustomer} müşterisindeydi".Trim(' ','·');
   var old=c.Status;
   int? previousCustomerId=c.CurrentCustomerId;
   c.Status=target;
@@ -80,23 +93,35 @@ public sealed class CrudService
   c.LastMovementAt=DateTime.Now;
   db.CylinderMovements.Add(new CylinderMovement{CylinderId=c.Id,CustomerId=movementCustomerId??previousCustomerId,FromStatus=old,ToStatus=target,MovementType=movementType,Description=note,MovementDate=DateTime.Now,VehiclePlate=plate,IsFull=c.IsFull});
   await db.SaveChangesAsync();
+  return conflict is null?null:$"⚠ Tüp önceden {conflict.CurrentCustomer} müşterisindeydi; {conflict.TargetCustomer} müşterisine aktarıldı.";
  }
- public async Task<List<CylinderBulkResult>> MoveCylindersAsync(IEnumerable<string?> codes,CylinderStatus target,int? customerId,string note,string movementType,string? vehiclePlate=null,bool? isFull=null)
+ public async Task<List<CylinderBulkResult>> MoveCylindersAsync(IEnumerable<string?> codes,CylinderStatus target,int? customerId,string note,string movementType,string? vehiclePlate=null,bool? isFull=null,bool confirmedCustomerChange=false)
  {
   IReadOnlyList<string> clean=CylinderTracking.CleanCodes(codes);
   if(clean.Count==0)throw new ArgumentException("Okutulmuş tüp yok.");
   if(clean.Count>CylinderTracking.MaxBatchSize)throw new ArgumentException($"Tek seferde en fazla {CylinderTracking.MaxBatchSize} tüp işlenebilir.");
   if(target==CylinderStatus.Vehicle)CylinderTracking.NormalizePlate(vehiclePlate);
   if(target==CylinderStatus.Customer&&customerId is null)throw new ArgumentException("Müşteriye teslim durumunda müşteri seçilmelidir.");
+  Dictionary<string,Cylinder?> found=[];
+  foreach(string code in clean)found[code]=await FindCylinderByCodeAsync(code);
+  if(!confirmedCustomerChange)
+  {
+   List<CylinderCustomerConflict> conflicts=[];
+   foreach((string code,Cylinder? cylinder) in found)
+   {
+    if(cylinder!=null&&await CustomerConflictAsync(cylinder.Id,target,customerId) is CylinderCustomerConflict conflict)conflicts.Add(conflict with{Code=code});
+   }
+   if(conflicts.Count>0)throw new CylinderConflictException(conflicts);
+  }
   List<CylinderBulkResult> results=[];
   foreach(string code in clean)
   {
-   Cylinder? cylinder=await FindCylinderByCodeAsync(code);
+   Cylinder? cylinder=found[code];
    if(cylinder is null){results.Add(new(code,false,"Tüp bulunamadı."));continue;}
    try
    {
-    await MoveCylinderAsync(cylinder.Id,target,customerId,note,movementType,vehiclePlate,isFull);
-    results.Add(new(code,true,$"{cylinder.SerialNumber}: {CylinderTracking.StatusName((int)cylinder.Status)} → {CylinderTracking.StatusName((int)target)}"));
+    string? warning=await MoveCylinderAsync(cylinder.Id,target,customerId,note,movementType,vehiclePlate,isFull,confirmedCustomerChange);
+    results.Add(new(code,true,$"{cylinder.SerialNumber}: {CylinderTracking.StatusName((int)cylinder.Status)} → {CylinderTracking.StatusName((int)target)}"+(warning is null?"":" "+warning)));
    }
    catch(Exception exception) when(exception is ArgumentException or InvalidOperationException)
    {

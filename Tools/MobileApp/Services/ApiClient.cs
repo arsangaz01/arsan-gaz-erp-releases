@@ -146,9 +146,32 @@ public sealed record CampaignListItem(
         (Failed > 0 ? $" · {Failed} başarısız" : string.Empty) + $" · başlangıç {StartsAt}";
 }
 
-public class ApiException(string message, int? statusCode = null) : Exception(message)
+public class ApiException(string message, int? statusCode = null, string? content = null) : Exception(message)
 {
     public int? StatusCode { get; } = statusCode;
+
+    public string? Content { get; } = content;
+
+    public bool IsCustomerConflict => StatusCode == 409;
+
+    // Codes the server refused because the cylinder is registered to another customer.
+    public IReadOnlyList<string> ConflictCodes()
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(Content ?? "{}");
+            return document.RootElement.TryGetProperty("conflicts", out JsonElement conflicts) && conflicts.ValueKind == JsonValueKind.Array
+                ? conflicts.EnumerateArray()
+                    .Select(c => c.TryGetProperty("code", out JsonElement code) ? code.GetString() : null)
+                    .OfType<string>()
+                    .ToList()
+                : [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
 }
 
 // The computer or tunnel could not be reached; the request never got an answer from the ERP.
@@ -318,11 +341,11 @@ public sealed class ApiClient
     public async Task<CylinderInfo> CylinderAsync(string code) =>
         await GetAsync<CylinderInfo>("/api/tup?kod=" + Uri.EscapeDataString(code));
 
-    public Task<string> MoveCylinderAsync(string code, int status, int? customerId, string? note, string? plate = null, bool? isFull = null) =>
-        PostMessageAsync("/api/tup/hareket", new { code, status, customerId, note, plate, isFull });
+    public Task<string> MoveCylinderAsync(string code, int status, int? customerId, string? note, string? plate = null, bool? isFull = null, bool confirmCustomerChange = false) =>
+        PostMessageAsync("/api/tup/hareket", new { code, status, customerId, note, plate, isFull, confirmCustomerChange });
 
-    public Task<CylinderBulkResponse> MoveCylindersAsync(IReadOnlyList<string> codes, int status, int? customerId, string? note, string? plate, bool? isFull) =>
-        PostAsync<CylinderBulkResponse>("/api/tup/toplu-hareket", new { codes, status, customerId, note, plate, isFull });
+    public Task<CylinderBulkResponse> MoveCylindersAsync(IReadOnlyList<string> codes, int status, int? customerId, string? note, string? plate, bool? isFull, bool confirmCustomerChange = false) =>
+        PostAsync<CylinderBulkResponse>("/api/tup/toplu-hareket", new { codes, status, customerId, note, plate, isFull, confirmCustomerChange });
 
     public Task<CylinderOverview> CylinderOverviewAsync() => GetAsync<CylinderOverview>("/api/tup/durum");
 
@@ -589,7 +612,7 @@ public sealed class ApiClient
             {
                 HttpStatusCode.Unauthorized => error ?? "Eşleşme geçersiz. Bağlantı'dan yeniden eşleştirin.",
                 _ => error ?? $"Sunucu hatası ({(int)response.StatusCode})."
-            }, (int)response.StatusCode);
+            }, (int)response.StatusCode, content);
         }
 
         try

@@ -596,9 +596,21 @@ public partial class OperationsWindow : Window
 				return;
 			}
 
+			int? targetCustomerId = target == CylinderStatus.Customer ? customer!.Id : null;
+			CylinderCustomerConflict? conflict = await _crud.CustomerConflictAsync(cylinder.Id, target, targetCustomerId);
+			if (conflict is not null
+				&& MessageBox.Show(this, conflict.Text + "\n\nYine de kaydedilsin mi?", "Tüp başka müşteride", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+			{
+				SetStatus($"{cylinder.SerialNumber}: {conflict.CurrentCustomer} müşterisindeki tüp için hareket iptal edildi.", true);
+				ScanCode.SelectAll();
+				ScanCode.Focus();
+				return;
+			}
+
 			string message = target switch
 			{
-				CylinderStatus.Customer => $"{cylinder.SerialNumber} → {customer!.CompanyName} teslim edildi.",
+				CylinderStatus.Customer => $"{cylinder.SerialNumber} → {customer!.CompanyName} teslim edildi."
+					+ (conflict is null ? string.Empty : $" (önceki müşteri: {conflict.CurrentCustomer})"),
 				CylinderStatus.Vehicle when plate is not null => $"{cylinder.SerialNumber} → {plate} plakalı araca yüklendi.",
 				_ => $"{cylinder.SerialNumber}: {action} kaydedildi."
 			};
@@ -606,11 +618,12 @@ public partial class OperationsWindow : Window
 				() => _crud.MoveCylinderAsync(
 					cylinder.Id,
 					target,
-					target == CylinderStatus.Customer ? customer!.Id : null,
+					targetCustomerId,
 					"Barkodla hızlı hareket",
 					action,
 					plate,
-					fullness),
+					fullness,
+					confirmedCustomerChange: conflict is not null),
 				message);
 		}
 		catch (Exception exception)
