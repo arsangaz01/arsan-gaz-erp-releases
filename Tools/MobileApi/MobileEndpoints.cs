@@ -11,7 +11,7 @@ internal sealed record PairRequest(string Code, string? DeviceName);
 internal sealed record MoveRequest(string Code, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null, bool ConfirmCustomerChange = false);
 internal sealed record BulkMoveRequest(List<string?>? Codes, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null, bool ConfirmCustomerChange = false);
 internal sealed record AuditRequest(int CustomerId, List<string?>? Codes, string? Note);
-internal sealed record NewCylinderRequest(string? SerialNumber, string? Barcode, string? GasType, decimal Capacity, string? CapacityUnit, bool? IsFull, DateTime? TestDueDate);
+internal sealed record NewCylinderRequest(string? SerialNumber, string? Barcode, string? GasType, decimal Capacity, string? CapacityUnit, bool? IsFull, DateTime? TestDueDate, int? CustomerId = null);
 internal sealed record CrmNoteRequest(string Text);
 internal sealed record CursorRequest(string? Message);
 internal sealed record CrmFollowUpRequest(DateOnly Date, string? Note);
@@ -83,30 +83,7 @@ internal static class MobileEndpoints
 
         app.MapGet("/api/ozet", () => Text(() => "ERP\n" + ErpTools.Summary() + "\nCRM\n" + ErpTools.CrmSummary()));
 
-        app.MapGet("/api/musteriler", async (string? q) =>
-        {
-            await using ArsanGazDbContext db = new();
-            List<Customer> customers = await db.Customers.AsNoTracking().OrderBy(c => c.CompanyName).ToListAsync();
-            Dictionary<int, int> counts = await db.Cylinders.AsNoTracking()
-                .Where(y => y.Status == CylinderStatus.Customer && y.CurrentCustomerId != null)
-                .GroupBy(y => y.CurrentCustomerId!.Value)
-                .Select(g => new { g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.Key, x => x.Count);
-            string term = (q ?? string.Empty).Trim();
-            return Results.Ok(customers
-                .Where(c => term.Length == 0 || Contains(c.CompanyName, term) || Contains(c.Code, term) || Contains(c.City, term))
-                .Take(50)
-                .Select(c => new
-                {
-                    c.Id,
-                    c.Code,
-                    Name = c.CompanyName,
-                    c.City,
-                    c.Phone,
-                    c.IsActive,
-                    Cylinders = counts.GetValueOrDefault(c.Id)
-                }));
-        });
+        app.MapGet("/api/musteriler", async (string? q) => Results.Ok(await CustomerChoices.SearchAsync(q)));
 
         app.MapGet("/api/crm", async (string? q) =>
         {
@@ -267,10 +244,10 @@ internal static class MobileEndpoints
             {
                 Cylinder cylinder = await new CrudService().RegisterCylinderAsync(
                     request.SerialNumber ?? string.Empty, request.Barcode, request.GasType ?? string.Empty, request.Capacity,
-                    request.CapacityUnit, request.IsFull, request.TestDueDate, $"Mobil kayıt ({DeviceName(context)})");
+                    request.CapacityUnit, request.IsFull, request.TestDueDate, $"Mobil kayıt ({DeviceName(context)})", request.CustomerId);
                 return Results.Ok(new
                 {
-                    message = $"{cylinder.SerialNumber} ({cylinder.GasType}, {cylinder.Capacity:0.##} {cylinder.CapacityUnit}) depoda olarak envantere eklendi.",
+                    message = $"{cylinder.SerialNumber} ({cylinder.GasType}, {cylinder.Capacity:0.##} {cylinder.CapacityUnit}) {await CustomerChoices.PlaceTextAsync(cylinder)} olarak envantere eklendi.",
                     cylinder.Barcode,
                     cylinder.SerialNumber
                 });

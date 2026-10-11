@@ -120,6 +120,7 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
           <label>Durum<select id="f-durum"><option value="">Tümü</option></select></label>
           <label>Dolu/Boş<select id="f-doluluk"><option value="">Tümü</option><option value="dolu">Dolu</option><option value="bos">Boş</option><option value="bilinmiyor">Bilinmiyor</option></select></label>
           <label>Plaka<select id="f-plaka"><option value="">Tümü</option></select></label>
+          <label>Müşteri<input id="f-musteri-q" placeholder="Müşteri ara"><select id="f-musteri"><option value="">Tümü</option></select></label>
           <label><span><input type="checkbox" id="f-uzun"> Uzun süredir müşteride</span></label>
           <label><span><input type="checkbox" id="f-pasif"> Pasif tüpler</span></label>
           <button class="primary" id="f-ara" type="button">Listele</button>
@@ -137,7 +138,7 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
           <label>Başlangıç<input type="date" id="h-bas"></label>
           <label>Bitiş<input type="date" id="h-bit"></label>
           <label>Yeni durum<select id="h-durum"><option value="">Tümü</option></select></label>
-          <label>Müşteri<select id="h-musteri"><option value="">Tümü</option></select></label>
+          <label>Müşteri<input id="h-musteri-q" placeholder="Müşteri ara"><select id="h-musteri"><option value="">Tümü</option></select></label>
           <label>Ara<input id="h-q" placeholder="Seri no, müşteri, plaka, not"></label>
           <button class="primary" id="h-ara" type="button">Listele</button>
           <a class="secondary" id="h-csv" href="#">Excel'e aktar (CSV)</a>
@@ -160,9 +161,10 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
           <label>Birim<select id="n-unit"><option>Litre</option><option>kg</option><option>m³</option></select></label>
           <label>Dolu / boş<select id="n-full"><option value="">Bilinmiyor</option><option value="true">Dolu</option><option value="false">Boş</option></select></label>
           <label>Test tarihi<input type="date" id="n-test"></label>
+          <label>Müşteri (isteğe bağlı)<input id="n-musteri-q" placeholder="Müşteri ara (ad, şehir, telefon)"><select id="n-musteri"><option value="">Depoda (müşteri yok)</option></select></label>
           <div style="display:flex;align-items:end"><button class="primary" type="submit">Kaydet</button></div>
         </form>
-        <div class="hint">Tüp "Depoda" olarak eklenir. Aynı seri no veya barkod ikinci kez kaydedilemez.</div>
+        <div class="hint">Müşteri seçilmezse tüp "Depoda" olarak eklenir; seçilirse doğrudan o müşteriye teslim edilmiş olarak kaydedilir. Müşteri listesi ERP ve CRM kayıtlarından otomatik gelir. Aynı seri no veya barkod ikinci kez kaydedilemez.</div>
         <div id="new-msg" class="msg hidden"></div>
       </div>
     </section>

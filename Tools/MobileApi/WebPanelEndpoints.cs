@@ -110,7 +110,7 @@ internal static class WebPanelEndpoints
                 query = query.Where(c => c.VehiclePlate == plaka.Trim());
             }
 
-            if (musteri is int customerId)
+            if (musteri is int choice && await LinkedCustomerIdAsync(db, choice) is var customerId)
             {
                 query = query.Where(c => c.CurrentCustomerId == customerId && c.Status == CylinderStatus.Customer);
             }
@@ -229,21 +229,7 @@ internal static class WebPanelEndpoints
             return Results.File(bytes, "text/csv; charset=utf-8", $"tup-hareketleri-{DateTime.Now:yyyyMMdd-HHmm}.csv");
         });
 
-        api.MapGet("/musteriler", async (string? q) =>
-        {
-            await using ArsanGazDbContext db = new();
-            List<Customer> customers = await db.Customers.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.CompanyName).ToListAsync();
-            Dictionary<int, int> counts = await db.Cylinders.AsNoTracking()
-                .Where(y => y.IsActive && y.Status == CylinderStatus.Customer && y.CurrentCustomerId != null)
-                .GroupBy(y => y.CurrentCustomerId!.Value)
-                .Select(g => new { g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.Key, x => x.Count);
-            string term = (q ?? string.Empty).Trim();
-            return Results.Ok(customers
-                .Where(c => term.Length == 0 || Contains(c.CompanyName, term) || Contains(c.Code, term) || Contains(c.City, term))
-                .Take(50)
-                .Select(c => new { c.Id, c.Code, Name = c.CompanyName, c.City, Cylinders = counts.GetValueOrDefault(c.Id) }));
-        });
+        api.MapGet("/musteriler", async (string? q) => Results.Ok(await CustomerChoices.SearchAsync(q)));
 
         api.MapGet("/secenekler", async () => Results.Ok(new
         {
@@ -278,8 +264,8 @@ internal static class WebPanelEndpoints
             {
                 Cylinder cylinder = await new CrudService().RegisterCylinderAsync(
                     request.SerialNumber ?? string.Empty, request.Barcode, request.GasType ?? string.Empty, request.Capacity,
-                    request.CapacityUnit, request.IsFull, request.TestDueDate, $"Web panel kaydı ({context.Items["panelUser"]})");
-                return Results.Ok(new { message = $"{cylinder.SerialNumber} depoda olarak envantere eklendi.", cylinder.Id });
+                    request.CapacityUnit, request.IsFull, request.TestDueDate, $"Web panel kaydı ({context.Items["panelUser"]})", request.CustomerId);
+                return Results.Ok(new { message = $"{cylinder.SerialNumber} {await CustomerChoices.PlaceTextAsync(cylinder)} olarak envantere eklendi.", cylinder.Id });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
@@ -325,7 +311,7 @@ internal static class WebPanelEndpoints
         DateTime start = ParseDate(from) ?? DateTime.Today.AddDays(-30);
         DateTime end = (ParseDate(to) ?? DateTime.Today).AddDays(1);
         IQueryable<CylinderMovement> query = MovementQuery(db).Where(m => m.MovementDate >= start && m.MovementDate < end);
-        if (customerId is int id)
+        if (customerId is int choice && await LinkedCustomerIdAsync(db, choice) is var id)
         {
             query = query.Where(m => m.CustomerId == id);
         }
@@ -363,6 +349,18 @@ internal static class WebPanelEndpoints
         Note = m.Description,
         Warning = m.Description?.Contains("Uyarı onaylandı", StringComparison.Ordinal) == true
     };
+
+    // Filters take picker ids; a CRM company that never became a customer matches nothing (-1).
+    private static async Task<int> LinkedCustomerIdAsync(ArsanGazDbContext db, int choice)
+    {
+        if (choice > 0)
+        {
+            return choice;
+        }
+
+        string code = CrudService.CrmCustomerCodePrefix + (-choice);
+        return await db.Customers.AsNoTracking().Where(c => c.Code == code).Select(c => (int?)c.Id).FirstOrDefaultAsync() ?? -1;
+    }
 
     private static DateTime? ParseDate(string? value) =>
         DateTime.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime date) ? date : null;

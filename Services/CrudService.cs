@@ -10,16 +10,76 @@ public sealed class CrudService
 {
  public async Task<List<Customer>> CustomersAsync(){await using var db=new ArsanGazDbContext();return await db.Customers.AsNoTracking().OrderBy(x=>x.CompanyName).ToListAsync();}
  public async Task<Customer> SaveCustomerAsync(Customer customer){await using var db=new ArsanGazDbContext();if(customer.Id==0)db.Customers.Add(customer);else db.Customers.Update(customer);await db.SaveChangesAsync();return customer;}
+ public const string CrmCustomerCodePrefix="CRM-";
+ // Active ERP customers plus CRM companies that are not customers yet. The latter carry Id = -CrmCompany.Id until
+ // ResolveCustomerIdAsync turns them into a real customer on first use.
+ public async Task<List<Customer>> CustomerChoicesAsync()
+ {
+  await using var db=new ArsanGazDbContext();
+  var customers=await db.Customers.AsNoTracking().Where(x=>x.IsActive).ToListAsync();
+  var linked=customers.Select(x=>CrmIdFromCode(x.Code)).OfType<int>().ToHashSet();
+  var fromCrm=(await CrmCompanyRowsAsync()).Where(x=>!linked.Contains(x.Id)&&!string.IsNullOrWhiteSpace(x.CompanyName))
+   .Select(x=>new Customer{Id=-x.Id,Code=CrmCustomerCodePrefix+x.Id,CompanyName=x.CompanyName.Trim(),Phone=x.Phone,Email=x.Email,City=x.City,Address=x.Address});
+  return customers.Concat(fromCrm).OrderBy(x=>x.CompanyName,StringComparer.Create(System.Globalization.CultureInfo.GetCultureInfo("tr-TR"),true)).ToList();
+ }
+ public async Task<int?> ResolveCustomerIdAsync(int? customerId)
+ {
+  if(customerId is not int id||id>0)return customerId;
+  int crmId=-id;
+  string code=CrmCustomerCodePrefix+crmId;
+  await using var db=new ArsanGazDbContext();
+  int? existing=await db.Customers.Where(x=>x.Code==code).Select(x=>(int?)x.Id).FirstOrDefaultAsync();
+  if(existing!=null)return existing;
+  await using var crm=new CrmDbContext();
+  var company=await crm.CrmCompanies.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==crmId)??throw new InvalidOperationException($"CRM firması bulunamadı: {crmId}.");
+  var customer=new Customer{Code=code,CompanyName=company.CompanyName.Trim(),Phone=company.Phone,Email=company.Email,City=company.City,Address=company.Address};
+  db.Customers.Add(customer);
+  try{await db.SaveChangesAsync();}
+  catch(DbUpdateException)
+  {
+   await using var again=new ArsanGazDbContext();
+   return await again.Customers.Where(x=>x.Code==code).Select(x=>(int?)x.Id).FirstOrDefaultAsync()??throw new InvalidOperationException("Müşteri kaydı oluşturulamadı.");
+  }
+  return customer.Id;
+ }
+ public static int? CrmIdFromCode(string? code)=>code!=null&&code.StartsWith(CrmCustomerCodePrefix,StringComparison.Ordinal)&&int.TryParse(code.AsSpan(CrmCustomerCodePrefix.Length),out int id)?id:null;
+ private static async Task<List<CrmCompany>> CrmCompanyRowsAsync()
+ {
+  try
+  {
+   await using var crm=new CrmDbContext();
+   return await crm.CrmCompanies.AsNoTracking().Select(x=>new CrmCompany{Id=x.Id,CompanyName=x.CompanyName,Phone=x.Phone,Email=x.Email,City=x.City,Address=x.Address}).ToListAsync();
+  }
+  catch(Exception exception) when(exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+  {
+   return [];
+  }
+ }
  public async Task DeleteCustomerAsync(int id){await using var db=new ArsanGazDbContext();var e=await db.Customers.FindAsync(id);if(e!=null){db.Customers.Remove(e);await db.SaveChangesAsync();}}
  public async Task<List<Product>> ProductsAsync(){await using var db=new ArsanGazDbContext();return await db.Products.AsNoTracking().OrderBy(x=>x.Name).ToListAsync();}
  public async Task<Product> SaveProductAsync(Product product){await using var db=new ArsanGazDbContext();if(product.Id==0)db.Products.Add(product);else db.Products.Update(product);await db.SaveChangesAsync();return product;}
  public async Task DeleteProductAsync(int id){await using var db=new ArsanGazDbContext();var e=await db.Products.FindAsync(id);if(e!=null){db.Products.Remove(e);await db.SaveChangesAsync();}}
  public async Task<List<Cylinder>> CylindersAsync(){await using var db=new ArsanGazDbContext();return await db.Cylinders.AsNoTracking().Include(x=>x.CurrentCustomer).OrderBy(x=>x.Barcode).ToListAsync();}
  public async Task<Cylinder> SaveCylinderAsync(Cylinder cylinder){await using var db=new ArsanGazDbContext();if(cylinder.Id==0)db.Cylinders.Add(cylinder);else db.Cylinders.Update(cylinder);await db.SaveChangesAsync();return cylinder;}
- public async Task<Cylinder> RegisterCylinderAsync(string serialNumber,string? barcode,string gasType,decimal capacity,string? capacityUnit,bool? isFull,DateTime? testDueDate,string note)
+ public async Task<Cylinder> RegisterCylinderAsync(string serialNumber,string? barcode,string gasType,decimal capacity,string? capacityUnit,bool? isFull,DateTime? testDueDate,string note,int? customerId=null)
  {
   string? error=CylinderTracking.NewCylinderError(serialNumber,barcode,gasType,capacity);
   if(error!=null)throw new ArgumentException(error);
+  customerId=await ResolveCustomerIdAsync(customerId);
+  if(customerId!=null)
+  {
+   await using var check=new ArsanGazDbContext();
+   if(!await check.Customers.AnyAsync(x=>x.Id==customerId))throw new InvalidOperationException($"Müşteri bulunamadı: {customerId}.");
+  }
+  Cylinder created=await AddCylinderAsync(serialNumber,barcode,gasType,capacity,capacityUnit,isFull,testDueDate,note);
+  if(customerId==null)return created;
+  await MoveCylinderAsync(created.Id,CylinderStatus.Customer,customerId,note,"Müşteriye teslim",null,isFull);
+  created.Status=CylinderStatus.Customer;
+  created.CurrentCustomerId=customerId;
+  return created;
+ }
+ private static async Task<Cylinder> AddCylinderAsync(string serialNumber,string? barcode,string gasType,decimal capacity,string? capacityUnit,bool? isFull,DateTime? testDueDate,string note)
+ {
   string serial=serialNumber.Trim();
   string code=string.IsNullOrWhiteSpace(barcode)?serial:barcode.Trim();
   await using var db=new ArsanGazDbContext();
@@ -60,6 +120,7 @@ public sealed class CrudService
  public async Task<CylinderCustomerConflict?> CustomerConflictAsync(int cylinderId,CylinderStatus target,int? customerId)
  {
   if(target!=CylinderStatus.Customer||customerId is null)return null;
+  customerId=await ResolveCustomerIdAsync(customerId);
   await using var db=new ArsanGazDbContext();
   var c=await db.Cylinders.AsNoTracking().Include(x=>x.CurrentCustomer).FirstOrDefaultAsync(x=>x.Id==cylinderId);
   if(c is null)return null;
@@ -70,6 +131,7 @@ public sealed class CrudService
  {
   if(!Enum.IsDefined(target))throw new ArgumentOutOfRangeException(nameof(target),"Geçersiz tüp durumu.");
   string? plate=target==CylinderStatus.Vehicle?CylinderTracking.NormalizePlate(vehiclePlate):null;
+  if(target==CylinderStatus.Customer)customerId=await ResolveCustomerIdAsync(customerId);
   int? movementCustomerId=null;
   string? targetName=null;
   await using var db=new ArsanGazDbContext();
@@ -102,6 +164,7 @@ public sealed class CrudService
   if(clean.Count>CylinderTracking.MaxBatchSize)throw new ArgumentException($"Tek seferde en fazla {CylinderTracking.MaxBatchSize} tüp işlenebilir.");
   if(target==CylinderStatus.Vehicle)CylinderTracking.NormalizePlate(vehiclePlate);
   if(target==CylinderStatus.Customer&&customerId is null)throw new ArgumentException("Müşteriye teslim durumunda müşteri seçilmelidir.");
+  if(target==CylinderStatus.Customer)customerId=await ResolveCustomerIdAsync(customerId);
   Dictionary<string,Cylinder?> found=[];
   foreach(string code in clean)found[code]=await FindCylinderByCodeAsync(code);
   if(!confirmedCustomerChange)
@@ -134,6 +197,7 @@ public sealed class CrudService
  {
   IReadOnlyList<string> clean=CylinderTracking.CleanCodes(codes);
   if(clean.Count>CylinderTracking.MaxBatchSize*5)throw new ArgumentException("Sayım listesi çok uzun.");
+  customerId=await ResolveCustomerIdAsync(customerId)??customerId;
   await using var db=new ArsanGazDbContext();
   Customer customer=await db.Customers.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==customerId)??throw new InvalidOperationException($"Müşteri bulunamadı: {customerId}.");
   var expected=await db.Cylinders.AsNoTracking()

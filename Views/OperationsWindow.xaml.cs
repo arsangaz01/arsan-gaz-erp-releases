@@ -50,10 +50,11 @@ public partial class OperationsWindow : Window
 			List<Customer> customers = await _crud.CustomersAsync();
 			Customers.ItemsSource = customers;
 			object? selectedScanCustomer = ScanCustomer.SelectedItem;
-			ScanCustomer.ItemsSource = customers;
+			List<Customer> choices = await _crud.CustomerChoicesAsync();
+			ScanCustomer.ItemsSource = choices;
 			if (selectedScanCustomer is Customer previous)
 			{
-				ScanCustomer.SelectedItem = customers.FirstOrDefault(customer => customer.Id == previous.Id);
+				ScanCustomer.SelectedItem = choices.FirstOrDefault(customer => customer.Code == previous.Code);
 			}
 
 			Products.ItemsSource = await _crud.ProductsAsync();

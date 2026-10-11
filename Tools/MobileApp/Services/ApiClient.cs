@@ -374,8 +374,8 @@ public sealed class ApiClient
 
     public Task<List<string>> GasTypesAsync() => GetAsync<List<string>>("/api/tup/gaz-turleri");
 
-    public Task<string> RegisterCylinderAsync(string serialNumber, string? barcode, string gasType, decimal capacity, string capacityUnit, bool? isFull, DateTime? testDueDate) =>
-        PostMessageAsync("/api/tup/yeni", new { serialNumber, barcode, gasType, capacity, capacityUnit, isFull, testDueDate = testDueDate?.ToString("yyyy-MM-dd") });
+    public Task<string> RegisterCylinderAsync(string serialNumber, string? barcode, string gasType, decimal capacity, string capacityUnit, bool? isFull, DateTime? testDueDate, int? customerId = null) =>
+        PostMessageAsync("/api/tup/yeni", new { serialNumber, barcode, gasType, capacity, capacityUnit, isFull, testDueDate = testDueDate?.ToString("yyyy-MM-dd"), customerId });
 
     public Task<CylinderAuditResponse> AuditCustomerAsync(int customerId, IReadOnlyList<string> codes, string? note) =>
         PostAsync<CylinderAuditResponse>("/api/tup/sayim", new { customerId, codes, note });

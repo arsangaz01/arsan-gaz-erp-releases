@@ -412,7 +412,7 @@ public sealed class CylinderPage : ContentPage
     private Task SearchCustomersAsync() => Ui.RunAsync(this, _busy, async () =>
     {
         _customers = await ApiClient.Instance.CustomersAsync(_customerSearch.Text ?? string.Empty);
-        _customer.ItemsSource = _customers.Select(c => $"{c.Name} ({c.Code})").ToList();
+        _customer.ItemsSource = _customers.Select(c => c.Name + (string.IsNullOrWhiteSpace(c.City) ? string.Empty : " · " + c.City)).ToList();
         if (_customers.Count == 1)
         {
             _customer.SelectedIndex = 0;

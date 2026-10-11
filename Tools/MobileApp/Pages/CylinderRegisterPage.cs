@@ -3,7 +3,7 @@ using ArsanGazMobile.Services;
 
 namespace ArsanGazMobile.Pages;
 
-// Adds a cylinder whose code was scanned but is not in the ERP yet; it starts in the warehouse.
+// Adds a cylinder whose code was scanned but is not in the ERP yet; it starts in the warehouse or at the chosen customer.
 public sealed class CylinderRegisterPage : ContentPage
 {
     private const string OtherGas = "Diğer (elle yaz)";
@@ -20,7 +20,10 @@ public sealed class CylinderRegisterPage : ContentPage
     private readonly Picker _fullness = new() { Title = "Dolu / boş" };
     private readonly CheckBox _hasTestDate = new() { Color = Ui.Accent };
     private readonly DatePicker _testDate = new() { Date = DateTime.Today.AddYears(1), Format = "dd.MM.yyyy", IsEnabled = false };
+    private readonly Entry _customerSearch = new() { Placeholder = "Müşteri ara (ad, şehir, telefon)", ReturnType = ReturnType.Search };
+    private readonly Picker _customer = new() { Title = "Müşteri" };
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
+    private List<CustomerItem> _customers = [];
     private bool _saved;
 
     private CylinderRegisterPage(string code)
@@ -33,6 +36,8 @@ public sealed class CylinderRegisterPage : ContentPage
         _fullness.SelectedIndex = 0;
         _gas.SelectedIndexChanged += (_, _) => _otherGas.IsVisible = Equals(_gas.SelectedItem, OtherGas);
         _hasTestDate.CheckedChanged += (_, e) => _testDate.IsEnabled = e.Value;
+        _customerSearch.Completed += async (_, _) => await SearchCustomersAsync();
+        ShowCustomers();
 
         Grid capacityRow = new()
         {
@@ -59,9 +64,14 @@ public sealed class CylinderRegisterPage : ContentPage
                 Spacing = 14,
                 Children =
                 {
-                    Ui.Note("Okutulan kod ERP'de kayıtlı değil. Bilgileri girip kaydedin; tüp \"Depoda\" olarak envantere eklenir."),
+                    Ui.Note("Okutulan kod ERP'de kayıtlı değil. Bilgileri girip kaydedin; müşteri seçmezseniz tüp \"Depoda\" olarak envantere eklenir."),
                     Ui.Section("Kimlik", Ui.Note("Barkod"), _barcode, Ui.Note("Seri numarası"), _serial),
                     Ui.Section("Tüp bilgisi", _gas, _otherGas, capacityRow, _fullness, testRow),
+                    Ui.Section("Müşteri (isteğe bağlı)",
+                        Ui.Note("Seçerseniz tüp doğrudan bu müşteriye teslim edilmiş olarak kaydedilir. Liste ERP ve CRM kayıtlarından gelir."),
+                        _customerSearch,
+                        Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
+                        _customer),
                     Ui.Primary("Kaydet", async (_, _) => await SaveAsync()),
                     _busy
                 }
@@ -107,6 +117,30 @@ public sealed class CylinderRegisterPage : ContentPage
         }
     }
 
+    private Task SearchCustomersAsync() => Ui.RunAsync(this, _busy, async () =>
+    {
+        _customers = await ApiClient.Instance.CustomersAsync(_customerSearch.Text ?? string.Empty);
+        ShowCustomers();
+        if (_customers.Count == 0)
+        {
+            await DisplayAlertAsync("Müşteri", "Eşleşen müşteri yok.", "Tamam");
+        }
+        else if (_customers.Count == 1)
+        {
+            _customer.SelectedIndex = 1;
+        }
+    });
+
+    private void ShowCustomers()
+    {
+        _customer.ItemsSource = new[] { "Depoda (müşteri yok)" }
+            .Concat(_customers.Select(c => c.Name + (string.IsNullOrWhiteSpace(c.City) ? string.Empty : " · " + c.City)))
+            .ToList();
+        _customer.SelectedIndex = 0;
+    }
+
+    private CustomerItem? SelectedCustomer => _customer.SelectedIndex > 0 ? _customers[_customer.SelectedIndex - 1] : null;
+
     private string GasType => Equals(_gas.SelectedItem, OtherGas) ? (_otherGas.Text ?? string.Empty).Trim() : _gas.SelectedItem as string ?? string.Empty;
 
     private async Task SaveAsync()
@@ -135,7 +169,8 @@ public sealed class CylinderRegisterPage : ContentPage
                 capacity,
                 (string)_unit.SelectedItem,
                 Fullness[Math.Max(0, _fullness.SelectedIndex)].Value,
-                _hasTestDate.IsChecked ? _testDate.Date : null);
+                _hasTestDate.IsChecked ? _testDate.Date : null,
+                SelectedCustomer?.Id);
             _saved = true;
             await DisplayAlertAsync("Kaydedildi", message, "Tamam");
             await Navigation.PopAsync();

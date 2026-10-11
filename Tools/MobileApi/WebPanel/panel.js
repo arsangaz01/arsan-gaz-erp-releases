@@ -64,6 +64,7 @@ async function start() {
     $("app").classList.remove("hidden");
     await loadOptions();
     await loadSummary();
+    for (const picker of [cylinderCustomer, movementCustomer, newCustomer]) picker.search();
   } catch (error) {
     if (!$("app").classList.contains("hidden")) show($("global-msg"), error.message);
   }
@@ -140,10 +141,36 @@ async function loadOptions() {
   for (const p of options.plates) $("f-plaka").append(el("option", { value: p }, p));
   $("gas-list").replaceChildren(...options.gasTypes.map((g) => el("option", { value: g })));
   $("plate-list").replaceChildren(...options.plates.map((p) => el("option", { value: p })));
-  const customers = await api("/panel/api/musteriler");
-  $("h-musteri").length = 1;
-  for (const c of customers) $("h-musteri").append(el("option", { value: c.id }, c.name));
 }
+
+function customerLabel(c) {
+  return `${c.name}${c.city ? " · " + c.city : ""}${c.cylinders ? ` (${c.cylinders} tüp)` : ""}${c.fromCrm ? " · CRM" : ""}`;
+}
+
+// Search box + select pair; the list comes from ERP customers and CRM companies.
+function customerPicker(inputId, selectId, emptyLabel) {
+  let timer = 0;
+  const select = $(selectId);
+  async function search() {
+    const keep = select.value;
+    try {
+      const rows = await api("/panel/api/musteriler?q=" + encodeURIComponent($(inputId).value.trim()));
+      const items = rows.map((c) => el("option", { value: c.id }, customerLabel(c)));
+      select.replaceChildren(...(emptyLabel ? [el("option", { value: "" }, emptyLabel)] : []), ...items);
+      if (keep && rows.some((c) => String(c.id) === keep)) select.value = keep;
+      else if (!emptyLabel && rows.length) select.value = String(rows[0].id);
+    } catch (error) {
+      show($("global-msg"), error.message);
+    }
+  }
+  $(inputId).addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(search, 300); });
+  return { search, reset() { $(inputId).value = ""; select.replaceChildren(...(emptyLabel ? [el("option", { value: "" }, emptyLabel)] : [])); } };
+}
+
+const cylinderCustomer = customerPicker("f-musteri-q", "f-musteri", "Tümü");
+const movementCustomer = customerPicker("h-musteri-q", "h-musteri", "Tümü");
+const newCustomer = customerPicker("n-musteri-q", "n-musteri", "Depoda (müşteri yok)");
+const moveCustomer = customerPicker("m-customer-q", "m-customer", null);
 
 async function loadSummary() {
   try {
@@ -181,6 +208,7 @@ function openFiltered(filter) {
   $("f-q").value = "";
   $("f-durum").value = filter.durum ?? "";
   $("f-plaka").value = filter.plaka ?? "";
+  cylinderCustomer.reset();
   $("f-doluluk").value = "";
   $("f-uzun").checked = !!filter.uzun;
   $("f-pasif").checked = !!filter.pasif;
@@ -195,6 +223,7 @@ async function loadCylinders() {
   if ($("f-q").value.trim()) query.set("q", $("f-q").value.trim());
   if ($("f-durum").value) query.set("durum", $("f-durum").value);
   if ($("f-plaka").value) query.set("plaka", $("f-plaka").value);
+  if ($("f-musteri").value) query.set("musteri", $("f-musteri").value);
   if ($("f-doluluk").value) query.set("doluluk", $("f-doluluk").value);
   if ($("f-uzun").checked) query.set("uzun", "true");
   if ($("f-pasif").checked) query.set("pasif", "true");
@@ -290,8 +319,7 @@ async function openDetail(id) {
   $("m-note").value = "";
   $("m-full").value = "";
   $("m-plate").value = "";
-  $("m-customer-q").value = "";
-  $("m-customer").replaceChildren();
+  moveCustomer.reset();
   updateMoveFields();
   const head = el("tr", {}, ...["Tarih", "Hareket", "Durum", "Müşteri / Plaka", "Dolu/Boş", "Not"].map((h) => el("th", {}, h)));
   const body = c.movements.map((m) => el("tr", {},
@@ -307,22 +335,8 @@ $("m-status").addEventListener("change", updateMoveFields);
 function updateMoveFields() {
   const status = Number($("m-status").value);
   $("m-customer-wrap").classList.toggle("hidden", status !== 3);
+  if (status === 3 && !$("m-customer").options.length) moveCustomer.search();
   $("m-plate-wrap").classList.toggle("hidden", status !== 2);
-}
-
-let customerTimer = 0;
-$("m-customer-q").addEventListener("input", () => {
-  clearTimeout(customerTimer);
-  customerTimer = setTimeout(searchCustomers, 300);
-});
-
-async function searchCustomers() {
-  try {
-    const rows = await api("/panel/api/musteriler?q=" + encodeURIComponent($("m-customer-q").value.trim()));
-    $("m-customer").replaceChildren(...rows.map((c) => el("option", { value: c.id }, `${c.name}${c.city ? " · " + c.city : ""} (${c.cylinders} tüp)`)));
-  } catch (error) {
-    show($("d-msg"), error.message);
-  }
 }
 
 $("m-save").addEventListener("click", () => saveMove(false));
@@ -384,11 +398,14 @@ $("new-form").addEventListener("submit", async (event) => {
       method: "POST",
       body: {
         serialNumber: $("n-serial").value.trim(), barcode: $("n-barcode").value.trim() || null, gasType: $("n-gas").value.trim(),
-        capacity, capacityUnit: $("n-unit").value, isFull: full === "" ? null : full === "true", testDueDate: $("n-test").value || null
+        capacity, capacityUnit: $("n-unit").value, isFull: full === "" ? null : full === "true", testDueDate: $("n-test").value || null,
+        customerId: Number($("n-musteri").value) || null
       }
     });
     show($("new-msg"), result.message, "ok");
     $("new-form").reset();
+    newCustomer.reset();
+    newCustomer.search();
     await loadOptions();
   } catch (error) {
     show($("new-msg"), error.message);
