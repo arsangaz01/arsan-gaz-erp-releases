@@ -14,6 +14,9 @@
     Treat these apps as changed at the current HEAD (ERP, AgentWatcher, MobileApi).
 .PARAMETER LibraryOnly
     Only define the functions (used by the tests).
+.NOTES
+    Disable: Disable-ScheduledTask -TaskName 'ArsanGazERP AutoSync', or set Enabled=false in
+    %LOCALAPPDATA%\ArsanGazERP\AutoSync\config.json. Log: autosync.log in the same folder.
 #>
 [CmdletBinding()]
 param(
