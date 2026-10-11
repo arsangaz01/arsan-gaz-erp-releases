@@ -51,6 +51,7 @@ public partial class App : Application
 
             DatabaseService databaseService = new();
             await databaseService.InitializeAsync();
+            await CylinderSchemaService.EnsureAsync();
             await new CrmSchemaService().EnsureAsync();
             await CollectionReminderService.EnsureSchemaAsync();
             _ = await new MojibakeRepairService().RepairAsync();

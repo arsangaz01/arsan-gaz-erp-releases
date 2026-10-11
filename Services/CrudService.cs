@@ -34,9 +34,10 @@ public sealed class CrudService
    .ToListAsync();
   return ReorderPrediction.Compute(deliveries,DateTime.Today);
  }
- public async Task MoveCylinderAsync(int cylinderId,CylinderStatus target,int? customerId,string note,string movementType="Durum Değişikliği")
+ public async Task MoveCylinderAsync(int cylinderId,CylinderStatus target,int? customerId,string note,string movementType="Durum Değişikliği",string? vehiclePlate=null,bool? isFull=null)
  {
   if(!Enum.IsDefined(target))throw new ArgumentOutOfRangeException(nameof(target),"Geçersiz tüp durumu.");
+  string? plate=target==CylinderStatus.Vehicle?CylinderTracking.NormalizePlate(vehiclePlate):null;
   int? movementCustomerId=null;
   await using var db=new ArsanGazDbContext();
   if(target==CylinderStatus.Customer)
@@ -51,9 +52,124 @@ public sealed class CrudService
   int? previousCustomerId=c.CurrentCustomerId;
   c.Status=target;
   c.CurrentCustomerId=movementCustomerId;
+  c.IsFull=CylinderTracking.NextFullness((int)old,(int)target,c.IsFull,isFull);
+  c.VehiclePlate=plate;
   c.LastMovementAt=DateTime.Now;
-  db.CylinderMovements.Add(new CylinderMovement{CylinderId=c.Id,CustomerId=movementCustomerId??previousCustomerId,FromStatus=old,ToStatus=target,MovementType=movementType,Description=note,MovementDate=DateTime.Now});
+  db.CylinderMovements.Add(new CylinderMovement{CylinderId=c.Id,CustomerId=movementCustomerId??previousCustomerId,FromStatus=old,ToStatus=target,MovementType=movementType,Description=note,MovementDate=DateTime.Now,VehiclePlate=plate,IsFull=c.IsFull});
   await db.SaveChangesAsync();
+ }
+ public async Task<List<CylinderBulkResult>> MoveCylindersAsync(IEnumerable<string?> codes,CylinderStatus target,int? customerId,string note,string movementType,string? vehiclePlate=null,bool? isFull=null)
+ {
+  IReadOnlyList<string> clean=CylinderTracking.CleanCodes(codes);
+  if(clean.Count==0)throw new ArgumentException("Okutulmuş tüp yok.");
+  if(clean.Count>CylinderTracking.MaxBatchSize)throw new ArgumentException($"Tek seferde en fazla {CylinderTracking.MaxBatchSize} tüp işlenebilir.");
+  if(target==CylinderStatus.Vehicle)CylinderTracking.NormalizePlate(vehiclePlate);
+  if(target==CylinderStatus.Customer&&customerId is null)throw new ArgumentException("Müşteriye teslim durumunda müşteri seçilmelidir.");
+  List<CylinderBulkResult> results=[];
+  foreach(string code in clean)
+  {
+   Cylinder? cylinder=await FindCylinderByCodeAsync(code);
+   if(cylinder is null){results.Add(new(code,false,"Tüp bulunamadı."));continue;}
+   try
+   {
+    await MoveCylinderAsync(cylinder.Id,target,customerId,note,movementType,vehiclePlate,isFull);
+    results.Add(new(code,true,$"{cylinder.SerialNumber}: {CylinderTracking.StatusName((int)cylinder.Status)} → {CylinderTracking.StatusName((int)target)}"));
+   }
+   catch(Exception exception) when(exception is ArgumentException or InvalidOperationException)
+   {
+    results.Add(new(code,false,exception.Message));
+   }
+  }
+  return results;
+ }
+ public async Task<CylinderAuditReport> AuditCustomerCylindersAsync(int customerId,IEnumerable<string?> codes,string? note,string? performedBy)
+ {
+  IReadOnlyList<string> clean=CylinderTracking.CleanCodes(codes);
+  if(clean.Count>CylinderTracking.MaxBatchSize*5)throw new ArgumentException("Sayım listesi çok uzun.");
+  await using var db=new ArsanGazDbContext();
+  Customer customer=await db.Customers.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==customerId)??throw new InvalidOperationException($"Müşteri bulunamadı: {customerId}.");
+  var expected=await db.Cylinders.AsNoTracking()
+   .Where(x=>x.IsActive&&x.Status==CylinderStatus.Customer&&x.CurrentCustomerId==customerId)
+   .Select(x=>new{x.Id,x.SerialNumber}).ToListAsync();
+  Dictionary<int,string> serials=expected.ToDictionary(x=>x.Id,x=>x.SerialNumber);
+  List<int> scannedIds=[];
+  List<string> unknown=[];
+  foreach(string code in clean)
+  {
+   Cylinder? cylinder=await FindCylinderByCodeAsync(code);
+   if(cylinder is null){unknown.Add(code);continue;}
+   scannedIds.Add(cylinder.Id);
+   serials.TryAdd(cylinder.Id,$"{cylinder.SerialNumber} – {CylinderTracking.StatusName((int)cylinder.Status)}{(cylinder.CurrentCustomer is null?"":" · "+cylinder.CurrentCustomer.CompanyName)}");
+  }
+  CylinderAuditComparison comparison=CylinderTracking.CompareAudit(expected.Select(x=>x.Id),scannedIds);
+  List<string> missing=comparison.Missing.Select(id=>serials[id]).ToList();
+  List<string> unexpected=comparison.Unexpected.Select(id=>serials[id]).ToList();
+  CylinderAudit audit=new()
+  {
+   CustomerId=customer.Id,
+   CustomerName=customer.CompanyName,
+   AuditedAt=DateTime.Now,
+   ExpectedCount=expected.Count,
+   FoundCount=comparison.Found.Count,
+   MissingSerials=string.Join(", ",missing),
+   UnexpectedSerials=string.Join(", ",unexpected),
+   UnknownCodes=string.Join(", ",unknown),
+   Note=string.IsNullOrWhiteSpace(note)?null:note.Trim(),
+   PerformedBy=performedBy
+  };
+  db.CylinderAudits.Add(audit);
+  await db.SaveChangesAsync();
+  return new CylinderAuditReport(audit.Id,customer.CompanyName,expected.Count,comparison.Found.Count,missing,unexpected,unknown);
+ }
+ public async Task<CylinderOverview> CylinderOverviewAsync()
+ {
+  await using var db=new ArsanGazDbContext();
+  var rows=await db.Cylinders.AsNoTracking().Where(x=>x.IsActive)
+   .Select(x=>new{x.Status,x.IsFull,x.VehiclePlate,x.LastMovementAt}).ToListAsync();
+  DateTime limit=DateTime.Today.AddDays(-CylinderTracking.LongAtCustomerDays);
+  List<CylinderStatusCount> statuses=CylinderTracking.AllStatuses
+   .Select(status=>new CylinderStatusCount(status,CylinderTracking.StatusName(status),
+    rows.Count(x=>(int)x.Status==status),rows.Count(x=>(int)x.Status==status&&x.IsFull==true),rows.Count(x=>(int)x.Status==status&&x.IsFull==false)))
+   .ToList();
+  List<CylinderPlateCount> vehicles=rows.Where(x=>x.Status==CylinderStatus.Vehicle)
+   .GroupBy(x=>x.VehiclePlate??"Plakasız")
+   .Select(g=>new CylinderPlateCount(g.Key,g.Count()))
+   .OrderByDescending(x=>x.Count).ThenBy(x=>x.Plate).ToList();
+  int longAtCustomer=rows.Count(x=>x.Status==CylinderStatus.Customer&&x.LastMovementAt is DateTime at&&at<limit);
+  return new CylinderOverview(statuses,vehicles,longAtCustomer,CylinderTracking.LongAtCustomerDays);
+ }
+ public async Task<List<CylinderListItem>> CylinderListAsync(CylinderStatus? status,string? plate,bool longAtCustomerOnly,int take=300)
+ {
+  await using var db=new ArsanGazDbContext();
+  IQueryable<Cylinder> query=db.Cylinders.AsNoTracking().Include(x=>x.CurrentCustomer).Where(x=>x.IsActive);
+  if(longAtCustomerOnly)
+  {
+   DateTime limit=DateTime.Today.AddDays(-CylinderTracking.LongAtCustomerDays);
+   query=query.Where(x=>x.Status==CylinderStatus.Customer&&x.LastMovementAt!=null&&x.LastMovementAt<limit);
+  }
+  else if(status is CylinderStatus value)
+  {
+   query=query.Where(x=>x.Status==value);
+  }
+  if(!string.IsNullOrWhiteSpace(plate))
+  {
+   string wanted=plate.Trim();
+   query=wanted=="Plakasız"?query.Where(x=>x.VehiclePlate==null):query.Where(x=>x.VehiclePlate==wanted);
+  }
+  List<Cylinder> cylinders=await query.OrderBy(x=>x.LastMovementAt).Take(Math.Clamp(take,1,1000)).ToListAsync();
+  DateTime today=DateTime.Today;
+  System.Globalization.CultureInfo turkish=System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
+  return cylinders.Select(x=>new CylinderListItem(
+   x.SerialNumber,x.Barcode,x.GasType,$"{x.Capacity.ToString("0.##",turkish)} {x.CapacityUnit}",(int)x.Status,CylinderTracking.StatusName((int)x.Status),
+   CylinderTracking.FullnessName(x.IsFull),x.CurrentCustomer?.CompanyName,x.VehiclePlate,CylinderTracking.DaysSince(x.LastMovementAt,today),
+   x.TestDueDate?.ToString("dd.MM.yyyy",turkish))).ToList();
+ }
+ public async Task<List<string>> KnownVehiclePlatesAsync()
+ {
+  await using var db=new ArsanGazDbContext();
+  List<string?> current=await db.Cylinders.AsNoTracking().Where(x=>x.VehiclePlate!=null).Select(x=>x.VehiclePlate).Distinct().ToListAsync();
+  List<string?> history=await db.CylinderMovements.AsNoTracking().Where(x=>x.VehiclePlate!=null).OrderByDescending(x=>x.MovementDate).Select(x=>x.VehiclePlate).Take(500).ToListAsync();
+  return current.Concat(history).OfType<string>().Distinct().OrderBy(x=>x).Take(50).ToList();
  }
  public async Task<List<Invoice>> OverdueInvoicesAsync(){await using var db=new ArsanGazDbContext();return await db.Invoices.AsNoTracking().Include(x=>x.Customer).Where(x=>x.DueDate<DateTime.Today&&x.PaidAmount<x.TotalAmount).OrderBy(x=>x.DueDate).ToListAsync();}
  public async Task<List<ErpTask>> TasksAsync(){await using var db=new ArsanGazDbContext();return await db.Tasks.AsNoTracking().OrderBy(x=>x.DueDate).ThenBy(x=>x.Title).ToListAsync();}

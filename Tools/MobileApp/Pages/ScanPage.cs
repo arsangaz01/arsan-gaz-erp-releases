@@ -5,11 +5,15 @@ namespace ArsanGazMobile.Pages;
 
 public sealed class ScanPage : ContentPage
 {
-    private readonly TaskCompletionSource<string?> _result = new();
+    private readonly TaskCompletionSource<IReadOnlyList<string>?> _result = new();
     private readonly CameraBarcodeReaderView _reader;
+    private readonly bool _continuous;
+    private readonly List<string> _codes = [];
+    private readonly Label _counter = new() { FontSize = 16, TextColor = Colors.White, HorizontalTextAlignment = TextAlignment.Center, Margin = new Thickness(12, 8) };
 
-    public ScanPage()
+    private ScanPage(bool continuous)
     {
+        _continuous = continuous;
         Title = "Barkod okut";
         _reader = new CameraBarcodeReaderView
         {
@@ -22,20 +26,37 @@ public sealed class ScanPage : ContentPage
         };
         _reader.BarcodesDetected += OnDetected;
 
-        Button cancel = new() { Text = "Vazgeç", Margin = new Thickness(16) };
-        cancel.Clicked += async (_, _) => await CloseAsync(null);
+        Button cancel = new() { Text = continuous ? "Bitti" : "Vazgeç", Margin = new Thickness(16) };
+        cancel.Clicked += async (_, _) => await CloseAsync(continuous ? _codes : null);
         Button torch = new() { Text = "🔦 Fener", Margin = new Thickness(16) };
         torch.Clicked += (_, _) => _reader.IsTorchOn = !_reader.IsTorchOn;
 
-        Grid root = new() { RowDefinitions = [new RowDefinition(GridLength.Star), new RowDefinition(GridLength.Auto)] };
-        root.Add(_reader, 0, 0);
-        root.Add(new HorizontalStackLayout { HorizontalOptions = LayoutOptions.Center, Children = { torch, cancel } }, 0, 1);
+        Grid root = new()
+        {
+            RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star), new RowDefinition(GridLength.Auto)],
+            BackgroundColor = Colors.Black
+        };
+        if (continuous)
+        {
+            _counter.Text = "Tüpleri sırayla okutun. Bitince \"Bitti\"ye basın.";
+            root.Add(_counter, 0, 0);
+        }
+
+        root.Add(_reader, 0, 1);
+        root.Add(new HorizontalStackLayout { HorizontalOptions = LayoutOptions.Center, Children = { torch, cancel } }, 0, 2);
         Content = root;
     }
 
-    public Task<string?> Result => _result.Task;
-
     public static async Task<string?> ScanAsync(INavigation navigation)
+    {
+        IReadOnlyList<string>? codes = await OpenAsync(navigation, continuous: false);
+        return codes?.FirstOrDefault();
+    }
+
+    public static async Task<IReadOnlyList<string>> ScanManyAsync(INavigation navigation) =>
+        await OpenAsync(navigation, continuous: true) ?? [];
+
+    private static async Task<IReadOnlyList<string>?> OpenAsync(INavigation navigation, bool continuous)
     {
         PermissionStatus status = await Permissions.RequestAsync<Permissions.Camera>();
         if (status != PermissionStatus.Granted)
@@ -43,14 +64,14 @@ public sealed class ScanPage : ContentPage
             throw new InvalidOperationException("Barkod okutmak için kamera izni gerekli.");
         }
 
-        ScanPage page = new();
+        ScanPage page = new(continuous);
         await navigation.PushModalAsync(page);
-        return await page.Result;
+        return await page._result.Task;
     }
 
     private void OnDetected(object? sender, BarcodeDetectionEventArgs e)
     {
-        string? value = e.Results?.FirstOrDefault()?.Value;
+        string? value = e.Results?.FirstOrDefault()?.Value?.Trim();
         if (string.IsNullOrWhiteSpace(value) || _result.Task.IsCompleted)
         {
             return;
@@ -58,19 +79,36 @@ public sealed class ScanPage : ContentPage
 
         MainThread.BeginInvokeOnMainThread(async () =>
         {
-            try
+            if (_continuous)
             {
-                Vibration.Default.Vibrate(TimeSpan.FromMilliseconds(80));
-            }
-            catch (FeatureNotSupportedException)
-            {
+                if (_codes.Contains(value, StringComparer.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                _codes.Add(value);
+                _counter.Text = $"✅ {_codes.Count} tüp okundu · son: {value}";
+                Buzz();
+                return;
             }
 
-            await CloseAsync(value.Trim());
+            Buzz();
+            await CloseAsync([value]);
         });
     }
 
-    private async Task CloseAsync(string? value)
+    private static void Buzz()
+    {
+        try
+        {
+            Vibration.Default.Vibrate(TimeSpan.FromMilliseconds(80));
+        }
+        catch (FeatureNotSupportedException)
+        {
+        }
+    }
+
+    private async Task CloseAsync(IReadOnlyList<string>? value)
     {
         if (!_result.TrySetResult(value))
         {
@@ -83,7 +121,7 @@ public sealed class ScanPage : ContentPage
 
     protected override bool OnBackButtonPressed()
     {
-        _ = CloseAsync(null);
+        _ = CloseAsync(_continuous ? _codes : null);
         return true;
     }
 }

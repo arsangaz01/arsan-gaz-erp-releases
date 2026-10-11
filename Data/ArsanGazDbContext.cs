@@ -10,6 +10,7 @@ public sealed class ArsanGazDbContext : DbContext
  public DbSet<Product> Products => Set<Product>();
  public DbSet<Cylinder> Cylinders => Set<Cylinder>();
  public DbSet<CylinderMovement> CylinderMovements => Set<CylinderMovement>();
+ public DbSet<CylinderAudit> CylinderAudits => Set<CylinderAudit>();
  public DbSet<Quote> Quotes => Set<Quote>();
  public DbSet<QuoteLine> QuoteLines => Set<QuoteLine>();
  public DbSet<Invoice> Invoices => Set<Invoice>();
@@ -24,6 +25,7 @@ public sealed class ArsanGazDbContext : DbContext
  public string DatabasePath { get; }
  public ArsanGazDbContext()
  {
+  if(Environment.GetEnvironmentVariable("ARSANGAZ_ERP_DB") is { Length: > 0 } custom){DatabasePath=custom;return;}
   string d=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"ArsanGazERP","Data");
   Directory.CreateDirectory(d); DatabasePath=Path.Combine(d,"arsangaz-erp-v3.db");
  }
@@ -41,6 +43,8 @@ public sealed class ArsanGazDbContext : DbContext
   b.Entity<Cylinder>().HasIndex(x=>x.SerialNumber).IsUnique();
   b.Entity<Cylinder>().HasIndex(x=>x.Barcode).IsUnique();
   b.Entity<Cylinder>().HasOne(x=>x.CurrentCustomer).WithMany(x=>x.Cylinders).HasForeignKey(x=>x.CurrentCustomerId).OnDelete(DeleteBehavior.SetNull);
+  b.Entity<Cylinder>().HasIndex(x=>x.Status);
+  b.Entity<CylinderAudit>().HasIndex(x=>new { x.CustomerId, x.AuditedAt });
   b.Entity<CylinderMovement>().HasOne(x=>x.Cylinder).WithMany(x=>x.Movements).HasForeignKey(x=>x.CylinderId).OnDelete(DeleteBehavior.Restrict);
   b.Entity<Quote>().HasIndex(x=>x.QuoteNumber).IsUnique();
   b.Entity<Invoice>().HasIndex(x=>x.InvoiceNumber).IsUnique();

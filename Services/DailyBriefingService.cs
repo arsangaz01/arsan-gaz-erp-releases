@@ -114,6 +114,27 @@ public static class DailyBriefingService
             {
                 text.AppendLine("   – " + CollectionReminderService.Describe(reminder, today));
             }
+
+            DateTime longLimit = today.AddDays(-CylinderTracking.LongAtCustomerDays);
+            var longAtCustomer = await erp.Cylinders
+                .AsNoTracking()
+                .Where(cylinder => cylinder.IsActive && cylinder.Status == CylinderStatus.Customer &&
+                                   cylinder.LastMovementAt != null && cylinder.LastMovementAt < longLimit)
+                .OrderBy(cylinder => cylinder.LastMovementAt)
+                .Select(cylinder => new
+                {
+                    cylinder.SerialNumber,
+                    cylinder.LastMovementAt,
+                    Customer = cylinder.CurrentCustomer != null ? cylinder.CurrentCustomer.CompanyName : null
+                })
+                .ToListAsync(cancellationToken);
+            text.AppendLine(longAtCustomer.Count == 0
+                ? $"• {CylinderTracking.LongAtCustomerDays} günden uzun müşteride kalan tüp yok."
+                : $"• {CylinderTracking.LongAtCustomerDays} günden uzun müşteride kalan tüp: {longAtCustomer.Count}");
+            foreach (var cylinder in longAtCustomer.Take(5))
+            {
+                text.AppendLine($"   – {cylinder.Customer ?? "müşteri yok"} · {cylinder.SerialNumber} · {CylinderTracking.DaysSince(cylinder.LastMovementAt, today)} gün");
+            }
         }
 
         await using CrmDbContext crm = new();

@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace ArsanGazMobile.Services;
 
-public sealed record PendingMove(string Code, int Status, int? CustomerId, string? Note, string Label, DateTime SavedAt);
+public sealed record PendingMove(string Code, int Status, int? CustomerId, string? Note, string Label, DateTime SavedAt, string? Plate = null, bool? IsFull = null);
 
 // Cylinder movements recorded without a connection; they are sent in order once the computer is reachable.
 public static class OfflineMoves
@@ -39,7 +39,7 @@ public static class OfflineMoves
                 string note = $"{move.Note} (telefonda çevrimdışı kaydedildi: {move.SavedAt:dd.MM.yyyy HH:mm})".Trim();
                 try
                 {
-                    await ApiClient.Instance.MoveCylinderAsync(move.Code, move.Status, move.CustomerId, note);
+                    await ApiClient.Instance.MoveCylinderAsync(move.Code, move.Status, move.CustomerId, note, move.Plate, move.IsFull);
                 }
                 catch (ServerUnreachableException)
                 {

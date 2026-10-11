@@ -10,6 +10,8 @@ public sealed class Cylinder
  public decimal Capacity { get; set; }
  public string CapacityUnit { get; set; } = "Litre";
  public CylinderStatus Status { get; set; } = CylinderStatus.Warehouse;
+ public bool? IsFull { get; set; }
+ public string? VehiclePlate { get; set; }
  public int? CurrentCustomerId { get; set; }
  public Customer? CurrentCustomer { get; set; }
  public DateTime? LastMovementAt { get; set; }

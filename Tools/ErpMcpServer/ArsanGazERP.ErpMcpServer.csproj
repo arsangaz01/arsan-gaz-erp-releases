@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <Compile Include="..\..\Services\ReorderPrediction.cs" Link="ReorderPrediction.cs" />
+    <Compile Include="..\..\Services\CylinderTracking.cs" Link="CylinderTracking.cs" />
   </ItemGroup>
 
 </Project>

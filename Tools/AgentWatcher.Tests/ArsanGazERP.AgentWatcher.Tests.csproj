@@ -56,6 +56,7 @@
     <Compile Include="..\..\Services\JarvisAgentProtocol.cs" Link="JarvisAgentProtocol.cs" />
     <Compile Include="..\..\Services\WebResearchService.cs" Link="WebResearchService.cs" />
     <Compile Include="..\..\Services\ReorderPrediction.cs" Link="ReorderPrediction.cs" />
+    <Compile Include="..\..\Services\CylinderTracking.cs" Link="CylinderTracking.cs" />
     <Compile Include="..\..\Services\AgentWatcherPaths.cs" Link="AgentWatcherPaths.cs" />
     <Compile Include="..\..\Services\CursorJobMonitor.cs" Link="CursorJobMonitor.cs" />
     <Compile Include="..\AgentWatcher\AgentWatcherWindowLayout.cs" Link="AgentWatcherWindowLayout.cs" />

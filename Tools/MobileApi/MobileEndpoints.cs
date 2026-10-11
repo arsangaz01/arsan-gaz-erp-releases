@@ -8,7 +8,9 @@ using Microsoft.EntityFrameworkCore;
 namespace ArsanGazERP.MobileApi;
 
 internal sealed record PairRequest(string Code, string? DeviceName);
-internal sealed record MoveRequest(string Code, CylinderStatus Status, int? CustomerId, string? Note);
+internal sealed record MoveRequest(string Code, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null);
+internal sealed record BulkMoveRequest(List<string?>? Codes, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null);
+internal sealed record AuditRequest(int CustomerId, List<string?>? Codes, string? Note);
 internal sealed record CrmNoteRequest(string Text);
 internal sealed record CursorRequest(string? Message);
 internal sealed record CrmFollowUpRequest(DateOnly Date, string? Note);
@@ -213,7 +215,7 @@ internal static class MobileEndpoints
             try
             {
                 string note = string.IsNullOrWhiteSpace(request.Note) ? $"Mobil ({DeviceName(context)})" : request.Note.Trim();
-                await crud.MoveCylinderAsync(cylinder.Id, request.Status, request.CustomerId, note, "Mobil hareket");
+                await crud.MoveCylinderAsync(cylinder.Id, request.Status, request.CustomerId, note, "Mobil hareket", request.Plate, request.IsFull);
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
@@ -222,6 +224,54 @@ internal static class MobileEndpoints
 
             return Results.Ok(new { message = $"{cylinder.SerialNumber}: {ErpTools.StatusName((int)cylinder.Status)} → {ErpTools.StatusName((int)request.Status)} kaydedildi." });
         });
+
+        app.MapPost("/api/tup/toplu-hareket", async (BulkMoveRequest request, HttpContext context) =>
+        {
+            try
+            {
+                string note = string.IsNullOrWhiteSpace(request.Note) ? $"Mobil toplu ({DeviceName(context)})" : request.Note.Trim();
+                List<CylinderBulkResult> results = await new CrudService().MoveCylindersAsync(
+                    request.Codes ?? [], request.Status, request.CustomerId, note, "Mobil toplu hareket", request.Plate, request.IsFull);
+                int ok = results.Count(r => r.Ok);
+                return Results.Ok(new
+                {
+                    message = $"{ok}/{results.Count} tüp {ErpTools.StatusName((int)request.Status)} olarak kaydedildi.",
+                    ok,
+                    failed = results.Count - ok,
+                    results
+                });
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+        app.MapGet("/api/tup/durum", async () => Results.Ok(await new CrudService().CylinderOverviewAsync()));
+
+        app.MapGet("/api/tup/liste", async (int? durum, string? plaka, bool? uzun) =>
+        {
+            CylinderStatus? status = durum is int value && Enum.IsDefined((CylinderStatus)value) ? (CylinderStatus)value : null;
+            return Results.Ok(await new CrudService().CylinderListAsync(status, plaka, uzun == true));
+        });
+
+        app.MapGet("/api/araclar", async () => Results.Ok(await new CrudService().KnownVehiclePlatesAsync()));
+
+        app.MapPost("/api/tup/sayim", async (AuditRequest request, HttpContext context) =>
+        {
+            try
+            {
+                CylinderAuditReport report = await new CrudService().AuditCustomerCylindersAsync(
+                    request.CustomerId, request.Codes ?? [], request.Note, "Mobil (" + DeviceName(context) + ")");
+                return Results.Ok(new { message = report.Text, report.Expected, report.Found, report.Missing, report.Unexpected, report.Unknown });
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+        app.MapGet("/api/tup/uzun-sure", (int? gun) => Text(() => ErpTools.LongAtCustomer(gun ?? CylinderTracking.LongAtCustomerDays)));
 
         app.MapGet("/api/tahmin", () => Text(ErpTools.ReorderForecasts));
         app.MapGet("/api/test-tarihleri", (int? gun) => Text(() => ErpTools.TestDue(gun ?? 30)));

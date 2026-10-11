@@ -17,6 +17,7 @@ public partial class OperationsWindow : Window
 	private readonly CollectionReminderService _reminders = new();
 	private readonly CultureInfo _turkishCulture = CultureInfo.GetCultureInfo("tr-TR");
 	private List<ErpTask> _tasks = [];
+	private List<Cylinder> _cylinders = [];
 
 	public OperationsWindow(bool openCollections = false)
 	{
@@ -56,7 +57,11 @@ public partial class OperationsWindow : Window
 			}
 
 			Products.ItemsSource = await _crud.ProductsAsync();
-			Cylinders.ItemsSource = await _crud.CylindersAsync();
+			_cylinders = await _crud.CylindersAsync();
+			ApplyCylinderFilter();
+			string plateText = ScanPlate.Text;
+			ScanPlate.ItemsSource = await _crud.KnownVehiclePlatesAsync();
+			ScanPlate.Text = plateText;
 			await LoadForecastsAsync();
 			OverdueInvoices.ItemsSource = await _crud.OverdueInvoicesAsync();
 			_tasks = await _crud.TasksAsync();
@@ -478,7 +483,55 @@ public partial class OperationsWindow : Window
 		{
 			ScanCustomer.IsEnabled = SelectedScanTarget() == CylinderStatus.Customer;
 		}
+
+		if (ScanPlate is not null)
+		{
+			ScanPlate.IsEnabled = SelectedScanTarget() == CylinderStatus.Vehicle;
+		}
 	}
+
+	private void CylinderFilter_SelectionChanged(object sender, SelectionChangedEventArgs e)
+	{
+		if (Cylinders is not null)
+		{
+			ApplyCylinderFilter();
+		}
+	}
+
+	private void ApplyCylinderFilter()
+	{
+		DateTime longLimit = DateTime.Today.AddDays(-CylinderTracking.LongAtCustomerDays);
+		bool IsLong(Cylinder cylinder) =>
+			cylinder.Status == CylinderStatus.Customer && cylinder.LastMovementAt is DateTime at && at < longLimit;
+
+		string? tag = (CylinderFilter.SelectedItem as ComboBoxItem)?.Tag as string;
+		Cylinders.ItemsSource = tag switch
+		{
+			null => _cylinders,
+			"Long" => _cylinders.Where(IsLong).OrderBy(cylinder => cylinder.LastMovementAt).ToList(),
+			_ when Enum.TryParse(tag, out CylinderStatus status) => _cylinders.Where(cylinder => cylinder.Status == status).ToList(),
+			_ => _cylinders
+		};
+
+		List<Cylinder> active = _cylinders.Where(cylinder => cylinder.IsActive).ToList();
+		IEnumerable<string> parts = CylinderTracking.AllStatuses
+			.Select(status => (Status: status, Items: active.Where(cylinder => (int)cylinder.Status == status).ToList()))
+			.Where(group => group.Items.Count > 0)
+			.Select(group =>
+			{
+				int full = group.Items.Count(cylinder => cylinder.IsFull == true);
+				int empty = group.Items.Count(cylinder => cylinder.IsFull == false);
+				string split = full + empty > 0 ? $" (dolu {full} · boş {empty})" : string.Empty;
+				return $"{CylinderTracking.StatusName(group.Status)} {group.Items.Count}{split}";
+			});
+		int longCount = active.Count(IsLong);
+		CylinderSummary.Text = active.Count == 0
+			? "Henüz tüp kaydı yok."
+			: string.Join(" · ", parts) + (longCount > 0 ? $" · ⚠ {longCount} tüp {CylinderTracking.LongAtCustomerDays}+ gündür müşteride" : string.Empty);
+	}
+
+	private bool? SelectedFullness() =>
+		(ScanFullness.SelectedItem as ComboBoxItem)?.Tag is string tag && bool.TryParse(tag, out bool value) ? value : null;
 
 	private CylinderStatus SelectedScanTarget() =>
 		(ScanAction.SelectedItem as ComboBoxItem)?.Tag is string tag && Enum.TryParse(tag, out CylinderStatus status)
@@ -516,6 +569,22 @@ public partial class OperationsWindow : Window
 		}
 
 		string action = (ScanAction.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? target.ToString();
+		string? plate = null;
+		if (target == CylinderStatus.Vehicle)
+		{
+			try
+			{
+				plate = CylinderTracking.NormalizePlate(ScanPlate.Text);
+			}
+			catch (ArgumentException exception)
+			{
+				SetStatus(exception.Message, true);
+				ScanPlate.Focus();
+				return;
+			}
+		}
+
+		bool? fullness = SelectedFullness();
 		try
 		{
 			Cylinder? cylinder = await _crud.FindCylinderByCodeAsync(code);
@@ -527,16 +596,21 @@ public partial class OperationsWindow : Window
 				return;
 			}
 
-			string message = target == CylinderStatus.Customer
-				? $"{cylinder.SerialNumber} → {customer!.CompanyName} teslim edildi."
-				: $"{cylinder.SerialNumber}: {action} kaydedildi.";
+			string message = target switch
+			{
+				CylinderStatus.Customer => $"{cylinder.SerialNumber} → {customer!.CompanyName} teslim edildi.",
+				CylinderStatus.Vehicle when plate is not null => $"{cylinder.SerialNumber} → {plate} plakalı araca yüklendi.",
+				_ => $"{cylinder.SerialNumber}: {action} kaydedildi."
+			};
 			await RunChangeAsync(
 				() => _crud.MoveCylinderAsync(
 					cylinder.Id,
 					target,
 					target == CylinderStatus.Customer ? customer!.Id : null,
 					"Barkodla hızlı hareket",
-					action),
+					action,
+					plate,
+					fullness),
 				message);
 		}
 		catch (Exception exception)

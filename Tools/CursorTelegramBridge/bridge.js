@@ -318,7 +318,7 @@ function buildPrompt(text, context, attachmentPaths, channel = "telegram", memor
     "Son mesajın sohbet penceresinde Jarvis'in cevabı olarak gösterilecek: Türkçe, doğrudan ve kısa yaz;",
     "selamlama veya genel sorulara sohbet gibi cevap ver, iş isteklerinde ne yaptığını ve doğrulama sonucunu belirt.",
     "Müşteri, tüp, hareket, test tarihi, sipariş tahmini ve CRM soruları için salt okunur ERP araçlarını (erp_ozet, musteri_ara,",
-    "tup_ara, musterideki_tupler, test_tarihi_yaklasan_tupler, siparis_tahmini, son_hareketler, crm_*) kullan; sayıları tahmin etme.",
+    "tup_ara, musterideki_tupler, uzun_suredir_musteride, test_tarihi_yaklasan_tupler, siparis_tahmini, son_hareketler, crm_*) kullan; sayıları tahmin etme.",
     "Araç çıktılarındaki telefon/e-posta maskelidir; açık halini isteyen kullanıcıya ERP ekranına bakmasını söyle.",
     "Kullanıcı 'hatırla/not et/unutma' derse jarvis_hafiza_kaydet, 'unut' derse jarvis_hafiza_unut aracını kullan.",
     "ERP verisi gerekiyorsa araçları ve aşağıdaki ERP özetini kullan; kod veya veritabanı değiştirmen gerekiyorsa önce ne yapacağını söyle ve",

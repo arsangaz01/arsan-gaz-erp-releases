@@ -38,6 +38,8 @@ public static class DataGridColumnLocalizer
         ["Capacity"] = "Kapasite",
         ["CapacityUnit"] = "Kapasite birimi",
         ["Status"] = "Durum",
+        ["IsFull"] = "Dolu/boş",
+        ["VehiclePlate"] = "Plaka",
         ["CurrentCustomerId"] = "Müşteri no",
         ["LastMovementAt"] = "Son hareket",
         ["TestDueDate"] = "Test tarihi",
@@ -74,6 +76,9 @@ public static class DataGridColumnLocalizer
             return;
         }
 
+        if (e.PropertyName == nameof(Cylinder.IsFull) && type == typeof(bool))
+            e.Column = new DataGridTextColumn { Binding = new Binding(e.PropertyName) { Converter = new FullnessConverter() } };
+
         if (Headers.TryGetValue(e.PropertyName, out string? header))
             e.Column.Header = header;
 
@@ -104,14 +109,18 @@ public static class DataGridColumnLocalizer
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
         {
-            CylinderStatus.Warehouse => "Depoda",
-            CylinderStatus.Vehicle => "Araçta",
-            CylinderStatus.Customer => "Müşteride",
-            CylinderStatus.Filling => "Dolumda",
-            CylinderStatus.Service => "Bakımda",
-            CylinderStatus.Scrap => "Hurda",
+            CylinderStatus status => CylinderTracking.StatusName((int)status),
             _ => value?.ToString() ?? string.Empty
         };
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class FullnessConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+            CylinderTracking.FullnessName(value as bool?);
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
             throw new NotSupportedException();

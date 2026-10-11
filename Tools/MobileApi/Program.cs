@@ -18,6 +18,14 @@ if (!firstInstance)
 MobileApiPaths.Ensure();
 TunnelService.ApplyPreferredPublicUrl();
 MobileLog.Write("Mobil sunucu başlatılıyor.");
+try
+{
+    await ArsanGazERP.Services.CylinderSchemaService.EnsureAsync();
+}
+catch (Exception exception)
+{
+    MobileLog.Write("Tüp takip şeması hazırlanamadı: " + exception.GetBaseException().Message);
+}
 
 WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
 {

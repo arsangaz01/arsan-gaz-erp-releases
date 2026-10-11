@@ -109,6 +109,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="14" Margin="0,0,0,12">
@@ -143,8 +144,10 @@
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="1.2*" />
-                                <ColumnDefinition Width="1*" />
-                                <ColumnDefinition Width="1.6*" />
+                                <ColumnDefinition Width="1.1*" />
+                                <ColumnDefinition Width="1.5*" />
+                                <ColumnDefinition Width="0.9*" />
+                                <ColumnDefinition Width="0.8*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -154,19 +157,41 @@
                             <TextBlock Text="BARKODLA HIZLI HAREKET · OKUT" FontSize="10" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
                             <TextBlock Grid.Column="1" Text="İŞLEM" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
                             <TextBlock Grid.Column="2" Text="MÜŞTERİ (YALNIZCA TESLİMDE)" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
-                            <TextBox x:Name="ScanCode" Grid.Row="1" KeyDown="ScanCode_KeyDown" ToolTip="Barkod okuyucuyla okutun veya seri numarasını yazıp Enter'a basın" AutomationProperties.Name="Okutulan tüp barkodu" />
+                            <TextBlock Grid.Column="3" Text="PLAKA (ARAÇTA)" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Grid.Column="4" Text="DOLU / BOŞ" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" />
+                            <TextBox x:Name="ScanCode" Grid.Row="1" KeyDown="ScanCode_KeyDown" ToolTip="Barkod okuyucuyla okutun veya seri numarasını yazıp Enter'a basın; art arda okutabilirsiniz" AutomationProperties.Name="Okutulan tüp barkodu" />
                             <ComboBox x:Name="ScanAction" Grid.Row="1" Grid.Column="1" AutomationProperties.Name="Tüp hareketi" SelectionChanged="ScanAction_SelectionChanged">
                                 <ComboBoxItem Content="Müşteriye teslim" Tag="Customer" IsSelected="True" />
                                 <ComboBoxItem Content="Depoya iade" Tag="Warehouse" />
-                                <ComboBoxItem Content="Araca yükle" Tag="Vehicle" />
+                                <ComboBoxItem Content="Araca yükle (taşınıyor)" Tag="Vehicle" />
                                 <ComboBoxItem Content="Dolum" Tag="Filling" />
                                 <ComboBoxItem Content="Servis / test" Tag="Service" />
                             </ComboBox>
                             <ComboBox x:Name="ScanCustomer" Grid.Row="1" Grid.Column="2" IsEditable="True" IsTextSearchEnabled="True" DisplayMemberPath="CompanyName" AutomationProperties.Name="Teslim edilecek müşteri" />
-                            <Button Grid.Row="1" Grid.Column="3" Content="Uygula" Click="ApplyScan_Click" Margin="12,0,0,0" />
+                            <ComboBox x:Name="ScanPlate" Grid.Row="1" Grid.Column="3" IsEditable="True" IsEnabled="False" ToolTip="Örnek: 01 ABC 123. Boş bırakılabilir." AutomationProperties.Name="Araç plakası" />
+                            <ComboBox x:Name="ScanFullness" Grid.Row="1" Grid.Column="4" AutomationProperties.Name="Dolu veya boş" ToolTip="Otomatik: teslimde dolu, müşteriden dönüşte boş, dolumdan çıkışta dolu sayılır">
+                                <ComboBoxItem Content="Otomatik" IsSelected="True" />
+                                <ComboBoxItem Content="Dolu" Tag="True" />
+                                <ComboBoxItem Content="Boş" Tag="False" />
+                            </ComboBox>
+                            <Button Grid.Row="1" Grid.Column="5" Content="Uygula" Click="ApplyScan_Click" Margin="12,0,0,0" />
                         </Grid>
                     </Border>
-                    <DataGrid x:Name="Cylinders" Grid.Row="2" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
+                    <DockPanel Grid.Row="2" LastChildFill="False" Margin="0,0,0,8">
+                        <TextBlock Text="GÖSTER" FontSize="10" FontWeight="Bold" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <ComboBox x:Name="CylinderFilter" Width="210" Margin="0,0,12,0" SelectionChanged="CylinderFilter_SelectionChanged" AutomationProperties.Name="Tüp durumu filtresi">
+                            <ComboBoxItem Content="Tüm tüpler" IsSelected="True" />
+                            <ComboBoxItem Content="Depoda" Tag="Warehouse" />
+                            <ComboBoxItem Content="Taşınıyor (araçta)" Tag="Vehicle" />
+                            <ComboBoxItem Content="Müşteride" Tag="Customer" />
+                            <ComboBoxItem Content="Dolumda" Tag="Filling" />
+                            <ComboBoxItem Content="Serviste" Tag="Service" />
+                            <ComboBoxItem Content="Hurda" Tag="Scrap" />
+                            <ComboBoxItem Content="60+ gündür müşteride" Tag="Long" />
+                        </ComboBox>
+                        <TextBlock x:Name="CylinderSummary" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" />
+                    </DockPanel>
+                    <DataGrid x:Name="Cylinders" Grid.Row="3" IsReadOnly="True" AutoGenerateColumns="True" ColumnWidth="*" />
                 </Grid>
             </TabItem>
 

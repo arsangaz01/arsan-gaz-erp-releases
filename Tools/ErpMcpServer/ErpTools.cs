@@ -26,14 +26,21 @@ public static class ErpTools
         text.AppendLine("Tüpler (aktif):");
         using (SqliteCommand command = connection.CreateCommand())
         {
-            command.CommandText = "SELECT Status, COUNT(*) FROM Cylinders WHERE IsActive = 1 GROUP BY Status ORDER BY Status";
+            command.CommandText = """
+                SELECT Status, COUNT(*), SUM(CASE WHEN IsFull = 1 THEN 1 ELSE 0 END), SUM(CASE WHEN IsFull = 0 THEN 1 ELSE 0 END)
+                FROM Cylinders WHERE IsActive = 1 GROUP BY Status ORDER BY Status
+                """;
             using SqliteDataReader reader = command.ExecuteReader();
             while (reader.Read())
             {
-                text.AppendLine($"- {StatusName(reader.GetInt32(0))}: {reader.GetInt64(1)}");
+                long full = reader.GetInt64(2);
+                long empty = reader.GetInt64(3);
+                string split = full + empty > 0 ? $" (dolu {full} · boş {empty})" : string.Empty;
+                text.AppendLine($"- {StatusName(reader.GetInt32(0))}: {reader.GetInt64(1)}{split}");
             }
         }
 
+        text.AppendLine($"{CylinderTracking.LongAtCustomerDays} günden uzun süredir müşteride: {Scalar(connection, "SELECT COUNT(*) FROM Cylinders WHERE IsActive = 1 AND Status = 3 AND LastMovementAt IS NOT NULL AND LastMovementAt < $limit", ("$limit", DateTime.Today.AddDays(-CylinderTracking.LongAtCustomerDays)))}");
         DateTime limit = DateTime.Today.AddDays(30);
         text.AppendLine($"Testi 30 gün içinde dolacak veya geçmiş tüp: {Scalar(connection, "SELECT COUNT(*) FROM Cylinders WHERE IsActive = 1 AND TestDueDate IS NOT NULL AND TestDueDate <= $limit", ("$limit", limit))}");
         text.AppendLine($"Son 30 günde tüp hareketi: {Scalar(connection, "SELECT COUNT(*) FROM CylinderMovements WHERE MovementDate >= $since", ("$since", DateTime.Today.AddDays(-30)))}");
@@ -82,7 +89,7 @@ public static class ErpTools
         using SqliteConnection connection = Open();
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
-            SELECT y.Id, y.SerialNumber, y.Barcode, y.GasType, y.Capacity, y.CapacityUnit, y.Status, y.TestDueDate, y.LastMovementAt, c.CompanyName
+            SELECT y.Id, y.SerialNumber, y.Barcode, y.GasType, y.Capacity, y.CapacityUnit, y.Status, y.TestDueDate, y.LastMovementAt, c.CompanyName, y.IsFull, y.VehiclePlate
             FROM Cylinders y LEFT JOIN Customers c ON c.Id = y.CurrentCustomerId
             WHERE y.Barcode = $code COLLATE NOCASE OR y.SerialNumber = $code COLLATE NOCASE
             LIMIT 1
@@ -100,13 +107,14 @@ public static class ErpTools
             id = reader.GetInt32(0);
             text.AppendLine($"Seri no: {reader.GetString(1)} · barkod: {reader.GetString(2)}");
             text.AppendLine($"Gaz: {reader.GetString(3)} · kapasite: {reader.GetDecimal(4).ToString("0.##", Turkish)} {reader.GetString(5)}");
-            text.AppendLine($"Durum: {StatusName(reader.GetInt32(6))}{(reader.IsDBNull(9) ? "" : " · müşteri: " + reader.GetString(9))}");
+            text.AppendLine($"Durum: {StatusName(reader.GetInt32(6))}{(reader.IsDBNull(11) ? "" : " · plaka: " + reader.GetString(11))}{(reader.IsDBNull(9) ? "" : " · müşteri: " + reader.GetString(9))}");
+            text.AppendLine($"Dolu/boş: {CylinderTracking.FullnessName(reader.IsDBNull(10) ? null : reader.GetBoolean(10))}");
             text.AppendLine($"Test tarihi: {Date(reader, 7)} · son hareket: {Date(reader, 8)}");
         }
 
         using SqliteCommand movements = connection.CreateCommand();
         movements.CommandText = """
-            SELECT m.MovementDate, m.MovementType, m.FromStatus, m.ToStatus, c.CompanyName, m.Description
+            SELECT m.MovementDate, m.MovementType, m.FromStatus, m.ToStatus, c.CompanyName, m.Description, m.VehiclePlate
             FROM CylinderMovements m LEFT JOIN Customers c ON c.Id = m.CustomerId
             WHERE m.CylinderId = $id ORDER BY m.MovementDate DESC LIMIT 10
             """;
@@ -117,7 +125,7 @@ public static class ErpTools
         while (rows.Read())
         {
             any = true;
-            text.AppendLine($"- {Date(rows, 0, "dd.MM.yyyy HH:mm")} · {rows.GetString(1)} · {StatusName(rows.GetInt32(2))} → {StatusName(rows.GetInt32(3))}{(rows.IsDBNull(4) ? "" : " · " + rows.GetString(4))}{(rows.IsDBNull(5) ? "" : " · " + rows.GetString(5))}");
+            text.AppendLine($"- {Date(rows, 0, "dd.MM.yyyy HH:mm")} · {rows.GetString(1)} · {StatusName(rows.GetInt32(2))} → {StatusName(rows.GetInt32(3))}{(rows.IsDBNull(6) ? "" : " · " + rows.GetString(6))}{(rows.IsDBNull(4) ? "" : " · " + rows.GetString(4))}{(rows.IsDBNull(5) ? "" : " · " + rows.GetString(5))}");
         }
 
         if (!any)
@@ -149,11 +157,37 @@ public static class ErpTools
                 continue;
             }
 
-            string days = reader.IsDBNull(3) ? "teslim tarihi yok" : $"{(DateTime.Today - reader.GetDateTime(3).Date).Days} gündür müşteride";
+            int? elapsed = reader.IsDBNull(3) ? null : (DateTime.Today - reader.GetDateTime(3).Date).Days;
+            string days = elapsed is int value
+                ? $"{value} gündür müşteride{(value > CylinderTracking.LongAtCustomerDays ? " ⚠" : "")}"
+                : "teslim tarihi yok";
             rows.Add($"- {name} · {reader.GetString(1)} ({reader.GetString(2)}) · {days}");
         }
 
         return rows.Count == 0 ? "Müşteride duran tüp kaydı yok." : string.Join(Environment.NewLine, rows);
+    }
+
+    [McpServerTool(Name = "uzun_suredir_musteride", ReadOnly = true), Description("Verilen günden uzun süredir müşteride duran (dönmeyen) tüpleri en eskiden başlayarak listeler. Salt okunur.")]
+    public static string LongAtCustomer([Description("Kaç günden uzun (7-365, varsayılan 60)")] int gun = CylinderTracking.LongAtCustomerDays)
+    {
+        int days = Math.Clamp(gun, 7, 365);
+        using SqliteConnection connection = Open();
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT c.CompanyName, y.SerialNumber, y.GasType, y.LastMovementAt
+            FROM Cylinders y JOIN Customers c ON c.Id = y.CurrentCustomerId
+            WHERE y.Status = 3 AND y.IsActive = 1 AND y.LastMovementAt IS NOT NULL AND y.LastMovementAt < $limit
+            ORDER BY y.LastMovementAt LIMIT 200
+            """;
+        command.Parameters.AddWithValue("$limit", DateTime.Today.AddDays(-days));
+        List<string> rows = [];
+        using SqliteDataReader reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            rows.Add($"- {reader.GetString(0)} · {reader.GetString(1)} ({reader.GetString(2)}) · {(DateTime.Today - reader.GetDateTime(3).Date).Days} gündür müşteride");
+        }
+
+        return rows.Count == 0 ? $"{days} günden uzun süredir müşteride duran tüp yok." : $"{rows.Count} tüp {days} günden uzun süredir müşteride:{Environment.NewLine}{string.Join(Environment.NewLine, rows)}";
     }
 
     [McpServerTool(Name = "test_tarihi_yaklasan_tupler", ReadOnly = true), Description("Periyodik test tarihi verilen gün sayısı içinde dolacak veya geçmiş tüpleri listeler. Salt okunur.")]
@@ -357,14 +391,5 @@ public static class ErpTools
     private static string Date(SqliteDataReader reader, int index, string format = "dd.MM.yyyy") =>
         reader.IsDBNull(index) ? "-" : reader.GetDateTime(index).ToString(format, Turkish);
 
-    public static string StatusName(int status) => status switch
-    {
-        1 => "Depoda",
-        2 => "Araçta",
-        3 => "Müşteride",
-        4 => "Dolumda",
-        5 => "Serviste",
-        6 => "Hurda",
-        _ => $"Durum {status}"
-    };
+    public static string StatusName(int status) => CylinderTracking.StatusName(status);
 }

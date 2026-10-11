@@ -25,6 +25,39 @@ public sealed record CrmItem(int Id, string Name, string? City, string? Sector, 
 }
 
 public sealed record CylinderInfo(int Id, string Barcode, string SerialNumber, int Status, string StatusName, string? Customer, string Detail);
+public sealed record CylinderStatusCount(int Status, string Name, int Total, int Full, int Empty);
+public sealed record CylinderPlateCount(string Plate, int Count);
+public sealed record CylinderOverview(List<CylinderStatusCount> Statuses, List<CylinderPlateCount> Vehicles, int LongAtCustomer, int LongAtCustomerDays);
+
+public sealed record CylinderListItem(
+    string SerialNumber,
+    string Barcode,
+    string GasType,
+    string Capacity,
+    int Status,
+    string StatusName,
+    string Fullness,
+    string? Customer,
+    string? Plate,
+    int? DaysThere,
+    string? TestDue)
+{
+    public string Title => $"{SerialNumber} · {GasType} {Capacity}";
+
+    public string Subtitle => string.Join(" · ", new[]
+    {
+        StatusName,
+        Fullness == "-" ? null : Fullness,
+        Customer,
+        Plate,
+        DaysThere is int days ? $"{days} gündür" : null,
+        TestDue is null ? null : "test " + TestDue
+    }.Where(part => !string.IsNullOrEmpty(part)));
+}
+
+public sealed record CylinderBulkResult(string Code, bool Ok, string Message);
+public sealed record CylinderBulkResponse(string Message, int Ok, int Failed, List<CylinderBulkResult> Results);
+public sealed record CylinderAuditResponse(string Message, int Expected, int Found, List<string> Missing, List<string> Unexpected, List<string> Unknown);
 public sealed record ChatTurn(string Role, string Content);
 public sealed record AgentReply(string Agent, string Role, string Text, bool Ok);
 
@@ -285,8 +318,39 @@ public sealed class ApiClient
     public async Task<CylinderInfo> CylinderAsync(string code) =>
         await GetAsync<CylinderInfo>("/api/tup?kod=" + Uri.EscapeDataString(code));
 
-    public Task<string> MoveCylinderAsync(string code, int status, int? customerId, string? note) =>
-        PostMessageAsync("/api/tup/hareket", new { code, status, customerId, note });
+    public Task<string> MoveCylinderAsync(string code, int status, int? customerId, string? note, string? plate = null, bool? isFull = null) =>
+        PostMessageAsync("/api/tup/hareket", new { code, status, customerId, note, plate, isFull });
+
+    public Task<CylinderBulkResponse> MoveCylindersAsync(IReadOnlyList<string> codes, int status, int? customerId, string? note, string? plate, bool? isFull) =>
+        PostAsync<CylinderBulkResponse>("/api/tup/toplu-hareket", new { codes, status, customerId, note, plate, isFull });
+
+    public Task<CylinderOverview> CylinderOverviewAsync() => GetAsync<CylinderOverview>("/api/tup/durum");
+
+    public Task<List<CylinderListItem>> CylinderListAsync(int? status, string? plate, bool longAtCustomer)
+    {
+        List<string> query = [];
+        if (status is int value)
+        {
+            query.Add("durum=" + value);
+        }
+
+        if (!string.IsNullOrEmpty(plate))
+        {
+            query.Add("plaka=" + Uri.EscapeDataString(plate));
+        }
+
+        if (longAtCustomer)
+        {
+            query.Add("uzun=true");
+        }
+
+        return GetAsync<List<CylinderListItem>>("/api/tup/liste" + (query.Count == 0 ? string.Empty : "?" + string.Join("&", query)));
+    }
+
+    public Task<List<string>> VehiclePlatesAsync() => GetAsync<List<string>>("/api/araclar");
+
+    public Task<CylinderAuditResponse> AuditCustomerAsync(int customerId, IReadOnlyList<string> codes, string? note) =>
+        PostAsync<CylinderAuditResponse>("/api/tup/sayim", new { customerId, codes, note });
 
     public Task<string> AddCrmNoteAsync(int id, string text) =>
         PostMessageAsync($"/api/crm/{id}/not", new { text });
