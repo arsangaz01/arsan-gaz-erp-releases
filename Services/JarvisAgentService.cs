@@ -134,7 +134,13 @@ internal static class JarvisAgentService
         }
 
         string reason = step.Input.TryGetValue("reason", out string? value) ? value : step.Thought;
-        string id = CursorEscalationService.Enqueue(userMessage, reason);
+        bool implement = userMessage.Contains("uygula", StringComparison.OrdinalIgnoreCase)
+            || userMessage.Contains("öneri", StringComparison.OrdinalIgnoreCase);
+        string notes = string.Join("\n", steps.Select(item =>
+            $"- {item.Step.Action}: {JarvisAgentProtocol.Truncate(item.Observation, 900)}"));
+        string id = implement && notes.Length > 20
+            ? CursorEscalationService.EnqueueForImplementation(userMessage, notes, reason)
+            : CursorEscalationService.Enqueue(userMessage, reason);
         return $"İstek Cursor kodlama ajanına aktarıldı (kayıt: {id}). Sonuç Telegram'a gelecek. Kullanıcıya bunu kısaca söyle.";
     }
 

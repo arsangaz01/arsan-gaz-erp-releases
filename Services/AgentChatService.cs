@@ -28,7 +28,13 @@ public sealed class AgentChatService : IAsyncDisposable
         new("jarvis", "Jarvis", "Genel sohbet, soruları yanıtlama ve ajan koordinasyonu", "Kullanıcının genel sorularına açık, doğru ve uygulanabilir yanıtlar verirsin; gerekirse uygun uzmana yönlendirirsin. Hava durumu, TCMB döviz kurları, haber gündemi ve günlük özet ('günaydın', 'günün özeti') ERP tarafından canlı olarak yanıtlanır; bunlar sorulduğunda kullanıcıdan il adını veya para birimini açıkça yazmasını iste. İzin verilmişse 'Excel'i aç', 'YouTube'da X ara', 'Masaüstünde X klasörü oluştur' gibi izinli bilgisayar komutlarını ERP yürütür. Araç çağırmaz, ERP kaydı, dosya/kod veya ayar değiştirmez ve onaylanmamış işlemleri yapmış gibi göstermezsin.")
     ];
 
-    public string ProviderStatus => (CloudAgentClient.IsConfigured, IsNimConfigured(_nim)) switch
+    public string ProviderStatus => CursorJarvisBrain.IsCursorOnlyMode
+        ? (CursorJarvisBrain.IsBridgeReady(out _) ? "Tüm ajan sohbeti: Cursor (köprü aktif)" : "Tüm ajan sohbeti: Cursor (köprü bekleniyor)")
+        : CursorJarvisBrain.IsEnabled
+            ? "Jarvis: Cursor ajanı · diğer ajanlar: " + BaseProviderStatus
+            : BaseProviderStatus;
+
+    private string BaseProviderStatus => (CloudAgentClient.IsConfigured, IsNimConfigured(_nim)) switch
     {
         (true, true) => "Cloudflare Workers AI · GPT-OSS 20B (yedek: NVIDIA NIM)",
         (true, false) => "Cloudflare Workers AI · GPT-OSS 20B",
@@ -65,6 +71,31 @@ public sealed class AgentChatService : IAsyncDisposable
         }
 
         input = AgentChatRoutingPolicy.NormalizeNamedAction(input, addressedAgent?.Id);
+
+        if (AgentChatRoutingPolicy.ShouldForwardRecommendationsToCursor(input))
+        {
+            try
+            {
+                string id = CursorEscalationService.EnqueueForImplementation(
+                    input,
+                    "Jarvis sohbetinden doğrudan iletim; önceki tur adımları ERP geçmişinde.",
+                    "Kullanıcı önerilerin Cursor'da uygulanmasını istedi");
+                ErpAgentProfile jarvis = Profiles.First(profile => profile.Id == "jarvis");
+                var reply = new ErpAgentReply(
+                    jarvis,
+                    "Öneriler Cursor köprüsüne iletildi (kayıt: " + id + "). Uygulama bitince Telegram'a rapor gider.",
+                    true);
+                onReply?.Invoke(reply);
+                return [reply];
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                ErpAgentProfile jarvis = Profiles.First(profile => profile.Id == "jarvis");
+                var reply = new ErpAgentReply(jarvis, "Cursor'a iletilemedi: " + exception.Message, false);
+                onReply?.Invoke(reply);
+                return [reply];
+            }
+        }
 
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -194,6 +225,11 @@ public sealed class AgentChatService : IAsyncDisposable
             return await ExecuteExplicitCommandAsync(profile, input, false, cancellationToken);
         }
 
+        if (!input.StartsWith("/", StringComparison.Ordinal) && CursorJarvisBrain.IsCursorOnlyMode)
+        {
+            return await RespondViaCursorAsync(profile, history, input, cancellationToken, progress);
+        }
+
         if (input.StartsWith("/", StringComparison.Ordinal))
         {
             if (!mayExecuteCommand)
@@ -228,6 +264,34 @@ public sealed class AgentChatService : IAsyncDisposable
             string pcAnswer = ExecutePcCommand(pcCommand);
             await RecordAgentRunAsync(profile.Name, pcAnswer);
             return "[Bilgisayar] " + pcAnswer;
+        }
+
+        if (profile.Id == "jarvis" && CursorJarvisBrain.IsEnabled)
+        {
+            if (CursorJarvisBrain.IsBridgeReady(out string notReady))
+            {
+                try
+                {
+                    string cursorAnswer = await CursorJarvisBrain.RunAsync(history, input, progress, cancellationToken);
+                    await RecordAgentRunAsync(profile.Name, cursorAnswer);
+                    return cursorAnswer;
+                }
+                catch (Exception exception) when (
+                    !cancellationToken.IsCancellationRequested &&
+                    exception is IOException or InvalidOperationException or UnauthorizedAccessException or JsonException)
+                {
+                    progress?.Invoke("⚠ Cursor yanıt veremedi (" + exception.GetBaseException().Message + "); yerel modelle yanıtlıyorum.");
+                }
+            }
+            else if (CursorJarvisBrain.IsCursorOnlyMode)
+            {
+                return "Cursor köprüsü hazır değil: " + notReady +
+                       ". Bilgisayarda Cursor, bridge.js ve AgentWatcher çalışmalı.";
+            }
+            else
+            {
+                progress?.Invoke("⚠ " + notReady + "; yerel modelle yanıtlıyorum.");
+            }
         }
 
         if (profile.Id == "jarvis" && CloudAgentClient.IsConfigured)
@@ -276,6 +340,42 @@ public sealed class AgentChatService : IAsyncDisposable
 
         await RecordAgentRunAsync(profile.Name, answer);
         return answer;
+    }
+
+    private async Task<string> RespondViaCursorAsync(
+        ErpAgentProfile profile,
+        IReadOnlyList<ErpChatTurn> history,
+        string input,
+        CancellationToken cancellationToken,
+        Action<string>? progress)
+    {
+        if (!CursorJarvisBrain.IsEnabled)
+        {
+            return "Cursor beyni kapalı. AgentWatcherData\\jarvis-brain.json içinde Brain=cursor olmalı.";
+        }
+
+        if (!CursorJarvisBrain.IsBridgeReady(out string notReady))
+        {
+            return "Cursor köprüsü hazır değil: " + notReady +
+                   ". Bilgisayarda Cursor, Tools\\CursorTelegramBridge\\bridge.js ve AgentWatcher çalışmalı.";
+        }
+
+        string message = string.Equals(profile.Id, "jarvis", StringComparison.OrdinalIgnoreCase)
+            ? input
+            : "[ERP ajan: " + profile.Name + " — " + profile.Role + "]\n" + input;
+
+        try
+        {
+            string answer = await CursorJarvisBrain.RunAsync(history, message, progress, cancellationToken);
+            await RecordAgentRunAsync(profile.Name, answer);
+            return answer;
+        }
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested &&
+            exception is IOException or InvalidOperationException or UnauthorizedAccessException or JsonException)
+        {
+            return "Cursor yanıt veremedi: " + exception.GetBaseException().Message;
+        }
     }
 
     private static async Task<string> AddErpContextAsync(

@@ -57,6 +57,7 @@
     <Compile Include="..\..\Services\WebResearchService.cs" Link="WebResearchService.cs" />
     <Compile Include="..\..\Services\ReorderPrediction.cs" Link="ReorderPrediction.cs" />
     <Compile Include="..\..\Services\AgentWatcherPaths.cs" Link="AgentWatcherPaths.cs" />
+    <Compile Include="..\..\Services\CursorJobMonitor.cs" Link="CursorJobMonitor.cs" />
     <Compile Include="..\AgentWatcher\AgentWatcherWindowLayout.cs" Link="AgentWatcherWindowLayout.cs" />
     <Compile Include="..\AgentWatcher\AgentWatcherRestart.cs" Link="AgentWatcherRestart.cs" />
     <Compile Include="..\AgentWatcher\AgentWatcherActivation.cs" Link="AgentWatcherActivation.cs" />

@@ -38,6 +38,21 @@ internal static class AgentChatRoutingPolicy
         return input;
     }
 
+    public static bool ShouldForwardRecommendationsToCursor(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input) || input.StartsWith("/", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        string text = input.Trim();
+        bool mentionsCursor = text.Contains("cursor", StringComparison.OrdinalIgnoreCase);
+        bool mentionsRecommendations = text.Contains("öneri", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("uygula", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("ilet", StringComparison.OrdinalIgnoreCase);
+        return mentionsCursor && mentionsRecommendations;
+    }
+
     public static IReadOnlyList<string> SelectParticipantIds(
         string input,
         string? addressedAgentId,

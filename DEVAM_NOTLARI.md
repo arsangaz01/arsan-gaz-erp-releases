@@ -6,6 +6,29 @@
 2. Eski açık sorular: mobil öneriler (1–8), `publish\staging-*` klasörlerinin silinmesi (silmek yerine taşımak tercih),
    "Geciken faturalar" sekmesinin kaldırılması (sistemde fatura olmayacak).
 
+## Jarvis'in beyni Cursor (11 Ekim)
+- `Services/CursorJarvisBrain.cs`: Jarvis mesajı → `CopilotInbox/jarvischat-*.request.json` (+ dispatch marker, IDE sohbeti almaz)
+  → bridge.js (Cursor SDK, ayrı "Arsan Gaz Jarvis" konuşması) → canlı adımlar progress.json `steps` → completion.
+  160 sn içinde bitmezse sonuç Telegram'a gider. Köprü hazır değilse eski yerel modele düşer. İzinli PC komutları anında çalışır.
+- Ayar: `AgentWatcherData\jarvis-brain.json` {"Brain":"cursor"|"local","Mode":"cursor-only"|"cursor-first"}; dosya yoksa Cursor.
+  Şu an cursor-only (köprü ekledi, kullanıcı "Her şeyi Cursor yapsın" dedi): `/` ile başlamayan tüm ajan mesajları ve PC komutları Cursor'a gider.
+  Köprü kapalıysa yerel model yerine hata mesajı döner.
+- "Cursor'a aktar / öneriyi uygula" işleri `jarvis-` önekiyle Telegram raporlu kalır (köprü `jarvischat-` yapmıştı, düzeltildi).
+- Durum: bridge.js yeniden başlatıldı. MobileApi yayında (yedek `.bak-pre-cursorjarvis`).
+  Masaüstü ERP 10:05'te güncellendi (yedek `publish\current\ArsanGazERP.exe.bak-20261011`). Commit henüz yok.
+- Doğrulanan: Köprü uçtan uca (10–11 sn, canlı adımlar, konuşma hafızası), node testleri 9/9.
+  Doğrulanmayan: Telefondan /api/sohbet ile gerçek deneme.
+- Sonraki aşama: Diğer ajanları ve Gözcü araştırmalarını Cursor'un dağıtması.
+
+## GitHub Jarvis raporundan uygulananlar (11 Ekim, rapor: Reports\jarvis-github-inceleme-2026-10-11.md)
+- ERP araçları: `.cursor/mcp.json` SDK ajanında çalışmıyordu (autoReview açıkken MCP çağrıları engelleniyor). Çözüm: `Tools/CursorTelegramBridge/erp-tools.js`
+  ErpMcpServer'ı köprü içinde başlatıp 10 salt-okuma aracını SDK `customTools` olarak verir (her iki kanal).
+- Kişisel veri maskeleme: `pii-mask.js` (telefon 0/+90 önekli veya "tel:" etiketli, e-posta, etiketli TC/VKN; barkodlara dokunmaz). Araç çıktıları ve Jarvis bağlamı maskeli gider.
+- Jarvis kalıcı belleği: `jarvis-memory.js`, `AgentWatcherData\jarvis-memory\*.md` (bilgi başına dosya, unutulan `_unutulan`'a taşınır). Araçlar: jarvis_hafiza_kaydet / jarvis_hafiza_unut.
+- Acil durdurma: `<id>.cancel.json` → köprü `run.cancel()`; Ajan Kontrol Merkezi'nde "Cursor işleri" sekmesi (`Services/CursorJobMonitor.cs`, `Views/AgentControlCenterWindow.CursorJobs.cs`).
+- Doğrulanan: gerçek istekte erp_ozet/crm_ozet + bellek kaydet/unut çalıştı; durdurma ~1 sn; node 15/15, C# test paketi geçti, ERP 0 hata.
+  Doğrulanmayan: "Cursor işleri" sekmesi ekranda (ERP yeniden yayınlanmadı, onay bekliyor).
+
 ## Gmail göndericisi (ozelgazlar@arsangaz.com, Google Workspace)
 - Durum: Uygulama şifreleri sayfası "Aradığınız ayar, hesabınızda kullanılamıyor" diyor.
 - Yapılacak (kullanıcı):

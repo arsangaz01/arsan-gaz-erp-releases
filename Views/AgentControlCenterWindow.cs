@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ArsanGazERP.Views;
 
-public sealed class AgentControlCenterWindow : Window
+public sealed partial class AgentControlCenterWindow : Window
 {
     private const int ActivityWindowDays = 30;
     private static string QueueDirectory => AgentWatcherPaths.QueueDirectory;
@@ -96,6 +96,7 @@ public sealed class AgentControlCenterWindow : Window
         tabs.Items.Add(new TabItem { Header = "Genel bakış", Content = BuildOverview() });
         tabs.Items.Add(new TabItem { Header = "Ajanlar", Content = BuildAgents() });
         tabs.Items.Add(new TabItem { Header = "Görev günlüğü", Content = BuildActivity() });
+        tabs.Items.Add(new TabItem { Header = "Cursor işleri", Content = BuildCursorJobs() });
         Grid.SetRow(tabs, 2);
         root.Children.Add(tabs);
         return root;
