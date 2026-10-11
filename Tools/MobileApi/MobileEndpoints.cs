@@ -11,6 +11,7 @@ internal sealed record PairRequest(string Code, string? DeviceName);
 internal sealed record MoveRequest(string Code, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null);
 internal sealed record BulkMoveRequest(List<string?>? Codes, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null);
 internal sealed record AuditRequest(int CustomerId, List<string?>? Codes, string? Note);
+internal sealed record NewCylinderRequest(string? SerialNumber, string? Barcode, string? GasType, decimal Capacity, string? CapacityUnit, bool? IsFull, DateTime? TestDueDate);
 internal sealed record CrmNoteRequest(string Text);
 internal sealed record CursorRequest(string? Message);
 internal sealed record CrmFollowUpRequest(DateOnly Date, string? Note);
@@ -246,6 +247,32 @@ internal static class MobileEndpoints
                 return Results.BadRequest(new { error = exception.Message });
             }
         });
+
+        app.MapPost("/api/tup/yeni", async (NewCylinderRequest request, HttpContext context) =>
+        {
+            try
+            {
+                Cylinder cylinder = await new CrudService().RegisterCylinderAsync(
+                    request.SerialNumber ?? string.Empty, request.Barcode, request.GasType ?? string.Empty, request.Capacity,
+                    request.CapacityUnit, request.IsFull, request.TestDueDate, $"Mobil kayıt ({DeviceName(context)})");
+                return Results.Ok(new
+                {
+                    message = $"{cylinder.SerialNumber} ({cylinder.GasType}, {cylinder.Capacity:0.##} {cylinder.CapacityUnit}) depoda olarak envantere eklendi.",
+                    cylinder.Barcode,
+                    cylinder.SerialNumber
+                });
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+            {
+                return Results.BadRequest(new { error = "Bu seri numarası veya barkod zaten kayıtlı." });
+            }
+        });
+
+        app.MapGet("/api/tup/gaz-turleri", async () => Results.Ok(await new CrudService().KnownGasTypesAsync()));
 
         app.MapGet("/api/tup/durum", async () => Results.Ok(await new CrudService().CylinderOverviewAsync()));
 

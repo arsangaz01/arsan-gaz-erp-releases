@@ -10,6 +10,17 @@ internal static class CylinderTrackingTests
         PlatesAreNormalized();
         AuditSplitsFoundMissingAndUnexpected();
         CodesAreCleaned();
+        NewCylindersAreValidated();
+    }
+
+    private static void NewCylindersAreValidated()
+    {
+        Assert(CylinderTracking.NewCylinderError("AG-001", null, "Oksijen", 40m) is null, "A complete new cylinder is accepted.");
+        Assert(CylinderTracking.NewCylinderError("  ", null, "Oksijen", 40m) is not null, "A serial number is required.");
+        Assert(CylinderTracking.NewCylinderError("AG-001", null, " ", 40m) is not null, "A gas type is required.");
+        Assert(CylinderTracking.NewCylinderError("AG-001", null, "Oksijen", 0m) is not null, "Capacity must be positive.");
+        Assert(CylinderTracking.NewCylinderError("AG-001", new string('x', 101), "Oksijen", 40m) is not null, "Overlong barcodes are rejected.");
+        Assert(CylinderTracking.CommonGasTypes.Contains("Oksijen"), "Common gas types are offered.");
     }
 
     private static void FullnessFollowsTheCylinderCycle()

@@ -110,7 +110,9 @@ public sealed class CylinderPage : ContentPage
             "Tek tüp",
             Ui.Primary("📷 Barkod / QR okut", async (_, _) => await ScanAsync()),
             _code,
-            Ui.Secondary("Sorgula", async (_, _) => await LookupAsync(_code.Text, quick: false)),
+            Ui.ActionRow(
+                Ui.Secondary("Sorgula", async (_, _) => await LookupAsync(_code.Text, quick: false)),
+                Ui.Secondary("➕ Yeni tüp", async (_, _) => await RegisterNewAsync())),
             _detail);
         _batchPanel = Ui.Section(
             "Toplu okutma",
@@ -310,6 +312,15 @@ public sealed class CylinderPage : ContentPage
         }
     }
 
+    private async Task RegisterNewAsync()
+    {
+        if (await CylinderRegisterPage.RegisterAsync(Navigation, (_code.Text ?? string.Empty).Trim()) is string saved)
+        {
+            _code.Text = saved;
+            await LookupAsync(saved, quick: false);
+        }
+    }
+
     private async Task LookupAsync(string? code, bool quick)
     {
         string value = (code ?? string.Empty).Trim();
@@ -324,6 +335,7 @@ public sealed class CylinderPage : ContentPage
         _action.SelectedIndex = -1;
         _note.Text = string.Empty;
         _fullness.SelectedIndex = 0;
+        bool unknown = false;
         await Ui.RunAsync(this, _busy, async () =>
         {
             try
@@ -336,9 +348,27 @@ public sealed class CylinderPage : ContentPage
                 _current = new CylinderInfo(0, value, value, -1, "bilinmiyor", null, string.Empty);
                 _detail.Text = $"📶 Bağlantı yok. Tüp bilgisi alınamadı ({value}).\nHareketi yine de kaydedebilirsiniz; bağlantı gelince ERP'ye gönderilir.";
             }
+            catch (ApiException exception) when (exception.StatusCode == 404)
+            {
+                unknown = true;
+                _detail.Text = exception.Message;
+                return;
+            }
 
             _movePanel.IsVisible = true;
         });
+
+        if (unknown)
+        {
+            if (await DisplayAlertAsync("Kayıtlı olmayan tüp", $"'{value}' ERP'de kayıtlı değil. Yeni tüp olarak kaydedilsin mi?", "Yeni tüp kaydet", "Vazgeç")
+                && await CylinderRegisterPage.RegisterAsync(Navigation, value) is string saved)
+            {
+                _code.Text = saved;
+                await LookupAsync(saved, quick: false);
+            }
+
+            return;
+        }
 
         if (quick && _current is not null)
         {

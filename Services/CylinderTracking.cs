@@ -147,4 +147,31 @@ public static class CylinderTracking
 
     public static int? DaysSince(DateTime? value, DateTime today) =>
         value is DateTime date ? Math.Max(0, (today.Date - date.Date).Days) : null;
+
+    public static IReadOnlyList<string> CommonGasTypes { get; } =
+        ["Oksijen", "Medikal Oksijen", "Azot", "Argon", "Karbondioksit", "Argon/CO2 karışım", "Asetilen", "Helyum", "Hidrojen", "Kuru hava"];
+
+    public const int MaxCodeLength = 100;
+
+    // Returns the reason a new cylinder cannot be registered, or null when the input is acceptable.
+    public static string? NewCylinderError(string? serialNumber, string? barcode, string? gasType, decimal capacity)
+    {
+        string serial = (serialNumber ?? string.Empty).Trim();
+        if (serial.Length == 0)
+        {
+            return "Tüp seri numarası zorunludur.";
+        }
+
+        if (serial.Length > MaxCodeLength || (barcode ?? string.Empty).Trim().Length > MaxCodeLength)
+        {
+            return $"Seri numarası ve barkod en fazla {MaxCodeLength} karakter olabilir.";
+        }
+
+        if (string.IsNullOrWhiteSpace(gasType))
+        {
+            return "Gaz türü zorunludur.";
+        }
+
+        return capacity <= 0 ? "Tüp kapasitesi sıfırdan büyük olmalıdır." : null;
+    }
 }

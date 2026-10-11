@@ -16,6 +16,29 @@ public sealed class CrudService
  public async Task DeleteProductAsync(int id){await using var db=new ArsanGazDbContext();var e=await db.Products.FindAsync(id);if(e!=null){db.Products.Remove(e);await db.SaveChangesAsync();}}
  public async Task<List<Cylinder>> CylindersAsync(){await using var db=new ArsanGazDbContext();return await db.Cylinders.AsNoTracking().Include(x=>x.CurrentCustomer).OrderBy(x=>x.Barcode).ToListAsync();}
  public async Task<Cylinder> SaveCylinderAsync(Cylinder cylinder){await using var db=new ArsanGazDbContext();if(cylinder.Id==0)db.Cylinders.Add(cylinder);else db.Cylinders.Update(cylinder);await db.SaveChangesAsync();return cylinder;}
+ public async Task<Cylinder> RegisterCylinderAsync(string serialNumber,string? barcode,string gasType,decimal capacity,string? capacityUnit,bool? isFull,DateTime? testDueDate,string note)
+ {
+  string? error=CylinderTracking.NewCylinderError(serialNumber,barcode,gasType,capacity);
+  if(error!=null)throw new ArgumentException(error);
+  string serial=serialNumber.Trim();
+  string code=string.IsNullOrWhiteSpace(barcode)?serial:barcode.Trim();
+  await using var db=new ArsanGazDbContext();
+  var taken=await db.Cylinders.AsNoTracking().Select(x=>new{x.SerialNumber,x.Barcode}).ToListAsync();
+  bool Same(string a,string b)=>string.Equals(a,b,StringComparison.OrdinalIgnoreCase);
+  var clash=taken.FirstOrDefault(x=>Same(x.SerialNumber,serial)||Same(x.Barcode,serial)||Same(x.SerialNumber,code)||Same(x.Barcode,code));
+  if(clash!=null)throw new InvalidOperationException($"Bu kod zaten kayıtlı: {clash.SerialNumber} seri numaralı tüp.");
+  var cylinder=new Cylinder{SerialNumber=serial,Barcode=code,GasType=gasType.Trim(),Capacity=capacity,CapacityUnit=string.IsNullOrWhiteSpace(capacityUnit)?"Litre":capacityUnit.Trim(),Status=CylinderStatus.Warehouse,IsFull=isFull,TestDueDate=testDueDate?.Date,LastMovementAt=DateTime.Now};
+  db.Cylinders.Add(cylinder);
+  db.CylinderMovements.Add(new CylinderMovement{Cylinder=cylinder,FromStatus=CylinderStatus.Warehouse,ToStatus=CylinderStatus.Warehouse,MovementType="Envantere giriş",Description=note,MovementDate=DateTime.Now,IsFull=isFull});
+  await db.SaveChangesAsync();
+  return cylinder;
+ }
+ public async Task<List<string>> KnownGasTypesAsync()
+ {
+  await using var db=new ArsanGazDbContext();
+  var used=await db.Cylinders.AsNoTracking().Select(x=>x.GasType).Where(x=>x!="").Distinct().ToListAsync();
+  return used.Concat(CylinderTracking.CommonGasTypes).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+ }
  public async Task<Cylinder?> FindCylinderByCodeAsync(string code)
  {
   string value=code.Trim();
