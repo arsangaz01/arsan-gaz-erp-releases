@@ -1,7 +1,10 @@
 # Release APK'yı MobileApi indirme klasörüne kopyalar; sürüm meta dosyasını csproj'dan yazar.
 param(
     [string]$ApkPath = "",
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$NoServer,
+    [string]$ServerHost = "arsangaz@144.24.189.205",
+    [string]$ServerRoot = "/var/lib/arsangaz-data/prod/ArsanGazERP/MobileApi"
 )
 
 $ErrorActionPreference = "Stop"
@@ -55,3 +58,16 @@ $ver = Get-CsprojVersion
 
 Write-Host "APK kopyalandi: $destApk"
 Write-Host "Surum: $($ver.Name) build $($ver.Code)"
+
+# arsantuptakip.com/indir sunucudaki MobileApi'den yayinlanir; APK oraya da yuklenir.
+if (-not $NoServer) {
+    $key = Join-Path $env:USERPROFILE ".ssh\arsangaz_hetzner"
+    $remote = "$ServerHost`:$ServerRoot"
+    scp -i $key -q $destApk "$remote/ArsanGazERP-Mobil.apk.upload"
+    if ($LASTEXITCODE -ne 0) { throw "APK sunucuya yuklenemedi." }
+    scp -i $key -q $destMeta "$remote/ArsanGazERP-Mobil.apk.meta.json.upload"
+    if ($LASTEXITCODE -ne 0) { throw "APK meta sunucuya yuklenemedi." }
+    ssh -i $key $ServerHost "cd '$ServerRoot' && chmod 600 *.upload && mv -f ArsanGazERP-Mobil.apk.upload ArsanGazERP-Mobil.apk && mv -f ArsanGazERP-Mobil.apk.meta.json.upload ArsanGazERP-Mobil.apk.meta.json"
+    if ($LASTEXITCODE -ne 0) { throw "Sunucuda APK yerine konamadi." }
+    Write-Host "APK sunucuya yuklendi: $ServerHost ($ServerRoot)"
+}

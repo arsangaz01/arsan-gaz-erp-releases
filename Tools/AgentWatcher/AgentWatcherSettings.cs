@@ -36,6 +36,8 @@ internal sealed class AppSettings
     public string ResearchProvider { get; set; } = "SerpApi";
     public string GoogleSearchEngineId { get; set; } = "";
     public string TelegramChatId { get; set; } = "";
+    // true: the server agent owns Telegram getUpdates and the 7/24 relay heartbeat; this PC only sends messages.
+    public bool TelegramPollingDisabled { get; set; }
 
     public static AppSettings Load(string path)
     {

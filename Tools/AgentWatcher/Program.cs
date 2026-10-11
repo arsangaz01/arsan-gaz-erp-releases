@@ -1823,7 +1823,7 @@ internal sealed partial class ControlCenterForm : Form
         SetCard("Cloudflare Workers AI",CloudAgentClient.IsConfigured?"Worker yapılandırıldı":"Worker/erişim anahtarı yapılandırılmadı",CloudAgentClient.IsConfigured);
         SetCard("NVIDIA NIM",nv?"API anahtarı kayıtlı":FreeLlmChain.AnyConfigured?"Bağlı değil · ücretsiz yedek sağlayıcılar kullanılır":"Bağlı değil",nv||FreeLlmChain.AnyConfigured);
         SetCard("Görev Kuyruğu",$"{q} bekleyen",true);
-        SetCard("Telegram",telegram is null?"Chat ID veya bot yapılandırması eksik":telegram.StatusText,telegram?.IsConnected==true);
+        SetCard("Telegram",telegram is null?"Chat ID veya bot yapılandırması eksik":(telegram.SendOnly?"Yalnız gönderim (dinleme sunucuda) · ":"")+telegram.StatusText,telegram?.IsConnected==true);
         SetCard("Web Araştırma",googleResearch.IsPaidProviderConfigured?$"{settings.ResearchProvider} yapılandırıldı":googleResearch.ActiveProviderName,googleResearch.IsConfigured);
         SetCard("ERP İyileştirme Araştırması",
             !settings.EnableDailyResearch ? "Kapalı" :
@@ -3587,6 +3587,14 @@ internal sealed partial class ControlCenterForm : Form
         telegramCancellation = CancellationTokenSource.CreateLinkedTokenSource(closing.Token);
         TelegramBotService bot = telegram;
         CancellationToken token = telegramCancellation.Token;
+        if (settings.TelegramPollingDisabled)
+        {
+            Append("Telegram dinleme bu bilgisayarda kapalı (TelegramPollingDisabled); mesajları sunucu ajanı alıyor, burada yalnızca gönderim yapılır.");
+            telegramTask = bot.RunSendOnlyAsync(Append, token);
+            await Task.Yield();
+            return;
+        }
+
         telegramTask = bot.RunAsync(HandleTelegramCommandAsync, HandleTelegramCallbackAsync, Append, token,
             (updateId, caption, targetChatId, attachments, cancellationToken) =>
                 settings.ForwardTelegramCommandsToCopilotChat && !caption.TrimStart().StartsWith("/", StringComparison.Ordinal)
@@ -3633,6 +3641,11 @@ internal sealed partial class ControlCenterForm : Form
 
     async Task ExchangeCloudRelayAsync(CancellationToken cancellationToken)
     {
+        if (settings.TelegramPollingDisabled)
+        {
+            return;
+        }
+
         CloudRelayHeartbeat? heartbeat = await CloudTelegramRelay.SendHeartbeatAsync(cancellationToken);
         if (heartbeat is null)
         {

@@ -1,0 +1,70 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Sunucu (Linux) Telegram/otomasyon ajanı. Yayın: Tools/ServerAgent/deploy/Publish-ServerAgent.ps1 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ArsanGazERP.ServerAgent</RootNamespace>
+    <AssemblyName>ArsanGazERP.ServerAgent</AssemblyName>
+    <Version>1.0.0</Version>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;deploy\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.90.1" />
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.90.1" />
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Data\ArsanGazDbContext.cs" Link="Shared\ArsanGazDbContext.cs" />
+    <Compile Include="..\..\Data\CrmDbContext.cs" Link="Shared\CrmDbContext.cs" />
+    <Compile Include="..\..\Data\ArsanDatabase.cs" Link="Shared\ArsanDatabase.cs" />
+    <Compile Include="..\..\Data\ArsanDbEf.cs" Link="Shared\ArsanDbEf.cs" />
+    <Compile Include="..\..\Data\PostgresSchema.cs" Link="Shared\PostgresSchema.cs" />
+    <Compile Include="..\..\Models\*.cs" Link="Shared\Models\%(Filename).cs" />
+    <Compile Include="..\..\Services\AgentChatService.cs" Link="Shared\AgentChatService.cs" />
+    <Compile Include="..\..\Services\AgentChatPromptBuilder.cs" Link="Shared\AgentChatPromptBuilder.cs" />
+    <Compile Include="..\..\Services\AgentChatRoutingPolicy.cs" Link="Shared\AgentChatRoutingPolicy.cs" />
+    <Compile Include="..\..\Services\AgentWatcherPaths.cs" Link="Shared\AgentWatcherPaths.cs" />
+    <Compile Include="..\..\Services\CampaignScheduler.cs" Link="Shared\CampaignScheduler.cs" />
+    <Compile Include="..\..\Services\CampaignService.cs" Link="Shared\CampaignService.cs" />
+    <Compile Include="..\..\Services\CampaignStore.cs" Link="Shared\CampaignStore.cs" />
+    <Compile Include="..\..\Services\CampaignTransport.cs" Link="Shared\CampaignTransport.cs" />
+    <Compile Include="..\..\Services\GmailSenderService.cs" Link="Shared\GmailSenderService.cs" />
+    <Compile Include="..\..\Services\LocalDataProtector.cs" Link="Shared\LocalDataProtector.cs" />
+    <Compile Include="..\..\Services\WhatsAppBusinessService.cs" Link="Shared\WhatsAppBusinessService.cs" />
+    <Compile Include="..\..\Services\CloudAgentClient.cs" Link="Shared\CloudAgentClient.cs" />
+    <Compile Include="..\..\Services\CloudAgentSettingsStore.cs" Link="Shared\CloudAgentSettingsStore.cs" />
+    <Compile Include="..\..\Services\CollectionReminderService.cs" Link="Shared\CollectionReminderService.cs" />
+    <Compile Include="..\..\Services\CrmEmailFinderService.cs" Link="Shared\CrmEmailFinderService.cs" />
+    <Compile Include="..\..\Services\CrudService.cs" Link="Shared\CrudService.cs" />
+    <Compile Include="..\..\Services\CylinderSchemaService.cs" Link="Shared\CylinderSchemaService.cs" />
+    <Compile Include="..\..\Services\CylinderTracking.cs" Link="Shared\CylinderTracking.cs" />
+    <Compile Include="..\..\Services\CursorEscalationService.cs" Link="Shared\CursorEscalationService.cs" />
+    <Compile Include="..\..\Services\CursorJarvisBrain.cs" Link="Shared\CursorJarvisBrain.cs" />
+    <Compile Include="..\..\Services\DailyBriefingService.cs" Link="Shared\DailyBriefingService.cs" />
+    <Compile Include="..\..\Services\ErpContextSnapshotService.cs" Link="Shared\ErpContextSnapshotService.cs" />
+    <Compile Include="..\..\Services\FreeLlmProviders.cs" Link="Shared\FreeLlmProviders.cs" />
+    <Compile Include="..\..\Services\JarvisAgentProtocol.cs" Link="Shared\JarvisAgentProtocol.cs" />
+    <Compile Include="..\..\Services\JarvisAgentService.cs" Link="Shared\JarvisAgentService.cs" />
+    <Compile Include="..\..\Services\LiveInfoService.cs" Link="Shared\LiveInfoService.cs" />
+    <Compile Include="..\..\Services\NvidiaNimService.cs" Link="Shared\NvidiaNimService.cs" />
+    <Compile Include="..\..\Services\PcCommandService.cs" Link="Shared\PcCommandService.cs" />
+    <Compile Include="..\..\Services\ReorderPrediction.cs" Link="Shared\ReorderPrediction.cs" />
+    <Compile Include="..\..\Services\SystemSupervisorService.cs" Link="Shared\SystemSupervisorService.cs" />
+    <Compile Include="..\..\Services\WebResearchService.cs" Link="Shared\WebResearchService.cs" />
+    <Compile Include="..\ErpMcpServer\ErpTools.cs" Link="Shared\ErpTools.cs" />
+    <Compile Include="..\AgentWatcher\TelegramBotService.cs" Link="Telegram\TelegramBotService.cs" />
+    <Compile Include="..\AgentWatcher\TelegramCopilotInbox.cs" Link="Telegram\TelegramCopilotInbox.cs" />
+    <Compile Include="..\AgentWatcher\TelegramQueuePolicy.cs" Link="Telegram\TelegramQueuePolicy.cs" />
+    <Compile Include="..\AgentWatcher\TelegramWorkflowNotice.cs" Link="Telegram\TelegramWorkflowNotice.cs" />
+  </ItemGroup>
+
+</Project>

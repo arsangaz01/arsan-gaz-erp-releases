@@ -1,0 +1,33 @@
+# ArsanGazERP sunucu ajanı: Telegram giden kutusu, tahsilat hatırlatmaları, (açıksa) Telegram dinleme ve 7/24 röle
+# sinyali, (açıksa) kampanya zamanlayıcısı. Ayarlar ve gizli değerler: /etc/arsangaz/serveragent.env (0600 root),
+# Tools/ServerAgent/Set-ServerSecret.ps1 ile yazılır.
+[Unit]
+Description=ArsanGazERP sunucu ajani (Telegram + otomatik isler)
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=arsangaz
+Group=arsangaz
+WorkingDirectory=/opt/arsangaz/serveragent
+EnvironmentFile=/etc/arsangaz/postgres.env
+EnvironmentFile=/etc/arsangaz/serveragent.env
+Environment=ARSANGAZ_DATA_DIR=/var/lib/arsangaz-data/prod
+Environment=ARSANGAZ_DB_PROVIDER=postgres
+Environment=ARSANGAZ_OWNER_SID=S-1-5-21-236224559-700927456-377575018-1001
+Environment=HOME=/var/lib/arsangaz-data/prod
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=DOTNET_NOLOGO=1
+ExecStart=/usr/bin/dotnet /opt/arsangaz/serveragent/ArsanGazERP.ServerAgent.dll
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/arsangaz-data/prod
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

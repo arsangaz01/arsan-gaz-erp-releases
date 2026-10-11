@@ -264,6 +264,51 @@ internal sealed class TelegramBotService : IDisposable
         }
     }
 
+    public bool SendOnly { get; private set; }
+
+    // Telegram allows a single getUpdates consumer per bot. When another host (the server agent) listens, this
+    // instance only sends; a periodic getMe keeps IsConnected meaningful for the outbox and report senders.
+    public async Task RunSendOnlyAsync(Action<string> log, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+        SendOnly = true;
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                using JsonDocument _ = await CallAsync("getMe", null, cancellationToken);
+                lock (_statusLock)
+                {
+                    _lastSuccessUtc = DateTime.UtcNow;
+                    _lastError = null;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                string message = Redact(exception.GetBaseException().Message);
+                lock (_statusLock)
+                {
+                    _lastError = message;
+                }
+
+                log("Telegram gönderim bağlantısı hatası: " + message);
+            }
+
+            try
+            {
+                await _retryDelay(TimeSpan.FromSeconds(30), cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+        }
+    }
+
     public async Task RunAsync(
         Func<long, string, long, CancellationToken, Task<string>> handleCommand,
         Func<long, string, long, CancellationToken, Task<string>> handleCallback,

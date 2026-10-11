@@ -1,0 +1,9 @@
+tunnel: c54e80e5-f98a-416f-969a-d72f68014324
+credentials-file: /etc/cloudflared/c54e80e5-f98a-416f-969a-d72f68014324.json
+no-autoupdate: true
+ingress:
+  - hostname: arsantuptakip.com
+    service: http://127.0.0.1:5077
+  - hostname: www.arsantuptakip.com
+    service: http://127.0.0.1:5077
+  - service: http_status:404

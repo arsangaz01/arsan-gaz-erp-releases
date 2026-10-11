@@ -1,0 +1,21 @@
+# arsantuptakip.com adlandırılmış Cloudflare tüneli (c54e80e5-...). Ayar: /etc/cloudflared/config.yml,
+# kimlik: /etc/cloudflared/c54e80e5-f98a-416f-969a-d72f68014324.json (ikisi de 0600 root).
+# Aynı tünel ofis PC'sinde de tanımlı; PC tarafı tunnel-disabled.txt işaretiyle kapalı tutulur (tek bağlayıcı).
+[Unit]
+Description=Cloudflare Tunnel (arsantuptakip.com -> MobileApi)
+After=network-online.target arsangaz-mobileapi-prod.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config /etc/cloudflared/config.yml tunnel run
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=0
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

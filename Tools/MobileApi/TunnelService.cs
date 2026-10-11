@@ -14,6 +14,12 @@ internal sealed partial class TunnelService : BackgroundService
 
     private static bool UsesNamedTunnel => File.Exists(NamedTunnelConfig) && MobilePublicUrl.IsStableConfigured;
 
+    // The public tunnel now runs on the server; this marker keeps the PC from starting a second connector.
+    // Deleting the file re-enables the PC tunnel within a minute (rollback) without restarting MobileApi.
+    internal static string DisabledMarker => Path.Combine(MobileApiPaths.Root, "tunnel-disabled.txt");
+
+    private static bool IsDisabled => File.Exists(DisabledMarker);
+
     public static string? CurrentUrl { get; private set; }
 
     internal static void ApplyPreferredPublicUrl()
@@ -37,8 +43,28 @@ internal sealed partial class TunnelService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         TimeSpan delay = TimeSpan.FromSeconds(5);
+        bool disabledLogged = false;
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (IsDisabled)
+            {
+                if (!disabledLogged)
+                {
+                    disabledLogged = true;
+                    StopOwnTunnels();
+                    MobileLog.Write("Tünel bu bilgisayarda kapalı (" + Path.GetFileName(DisabledMarker) + "); genel adres sunucudan yayınlanıyor.");
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                continue;
+            }
+
+            if (disabledLogged)
+            {
+                disabledLogged = false;
+                MobileLog.Write("Tünel kapatma işareti kaldırıldı; bu bilgisayarın tüneli yeniden başlatılıyor.");
+            }
+
             if (!File.Exists(MobileApiPaths.CloudflaredExe))
             {
                 MobileLog.Write("cloudflared.exe bulunamadı; uzaktan erişim kapalı: " + MobileApiPaths.CloudflaredExe);
@@ -50,7 +76,20 @@ internal sealed partial class TunnelService : BackgroundService
             try
             {
                 using Process tunnel = AdoptRunningTunnel() ?? await StartTunnelAsync(stoppingToken);
-                await tunnel.WaitForExitAsync(stoppingToken);
+                while (!tunnel.HasExited)
+                {
+                    await Task.WhenAny(tunnel.WaitForExitAsync(stoppingToken), Task.Delay(TimeSpan.FromSeconds(15), stoppingToken));
+                    stoppingToken.ThrowIfCancellationRequested();
+                    if (IsDisabled)
+                    {
+                        break;
+                    }
+                }
+
+                if (IsDisabled)
+                {
+                    continue;
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -91,6 +130,25 @@ internal sealed partial class TunnelService : BackgroundService
         }
 
         return own;
+    }
+
+    private static void StopOwnTunnels()
+    {
+        foreach (Process process in FindOwnTunnels())
+        {
+            using (process)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit(5000);
+                    MobileLog.Write("Bu bilgisayardaki cloudflared kapatıldı (PID " + process.Id + ").");
+                }
+                catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+                {
+                }
+            }
+        }
     }
 
     private static Process? AdoptRunningTunnel()

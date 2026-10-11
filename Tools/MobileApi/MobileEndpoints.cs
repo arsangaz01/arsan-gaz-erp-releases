@@ -50,7 +50,7 @@ internal static class MobileEndpoints
                 update.ApkReady,
                 update.ApkSizeBytes,
                 downloadUrl = update.DownloadPath,
-                note = "APK yalnızca bilgisayardaki MobileApi üzerinden indirilir; kurulumdan sonra eşleşme anahtarı korunur."
+                note = "APK bu sunucunun /indir adresinden indirilir; kurulumdan sonra eşleşme anahtarı korunur."
             });
         });
 
