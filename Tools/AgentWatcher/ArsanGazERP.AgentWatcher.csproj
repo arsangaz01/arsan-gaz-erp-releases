@@ -32,6 +32,7 @@
     <Compile Include="..\..\Services\CampaignTransport.cs" Link="CampaignTransport.cs" />
     <Compile Include="..\..\Services\WhatsAppBusinessService.cs" Link="WhatsAppBusinessService.cs" />
     <Compile Include="..\..\Services\GmailSenderService.cs" Link="GmailSenderService.cs" />
+    <Compile Include="..\..\Services\LocalDataProtector.cs" Link="LocalDataProtector.cs" />
     <Compile Include="..\..\Services\CopilotAgentRuntime.cs" Link="CopilotAgentRuntime.cs" />
     <Compile Include="..\..\Services\CloudAgentClient.cs" Link="CloudAgentClient.cs" />
     <Compile Include="..\..\Services\JarvisAgentProtocol.cs" Link="JarvisAgentProtocol.cs" />

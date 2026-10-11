@@ -39,7 +39,7 @@ public sealed class GmailSenderService
     {
         if (!File.Exists(settingsPath))
             throw new InvalidOperationException("Gmail gönderici ayarları yapılmamış (Tools\\Set-GmailSender.ps1).");
-        byte[] clearBytes = ProtectedData.Unprotect(File.ReadAllBytes(settingsPath), null, DataProtectionScope.CurrentUser);
+        byte[] clearBytes = LocalDataProtector.Unprotect(File.ReadAllBytes(settingsPath));
         Settings settings = JsonSerializer.Deserialize<Settings>(clearBytes)
             ?? throw new InvalidOperationException("Gmail gönderici ayar dosyası okunamadı.");
         if (!MailAddress.TryCreate(settings.Address, out _) || string.IsNullOrWhiteSpace(settings.AppPassword))
@@ -56,9 +56,9 @@ public sealed class GmailSenderService
             throw new ArgumentException("Uygulama şifresi boş veya çok kısa.", nameof(appPassword));
         Settings settings = new(parsed.Address, password, string.IsNullOrWhiteSpace(displayName) ? parsed.Address : displayName.Trim());
         Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
-        byte[] protectedBytes = ProtectedData.Protect(JsonSerializer.SerializeToUtf8Bytes(settings), null, DataProtectionScope.CurrentUser);
+        byte[] protectedBytes = LocalDataProtector.Protect(JsonSerializer.SerializeToUtf8Bytes(settings));
         string temporaryPath = settingsPath + ".tmp";
-        File.WriteAllBytes(temporaryPath, protectedBytes);
+        LocalDataProtector.WriteAllBytes(temporaryPath, protectedBytes);
         File.Move(temporaryPath, settingsPath, true);
     }
 

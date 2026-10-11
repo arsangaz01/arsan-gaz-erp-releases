@@ -1,6 +1,8 @@
 # Build and publish outputs
 bin/
 obj/
+bin-linux/
+obj-linux/
 publish*/
 artifacts/
 TestResults/

@@ -41,7 +41,7 @@ public sealed class CampaignStore
         this.attachmentRoot = Path.GetFullPath(attachmentRoot ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ArsanGazERP", "CampaignAttachments"));
-        this.ownerSid = ownerSid ?? WindowsIdentity.GetCurrent().User?.Value
+        this.ownerSid = ownerSid ?? CurrentOwnerSid()
             ?? throw new InvalidOperationException("Windows owner SID is unavailable; campaign data cannot be isolated.");
         this.utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
         OwnerSid = this.ownerSid;
@@ -82,14 +82,25 @@ ON CONFLICT(OwnerSid) DO UPDATE SET ExecutionEnabled=excluded.ExecutionEnabled, 
 
     public static CampaignStore CreateForCurrentWindowsUser()
     {
-        string crmDatabasePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments),
-            "ArsanGazERP", "CRM", "arsangaz-crm.db");
-        string erpDatabasePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ArsanGazERP", "Data", "arsangaz-erp-v3.db");
+        string crmDatabasePath = Environment.GetEnvironmentVariable("ARSANGAZ_CRM_DB") is { Length: > 0 } crm
+            ? crm
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments),
+                "ArsanGazERP", "CRM", "arsangaz-crm.db");
+        string erpDatabasePath = Environment.GetEnvironmentVariable("ARSANGAZ_ERP_DB") is { Length: > 0 } erp
+            ? erp
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ArsanGazERP", "Data", "arsangaz-erp-v3.db");
         return new CampaignStore(crmDatabasePath, erpDatabasePath);
     }
+
+    // Campaign rows are keyed by the Windows SID of the office PC user; the Linux server has no Windows identity, so
+    // it must be told which owner's data it serves (ARSANGAZ_OWNER_SID), otherwise campaigns stay unavailable there.
+    private static string? CurrentOwnerSid() =>
+        OperatingSystem.IsWindows()
+            ? WindowsIdentity.GetCurrent().User?.Value
+            : Environment.GetEnvironmentVariable("ARSANGAZ_OWNER_SID") is { Length: > 0 } sid ? sid : null;
 
     public string OwnerSid { get; }
     public DateTimeOffset UtcNow => utcNow().ToUniversalTime();

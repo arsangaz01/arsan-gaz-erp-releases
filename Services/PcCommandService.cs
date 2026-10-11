@@ -133,6 +133,11 @@ internal static class PcCommandService
     public static string Execute(PcCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+        if (!OperatingSystem.IsWindows())
+        {
+            return "Bilgisayar kontrol komutları sunucu (Linux) sürümünde kapalıdır; bu komutlar yalnızca ofis bilgisayarındaki ERP ile çalışır.";
+        }
+
         switch (command.Kind)
         {
             case PcCommandKind.OpenApp:

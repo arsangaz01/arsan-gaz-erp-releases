@@ -251,8 +251,18 @@ internal sealed class DeviceAuthMiddleware(RequestDelegate next, DeviceStore dev
 
 internal static class TelegramNotifier
 {
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
+
     public static void Send(string text)
     {
+        if (!OperatingSystem.IsWindows()
+            && Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN") is { Length: > 0 } botToken
+            && Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID") is { Length: > 0 } chatIdText)
+        {
+            _ = SendDirectAsync(botToken, chatIdText, text);
+            return;
+        }
+
         try
         {
             string data = Path.GetDirectoryName(ArsanGazERP.Services.AgentWatcherPaths.SettingsFile)!;
@@ -290,6 +300,29 @@ internal static class TelegramNotifier
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException)
         {
             MobileLog.Write("Telegram bildirimi kuyruğa yazılamadı: " + exception.GetBaseException().Message);
+        }
+    }
+
+    // The Linux server has no AgentWatcher outbox, so notifications go straight to the Bot API.
+    private static async Task SendDirectAsync(string botToken, string chatId, string text)
+    {
+        try
+        {
+            using FormUrlEncodedContent body = new(new Dictionary<string, string>
+            {
+                ["chat_id"] = chatId,
+                ["text"] = text.Length > 4000 ? text[..4000] : text,
+                ["disable_web_page_preview"] = "true"
+            });
+            using HttpResponseMessage response = await Http.PostAsync($"https://api.telegram.org/bot{botToken}/sendMessage", body);
+            if (!response.IsSuccessStatusCode)
+            {
+                MobileLog.Write($"Telegram bildirimi gönderilemedi (HTTP {(int)response.StatusCode}).");
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            MobileLog.Write("Telegram bildirimi gönderilemedi: " + exception.GetBaseException().Message);
         }
     }
 }

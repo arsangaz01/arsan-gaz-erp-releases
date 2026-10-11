@@ -50,7 +50,7 @@ public sealed class WhatsAppBusinessService
         }
 
         byte[] protectedBytes = File.ReadAllBytes(settingsPath);
-        byte[] clearBytes = ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.CurrentUser);
+        byte[] clearBytes = LocalDataProtector.Unprotect(protectedBytes);
         return JsonSerializer.Deserialize<Settings>(clearBytes)
             ?? throw new InvalidOperationException("WhatsApp Business API ayar dosyası okunamadı.");
     }
@@ -97,11 +97,11 @@ public sealed class WhatsAppBusinessService
     {
         Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
         byte[] clearBytes = JsonSerializer.SerializeToUtf8Bytes(settings);
-        byte[] protectedBytes = ProtectedData.Protect(clearBytes, null, DataProtectionScope.CurrentUser);
+        byte[] protectedBytes = LocalDataProtector.Protect(clearBytes);
         string temporaryPath = settingsPath + ".tmp";
         try
         {
-            File.WriteAllBytes(temporaryPath, protectedBytes);
+            LocalDataProtector.WriteAllBytes(temporaryPath, protectedBytes);
             File.Move(temporaryPath, settingsPath, true);
         }
         finally

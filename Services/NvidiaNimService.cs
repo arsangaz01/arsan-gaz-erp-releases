@@ -30,8 +30,8 @@ public sealed class NvidiaNimService
         string key = apiKey?.Trim() ?? string.Empty;
         if (!key.StartsWith("nvapi-", StringComparison.Ordinal)) throw new ArgumentException("NVIDIA API anahtari nvapi- ile baslamalidir.");
         Directory.CreateDirectory(Folder);
-        byte[] encrypted = ProtectedData.Protect(Encoding.UTF8.GetBytes(key), null, DataProtectionScope.CurrentUser);
-        File.WriteAllBytes(KeyFile, encrypted);
+        byte[] encrypted = LocalDataProtector.Protect(Encoding.UTF8.GetBytes(key));
+        LocalDataProtector.WriteAllBytes(KeyFile, encrypted);
         Model = string.IsNullOrWhiteSpace(model) ? DefaultModel : model.Trim();
         File.WriteAllText(SettingsFile, JsonSerializer.Serialize(new { model = Model }, new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
     }
@@ -76,7 +76,7 @@ public sealed class NvidiaNimService
         if (File.Exists(KeyFile))
         {
             return Encoding.UTF8.GetString(
-                ProtectedData.Unprotect(File.ReadAllBytes(KeyFile), null, DataProtectionScope.CurrentUser));
+                LocalDataProtector.Unprotect(File.ReadAllBytes(KeyFile)));
         }
 
         string? userKey = Environment.GetEnvironmentVariable("NVIDIA_API_KEY", EnvironmentVariableTarget.User);

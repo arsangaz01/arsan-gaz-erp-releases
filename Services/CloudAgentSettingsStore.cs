@@ -76,10 +76,9 @@ public static class CloudAgentSettingsStore
 
             if (!string.IsNullOrWhiteSpace(accessToken))
             {
-                byte[] protectedToken = ProtectedData.Protect(
+                byte[] protectedToken = LocalDataProtector.Protect(
                     Encoding.UTF8.GetBytes(accessToken.Trim()),
-                    Entropy,
-                    DataProtectionScope.CurrentUser);
+                    Entropy);
                 WriteAtomically(TokenPath, protectedToken);
             }
         }
@@ -143,7 +142,7 @@ public static class CloudAgentSettingsStore
             {
                 byte[] protectedToken = File.ReadAllBytes(TokenPath);
                 return Encoding.UTF8.GetString(
-                    ProtectedData.Unprotect(protectedToken, Entropy, DataProtectionScope.CurrentUser));
+                    LocalDataProtector.Unprotect(protectedToken, Entropy));
             }
             catch (Exception exception) when (
                 exception is IOException or CryptographicException or UnauthorizedAccessException)
@@ -188,7 +187,7 @@ public static class CloudAgentSettingsStore
     {
         Directory.CreateDirectory(Folder);
         string temporaryPath = path + ".tmp";
-        File.WriteAllBytes(temporaryPath, contents);
+        LocalDataProtector.WriteAllBytes(temporaryPath, contents);
         File.Move(temporaryPath, path, overwrite: true);
     }
 

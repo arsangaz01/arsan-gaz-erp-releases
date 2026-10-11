@@ -22,6 +22,7 @@
     <Compile Include="..\..\Services\CampaignTransport.cs" Link="CampaignTransport.cs" />
     <Compile Include="..\..\Services\WhatsAppBusinessService.cs" Link="WhatsAppBusinessService.cs" />
     <Compile Include="..\..\Services\GmailSenderService.cs" Link="GmailSenderService.cs" />
+    <Compile Include="..\..\Services\LocalDataProtector.cs" Link="LocalDataProtector.cs" />
     <Compile Include="..\AgentWatcher\GozcuAutonomy.cs" Link="GozcuAutonomy.cs" />
     <Compile Include="..\AgentWatcher\AgentRecommendationPolicy.cs" Link="AgentRecommendationPolicy.cs" />
     <Compile Include="..\AgentWatcher\LocalTestAutomation.cs" Link="LocalTestAutomation.cs" />

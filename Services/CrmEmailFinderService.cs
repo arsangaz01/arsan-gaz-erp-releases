@@ -58,8 +58,7 @@ internal static partial class CrmEmailFinderService
     internal static string ChangesPath => Path.Combine(StateDirectory, "changes.jsonl");
     private static string LockPath => Path.Combine(StateDirectory, "run.lock");
 
-    public static string CrmDatabasePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments), "ArsanGazERP", "CRM", "arsangaz-crm.db");
+    public static string CrmDatabasePath => ArsanGazERP.Data.CrmDbContext.SharedDatabasePath;
 
     /// <summary>Starts a background batch and returns immediately with a short Turkish status line.</summary>
     public static async Task<string> StartBatchAsync(int limit, bool searchWeb, string? city, CancellationToken cancellationToken)

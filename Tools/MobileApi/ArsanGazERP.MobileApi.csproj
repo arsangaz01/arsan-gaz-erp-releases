@@ -11,6 +11,20 @@
     <Version>1.4.0</Version>
   </PropertyGroup>
 
+  <!-- Linux sunucu derlemesi: dotnet publish -p:ArsanLinux=true -c Release -->
+  <PropertyGroup Condition="'$(ArsanLinux)' == 'true'">
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>linux-arm64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <DefineConstants>$(DefineConstants);ARSAN_LINUX</DefineConstants>
+    <BaseOutputPath>bin-linux\</BaseOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;bin-linux\**;obj-linux\**</DefaultItemExcludes>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.90.1" />
@@ -32,6 +46,7 @@
     <Compile Include="..\..\Services\CampaignStore.cs" Link="Shared\CampaignStore.cs" />
     <Compile Include="..\..\Services\CampaignTransport.cs" Link="Shared\CampaignTransport.cs" />
     <Compile Include="..\..\Services\GmailSenderService.cs" Link="Shared\GmailSenderService.cs" />
+    <Compile Include="..\..\Services\LocalDataProtector.cs" Link="Shared\LocalDataProtector.cs" />
     <Compile Include="..\..\Services\WhatsAppBusinessService.cs" Link="Shared\WhatsAppBusinessService.cs" />
     <Compile Include="..\..\Services\CloudAgentClient.cs" Link="Shared\CloudAgentClient.cs" />
     <Compile Include="..\..\Services\CloudAgentSettingsStore.cs" Link="Shared\CloudAgentSettingsStore.cs" />

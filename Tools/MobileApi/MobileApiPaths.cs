@@ -25,6 +25,11 @@ internal static class MobileLog
     public static void Write(string message)
     {
         string line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}";
+        if (!OperatingSystem.IsWindows())
+        {
+            Console.Out.Write(line);
+        }
+
         lock (Gate)
         {
             try

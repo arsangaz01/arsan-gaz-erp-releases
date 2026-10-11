@@ -1,6 +1,13 @@
 using System.Text.Json;
 using ArsanGazERP.MobileApi;
 
+// Linux: every LocalApplicationData path (MobileApi, AgentWatcher data, CloudAgent, Gmail...) resolves under
+// $XDG_DATA_HOME, so ARSANGAZ_DATA_DIR relocates them all. Must run before any path class is touched.
+if (!OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable("ARSANGAZ_DATA_DIR") is { Length: > 0 } dataDirectory)
+{
+    Environment.SetEnvironmentVariable("XDG_DATA_HOME", dataDirectory);
+}
+
 if (args is ["--yerel-eslestir", { Length: > 0 } localDeviceName, { Length: > 0 } tokenFile])
 {
     MobileApiPaths.Ensure();
@@ -97,6 +104,10 @@ WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicat
     ContentRootPath = AppContext.BaseDirectory
 });
 builder.Logging.ClearProviders();
+if (!OperatingSystem.IsWindows())
+{
+    builder.Logging.AddSimpleConsole(options => options.SingleLine = true).SetMinimumLevel(LogLevel.Warning);
+}
 builder.WebHost.UseUrls($"http://127.0.0.1:{MobileApiPaths.Port}");
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 80 * 1024 * 1024);
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -107,7 +118,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddSingleton<DeviceStore>();
 builder.Services.AddSingleton<PairingService>();
 builder.Services.AddSingleton<MobileChatService>();
-builder.Services.AddHostedService<TunnelService>();
+if (OperatingSystem.IsWindows())
+{
+    builder.Services.AddHostedService<TunnelService>();
+}
+else
+{
+    MobileLog.Write("Linux sunucu modu: tünel (cloudflared) ayrı systemd servisi olarak çalışır; PC kontrol komutları kapalı.");
+}
 builder.Services.AddHostedService<CursorRelayNotifier>();
 
 WebApplication app = builder.Build();

@@ -67,6 +67,11 @@ internal static class MobileConnectionHub
 
     private static string BuildHint(bool erp, bool watcher, bool telegram, bool cursorBridge, string? publicUrl)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return "Sunucu (Linux) sürümü: bilgisayar kontrol komutları kapalı; ERP, Watcher ve Cursor köprüsü ofis bilgisayarında çalışır ve buradan izlenemez.";
+        }
+
         if (publicUrl is null or { Length: 0 })
         {
             return "Uzaktan adres henüz hazır değil. Bilgisayarda MobileApi ve tünel çalışıyor olmalı.";

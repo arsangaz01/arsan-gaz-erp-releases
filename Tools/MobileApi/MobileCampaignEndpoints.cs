@@ -41,6 +41,22 @@ internal static class MobileCampaignEndpoints
 
     public static void Map(WebApplication app)
     {
+        // Campaign rows belong to a Windows user SID; on Linux the owner must be configured explicitly.
+        if (!OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable("ARSANGAZ_OWNER_SID") is not { Length: > 0 })
+        {
+            app.Use(async (context, next) =>
+            {
+                if (context.Request.Path.StartsWithSegments("/api/kampanya"))
+                {
+                    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                    await context.Response.WriteAsJsonAsync(new { error = "Kampanyalar bu sunucuda henüz etkin değil (ARSANGAZ_OWNER_SID ayarlanmamış)." });
+                    return;
+                }
+
+                await next(context);
+            });
+        }
+
         app.MapGet("/api/kampanya/durum", async (CancellationToken ct) =>
         {
             WhatsAppBusinessService whatsApp = new();

@@ -54,8 +54,8 @@ public static class FreeLlmChain
         if (key.Length < 10) throw new ArgumentException("API anahtarı geçersiz görünüyor.", nameof(apiKey));
         Find(providerId);
         Directory.CreateDirectory(Folder);
-        File.WriteAllBytes(KeyFile(providerId),
-            ProtectedData.Protect(Encoding.UTF8.GetBytes(key), null, DataProtectionScope.CurrentUser));
+        LocalDataProtector.WriteAllBytes(KeyFile(providerId),
+            LocalDataProtector.Protect(Encoding.UTF8.GetBytes(key)));
     }
 
     public static void RemoveKey(string providerId)
@@ -202,7 +202,7 @@ public static class FreeLlmChain
         if (!File.Exists(path)) return null;
         try
         {
-            return Encoding.UTF8.GetString(ProtectedData.Unprotect(File.ReadAllBytes(path), null, DataProtectionScope.CurrentUser));
+            return Encoding.UTF8.GetString(LocalDataProtector.Unprotect(File.ReadAllBytes(path)));
         }
         catch (CryptographicException)
         {
