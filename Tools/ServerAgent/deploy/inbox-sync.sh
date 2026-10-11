@@ -33,7 +33,8 @@ case "${1:-}" in
     base64 -w0 "$INBOX/$2.request.json"
     ;;
   file)
-    path=$(realpath -e -- "${2:-}")
+    # The path arrives base64-encoded (UTF-8) so non-ASCII file names survive the Windows ssh command line.
+    path=$(realpath -e -- "$(printf '%s' "${2:-}" | base64 -d)")
     case "$path" in
       "$DATA"/*) base64 -w0 "$path" ;;
       *) echo "outside data dir" >&2; exit 3 ;;
@@ -51,7 +52,8 @@ case "${1:-}" in
     valid_id "${2:-}"
     case "${3:-}" in completion|ack|progress|ide-claim) ;; *) echo "invalid kind" >&2; exit 3 ;; esac
     target="$INBOX/$2.$3.json"
-    base64 -d > "$target.tmp"
+    tr -d '\r\n' | base64 -d > "$target.tmp"
+    [ -s "$target.tmp" ] || { rm -f "$target.tmp"; echo "empty content" >&2; exit 4; }
     mv -f "$target.tmp" "$target"
     ;;
   *)
