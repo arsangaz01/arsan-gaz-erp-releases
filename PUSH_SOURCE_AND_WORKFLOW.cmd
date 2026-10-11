@@ -11,7 +11,7 @@ if errorlevel 1 (
 if not exist ".git" git init
 
 git remote get-url origin >nul 2>nul
-if errorlevel 1 git remote add origin https://github.com/arsangaz01/arsan-gaz-erp-releases.git
+if errorlevel 1 git remote add origin https://github.com/arsangaz01/arsan-gaz-erp-kaynak.git
 
 git add .
 git commit -m "Arsan Gaz ERP V6 CI and Setup pipeline"
