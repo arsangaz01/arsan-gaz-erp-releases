@@ -9,6 +9,11 @@ internal sealed partial class TunnelService : BackgroundService
 {
     private static readonly string TunnelLogFile = Path.Combine(MobileApiPaths.Root, "cloudflared.log");
 
+    // A named tunnel (fixed domain) is used instead of a quick tunnel when this cloudflared config exists.
+    private static string NamedTunnelConfig => Path.Combine(MobileApiPaths.Root, "named-tunnel.yml");
+
+    private static bool UsesNamedTunnel => File.Exists(NamedTunnelConfig) && MobilePublicUrl.IsStableConfigured;
+
     public static string? CurrentUrl { get; private set; }
 
     internal static void ApplyPreferredPublicUrl()
@@ -91,7 +96,7 @@ internal sealed partial class TunnelService : BackgroundService
     private static Process? AdoptRunningTunnel()
     {
         List<Process> running = FindOwnTunnels();
-        string? url = ReadUrlFromLog();
+        string? url = UsesNamedTunnel ? NamedTunnelReady() : ReadUrlFromLog();
         if (running.Count == 1 && url is not null)
         {
             MobileLog.Write($"Çalışan tünel devralındı (PID {running[0].Id}).");
@@ -106,6 +111,7 @@ internal sealed partial class TunnelService : BackgroundService
                 try
                 {
                     process.Kill(entireProcessTree: true);
+                    process.WaitForExit(5000);
                     MobileLog.Write("Adresi okunamayan eski cloudflared kapatıldı (PID " + process.Id + ").");
                 }
                 catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
@@ -126,20 +132,20 @@ internal sealed partial class TunnelService : BackgroundService
             CreateNoWindow = true,
             WorkingDirectory = MobileApiPaths.Root
         };
-        foreach (string argument in new[]
-                 {
-                     "tunnel", "--no-autoupdate", "--logfile", TunnelLogFile,
-                     "--url", $"http://127.0.0.1:{MobileApiPaths.Port}"
-                 })
+        bool named = UsesNamedTunnel;
+        string[] arguments = named
+            ? ["tunnel", "--no-autoupdate", "--logfile", TunnelLogFile, "--config", NamedTunnelConfig, "run"]
+            : ["tunnel", "--no-autoupdate", "--logfile", TunnelLogFile, "--url", $"http://127.0.0.1:{MobileApiPaths.Port}"];
+        foreach (string argument in arguments)
         {
             start.ArgumentList.Add(argument);
         }
 
         Process process = Process.Start(start) ?? throw new InvalidOperationException("cloudflared başlatılamadı.");
-        MobileLog.Write("cloudflared başlatıldı (PID " + process.Id + ").");
+        MobileLog.Write($"cloudflared başlatıldı (PID {process.Id}, {(named ? "sabit alan adı" : "geçici adres")}).");
         for (int attempt = 0; attempt < 120 && !process.HasExited; attempt++)
         {
-            if (ReadUrlFromLog() is { } url)
+            if ((named ? NamedTunnelReady() : ReadUrlFromLog()) is { } url)
             {
                 Publish(url);
                 break;
@@ -153,21 +159,35 @@ internal sealed partial class TunnelService : BackgroundService
 
     private static string? ReadUrlFromLog()
     {
+        Match match = QuickTunnelUrl().Match(ReadLog());
+        return match.Success ? match.Value : null;
+    }
+
+    // The stable URL once the named tunnel has a live edge connection; a quick tunnel's log never qualifies.
+    private static string? NamedTunnelReady()
+    {
+        string log = ReadLog();
+        return log.Contains("Registered tunnel connection", StringComparison.Ordinal) && !QuickTunnelUrl().IsMatch(log)
+            ? MobilePublicUrl.ReadStable()
+            : null;
+    }
+
+    private static string ReadLog()
+    {
         try
         {
             if (!File.Exists(TunnelLogFile))
             {
-                return null;
+                return string.Empty;
             }
 
             using FileStream stream = new(TunnelLogFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using StreamReader reader = new(stream);
-            Match match = QuickTunnelUrl().Match(reader.ReadToEnd());
-            return match.Success ? match.Value : null;
+            return reader.ReadToEnd();
         }
         catch (IOException)
         {
-            return null;
+            return string.Empty;
         }
     }
 

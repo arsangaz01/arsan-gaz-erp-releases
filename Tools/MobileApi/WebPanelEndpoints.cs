@@ -40,6 +40,7 @@ internal static class WebPanelEndpoints
             await next(context);
         });
 
+        app.MapGet("/", () => Results.Redirect("/panel"));
         app.MapGet("/panel", () => Asset("panel.html", "text/html; charset=utf-8"));
         app.MapGet("/panel/app.js", () => Asset("panel.js", "text/javascript; charset=utf-8"));
 
