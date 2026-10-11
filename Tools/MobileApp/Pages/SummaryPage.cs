@@ -24,13 +24,19 @@ public sealed class SummaryPage : ContentPage
         buttons.Add(Ui.Secondary("Son hareketler", async (_, _) => await ShowAsync("Son 7 gün hareketleri", "/api/hareketler?gun=7")), 1, 1);
         buttons.Add(Ui.Secondary("Müşterideki tüpler", async (_, _) => await ShowAsync("Müşterideki tüpler", "/api/musterideki-tupler")), 0, 2);
 
+        Ui.ApplyPageChrome(this);
         Content = new ScrollView
         {
             Content = new VerticalStackLayout
             {
-                Padding = 16,
-                Spacing = 10,
-                Children = { buttons, _busy, _heading, Ui.Card(_text) }
+                Padding = new Thickness(16, 12, 16, 24),
+                Spacing = 14,
+                Children =
+                {
+                    Ui.Section("Rapor seçin", buttons),
+                    _busy,
+                    Ui.Card(new VerticalStackLayout { Spacing = 8, Children = { _heading, _text } })
+                }
             }
         };
     }

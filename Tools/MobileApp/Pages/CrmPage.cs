@@ -17,6 +17,7 @@ public sealed class CrmPage : ContentPage
     {
         _followUps = followUps;
         Title = followUps ? "Takip" : "CRM";
+        Ui.ApplyPageChrome(this);
         _search.SearchButtonPressed += async (_, _) => await LoadAsync();
         _range.SelectedIndexChanged += async (_, _) => await LoadAsync();
 
@@ -26,17 +27,24 @@ public sealed class CrmPage : ContentPage
             SelectionMode = SelectionMode.Single,
             ItemTemplate = new DataTemplate(() =>
             {
-                Label name = new() { FontSize = 16, FontAttributes = FontAttributes.Bold };
+                Label name = new() { FontSize = 16, FontFamily = "OpenSansSemibold" };
                 name.SetBinding(Label.TextProperty, nameof(CrmItem.Name));
                 Label subtitle = Ui.Note(string.Empty);
                 subtitle.SetBinding(Label.TextProperty, nameof(CrmItem.Subtitle));
-                Label followUp = new() { FontSize = 13, TextColor = Ui.Accent };
+                Label followUp = new() { FontSize = 13, TextColor = Ui.Accent, FontFamily = "OpenSansSemibold" };
                 followUp.SetBinding(Label.TextProperty, nameof(CrmItem.FollowUpText));
-                return new VerticalStackLayout
+                Border row = new()
                 {
-                    Padding = new Thickness(14, 8),
-                    Children = { name, subtitle, followUp, new BoxView { HeightRequest = 1, Color = Color.FromArgb("#E5E7EB"), Margin = new Thickness(0, 6, 0, 0) } }
+                    Margin = new Thickness(12, 0, 12, 10),
+                    Padding = new Thickness(16, 12),
+                    StrokeThickness = 1,
+                    StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
+                    Content = new VerticalStackLayout { Spacing = 4, Children = { name, subtitle, followUp } }
                 };
+                row.SetAppThemeColor(VisualElement.BackgroundColorProperty, Ui.SurfaceLight, Ui.SurfaceDark);
+                row.SetAppTheme<Brush>(Border.StrokeProperty,
+                    new SolidColorBrush(Color.FromArgb("#E7E5E4")), new SolidColorBrush(Color.FromArgb("#3F3F46")));
+                return row;
             })
         };
         list.SelectionChanged += async (_, e) =>
@@ -49,8 +57,9 @@ public sealed class CrmPage : ContentPage
         };
 
         View header = followUps
-            ? new VerticalStackLayout { Padding = new Thickness(12, 6), Children = { _range, _status } }
-            : new VerticalStackLayout { Padding = new Thickness(8, 4), Children = { _search, _status } };
+            ? Ui.Card(new VerticalStackLayout { Spacing = 8, Children = { _range, _status } })
+            : Ui.Card(new VerticalStackLayout { Spacing = 8, Children = { _search, _status } });
+        header.Margin = new Thickness(12, 12, 12, 4);
         Grid root = new() { RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)] };
         root.Add(header, 0, 0);
         root.Add(_busy, 0, 1);

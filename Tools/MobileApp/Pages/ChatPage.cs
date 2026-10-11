@@ -9,7 +9,7 @@ public sealed class ChatMessage
     public required string Text { get; init; }
     public bool IsUser { get; init; }
     public LayoutOptions Alignment => IsUser ? LayoutOptions.End : LayoutOptions.Start;
-    public Color Background => IsUser ? Color.FromArgb("#FFEDD5") : Color.FromArgb("#F3F4F6");
+    public Color Background => IsUser ? Color.FromArgb("#FFEDD5") : Color.FromArgb("#FFFFFF");
 }
 
 public sealed class ChatPage : ContentPage
@@ -50,55 +50,61 @@ public sealed class ChatPage : ContentPage
     public ChatPage()
     {
         Title = "Ajan";
+        Ui.ApplyPageChrome(this);
         _list = new CollectionView
         {
             ItemsSource = _messages,
             ItemTemplate = new DataTemplate(() =>
             {
-                Label sender = new() { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = Ui.Accent };
+                Label sender = new() { FontSize = 11, FontFamily = "OpenSansSemibold", TextColor = Ui.Accent };
                 sender.SetBinding(Label.TextProperty, nameof(ChatMessage.Sender));
-                Label text = new() { FontSize = 15, TextColor = Color.FromArgb("#111827") };
+                Label text = new() { FontSize = 15, LineBreakMode = LineBreakMode.WordWrap, TextColor = Color.FromArgb("#1C1917") };
                 text.SetBinding(Label.TextProperty, nameof(ChatMessage.Text));
                 Border bubble = new()
                 {
-                    Padding = new Thickness(10, 6),
-                    Margin = new Thickness(6, 3),
-                    StrokeThickness = 0,
-                    StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 12 },
-                    MaximumWidthRequest = 340,
-                    Content = new VerticalStackLayout { Children = { sender, text } }
+                    Padding = new Thickness(14, 10),
+                    StrokeThickness = 1,
+                    StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 16 },
+                    MaximumWidthRequest = 320,
+                    Content = new VerticalStackLayout { Spacing = 4, Children = { sender, text } }
                 };
+                bubble.SetAppTheme<Brush>(Border.StrokeProperty,
+                    new SolidColorBrush(Color.FromArgb("#E7E5E4")), new SolidColorBrush(Color.FromArgb("#52525B")));
                 bubble.SetBinding(View.HorizontalOptionsProperty, nameof(ChatMessage.Alignment));
                 bubble.SetBinding(BackgroundColorProperty, nameof(ChatMessage.Background));
-                return bubble;
+                return new ContentView
+                {
+                    Padding = new Thickness(12, 2),
+                    Content = bubble
+                };
             })
         };
 
         _input = new Editor
         {
-            Placeholder = "Mesaj yazın veya 🎤 ile konuşun",
+            Placeholder = "Mesaj yazın…",
             AutoSize = EditorAutoSizeOption.TextChanges,
             MaximumHeightRequest = 120,
-            HorizontalOptions = LayoutOptions.Fill
+            HorizontalOptions = LayoutOptions.Fill,
+            FontSize = 15,
+            BackgroundColor = Colors.Transparent
         };
-        _mic = new Button { Text = "🎤", FontSize = 22, WidthRequest = 58, BackgroundColor = Ui.Accent, TextColor = Colors.White, BorderWidth = 0 };
-        _mic.Clicked += async (_, _) => await ListenAsync();
-        _attach = new Button { Text = "📎", FontSize = 20, WidthRequest = 52 };
-        _attach.Clicked += async (_, _) => await PickAttachmentAsync();
-        _attachments = new Label { FontSize = 12, TextColor = Ui.Muted, LineBreakMode = LineBreakMode.WordWrap };
-        _send = new Button { Text = "Gönder", WidthRequest = 90 };
-        _send.Clicked += async (_, _) => await SendAsync(_input.Text);
+        _mic = Ui.IconAction("🎤", async (_, _) => await ListenAsync(), accent: true);
+        _attach = Ui.IconAction("📎", async (_, _) => await PickAttachmentAsync());
+        _attachments = new Label { FontSize = 12, TextColor = Ui.Muted, LineBreakMode = LineBreakMode.WordWrap, Margin = new Thickness(16, 0) };
+        _send = Ui.Primary("Gönder", async (_, _) => await SendAsync(_input.Text));
+        _send.MinimumWidthRequest = 96;
+        _send.Padding = new Thickness(14, 10);
         _speak.Toggled += (_, e) => Preferences.Default.Set("speak_replies", e.Value);
         _muteJarvis.Toggled += (_, e) => Preferences.Default.Set("mute_jarvis_tts", e.Value);
         _target.SelectedIndexChanged += (_, _) => Preferences.Default.Set("chat_target", _target.SelectedIndex);
 
-        Button clear = new() { Text = "Yeni sohbet", FontSize = 12, Padding = new Thickness(8, 2) };
-        clear.Clicked += (_, _) =>
+        Button clear = Ui.Compact("Yeni sohbet", (_, _) =>
         {
             _messages.Clear();
             _history.Clear();
             AddWelcome();
-        };
+        });
 
         Grid inputRow = new()
         {
@@ -107,28 +113,37 @@ public sealed class ChatPage : ContentPage
                 new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto),
                 new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto)
             ],
-            ColumnSpacing = 6,
-            Padding = new Thickness(8, 4, 8, 8)
+            ColumnSpacing = 8
         };
         inputRow.Add(_input, 0);
         inputRow.Add(_attach, 1);
         inputRow.Add(_send, 2);
         inputRow.Add(_mic, 3);
 
-        HorizontalStackLayout options = new()
+        View options = Ui.Card(new VerticalStackLayout
         {
             Spacing = 8,
-            Padding = new Thickness(10, 4),
             Children =
             {
-                new Label { Text = "Sesli oku", VerticalOptions = LayoutOptions.Center },
-                _speak,
-                new Label { Text = "Jarvis sustur", VerticalOptions = LayoutOptions.Center },
-                _muteJarvis,
-                Ui.Secondary("Durdur", (_, _) => _speech?.Cancel()),
-                _busy
+                new HorizontalStackLayout
+                {
+                    Spacing = 10,
+                    Children =
+                    {
+                        new Label { Text = "Sesli oku", FontSize = 13, VerticalOptions = LayoutOptions.Center },
+                        _speak,
+                        new Label { Text = "Jarvis sustur", FontSize = 13, VerticalOptions = LayoutOptions.Center },
+                        _muteJarvis
+                    }
+                },
+                new HorizontalStackLayout
+                {
+                    Spacing = 8,
+                    Children = { Ui.Compact("Durdur", (_, _) => _speech?.Cancel()), _busy }
+                }
             }
-        };
+        });
+        options.Margin = new Thickness(12, 8, 12, 0);
         Grid targetRow = new()
         {
             ColumnDefinitions =
@@ -137,9 +152,9 @@ public sealed class ChatPage : ContentPage
                 new ColumnDefinition(GridLength.Auto)
             ],
             ColumnSpacing = 8,
-            Padding = new Thickness(10, 0)
+            Padding = new Thickness(12, 8, 12, 0)
         };
-        targetRow.Add(new Label { Text = "Kime:", VerticalOptions = LayoutOptions.Center }, 0);
+        targetRow.Add(new Label { Text = "Kime", FontFamily = "OpenSansSemibold", FontSize = 13, VerticalOptions = LayoutOptions.Center }, 0);
         targetRow.Add(_target, 1);
         targetRow.Add(clear, 2);
 
@@ -156,7 +171,7 @@ public sealed class ChatPage : ContentPage
         root.Add(targetRow, 0, 1);
         root.Add(_list, 0, 2);
         root.Add(_attachments, 0, 3);
-        root.Add(inputRow, 0, 4);
+        root.Add(Ui.ComposerShell(inputRow), 0, 4);
         Content = root;
         AddWelcome();
     }

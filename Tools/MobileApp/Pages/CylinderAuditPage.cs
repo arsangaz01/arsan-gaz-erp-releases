@@ -26,26 +26,34 @@ public sealed class CylinderAuditPage : ContentPage
         _resultCard = Ui.Card(_result);
         _resultCard.IsVisible = false;
 
+        Ui.ApplyPageChrome(this);
         Content = new ScrollView
         {
             Content = new VerticalStackLayout
             {
-                Padding = 16,
-                Spacing = 10,
+                Padding = new Thickness(16, 12, 16, 24),
+                Spacing = 14,
                 Children =
                 {
                     Ui.Note("Müşteriyi seçin, sahadaki tüpleri okutun ve sayımı kaydedin. ERP kaydıyla karşılaştırılıp eksik ve fazla tüpler listelenir; tüplerin durumu değiştirilmez."),
-                    _customerSearch,
-                    Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
-                    _customer,
-                    _expected,
-                    Ui.Primary("📷 Sahadaki tüpleri okut", async (_, _) => await ScanAsync()),
-                    _code,
-                    Ui.Secondary("Yazılan kodu ekle", (_, _) => AddManual()),
-                    Ui.Card(_scannedText),
-                    Ui.Secondary("Listeyi temizle", (_, _) => { _scanned.Clear(); RefreshScanned(); }),
-                    _note,
-                    Ui.Primary("Sayımı kaydet ve karşılaştır", async (_, _) => await SubmitAsync()),
+                    Ui.Section(
+                        "1 · Müşteri",
+                        _customerSearch,
+                        Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
+                        _customer,
+                        _expected),
+                    Ui.Section(
+                        "2 · Sahadaki tüpler",
+                        Ui.Primary("📷 Sahadaki tüpleri okut", async (_, _) => await ScanAsync()),
+                        _code,
+                        Ui.ActionRow(
+                            Ui.Secondary("Kodu ekle", (_, _) => AddManual()),
+                            Ui.Secondary("Listeyi temizle", (_, _) => { _scanned.Clear(); RefreshScanned(); })),
+                        _scannedText),
+                    Ui.Section(
+                        "3 · Kaydet",
+                        _note,
+                        Ui.Primary("Sayımı kaydet ve karşılaştır", async (_, _) => await SubmitAsync())),
                     _busy,
                     _resultCard
                 }

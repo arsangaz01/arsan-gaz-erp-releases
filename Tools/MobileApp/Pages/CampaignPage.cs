@@ -94,35 +94,36 @@ public sealed class CampaignPage : ContentPage
         _scheduled.Children.Add(_prepared);
         _scheduled.Children.Add(_launch);
 
+        Ui.ApplyPageChrome(this);
         Content = new ScrollView
         {
             Content = new VerticalStackLayout
             {
-                Padding = new Thickness(14, 10),
-                Spacing = 8,
+                Padding = new Thickness(16, 12, 16, 24),
+                Spacing = 14,
                 Children =
                 {
-                    Ui.Title("Toplu tanıtım"),
-                    _status,
+                    Ui.Card(new VerticalStackLayout { Spacing = 6, Children = { Ui.Title("Toplu tanıtım"), _status } }),
                     _busy,
-                    Section("1. Grup"),
-                    _group,
-                    Row(Ui.Secondary("Yenile", async (_, _) => await LoadAsync()),
-                        Ui.Secondary("➕ Yeni grup", (_, _) => _newGroup.IsVisible = !_newGroup.IsVisible)),
-                    _newGroup,
-                    Section("2. Mesaj"),
-                    _mode,
-                    _subject,
-                    _content,
-                    Row(Ui.Secondary("📎 PDF seç", async (_, _) => await PickPdfAsync()),
-                        Ui.Secondary("PDF'i kaldır", (_, _) => { _pdfLocal = null; _pdfUploaded = null; _pdfLabel.Text = "PDF eklenmedi."; })),
-                    _pdfLabel,
-                    Section("3. Gönderim"),
-                    _semiAuto,
-                    _scheduled,
-                    Section("Kampanyalar"),
-                    Ui.Secondary("Durumları yenile", async (_, _) => await LoadCampaignsAsync()),
-                    _campaigns
+                    Ui.Section(
+                        "1 · Grup",
+                        _group,
+                        Row(Ui.Secondary("Yenile", async (_, _) => await LoadAsync()),
+                            Ui.Secondary("➕ Yeni grup", (_, _) => _newGroup.IsVisible = !_newGroup.IsVisible)),
+                        _newGroup),
+                    Ui.Section(
+                        "2 · Mesaj",
+                        _mode,
+                        _subject,
+                        _content,
+                        Row(Ui.Secondary("📎 PDF seç", async (_, _) => await PickPdfAsync()),
+                            Ui.Secondary("PDF'i kaldır", (_, _) => { _pdfLocal = null; _pdfUploaded = null; _pdfLabel.Text = "PDF eklenmedi."; })),
+                        _pdfLabel),
+                    Ui.Section("3 · Gönderim", _semiAuto, _scheduled),
+                    Ui.Section(
+                        "Kampanyalar",
+                        Ui.Secondary("Durumları yenile", async (_, _) => await LoadCampaignsAsync()),
+                        _campaigns)
                 }
             }
         };
@@ -138,8 +139,6 @@ public sealed class CampaignPage : ContentPage
             await LoadAsync();
         }
     }
-
-    private static Label Section(string text) => new() { Text = text, FontSize = 16, FontAttributes = FontAttributes.Bold, Margin = new Thickness(0, 10, 0, 0) };
 
     private static Grid Row(View left, View right)
     {
@@ -452,9 +451,19 @@ public sealed class CampaignPage : ContentPage
 
             foreach (CampaignListItem item in _campaignItems.Where(c => c.StateCode != "Draft").Take(15))
             {
-                Button button = new() { Text = $"{item.Name}\n{item.Summary}", FontSize = 13, HorizontalOptions = LayoutOptions.Fill };
-                button.Clicked += async (_, _) => await CampaignActionsAsync(item);
-                _campaigns.Children.Add(button);
+                Border row = Ui.Card(new VerticalStackLayout
+                {
+                    Spacing = 2,
+                    Children =
+                    {
+                        new Label { Text = item.Name, FontSize = 15, FontFamily = "OpenSansSemibold" },
+                        Ui.Note(item.Summary)
+                    }
+                });
+                TapGestureRecognizer tap = new();
+                tap.Tapped += async (_, _) => await CampaignActionsAsync(item);
+                row.GestureRecognizers.Add(tap);
+                _campaigns.Children.Add(row);
             }
         }
 

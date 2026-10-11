@@ -29,14 +29,16 @@ public sealed class CylinderListPage : ContentPage
                 name.SetBinding(Label.TextProperty, nameof(CylinderListItem.Title));
                 Label detail = Ui.Note(string.Empty);
                 detail.SetBinding(Label.TextProperty, nameof(CylinderListItem.Subtitle));
-                return new VerticalStackLayout { Padding = new Thickness(4, 8), Spacing = 2, Children = { name, detail } };
+                Border card = Ui.Card(new VerticalStackLayout { Spacing = 3, Children = { name, detail } });
+                return new ContentView { Padding = new Thickness(0, 0, 0, 8), Content = card };
             })
         };
         _search.TextChanged += (_, _) => ApplyFilter();
+        Ui.ApplyPageChrome(this);
 
         Grid root = new()
         {
-            Padding = 16,
+            Padding = new Thickness(16, 12, 16, 0),
             RowSpacing = 8,
             RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)]
         };

@@ -11,6 +11,7 @@ public sealed class CylinderStatusPage : ContentPage
     public CylinderStatusPage()
     {
         Title = "Tüp durumu";
+        Ui.ApplyPageChrome(this);
         _refresh = new RefreshView
         {
             RefreshColor = Ui.Accent,
@@ -18,8 +19,8 @@ public sealed class CylinderStatusPage : ContentPage
             {
                 Content = new VerticalStackLayout
                 {
-                    Padding = 16,
-                    Spacing = 10,
+                    Padding = new Thickness(16, 12, 16, 24),
+                    Spacing = 12,
                     Children = { Ui.Note("Karta dokunarak o durumdaki tüpleri listeleyin. Yenilemek için aşağı çekin."), _cards, _updated }
                 }
             }
@@ -76,7 +77,7 @@ public sealed class CylinderStatusPage : ContentPage
 
         if (overview.Vehicles.Count > 0)
         {
-            _cards.Children.Add(Ui.Title("Araçlardaki tüpler"));
+            _cards.Children.Add(Ui.SectionCaption("Araçlardaki tüpler"));
             foreach (CylinderPlateCount vehicle in overview.Vehicles)
             {
                 _cards.Children.Add(Tappable(
@@ -111,6 +112,8 @@ public sealed class CylinderStatusPage : ContentPage
                 Ui.Note(subtitle)
             }
         }, 1, 0);
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        grid.Add(new Label { Text = "›", FontSize = 26, TextColor = Colors.Gray, VerticalTextAlignment = TextAlignment.Center }, 2, 0);
         return Ui.Card(grid);
     }
 

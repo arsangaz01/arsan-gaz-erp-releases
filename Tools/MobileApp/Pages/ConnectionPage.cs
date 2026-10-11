@@ -4,8 +4,8 @@ namespace ArsanGazMobile.Pages;
 
 public sealed class ConnectionPage : ContentPage
 {
-    private readonly Entry _server = new() { Placeholder = "https://....trycloudflare.com", Keyboard = Keyboard.Url };
-    private readonly Entry _code = new() { Placeholder = "6 haneli kod", Keyboard = Keyboard.Numeric, MaxLength = 6 };
+    private readonly Entry _server;
+    private readonly Entry _code;
     private readonly Label _state = new() { FontSize = 14 };
     private readonly Label _hub = new() { FontSize = 13, TextColor = Ui.Muted };
     private readonly Label _update = new() { FontSize = 14 };
@@ -14,44 +14,47 @@ public sealed class ConnectionPage : ContentPage
     public ConnectionPage()
     {
         Title = "Bağlantı";
+        Ui.ApplyPageChrome(this);
+        _server = Ui.TextField("https://….trycloudflare.com", Keyboard.Url);
+        _code = Ui.TextField("6 haneli kod", Keyboard.Numeric, maxLength: 6);
+        _state.FontSize = 14;
         Content = new ScrollView
         {
             Content = new VerticalStackLayout
             {
-                Padding = 16,
-                Spacing = 10,
+                Padding = new Thickness(16, 12, 16, 24),
+                Spacing = 14,
                 Children =
                 {
-                    Ui.Title("Sistem durumu"),
-                    Ui.Note("Telefon, bilgisayardaki ERP + Watcher + Telegram + PC ajan köprüsü ile aynı hatta çalışır."),
-                    _hub,
-                    Ui.Secondary("Durumu yenile", async (_, _) => await RefreshHubAsync()),
-                    Ui.Title("Güncelleme"),
-                    _update,
-                    Ui.Primary("Güncelle", async (_, _) => await UpdateNowAsync()),
-                    Ui.Secondary("Güncellemeyi denetle", async (_, _) => await CheckUpdateAsync()),
-                    Ui.Secondary("APK indir (tarayıcı, yedek yol)", async (_, _) => await OpenDownloadAsync()),
-                    Ui.Title("Sunucu"),
-                    Ui.Note("Eşleştikten sonra adres PC'den otomatik güncellenir. Telegram'daki tek dokunuş bağlantısı (arsangazerp://) veya sabit adres dosyası ile elle değiştirmeniz gerekmez."),
-                    _server,
-                    new HorizontalStackLayout
-                    {
-                        Spacing = 8,
-                        Children =
-                        {
+                    Ui.Section(
+                        "Sistem durumu",
+                        Ui.Note("Telefon, bilgisayardaki ERP + Watcher + Telegram + PC ajan köprüsü ile aynı hatta çalışır."),
+                        _hub,
+                        Ui.Secondary("Durumu yenile", async (_, _) => await RefreshHubAsync())),
+                    Ui.Section(
+                        "Güncelleme",
+                        _update,
+                        Ui.Primary("Güncelle", async (_, _) => await UpdateNowAsync()),
+                        Ui.ActionRow(
+                            Ui.Secondary("Güncellemeyi denetle", async (_, _) => await CheckUpdateAsync()),
+                            Ui.Secondary("APK indir (tarayıcı)", async (_, _) => await OpenDownloadAsync()))),
+                    Ui.Section(
+                        "Sunucu",
+                        Ui.Note("Eşleştikten sonra adres PC'den otomatik güncellenir."),
+                        _server,
+                        Ui.ActionRow(
                             Ui.Primary("Telegram'dan bağlan", async (_, _) => await ConnectFromTelegramAsync()),
-                            Ui.Secondary("PC'den adres al", async (_, _) => await RefreshServerFromPcAsync())
-                        }
-                    },
-                    Ui.Secondary("Kaydet ve test et", async (_, _) => await SaveAndTestAsync()),
+                            Ui.Secondary("PC'den adres al", async (_, _) => await RefreshServerFromPcAsync())),
+                        Ui.Secondary("Kaydet ve test et", async (_, _) => await SaveAndTestAsync())),
                     _busy,
                     _state,
-                    Ui.Title("Telefonu eşleştir"),
-                    Ui.Note("Kod iste → Telegram → kodu gir → Eşleştir. Bir kez yeterli."),
-                    Ui.Secondary("Kod iste (Telegram)", async (_, _) => await RequestCodeAsync()),
-                    _code,
-                    Ui.Primary("Eşleştir", async (_, _) => await PairAsync()),
-                    Ui.Secondary("Eşleşmeyi kaldır", async (_, _) => await UnpairAsync())
+                    Ui.Section(
+                        "Telefonu eşleştir",
+                        Ui.Note("Kod iste → Telegram → kodu gir → Eşleştir."),
+                        Ui.Secondary("Kod iste (Telegram)", async (_, _) => await RequestCodeAsync()),
+                        _code,
+                        Ui.Primary("Eşleştir", async (_, _) => await PairAsync()),
+                        Ui.Secondary("Eşleşmeyi kaldır", async (_, _) => await UnpairAsync()))
                 }
             }
         };

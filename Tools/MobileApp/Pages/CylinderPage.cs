@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using ArsanGazMobile.Services;
 
 namespace ArsanGazMobile.Pages;
@@ -10,38 +10,39 @@ public sealed class CylinderPage : ContentPage
 
     private static readonly (string Label, int Status)[] Actions =
     [
-        ("Müşteriye teslim", CustomerStatus),
+        ("MÃ¼ÅŸteriye teslim", CustomerStatus),
         ("Depoya iade", 1),
-        ("Araca yükle (taşınıyor)", VehicleStatus),
+        ("Araca yÃ¼kle (taÅŸÄ±nÄ±yor)", VehicleStatus),
         ("Dolum", 4),
         ("Servis", 5)
     ];
 
     private static readonly (string Label, bool? Value)[] Fullness =
     [
-        ("Dolu/boş: otomatik", null),
+        ("Dolu/boÅŸ: otomatik", null),
         ("Dolu", true),
-        ("Boş", false)
+        ("BoÅŸ", false)
     ];
 
-    private static readonly Regex PlatePattern = new(@"^\d{2}\s*[A-ZÇĞİÖŞÜ]{1,3}\s*\d{2,4}$");
+    private static readonly Regex PlatePattern = new(@"^\d{2}\s*[A-ZÃ‡ÄÄ°Ã–ÅÃœ]{1,3}\s*\d{2,4}$");
 
     private readonly Entry _code = new() { Placeholder = "Barkod veya seri no", ReturnType = ReturnType.Search };
+    private readonly Entry _batchCode = new() { Placeholder = "Barkod veya seri no (elle ekle)", ReturnType = ReturnType.Done };
     private readonly Label _detail = new() { FontSize = 14 };
     private readonly Picker _action = new() { Title = "Hareket" };
-    private readonly Entry _customerSearch = new() { Placeholder = "Müşteri ara (ad, kod, şehir)", ReturnType = ReturnType.Search };
-    private readonly Picker _customer = new() { Title = "Müşteri seçin" };
-    private readonly Entry _plate = new() { Placeholder = "Plaka (ör. 01 ABC 123, boş bırakılabilir)" };
-    private readonly Picker _knownPlates = new() { Title = "Kayıtlı araçlar" };
-    private readonly Picker _fullness = new() { Title = "Dolu / boş" };
-    private readonly Entry _note = new() { Placeholder = "Not (isteğe bağlı)" };
+    private readonly Entry _customerSearch = new() { Placeholder = "MÃ¼ÅŸteri ara (ad, kod, ÅŸehir)", ReturnType = ReturnType.Search };
+    private readonly Picker _customer = new() { Title = "MÃ¼ÅŸteri seÃ§in" };
+    private readonly Entry _plate = new() { Placeholder = "Plaka (Ã¶r. 01 ABC 123, boÅŸ bÄ±rakÄ±labilir)" };
+    private readonly Picker _knownPlates = new() { Title = "KayÄ±tlÄ± araÃ§lar" };
+    private readonly Picker _fullness = new() { Title = "Dolu / boÅŸ" };
+    private readonly Entry _note = new() { Placeholder = "Not (isteÄŸe baÄŸlÄ±)" };
     private readonly Label _pendingText = new() { FontSize = 13, TextColor = Ui.Accent };
     private readonly Switch _batchMode = new();
     private readonly Label _batchText = new() { FontSize = 14 };
-    private readonly VerticalStackLayout _pendingPanel;
-    private readonly VerticalStackLayout _singlePanel;
-    private readonly VerticalStackLayout _batchPanel;
-    private readonly VerticalStackLayout _movePanel;
+    private readonly Border _pendingPanel;
+    private readonly Border _singlePanel;
+    private readonly Border _batchPanel;
+    private readonly Border _movePanel;
     private readonly VerticalStackLayout _customerPanel;
     private readonly VerticalStackLayout _vehiclePanel;
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
@@ -52,7 +53,8 @@ public sealed class CylinderPage : ContentPage
 
     public CylinderPage()
     {
-        Title = "Tüp";
+        Title = "TÃ¼p";
+        Ui.ApplyPageChrome(this);
         foreach ((string label, _) in Actions)
         {
             _action.Items.Add(label);
@@ -73,20 +75,21 @@ public sealed class CylinderPage : ContentPage
             }
         };
         _code.Completed += async (_, _) => await OnCodeEnteredAsync();
+        _batchCode.Completed += async (_, _) => await OnCodeEnteredAsync();
         _customerSearch.Completed += async (_, _) => await SearchCustomersAsync();
         _batchMode.Toggled += (_, _) => ApplyMode();
 
-        _pendingPanel = new VerticalStackLayout
+        _pendingPanel = Ui.Card(new VerticalStackLayout
         {
-            Spacing = 6,
-            IsVisible = false,
-            Children = { _pendingText, Ui.Secondary("Bekleyenleri şimdi gönder", async (_, _) => await FlushAsync(showResult: true)) }
-        };
+            Spacing = 8,
+            Children = { _pendingText, Ui.Secondary("Bekleyenleri ÅŸimdi gÃ¶nder", async (_, _) => await FlushAsync(showResult: true)) }
+        });
+        _pendingPanel.IsVisible = false;
         _customerPanel = new VerticalStackLayout
         {
             Spacing = 6,
             IsVisible = false,
-            Children = { _customerSearch, Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()), _customer }
+            Children = { _customerSearch, Ui.Secondary("MÃ¼ÅŸteri ara", async (_, _) => await SearchCustomersAsync()), _customer }
         };
         _vehiclePanel = new VerticalStackLayout
         {
@@ -94,71 +97,60 @@ public sealed class CylinderPage : ContentPage
             IsVisible = false,
             Children = { _knownPlates, _plate }
         };
-        _movePanel = new VerticalStackLayout
-        {
-            Spacing = 8,
-            IsVisible = false,
-            Children =
-            {
-                Ui.Title("Hareket kaydet"),
-                _action,
-                _customerPanel,
-                _vehiclePanel,
-                _fullness,
-                _note,
-                Ui.Primary("Kaydet", async (_, _) => await MoveAsync(confirm: true))
-            }
-        };
-        _singlePanel = new VerticalStackLayout
-        {
-            Spacing = 10,
-            Children =
-            {
-                Ui.Primary("📷 Barkod / QR okut", async (_, _) => await ScanAsync()),
-                _code,
-                Ui.Secondary("Sorgula", async (_, _) => await LookupAsync(_code.Text, quick: false)),
-                _detail
-            }
-        };
-        _batchPanel = new VerticalStackLayout
-        {
-            Spacing = 10,
-            IsVisible = false,
-            Children =
-            {
-                Ui.Primary("📷 Art arda okut", async (_, _) => await ScanManyAsync()),
-                Ui.Secondary("Yazılan kodu listeye ekle", async (_, _) => await OnCodeEnteredAsync()),
-                Ui.Card(_batchText),
-                Ui.Secondary("Listeyi temizle", (_, _) => ClearBatch())
-            }
-        };
+        _movePanel = Ui.Section(
+            "Hareket kaydet",
+            _action,
+            _customerPanel,
+            _vehiclePanel,
+            _fullness,
+            _note,
+            Ui.Primary("Kaydet", async (_, _) => await MoveAsync(confirm: true)));
+        _movePanel.IsVisible = false;
+        _singlePanel = Ui.Section(
+            "Tek tÃ¼p",
+            Ui.Primary("ğŸ“· Barkod / QR okut", async (_, _) => await ScanAsync()),
+            _code,
+            Ui.Secondary("Sorgula", async (_, _) => await LookupAsync(_code.Text, quick: false)),
+            _detail);
+        _batchPanel = Ui.Section(
+            "Toplu okutma",
+            Ui.Primary("ğŸ“· Art arda okut", async (_, _) => await ScanManyAsync()),
+            _batchCode,
+            Ui.ActionRow(
+                Ui.Secondary("Kodu ekle", async (_, _) => await OnCodeEnteredAsync()),
+                Ui.Secondary("Listeyi temizle", (_, _) => ClearBatch())),
+            _batchText);
+        _batchPanel.IsVisible = false;
 
         Grid modeRow = new()
         {
+            ColumnSpacing = 8,
             ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)]
         };
-        modeRow.Add(new Label { Text = "Toplu okutma (birden çok tüpe aynı hareket)", VerticalTextAlignment = TextAlignment.Center }, 0, 0);
-        modeRow.Add(_batchMode, 1, 0);
-
-        Grid shortcuts = new()
+        modeRow.Add(new VerticalStackLayout
         {
-            ColumnSpacing = 8,
-            ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star)]
-        };
-        shortcuts.Add(Ui.Secondary("📊 Tüp durumu", async (_, _) => await Navigation.PushAsync(new CylinderStatusPage())), 0, 0);
-        shortcuts.Add(Ui.Secondary("📋 Müşteride sayım", async (_, _) => await Navigation.PushAsync(new CylinderAuditPage())), 1, 0);
+            Spacing = 2,
+            Children =
+            {
+                new Label { Text = "Toplu okutma", FontSize = 15, FontFamily = "OpenSansSemibold" },
+                Ui.Note("Birden Ã§ok tÃ¼pe aynÄ± hareketi uygular")
+            }
+        }, 0, 0);
+        modeRow.Add(_batchMode, 1, 0);
 
         Content = new ScrollView
         {
             Content = new VerticalStackLayout
             {
-                Padding = 16,
-                Spacing = 10,
+                Padding = new Thickness(16, 12, 16, 24),
+                Spacing = 14,
                 Children =
                 {
                     _pendingPanel,
-                    shortcuts,
-                    modeRow,
+                    Ui.ActionRow(
+                        Ui.Secondary("ğŸ“Š TÃ¼p durumu", async (_, _) => await Navigation.PushAsync(new CylinderStatusPage())),
+                        Ui.Secondary("ğŸ“‹ MÃ¼ÅŸteride sayÄ±m", async (_, _) => await Navigation.PushAsync(new CylinderAuditPage()))),
+                    Ui.Card(modeRow),
                     _singlePanel,
                     _batchPanel,
                     _busy,
@@ -224,14 +216,14 @@ public sealed class CylinderPage : ContentPage
     {
         int count = OfflineMoves.Pending.Count;
         _pendingPanel.IsVisible = count > 0;
-        _pendingText.Text = $"📶 Gönderilmeyi bekleyen {count} tüp hareketi var. Bağlantı gelince otomatik gönderilir.";
+        _pendingText.Text = $"ğŸ“¶ GÃ¶nderilmeyi bekleyen {count} tÃ¼p hareketi var. BaÄŸlantÄ± gelince otomatik gÃ¶nderilir.";
     }
 
     private void RefreshBatch()
     {
         _batchText.Text = _batch.Count == 0
-            ? "Liste boş. \"Art arda okut\" ile tüpleri sırayla okutun."
-            : $"{_batch.Count} tüp seçildi:\n{string.Join(", ", _batch)}";
+            ? "Liste boÅŸ. \"Art arda okut\" ile tÃ¼pleri sÄ±rayla okutun."
+            : $"{_batch.Count} tÃ¼p seÃ§ildi:\n{string.Join(", ", _batch)}";
         if (BatchMode)
         {
             _movePanel.IsVisible = _batch.Count > 0;
@@ -261,8 +253,8 @@ public sealed class CylinderPage : ContentPage
     {
         if (BatchMode)
         {
-            AddToBatch([_code.Text ?? string.Empty]);
-            _code.Text = string.Empty;
+            AddToBatch([_batchCode.Text ?? string.Empty]);
+            _batchCode.Text = string.Empty;
             return;
         }
 
@@ -285,7 +277,7 @@ public sealed class CylinderPage : ContentPage
         {
             int left = OfflineMoves.Pending.Count;
             await DisplayAlertAsync("Bekleyen hareketler",
-                left == 0 ? $"{sent} hareket ERP'ye gönderildi." : $"{sent} gönderildi; {left} hareket bağlantı bekliyor.", "Tamam");
+                left == 0 ? $"{sent} hareket ERP'ye gÃ¶nderildi." : $"{sent} gÃ¶nderildi; {left} hareket baÄŸlantÄ± bekliyor.", "Tamam");
         }
     }
 
@@ -342,7 +334,7 @@ public sealed class CylinderPage : ContentPage
             catch (ServerUnreachableException)
             {
                 _current = new CylinderInfo(0, value, value, -1, "bilinmiyor", null, string.Empty);
-                _detail.Text = $"📶 Bağlantı yok. Tüp bilgisi alınamadı ({value}).\nHareketi yine de kaydedebilirsiniz; bağlantı gelince ERP'ye gönderilir.";
+                _detail.Text = $"ğŸ“¶ BaÄŸlantÄ± yok. TÃ¼p bilgisi alÄ±namadÄ± ({value}).\nHareketi yine de kaydedebilirsiniz; baÄŸlantÄ± gelince ERP'ye gÃ¶nderilir.";
             }
 
             _movePanel.IsVisible = true;
@@ -357,7 +349,7 @@ public sealed class CylinderPage : ContentPage
     private async Task QuickMoveAsync()
     {
         string? choice = await DisplayActionSheetAsync(
-            $"{_current!.SerialNumber} · {_current.StatusName}", "Kapat", null, Actions.Select(a => a.Label).ToArray());
+            $"{_current!.SerialNumber} Â· {_current.StatusName}", "Kapat", null, Actions.Select(a => a.Label).ToArray());
         int index = Array.FindIndex(Actions, a => a.Label == choice);
         if (index < 0)
         {
@@ -367,14 +359,14 @@ public sealed class CylinderPage : ContentPage
         _action.SelectedIndex = index;
         if (Actions[index].Status == CustomerStatus)
         {
-            await DisplayAlertAsync("Müşteriye teslim", "Aşağıdan müşteriyi arayıp seçin, sonra Kaydet'e basın.", "Tamam");
+            await DisplayAlertAsync("MÃ¼ÅŸteriye teslim", "AÅŸaÄŸÄ±dan mÃ¼ÅŸteriyi arayÄ±p seÃ§in, sonra Kaydet'e basÄ±n.", "Tamam");
             _customerSearch.Focus();
             return;
         }
 
         if (Actions[index].Status == VehicleStatus)
         {
-            await DisplayAlertAsync("Araca yükle", "Aşağıdan aracın plakasını seçin veya yazın, sonra Kaydet'e basın.", "Tamam");
+            await DisplayAlertAsync("Araca yÃ¼kle", "AÅŸaÄŸÄ±dan aracÄ±n plakasÄ±nÄ± seÃ§in veya yazÄ±n, sonra Kaydet'e basÄ±n.", "Tamam");
             return;
         }
 
@@ -391,7 +383,7 @@ public sealed class CylinderPage : ContentPage
         }
         else if (_customers.Count == 0)
         {
-            await DisplayAlertAsync("Müşteri", "Eşleşen müşteri yok.", "Tamam");
+            await DisplayAlertAsync("MÃ¼ÅŸteri", "EÅŸleÅŸen mÃ¼ÅŸteri yok.", "Tamam");
         }
     });
 
@@ -400,14 +392,14 @@ public sealed class CylinderPage : ContentPage
         bool batch = BatchMode;
         if ((batch ? _batch.Count == 0 : _current is null) || SelectedStatus is not int status)
         {
-            await DisplayAlertAsync("Tüp", batch ? "Önce tüpleri okutup hareket seçin." : "Önce tüpü sorgulayıp hareket seçin.", "Tamam");
+            await DisplayAlertAsync("TÃ¼p", batch ? "Ã–nce tÃ¼pleri okutup hareket seÃ§in." : "Ã–nce tÃ¼pÃ¼ sorgulayÄ±p hareket seÃ§in.", "Tamam");
             return;
         }
 
         CustomerItem? customer = status == CustomerStatus && _customer.SelectedIndex >= 0 ? _customers[_customer.SelectedIndex] : null;
         if (status == CustomerStatus && customer is null)
         {
-            await DisplayAlertAsync("Tüp", "Müşteriye teslim için müşteri seçin. Bağlantı yoksa önce bağlantılıyken müşteriyi aratın.", "Tamam");
+            await DisplayAlertAsync("TÃ¼p", "MÃ¼ÅŸteriye teslim iÃ§in mÃ¼ÅŸteri seÃ§in. BaÄŸlantÄ± yoksa Ã¶nce baÄŸlantÄ±lÄ±yken mÃ¼ÅŸteriyi aratÄ±n.", "Tamam");
             return;
         }
 
@@ -421,7 +413,7 @@ public sealed class CylinderPage : ContentPage
             }
             else if (!PlatePattern.IsMatch(plate))
             {
-                await DisplayAlertAsync("Plaka", "Plaka geçerli görünmüyor. Örnek: 01 ABC 123", "Tamam");
+                await DisplayAlertAsync("Plaka", "Plaka geÃ§erli gÃ¶rÃ¼nmÃ¼yor. Ã–rnek: 01 ABC 123", "Tamam");
                 return;
             }
         }
@@ -430,9 +422,9 @@ public sealed class CylinderPage : ContentPage
         string label = _action.Items[_action.SelectedIndex]
             + (customer is null ? string.Empty : $" ({customer.Name})")
             + (plate is null ? string.Empty : $" ({plate})")
-            + (isFull is null ? string.Empty : isFull.Value ? " · dolu" : " · boş");
-        string subject = batch ? $"{_batch.Count} tüp" : $"{_current!.SerialNumber}: {_current.StatusName}";
-        if ((confirm || batch) && !await DisplayAlertAsync("Onay", $"{subject} → {label}\nKaydedilsin mi?", "Kaydet", "Vazgeç"))
+            + (isFull is null ? string.Empty : isFull.Value ? " Â· dolu" : " Â· boÅŸ");
+        string subject = batch ? $"{_batch.Count} tÃ¼p" : $"{_current!.SerialNumber}: {_current.StatusName}";
+        if ((confirm || batch) && !await DisplayAlertAsync("Onay", $"{subject} â†’ {label}\nKaydedilsin mi?", "Kaydet", "VazgeÃ§"))
         {
             return;
         }
@@ -456,7 +448,7 @@ public sealed class CylinderPage : ContentPage
             {
                 OfflineMoves.Add(new PendingMove(current.Barcode, status, customer?.Id, _note.Text, label, DateTime.Now, plate, isFull));
                 _movePanel.IsVisible = false;
-                _detail.Text = $"📶 Bağlantı yok: {current.SerialNumber} → {label} telefonda saklandı. Bağlantı gelince otomatik gönderilecek.";
+                _detail.Text = $"ğŸ“¶ BaÄŸlantÄ± yok: {current.SerialNumber} â†’ {label} telefonda saklandÄ±. BaÄŸlantÄ± gelince otomatik gÃ¶nderilecek.";
             }
         });
     }
@@ -469,7 +461,7 @@ public sealed class CylinderPage : ContentPage
             {
                 CylinderBulkResponse response = await ApiClient.Instance.MoveCylindersAsync(codes, status, customer?.Id, _note.Text, plate, isFull);
                 List<string> failed = response.Results.Where(r => !r.Ok).Select(r => $"{r.Code}: {r.Message}").ToList();
-                await DisplayAlertAsync(response.Failed == 0 ? "Kaydedildi" : "Kısmen kaydedildi",
+                await DisplayAlertAsync(response.Failed == 0 ? "Kaydedildi" : "KÄ±smen kaydedildi",
                     response.Message + (failed.Count == 0 ? string.Empty : "\n\nKaydedilemeyenler:\n" + string.Join("\n", failed)), "Tamam");
                 _batch.Clear();
                 _batch.AddRange(response.Results.Where(r => !r.Ok).Select(r => r.Code));
@@ -482,7 +474,7 @@ public sealed class CylinderPage : ContentPage
                 }
 
                 _batch.Clear();
-                await DisplayAlertAsync("Bağlantı yok", $"{codes.Count} tüp hareketi telefonda saklandı. Bağlantı gelince otomatik gönderilecek.", "Tamam");
+                await DisplayAlertAsync("BaÄŸlantÄ± yok", $"{codes.Count} tÃ¼p hareketi telefonda saklandÄ±. BaÄŸlantÄ± gelince otomatik gÃ¶nderilecek.", "Tamam");
             }
 
             RefreshBatch();
