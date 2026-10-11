@@ -49,8 +49,14 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
           RELEASES_REPO: arsangaz01/arsan-gaz-erp-releases
         run: |
+          $tag = "${{ github.ref_name }}"
           if (-not $env:GH_TOKEN) { throw "RELEASES_REPO_TOKEN secret is missing; the release cannot be published to $env:RELEASES_REPO." }
-          gh release view "${{ github.ref_name }}" --repo $env:RELEASES_REPO *> $null
-          if ($LASTEXITCODE -eq 0) { throw "Release ${{ github.ref_name }} already exists in $env:RELEASES_REPO; bump the version instead of re-publishing." }
-          gh release create "${{ github.ref_name }}" .\artifacts\installer\ArsanGazERP_Setup.exe .\artifacts\installer\update.json --repo $env:RELEASES_REPO --title "Arsan Gaz ERP ${{ github.ref_name }}" --notes "Arsan Gaz ERP ${{ github.ref_name }} kurulum dosyası ve güncelleme bildirimi."
+          gh release view $tag --repo $env:RELEASES_REPO *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Release $tag already exists in $env:RELEASES_REPO; bump the version instead of re-publishing." }
+          # Test tags (v*-test*) verify the pipeline: prerelease, never 'latest', no update.json, so clients ignore them.
+          if ($tag -match '-test') {
+            gh release create $tag .\artifacts\installer\ArsanGazERP_Setup.exe --repo $env:RELEASES_REPO --prerelease --latest=false --title "TEST $tag (silinecek)" --notes "Sürüm hattı testi; otomatik güncellemeyi etkilemez ve silinecektir."
+          } else {
+            gh release create $tag .\artifacts\installer\ArsanGazERP_Setup.exe .\artifacts\installer\update.json --repo $env:RELEASES_REPO --latest --title "Arsan Gaz ERP $tag" --notes "Arsan Gaz ERP $tag kurulum dosyası ve güncelleme bildirimi."
+          }
           if ($LASTEXITCODE -ne 0) { throw "gh release create failed." }
