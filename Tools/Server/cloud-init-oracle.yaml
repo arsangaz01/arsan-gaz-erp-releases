@@ -1,0 +1,138 @@
+#cloud-config
+# Arsan Gaz ERP sunucusu (Oracle Cloud Always Free, Ubuntu 24.04, arm64).
+# OCI 'Show advanced options > Management > Cloud-init script' alanina yapistirilir. Kurulum gunlugu: /var/log/arsangaz-bootstrap.log
+# Bitince /var/lib/arsangaz/bootstrap.done olusur. Betik tekrar calistirilabilir:
+#   sudo /usr/local/sbin/arsangaz-bootstrap.sh
+
+timezone: Europe/Istanbul
+disable_root: true
+ssh_pwauth: false
+
+users:
+  - name: arsangaz
+    gecos: Arsan Gaz ERP
+    groups: [sudo, adm, systemd-journal]
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGbv96t8dMzrG3Z2xj2n462pc6iq8rPSlw9QC0l2TTSV arsangaz-hetzner
+
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - git
+  - sqlite3
+  - jq
+  - unzip
+  - fail2ban
+  - python3-systemd
+  - unattended-upgrades
+
+write_files:
+  # sshd ilk eslesen degeri kullanir; 10- oneki 50-cloud-init.conf'tan once okunur.
+  - path: /etc/ssh/sshd_config.d/10-arsangaz.conf
+    permissions: "0644"
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PubkeyAuthentication yes
+      AllowUsers arsangaz
+
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  - path: /etc/fail2ban/jail.d/arsangaz.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 5
+      findtime = 10m
+      bantime = 1h
+
+  - path: /etc/profile.d/arsangaz-dotnet.sh
+    permissions: "0644"
+    content: |
+      export DOTNET_CLI_TELEMETRY_OPTOUT=1
+      export DOTNET_NOLOGO=1
+
+  - path: /usr/local/sbin/arsangaz-bootstrap.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec >>/var/log/arsangaz-bootstrap.log 2>&1
+      echo "=== bootstrap $(date -Is) ==="
+      export DEBIAN_FRONTEND=noninteractive
+
+      # 2 GB swap
+      if [ ! -f /swapfile ]; then
+        fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+        chmod 600 /swapfile
+        mkswap /swapfile
+      fi
+      swapon --show=NAME --noheadings | grep -qx /swapfile || swapon /swapfile
+      grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+      echo 'vm.swappiness=10' > /etc/sysctl.d/99-arsangaz-swap.conf
+      sysctl -p /etc/sysctl.d/99-arsangaz-swap.conf || true
+
+      # Guvenlik duvari: Oracle Ubuntu imajinin iptables kurallari (yalnizca 22) kalir.
+      # Oracle UFW kullanilmamasini ister; acik kalirsa iSCSI disk trafigini kesebilir.
+      ufw disable || true
+
+      systemctl enable fail2ban
+      systemctl restart fail2ban || echo "UYARI: fail2ban baslatilamadi"
+      systemctl enable --now unattended-upgrades || echo "UYARI: unattended-upgrades"
+      sshd -t && systemctl restart ssh
+
+      # .NET 10 SDK (Ubuntu 24.04 kendi deposu; x64 ve arm64)
+      if ! dotnet --list-sdks 2>/dev/null | grep -q '^10\.'; then
+        if ! apt-get install -y dotnet-sdk-10.0; then
+          curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+          bash /tmp/dotnet-install.sh --channel 10.0 --install-dir /usr/share/dotnet
+          ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet
+        fi
+      fi
+
+      # Node.js LTS (NodeSource)
+      if ! command -v node >/dev/null 2>&1; then
+        curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource_setup.sh
+        bash /tmp/nodesource_setup.sh
+        apt-get install -y nodejs
+      fi
+
+      # cloudflared (Cloudflare apt deposu)
+      if ! command -v cloudflared >/dev/null 2>&1; then
+        install -d -m 0755 /usr/share/keyrings
+        curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg -o /usr/share/keyrings/cloudflare-main.gpg
+        echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared noble main' > /etc/apt/sources.list.d/cloudflared.list
+        apt-get update
+        apt-get install -y cloudflared
+      fi
+
+      install -d -m 0750 -o arsangaz -g arsangaz /opt/arsangaz /var/lib/arsangaz-data
+      install -d -m 0755 /var/lib/arsangaz
+      {
+        echo "date=$(date -Is)"
+        echo "arch=$(uname -m)"
+        echo "dotnet=$(dotnet --version 2>/dev/null || echo missing)"
+        echo "node=$(node --version 2>/dev/null || echo missing)"
+        echo "cloudflared=$(cloudflared --version 2>/dev/null | head -n1 || echo missing)"
+        echo "swap=$(swapon --show=NAME,SIZE --noheadings | tr '\n' ' ')"
+      } > /var/lib/arsangaz/bootstrap.done
+      cat /var/lib/arsangaz/bootstrap.done
+      echo "=== bootstrap ok ==="
+
+runcmd:
+  - [bash, /usr/local/sbin/arsangaz-bootstrap.sh]
+
+final_message: "Arsan Gaz ERP sunucusu hazir ($UPTIME sn). Ayrinti: /var/log/arsangaz-bootstrap.log"
