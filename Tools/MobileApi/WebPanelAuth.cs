@@ -128,6 +128,60 @@ internal sealed class WebPanelAuth
         return null;
     }
 
+    // Returns null on success or the message to show. Other sessions are signed out after a change.
+    internal async Task<string?> ChangePasswordAsync(HttpContext context, string? currentPassword, string? newPassword, string? repeat)
+    {
+        WebPanelSession? session = Current(context);
+        WebPanelCredentials? credentials = Load();
+        if (session is null || credentials is null)
+        {
+            return "Oturum kapalı; yeniden giriş yapın.";
+        }
+
+        string ip = ClientIp(context);
+        DateTime now = DateTime.UtcNow;
+        if (_failures.TryGetValue(ip, out var state) && now < state.LockedUntilUtc)
+        {
+            return $"Çok sayıda hatalı deneme. {Math.Ceiling((state.LockedUntilUtc - now).TotalMinutes)} dakika sonra tekrar deneyin.";
+        }
+
+        if (string.IsNullOrEmpty(currentPassword) || currentPassword.Length > 200 || !Verify(credentials, credentials.User, currentPassword))
+        {
+            await Task.Delay(700);
+            RegisterFailure(ip, now);
+            return "Mevcut şifre hatalı.";
+        }
+
+        if (string.IsNullOrEmpty(newPassword) || newPassword.Length < 8 || newPassword.Length > 200)
+        {
+            return "Yeni şifre 8-200 karakter olmalı.";
+        }
+
+        if (newPassword != repeat)
+        {
+            return "Yeni şifre ile tekrarı aynı değil.";
+        }
+
+        if (newPassword == currentPassword)
+        {
+            return "Yeni şifre eskisiyle aynı olamaz.";
+        }
+
+        SaveCredentials(CreateCredentials(credentials.User, newPassword));
+        string currentKey = TokenKey(context.Request.Cookies[CookieName] ?? string.Empty);
+        foreach (string key in _sessions.Keys)
+        {
+            if (key != currentKey)
+            {
+                _sessions.TryRemove(key, out _);
+            }
+        }
+
+        MobileLog.Write($"Web paneli şifresi değiştirildi ({ip}).");
+        TelegramNotifier.Send($"🔑 Tüp takip paneli şifresi değiştirildi. IP: {ip}. Diğer açık oturumlar kapatıldı. Bu siz değilseniz hemen haber verin.");
+        return null;
+    }
+
     private void RegisterFailure(string ip, DateTime now)
     {
         var updated = _failures.AddOrUpdate(ip, _ => (1, DateTime.MinValue), (_, old) => (old.Failures + 1, old.LockedUntilUtc));

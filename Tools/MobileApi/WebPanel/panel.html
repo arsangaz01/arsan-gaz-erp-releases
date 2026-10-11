@@ -95,6 +95,7 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
     </nav>
     <div class="spacer"></div>
     <span class="user" id="who"></span>
+    <button class="secondary" id="password-open" type="button">Şifre değiştir</button>
     <button class="secondary" id="logout" type="button">Çıkış</button>
   </header>
   <main>
@@ -201,6 +202,21 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
   </div>
 </dialog>
 <datalist id="plate-list"></datalist>
+
+<dialog id="password-dialog" style="width:min(420px,96vw)">
+  <div class="dlg-head"><h3>Şifre değiştir</h3><button class="secondary" id="password-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <form id="password-form" style="display:flex;flex-direction:column;gap:10px">
+      <input type="text" name="username" autocomplete="username" id="password-user" class="hidden" readonly>
+      <input type="password" id="p-current" autocomplete="current-password" placeholder="Mevcut şifre" required maxlength="200">
+      <input type="password" id="p-new" autocomplete="new-password" placeholder="Yeni şifre (en az 8 karakter)" required minlength="8" maxlength="200">
+      <input type="password" id="p-repeat" autocomplete="new-password" placeholder="Yeni şifre (tekrar)" required minlength="8" maxlength="200">
+      <button class="primary" type="submit">Şifreyi değiştir</button>
+      <div class="hint">Değişiklikten sonra diğer cihazlardaki oturumlar kapanır ve Telegram'a bildirim gider.</div>
+      <div id="password-msg" class="msg hidden"></div>
+    </form>
+  </div>
+</dialog>
 
 <script src="/panel/app.js"></script>
 </body>

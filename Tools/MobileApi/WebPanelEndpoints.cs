@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace ArsanGazERP.MobileApi;
 
 internal sealed record PanelLoginRequest(string? Kullanici, string? Sifre);
+internal sealed record PanelPasswordRequest(string? Mevcut, string? Yeni, string? YeniTekrar);
 internal sealed record PanelMoveRequest(CylinderStatus Status, int? CustomerId, string? Plate, bool? IsFull, string? Note, bool Confirm = false);
 internal sealed record PanelEditRequest(string? GasType, decimal Capacity, string? CapacityUnit, DateTime? TestDueDate, bool IsActive);
 
@@ -74,6 +75,12 @@ internal static class WebPanelEndpoints
         });
 
         api.MapGet("/ben", (HttpContext context) => Results.Ok(new { user = context.Items["panelUser"] }));
+
+        api.MapPost("/sifre", async (PanelPasswordRequest request, HttpContext context) =>
+        {
+            string? error = await auth.ChangePasswordAsync(context, request.Mevcut, request.Yeni, request.YeniTekrar);
+            return error is null ? Results.Ok(new { message = "Şifre değiştirildi. Diğer cihazlardaki oturumlar kapatıldı." }) : Results.BadRequest(new { error });
+        });
 
         api.MapGet("/ozet", async () =>
         {

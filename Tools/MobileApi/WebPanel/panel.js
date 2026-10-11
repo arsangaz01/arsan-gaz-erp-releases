@@ -89,6 +89,31 @@ $("logout").addEventListener("click", async () => {
   showLogin();
 });
 
+$("password-open").addEventListener("click", () => {
+  $("password-form").reset();
+  $("password-user").value = $("who").textContent;
+  hide($("password-msg"));
+  $("password-dialog").showModal();
+  $("p-current").focus();
+});
+$("password-close").addEventListener("click", () => $("password-dialog").close());
+
+$("password-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if ($("p-new").value !== $("p-repeat").value) { show($("password-msg"), "Yeni şifre ile tekrarı aynı değil."); return; }
+  const button = event.submitter;
+  if (button) button.disabled = true;
+  try {
+    const result = await api("/panel/api/sifre", { method: "POST", body: { mevcut: $("p-current").value, yeni: $("p-new").value, yeniTekrar: $("p-repeat").value } });
+    $("password-form").reset();
+    show($("password-msg"), result.message, "ok");
+  } catch (error) {
+    show($("password-msg"), error.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
+});
+
 for (const button of document.querySelectorAll("nav button")) {
   button.addEventListener("click", () => openTab(button.dataset.tab));
 }
