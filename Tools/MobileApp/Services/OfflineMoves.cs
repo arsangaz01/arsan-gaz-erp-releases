@@ -45,6 +45,10 @@ public static class OfflineMoves
                 {
                     return (sent, null);
                 }
+                catch (ApiException exception) when (!IsPermanentRejection(exception.StatusCode))
+                {
+                    return (sent, $"{move.Code} – {move.Label}: {exception.Message} (kayıt kuyrukta bekliyor)");
+                }
                 catch (ApiException exception)
                 {
                     // The ERP rejected this movement (e.g. unknown barcode); drop it so later ones are not blocked.
@@ -65,6 +69,9 @@ public static class OfflineMoves
             Gate.Release();
         }
     }
+
+    private static bool IsPermanentRejection(int? statusCode) =>
+        statusCode is >= 400 and < 500 and not (401 or 403 or 408 or 429);
 
     private static List<PendingMove> Load()
     {

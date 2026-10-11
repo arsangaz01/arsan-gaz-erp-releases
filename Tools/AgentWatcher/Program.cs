@@ -544,7 +544,8 @@ internal sealed partial class ControlCenterForm : Form
     readonly SemaphoreSlim telegramOutboxGate = new(1, 1);
     readonly SemaphoreSlim autonomyQueueGate = new(1, 1);
     readonly HashSet<string> telegramOutboxWarnings = new(StringComparer.Ordinal);
-    readonly TelegramCopilotInbox telegramCopilotInbox = new(Paths.CopilotInbox, Paths.TelegramOutbox);
+    readonly TelegramCopilotInbox telegramCopilotInbox = new(Paths.CopilotInbox, Paths.TelegramOutbox,
+        message => AppLog.Write("TELEGRAM", message));
     DateTime workflowNoticeSendAllowedUtc = DateTime.MinValue;
     readonly TabControl tabs = new() { Dock = DockStyle.Fill };
     readonly DataGridView approvalsGrid = NewGrid();

@@ -118,6 +118,10 @@ public sealed class CampaignService
                 await store.SetConsentAsync(group.Population, contact.ContactId, channel, endpoint!, granted, evidence, cancellationToken);
                 recorded++;
             }
+            catch (CrmOptOutException)
+            {
+                withdrawn++;
+            }
             catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
             {
                 failed++;
@@ -356,7 +360,7 @@ public sealed class CampaignService
         bool granted,
         string evidence,
         CancellationToken cancellationToken = default) =>
-        store.SetConsentAsync(population, contactId, channel, endpoint, granted, evidence, cancellationToken);
+        store.SetConsentAsync(population, contactId, channel, endpoint, granted, evidence, cancellationToken, overrideCrmOptOut: true);
 
     public Task<IReadOnlyList<CampaignConsent>> GetConsentLedgerAsync(
         CampaignPopulation? population = null,

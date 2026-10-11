@@ -628,14 +628,14 @@ internal sealed class TelegramBotService : IDisposable
             || !callback.TryGetProperty("data", out JsonElement dataValue)
             || dataValue.ValueKind != JsonValueKind.String)
         {
-            await AnswerCallbackAsync(callbackId, "Bu işlem artık kullanılamıyor.", cancellationToken);
+            await AnswerCallbackAsync(callbackId, "Bu işlem artık kullanılamıyor.", log, cancellationToken);
             return;
         }
 
         if (chatId != _allowedChatId)
         {
             log($"Yetkisiz Telegram callback'i yok sayıldı (chat ID: {chatId}).");
-            await AnswerCallbackAsync(callbackId, "Bu sohbet için yetki yok.", cancellationToken);
+            await AnswerCallbackAsync(callbackId, "Bu sohbet için yetki yok.", log, cancellationToken);
             return;
         }
 
@@ -646,7 +646,7 @@ internal sealed class TelegramBotService : IDisposable
                 dataValue.GetString() ?? string.Empty,
                 chatId,
                 cancellationToken);
-            await AnswerCallbackAsync(callbackId, result, cancellationToken);
+            await AnswerCallbackAsync(callbackId, result, log, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -656,25 +656,34 @@ internal sealed class TelegramBotService : IDisposable
         {
             string errorText = Redact(exception.GetBaseException().Message);
             log("Telegram callback işlenemedi: " + errorText);
-            await AnswerCallbackAsync(callbackId, "İşlem başarısız: " + errorText, cancellationToken);
+            await AnswerCallbackAsync(callbackId, "İşlem başarısız: " + errorText, log, cancellationToken);
         }
     }
 
     private async Task AnswerCallbackAsync(
         string callbackId,
         string text,
+        Action<string> log,
         CancellationToken cancellationToken)
     {
         string safeText = text.Length <= 180 ? text : text[..180];
-        await CallAsync(
-            "answerCallbackQuery",
-            new Dictionary<string, object>
-            {
-                ["callback_query_id"] = callbackId,
-                ["text"] = safeText,
-                ["show_alert"] = !string.IsNullOrWhiteSpace(text)
-            },
-            cancellationToken);
+        try
+        {
+            using JsonDocument _ = await CallAsync(
+                "answerCallbackQuery",
+                new Dictionary<string, object>
+                {
+                    ["callback_query_id"] = callbackId,
+                    ["text"] = safeText,
+                    ["show_alert"] = !string.IsNullOrWhiteSpace(text)
+                },
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // Telegram rejects answers to callbacks older than ~15 s; the offset must still advance past this update.
+            log("Telegram callback yanıtı gönderilemedi: " + Redact(exception.GetBaseException().Message));
+        }
     }
 
     private Task<JsonDocument> CallAsync(

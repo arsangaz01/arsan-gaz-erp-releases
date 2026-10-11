@@ -141,6 +141,23 @@ internal static class CampaignTests
         AudiencePreview preview = await service.PreviewAudienceAsync(
             new AudienceSelection(CampaignPopulation.CrmCompanies, [30, 31, 32], false), CampaignChannel.Email);
         Check(preview.Recipients.Select(item => item.ContactId).SequenceEqual([31]), "An opted-out firm never re-enters the audience through a group consent.");
+
+        await fixture.InsertCrmContactAsync(33, "Kartta Ret", "", "0532 333 44 55");
+        await fixture.InsertCrmContactAsync(34, "Kartta Izinli", "", "0532 333 44 66");
+        await fixture.ExecuteCrmAsync("UPDATE CrmCompanies SET WhatsAppOptOutAtUtc='2026-10-04T17:30:00.0000000+00:00' WHERE Id=33;");
+        CampaignGroup whatsApp = await service.SaveGroupAsync(null, "Kart reddi", CampaignPopulation.CrmCompanies, [33, 34]);
+        ConsentBatchResult cardConsent = await service.RecordGroupConsentAsync(whatsApp.Id, CampaignChannel.WhatsApp, true, "Synthetic B2B basis");
+        Check(cardConsent.Recorded == 1 && cardConsent.SkippedWithdrawn == 1,
+            "A group WhatsApp consent must skip firms whose CRM card records an opt-out.");
+        AudiencePreview cardPreview = await service.PreviewAudienceAsync(
+            new AudienceSelection(CampaignPopulation.CrmCompanies, [33, 34], false), CampaignChannel.WhatsApp);
+        Check(cardPreview.Recipients.Select(item => item.ContactId).SequenceEqual([34]),
+            "A CRM card opt-out must survive a group consent and keep the firm out of the audience.");
+        await service.RecordConsentAsync(CampaignPopulation.CrmCompanies, 33, CampaignChannel.WhatsApp, "0532 333 44 55", true, "Synthetic explicit re-consent");
+        AudiencePreview reconsented = await service.PreviewAudienceAsync(
+            new AudienceSelection(CampaignPopulation.CrmCompanies, [33, 34], false), CampaignChannel.WhatsApp);
+        Check(reconsented.Recipients.Select(item => item.ContactId).OrderBy(id => id).SequenceEqual([33, 34]),
+            "An explicit single-firm consent may still clear an earlier CRM card opt-out.");
     }
 
     private static async Task GmailSenderSettingsAndReadinessAsync()

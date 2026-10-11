@@ -413,8 +413,17 @@ internal static class LiveInfoService
 
     private static bool ContainsWord(string foldedText, string keyword)
     {
-        int index = foldedText.IndexOf(keyword, StringComparison.Ordinal);
-        return index >= 0 && (index == 0 || !char.IsLetter(foldedText[index - 1]));
+        for (int index = foldedText.IndexOf(keyword, StringComparison.Ordinal);
+             index >= 0;
+             index = foldedText.IndexOf(keyword, index + 1, StringComparison.Ordinal))
+        {
+            if (index == 0 || !char.IsLetter(foldedText[index - 1]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string Fold(string text)

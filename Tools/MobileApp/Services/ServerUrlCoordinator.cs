@@ -56,16 +56,31 @@ public static class ServerUrlCoordinator
         }
     }
 
+    private static int _recovering;
+
     public static async Task TryRecoverAfterFailureAsync()
     {
-        if (await ApiClient.Instance.TryApplyTelegramClipboardUrlAsync())
+        // The refresh below goes through ApiClient.SendAsync, whose failure path calls back into this method.
+        if (Interlocked.Exchange(ref _recovering, 1) == 1)
         {
             return;
         }
 
-        if (await ApiClient.Instance.IsPairedAsync())
+        try
         {
-            await RefreshIfDueAsync(force: true);
+            if (await ApiClient.Instance.TryApplyTelegramClipboardUrlAsync())
+            {
+                return;
+            }
+
+            if (await ApiClient.Instance.IsPairedAsync())
+            {
+                await RefreshIfDueAsync(force: true);
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref _recovering, 0);
         }
     }
 

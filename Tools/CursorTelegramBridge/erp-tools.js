@@ -43,6 +43,7 @@ class ErpMcpClient {
       }
       this.pending.clear();
     };
+    child.stdin.on("error", (error) => fail(error));
     child.on("error", (error) => fail(error));
     child.on("exit", (code) => fail(new Error(`ERP MCP sunucusu kapandı (kod ${code}).`)));
     this.ready = (async () => {

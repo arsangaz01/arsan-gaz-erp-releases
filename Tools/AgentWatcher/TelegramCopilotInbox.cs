@@ -15,8 +15,10 @@ internal sealed record BridgeRequest(
 
 internal sealed record TelegramCopilotEnqueueResult(string Id, bool AlreadyQueued);
 
-internal sealed class TelegramCopilotInbox(string inboxDirectory, string outboxDirectory)
+internal sealed class TelegramCopilotInbox(string inboxDirectory, string outboxDirectory, Action<string>? log = null)
 {
+    private readonly HashSet<string> reportedBadRecords = new(StringComparer.OrdinalIgnoreCase);
+
     public const string DirectResponseKind = "telegram-copilot-direct-response";
     public const string DirectTrackingSuffix = ".delivery.json";
 
@@ -109,65 +111,84 @@ internal sealed class TelegramCopilotInbox(string inboxDirectory, string outboxD
                      .OrderBy(path => path, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            TelegramDirectTracking tracking = JsonSerializer.Deserialize<TelegramDirectTracking>(
-                await File.ReadAllTextAsync(trackingPath, cancellationToken),
-                JsonOptions) ?? throw new InvalidDataException(
-                    $"Telegram doğrudan yönlendirme kaydı boş: {Path.GetFileName(trackingPath)}");
-            if (tracking.Delivered)
+            try
             {
-                continue;
-            }
-
-            (string Status, string? Report)? outcome = await ReadOutcomeAsync(tracking, cancellationToken);
-            if (outcome is not { } result)
-            {
-                continue;
-            }
-
-            bool succeeded = string.Equals(result.Status, "completed", StringComparison.Ordinal);
-            string report = succeeded
-                ? result.Report ?? throw new InvalidDataException("VS Code tamamlanma raporu boş.")
-                : "VS Code isteği Copilot'a gönderemedi: " + result.Report;
-            string outboxId = Convert.ToHexString(
-                SHA256.HashData(Encoding.UTF8.GetBytes(tracking.Request.TaskId ?? tracking.Request.Id)))[..32];
-            string outboxPath = Path.Combine(outboxDirectory, outboxId + ".json");
-            if (File.Exists(outboxPath))
-            {
-                using JsonDocument existing = JsonDocument.Parse(
-                    await File.ReadAllTextAsync(outboxPath, cancellationToken));
-                JsonElement root = existing.RootElement;
-                if (!root.TryGetProperty("TaskId", out JsonElement existingTaskId)
-                    || existingTaskId.GetString() != (tracking.Request.TaskId ?? tracking.Request.Id)
-                    || !root.TryGetProperty("ChatId", out JsonElement existingChatId)
-                    || existingChatId.GetInt64() != tracking.ChatId)
+                if (await ForwardCompletionAsync(trackingPath, cancellationToken))
                 {
-                    throw new InvalidDataException("Telegram giden kutusu kimlik çakışması; kayıt korunmuştur.");
+                    forwarded++;
                 }
             }
-            else
+            catch (Exception exception) when (exception is JsonException or InvalidDataException or IOException
+                                              or InvalidOperationException or KeyNotFoundException or FormatException)
             {
-                await WriteJsonAtomicallyAsync(outboxPath, new
+                if (reportedBadRecords.Add(trackingPath))
                 {
-                    Id = outboxId,
-                    Kind = succeeded ? DirectResponseKind : TelegramQueuePolicy.ErrorNoticeKind,
-                    TaskId = tracking.Request.TaskId ?? tracking.Request.Id,
-                    ChatId = tracking.ChatId,
-                    Report = report,
-                    CreatedUtc = DateTime.UtcNow,
-                    NextAttemptUtc = DateTime.UtcNow,
-                    Attempts = 0,
-                    DeliveredChunkCount = 0,
-                    Receipts = Array.Empty<object>(),
-                    LastError = (string?)null
-                }, overwrite: false, cancellationToken);
+                    log?.Invoke($"Telegram doğrudan yönlendirme kaydı atlandı ({Path.GetFileName(trackingPath)}): {exception.Message}");
+                }
             }
-
-            tracking.Delivered = true;
-            await WriteJsonAtomicallyAsync(trackingPath, tracking, overwrite: true, cancellationToken);
-            forwarded++;
         }
 
         return forwarded;
+    }
+
+    private async Task<bool> ForwardCompletionAsync(string trackingPath, CancellationToken cancellationToken)
+    {
+        TelegramDirectTracking tracking = JsonSerializer.Deserialize<TelegramDirectTracking>(
+            await File.ReadAllTextAsync(trackingPath, cancellationToken),
+            JsonOptions) ?? throw new InvalidDataException(
+                $"Telegram doğrudan yönlendirme kaydı boş: {Path.GetFileName(trackingPath)}");
+        if (tracking.Delivered)
+        {
+            return false;
+        }
+
+        (string Status, string? Report)? outcome = await ReadOutcomeAsync(tracking, cancellationToken);
+        if (outcome is not { } result)
+        {
+            return false;
+        }
+
+        bool succeeded = string.Equals(result.Status, "completed", StringComparison.Ordinal);
+        string report = succeeded
+            ? result.Report ?? throw new InvalidDataException("VS Code tamamlanma raporu boş.")
+            : "VS Code isteği Copilot'a gönderemedi: " + result.Report;
+        string outboxId = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(tracking.Request.TaskId ?? tracking.Request.Id)))[..32];
+        string outboxPath = Path.Combine(outboxDirectory, outboxId + ".json");
+        if (File.Exists(outboxPath))
+        {
+            using JsonDocument existing = JsonDocument.Parse(
+                await File.ReadAllTextAsync(outboxPath, cancellationToken));
+            JsonElement root = existing.RootElement;
+            if (!root.TryGetProperty("TaskId", out JsonElement existingTaskId)
+                || existingTaskId.GetString() != (tracking.Request.TaskId ?? tracking.Request.Id)
+                || !root.TryGetProperty("ChatId", out JsonElement existingChatId)
+                || existingChatId.GetInt64() != tracking.ChatId)
+            {
+                throw new InvalidDataException("Telegram giden kutusu kimlik çakışması; kayıt korunmuştur.");
+            }
+        }
+        else
+        {
+            await WriteJsonAtomicallyAsync(outboxPath, new
+            {
+                Id = outboxId,
+                Kind = succeeded ? DirectResponseKind : TelegramQueuePolicy.ErrorNoticeKind,
+                TaskId = tracking.Request.TaskId ?? tracking.Request.Id,
+                ChatId = tracking.ChatId,
+                Report = report,
+                CreatedUtc = DateTime.UtcNow,
+                NextAttemptUtc = DateTime.UtcNow,
+                Attempts = 0,
+                DeliveredChunkCount = 0,
+                Receipts = Array.Empty<object>(),
+                LastError = (string?)null
+            }, overwrite: false, cancellationToken);
+        }
+
+        tracking.Delivered = true;
+        await WriteJsonAtomicallyAsync(trackingPath, tracking, overwrite: true, cancellationToken);
+        return true;
     }
 
     private async Task<(string Status, string? Report)?> ReadOutcomeAsync(

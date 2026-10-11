@@ -12,15 +12,16 @@ internal sealed record MobileApkVersion(string VersionName, int VersionCode);
 internal static class MobileApkPublishInfo
 {
     private static string MetaFile => MobileApiPaths.ApkFile + ".meta.json";
+    private static readonly Lock CacheGate = new();
+    private static (long Length, DateTime WrittenUtc, MobileApkVersion Version)? cachedApkVersion;
 
     internal static MobileApkVersion ResolvePublishedVersion()
     {
         if (File.Exists(MobileApiPaths.ApkFile))
         {
-            MobileApkVersion? fromApk = TryReadFromApkFile();
+            MobileApkVersion? fromApk = ReadApkVersionCached();
             if (fromApk is not null)
             {
-                TryWriteMeta(fromApk);
                 return fromApk;
             }
 
@@ -67,6 +68,28 @@ internal static class MobileApkPublishInfo
         }
     }
 
+    // /api/merhaba and /api/guncelleme are unauthenticated; aapt runs only when the APK file changes.
+    private static MobileApkVersion? ReadApkVersionCached()
+    {
+        FileInfo apk = new(MobileApiPaths.ApkFile);
+        lock (CacheGate)
+        {
+            if (cachedApkVersion is { } cached && cached.Length == apk.Length && cached.WrittenUtc == apk.LastWriteTimeUtc)
+            {
+                return cached.Version;
+            }
+
+            MobileApkVersion? version = TryReadFromApkFile();
+            if (version is not null)
+            {
+                cachedApkVersion = (apk.Length, apk.LastWriteTimeUtc, version);
+                TryWriteMeta(version);
+            }
+
+            return version;
+        }
+    }
+
     private static MobileApkVersion? TryReadFromApkFile()
     {
         string? aapt = FindAapt();
@@ -85,8 +108,16 @@ internal static class MobileApkPublishInfo
                 CreateNoWindow = true
             };
             using Process process = Process.Start(start) ?? throw new InvalidOperationException("aapt başlatılamadı.");
-            string output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit(15000);
+            Task<string> error = process.StandardError.ReadToEndAsync();
+            Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
+            if (!process.WaitForExit(15000))
+            {
+                process.Kill(entireProcessTree: true);
+                throw new TimeoutException("aapt 15 saniyede yanıt vermedi.");
+            }
+
+            string output = standardOutput.GetAwaiter().GetResult();
+            _ = error.GetAwaiter().GetResult();
             if (process.ExitCode != 0)
             {
                 return null;
@@ -101,7 +132,8 @@ internal static class MobileApkPublishInfo
 
             return new MobileApkVersion(nameMatch.Groups[1].Value, int.Parse(codeMatch.Groups[1].Value));
         }
-        catch (Exception exception) when (exception is IOException or InvalidOperationException or TimeoutException)
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or TimeoutException
+                                              or System.ComponentModel.Win32Exception or FormatException or OverflowException)
         {
             MobileLog.Write("APK badging okunamadı: " + exception.Message);
             return null;

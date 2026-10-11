@@ -113,7 +113,10 @@ public sealed record CampaignListItem(
         (Failed > 0 ? $" · {Failed} başarısız" : string.Empty) + $" · başlangıç {StartsAt}";
 }
 
-public class ApiException(string message) : Exception(message);
+public class ApiException(string message, int? statusCode = null) : Exception(message)
+{
+    public int? StatusCode { get; } = statusCode;
+}
 
 // The computer or tunnel could not be reached; the request never got an answer from the ERP.
 public sealed class ServerUnreachableException(string message) : ApiException(message);
@@ -472,7 +475,14 @@ public sealed class ApiClient
                     retry.Content = JsonContent.Create(body, options: Json);
                 }
 
-                return await _http.SendAsync(retry);
+                try
+                {
+                    return await _http.SendAsync(retry);
+                }
+                catch (Exception retryException) when (retryException is HttpRequestException or TaskCanceledException)
+                {
+                    throw new ServerUnreachableException("Sunucuya yeni adresten de ulaşılamadı. (" + retryException.Message + ")");
+                }
             }
 
             throw new ServerUnreachableException("Sunucuya ulaşılamadı. Telegram'daki tek dokunuş bağlantısını deneyin veya uygulamayı yeniden açın. (" + exception.Message + ")");
@@ -510,7 +520,7 @@ public sealed class ApiClient
             {
                 HttpStatusCode.Unauthorized => error ?? "Eşleşme geçersiz. Bağlantı'dan yeniden eşleştirin.",
                 _ => error ?? $"Sunucu hatası ({(int)response.StatusCode})."
-            });
+            }, (int)response.StatusCode);
         }
 
         try

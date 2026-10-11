@@ -656,7 +656,8 @@ VALUES($id,$owner,$name,$type,$length,$hash,$path,$now);
         string endpoint,
         bool granted,
         string evidence,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool overrideCrmOptOut = false)
     {
         if (string.IsNullOrWhiteSpace(evidence) || evidence.Trim().Length > 2000)
             throw new ArgumentException("Consent evidence is required and must not exceed 2000 characters.", nameof(evidence));
@@ -679,6 +680,9 @@ VALUES($id,$owner,$name,$type,$length,$hash,$path,$now);
             if (current is null || !current.IsActive ||
                 !string.Equals(NormalizeEndpoint(channel, current.EndpointFor(channel)), normalized, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("CRM WhatsApp endpoint changed before consent could be committed.");
+            // The CRM card opt-out is not mirrored into the consent ledger; only an explicit per-contact grant may clear it.
+            if (granted && !overrideCrmOptOut && current.WhatsAppOptOutAtUtc is not null)
+                throw new CrmOptOutException("CRM kartında WhatsApp pazarlama izni geri çekilmiş; toplu izin bu firmayı kapsamaz.");
         }
         await ExecuteAsync(connection, transaction, """
 INSERT INTO CampaignConsents(OwnerSid, Population, ContactId, Channel, Endpoint, NormalizedEndpoint, Granted, Evidence, RecordedUtc, IsWithdrawal)
@@ -1895,5 +1899,7 @@ JOIN Campaigns c ON c.Id=a.CampaignId WHERE c.OwnerSid=$owner AND a.CampaignId=$
     private sealed record CrmCooldownState(IReadOnlyList<int> ContactIds, DateTimeOffset? LatestAttemptUtc);
     private enum ConsentDecision { Granted, Missing, OptedOut, Conflicting }
 }
+
+public sealed class CrmOptOutException(string message) : InvalidOperationException(message);
 
 public sealed record CampaignSendAuthorization(string AttemptId, CampaignApprovalManifest Manifest, CampaignRecipient Recipient, int AttemptNumber);

@@ -88,7 +88,7 @@ internal static class CursorRelay
 
         if (!File.Exists(Path.Combine(Inbox, id + ".request.json")))
         {
-            return null;
+            return ReadFailedAcknowledgement(id);
         }
 
         string? stage = File.Exists(Path.Combine(Inbox, id + ".ide-claim.json")) ? "Cursor sohbeti üzerinde çalışıyor" : null;
@@ -106,6 +106,34 @@ internal static class CursorRelay
         }
 
         return new CursorRequestStatus(id, stage is null ? "queued" : "working", stage, null);
+    }
+
+    // bridge.js reports a failed request only through <id>.ack.json and then deletes the request file.
+    private static CursorRequestStatus? ReadFailedAcknowledgement(string id)
+    {
+        string acknowledgement = Path.Combine(Inbox, id + ".ack.json");
+        if (!File.Exists(acknowledgement))
+        {
+            return null;
+        }
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(acknowledgement, Utf8));
+            JsonElement root = document.RootElement;
+            if (!root.TryGetProperty("status", out JsonElement state) || state.GetString() != "failed")
+            {
+                return null;
+            }
+
+            string? error = root.TryGetProperty("error", out JsonElement value) ? value.GetString() : null;
+            return new CursorRequestStatus(id, "failed", null,
+                "İstek tamamlanamadı: " + (string.IsNullOrWhiteSpace(error) ? "bilinmeyen hata" : error));
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     public static bool IsValidId(string id) =>
@@ -129,20 +157,27 @@ internal sealed class CursorRelayNotifier : BackgroundService
                     continue;
                 }
 
-                IEnumerable<string> completions = Directory.EnumerateFiles(CursorRelay.Inbox, CursorRelay.IdPrefix + "*.completion.json")
-                    .Concat(Directory.EnumerateFiles(CursorRelay.Inbox, CursorEscalationService.IdPrefix + "*.completion.json"));
-                foreach (string completion in completions)
+                IEnumerable<string> outcomes = new[] { ".completion.json", ".ack.json" }
+                    .SelectMany(suffix => new[] { CursorRelay.IdPrefix, CursorEscalationService.IdPrefix }
+                        .SelectMany(prefix => Directory.EnumerateFiles(CursorRelay.Inbox, prefix + "*" + suffix)));
+                foreach (string outcome in outcomes)
                 {
-                    string id = Path.GetFileName(completion)[..^".completion.json".Length];
+                    string name = Path.GetFileName(outcome);
+                    string id = name[..^(name.EndsWith(".ack.json", StringComparison.Ordinal) ? ".ack.json".Length : ".completion.json".Length)];
                     string marker = Path.Combine(CursorRelay.Inbox, id + ".mobile-notified");
-                    if (File.Exists(marker) || File.GetLastWriteTimeUtc(completion) < DateTime.UtcNow.AddDays(-1))
+                    if (File.Exists(marker) || File.GetLastWriteTimeUtc(outcome) < DateTime.UtcNow.AddDays(-1))
+                    {
+                        continue;
+                    }
+
+                    CursorRequestStatus? status = CursorRelay.GetStatus(id);
+                    if (status is not { Status: "completed" or "failed" })
                     {
                         continue;
                     }
 
                     File.WriteAllText(marker, DateTime.UtcNow.ToString("o"));
-                    CursorRequestStatus? status = CursorRelay.GetStatus(id);
-                    if (status?.Report is { Length: > 0 } report)
+                    if (status.Report is { Length: > 0 } report)
                     {
                         TelegramNotifier.Send((id.StartsWith(CursorEscalationService.IdPrefix, StringComparison.Ordinal)
                             ? "🤖 Jarvis'in Cursor'a aktardığı isteğin sonucu:\n\n"
