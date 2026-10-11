@@ -4,7 +4,7 @@ namespace ArsanGazMobile.Pages;
 
 public sealed class SummaryPage : ContentPage
 {
-    private readonly Label _text = new() { FontSize = 15 };
+    private readonly Label _text = new() { FontSize = 15, LineHeight = 1.3 };
     private readonly Label _heading = Ui.Title("Genel özet");
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
 
@@ -30,7 +30,7 @@ public sealed class SummaryPage : ContentPage
             {
                 Padding = 16,
                 Spacing = 10,
-                Children = { buttons, _busy, _heading, _text }
+                Children = { buttons, _busy, _heading, Ui.Card(_text) }
             }
         };
     }

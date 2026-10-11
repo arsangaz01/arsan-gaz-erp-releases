@@ -6,6 +6,8 @@
     Title="Arsan Gaz ERP"
     Shell.TabBarForegroundColor="#C2410C"
     Shell.TabBarTitleColor="#C2410C"
+    Shell.TabBarUnselectedColor="#6B7280"
+    Shell.TabBarBackgroundColor="{AppThemeBinding Light=White, Dark=#1F1F1F}"
     Shell.BackgroundColor="#C2410C"
     Shell.ForegroundColor="White"
     Shell.TitleColor="White">

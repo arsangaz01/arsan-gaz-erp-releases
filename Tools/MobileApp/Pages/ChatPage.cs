@@ -57,7 +57,7 @@ public sealed class ChatPage : ContentPage
             {
                 Label sender = new() { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = Ui.Accent };
                 sender.SetBinding(Label.TextProperty, nameof(ChatMessage.Sender));
-                Label text = new() { FontSize = 15 };
+                Label text = new() { FontSize = 15, TextColor = Color.FromArgb("#111827") };
                 text.SetBinding(Label.TextProperty, nameof(ChatMessage.Text));
                 Border bubble = new()
                 {
@@ -81,7 +81,7 @@ public sealed class ChatPage : ContentPage
             MaximumHeightRequest = 120,
             HorizontalOptions = LayoutOptions.Fill
         };
-        _mic = new Button { Text = "🎤", FontSize = 22, WidthRequest = 58, BackgroundColor = Ui.Accent, TextColor = Colors.White };
+        _mic = new Button { Text = "🎤", FontSize = 22, WidthRequest = 58, BackgroundColor = Ui.Accent, TextColor = Colors.White, BorderWidth = 0 };
         _mic.Clicked += async (_, _) => await ListenAsync();
         _attach = new Button { Text = "📎", FontSize = 20, WidthRequest = 52 };
         _attach.Clicked += async (_, _) => await PickAttachmentAsync();

@@ -9,9 +9,24 @@ public static class Ui
     {
         Text = text,
         FontSize = 20,
-        FontAttributes = FontAttributes.Bold,
-        Margin = new Thickness(0, 4, 0, 4)
+        FontFamily = "OpenSansSemibold",
+        Margin = new Thickness(0, 8, 0, 2)
     };
+
+    public static Border Card(View content)
+    {
+        Border card = new()
+        {
+            Padding = new Thickness(14, 12),
+            StrokeThickness = 1,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
+            Content = content
+        };
+        card.SetAppThemeColor(VisualElement.BackgroundColorProperty, Color.FromArgb("#FAFAF9"), Color.FromArgb("#262626"));
+        card.SetAppTheme<Brush>(Border.StrokeProperty,
+            new SolidColorBrush(Color.FromArgb("#E7E5E4")), new SolidColorBrush(Color.FromArgb("#3F3F46")));
+        return card;
+    }
 
     public static Label Note(string text) => new()
     {
@@ -22,7 +37,7 @@ public static class Ui
 
     public static Button Primary(string text, EventHandler onClick)
     {
-        Button button = new() { Text = text, BackgroundColor = Accent, TextColor = Colors.White };
+        Button button = new() { Text = text, BackgroundColor = Accent, TextColor = Colors.White, BorderWidth = 0 };
         button.Clicked += onClick;
         return button;
     }
