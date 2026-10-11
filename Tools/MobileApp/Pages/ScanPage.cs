@@ -103,7 +103,7 @@ public sealed class ScanPage : ContentPage
         {
             Vibration.Default.Vibrate(TimeSpan.FromMilliseconds(80));
         }
-        catch (FeatureNotSupportedException)
+        catch (Exception exception) when (exception is FeatureNotSupportedException or PermissionException)
         {
         }
     }
