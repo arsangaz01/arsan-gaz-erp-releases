@@ -89,7 +89,14 @@ public sealed class CylinderPage : ContentPage
         {
             Spacing = 6,
             IsVisible = false,
-            Children = { _customerSearch, Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()), _customer }
+            Children =
+            {
+                _customerSearch,
+                Ui.ActionRow(
+                    Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
+                    Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync())),
+                _customer
+            }
         };
         _vehiclePanel = new VerticalStackLayout
         {
@@ -407,6 +414,19 @@ public sealed class CylinderPage : ContentPage
         }
 
         await MoveAsync(confirm: false);
+    }
+
+    private async Task NewCustomerAsync()
+    {
+        if (await CustomerCreatePage.CreateAsync(Navigation, _customerSearch.Text) is not CustomerItem created)
+        {
+            return;
+        }
+
+        _customers = [created];
+        _customerSearch.Text = created.Name;
+        _customer.ItemsSource = _customers.Select(c => c.Name + (string.IsNullOrWhiteSpace(c.City) ? string.Empty : " · " + c.City)).ToList();
+        _customer.SelectedIndex = 0;
     }
 
     private Task SearchCustomersAsync() => Ui.RunAsync(this, _busy, async () =>

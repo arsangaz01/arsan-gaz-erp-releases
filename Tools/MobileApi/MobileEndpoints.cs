@@ -12,6 +12,9 @@ internal sealed record MoveRequest(string Code, CylinderStatus Status, int? Cust
 internal sealed record BulkMoveRequest(List<string?>? Codes, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null, bool ConfirmCustomerChange = false);
 internal sealed record AuditRequest(int CustomerId, List<string?>? Codes, string? Note);
 internal sealed record NewCylinderRequest(string? SerialNumber, string? Barcode, string? GasType, decimal Capacity, string? CapacityUnit, bool? IsFull, DateTime? TestDueDate, int? CustomerId = null);
+internal sealed record CustomerCreateRequest(
+    string? Name, string? ContactName, string? Phone, string? Email, string? City, string? District, string? Address,
+    string? TaxOffice, string? TaxNumber, bool AllowDuplicate = false);
 internal sealed record CrmNoteRequest(string Text);
 internal sealed record CursorRequest(string? Message);
 internal sealed record CrmFollowUpRequest(DateOnly Date, string? Note);
@@ -84,6 +87,9 @@ internal static class MobileEndpoints
         app.MapGet("/api/ozet", () => Text(() => "ERP\n" + ErpTools.Summary() + "\nCRM\n" + ErpTools.CrmSummary()));
 
         app.MapGet("/api/musteriler", async (string? q) => Results.Ok(await CustomerChoices.SearchAsync(q)));
+
+        app.MapPost("/api/musteri", (CustomerCreateRequest request, HttpContext context) =>
+            CustomerChoices.CreateAsync(request, "mobil: " + DeviceName(context)));
 
         app.MapGet("/api/crm", async (string? q) =>
         {

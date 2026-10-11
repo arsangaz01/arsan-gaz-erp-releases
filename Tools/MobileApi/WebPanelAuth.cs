@@ -1,15 +1,16 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 
 namespace ArsanGazERP.MobileApi;
 
+// Format of the single-user web-panel.json used before multi-user support; read only for the one-time migration.
 internal sealed record WebPanelCredentials(string User, string Salt, string Hash, int Iterations);
 
-internal sealed record WebPanelSession(string User, DateTime ExpiresUtc, string Ip);
+// UserCreatedAt guards against a restored users file handing an old session's id to a different account.
+internal sealed record WebPanelSession(int UserId, DateTime UserCreatedAt, int Stamp, DateTime ExpiresUtc, string Ip);
 
-// Username/password login for the browser panel. Only a PBKDF2 hash of the password is stored on disk.
+// Username/password login for the browser panel plus the administrator's user management.
 internal sealed class WebPanelAuth
 {
     internal const string CookieName = "agp_oturum";
@@ -24,43 +25,7 @@ internal sealed class WebPanelAuth
     private readonly ConcurrentQueue<DateTime> _recentFailures = new();
     private DateTime _globalLockUntilUtc;
 
-    internal static string CredentialsFile => Path.Combine(MobileApiPaths.Root, "web-panel.json");
-
-    internal static bool IsConfigured => File.Exists(CredentialsFile);
-
-    internal static WebPanelCredentials CreateCredentials(string user, string password, int iterations = 210_000)
-    {
-        byte[] salt = RandomNumberGenerator.GetBytes(16);
-        byte[] hash = Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(password), salt, iterations, HashAlgorithmName.SHA256, 32);
-        return new WebPanelCredentials(user.Trim(), Convert.ToBase64String(salt), Convert.ToBase64String(hash), iterations);
-    }
-
-    internal static bool Verify(WebPanelCredentials credentials, string user, string password)
-    {
-        byte[] expected = Convert.FromBase64String(credentials.Hash);
-        byte[] actual = Rfc2898DeriveBytes.Pbkdf2(
-            Encoding.UTF8.GetBytes(password), Convert.FromBase64String(credentials.Salt), credentials.Iterations, HashAlgorithmName.SHA256, expected.Length);
-        bool userMatches = CryptographicOperations.FixedTimeEquals(
-            SHA256.HashData(Encoding.UTF8.GetBytes(user.Trim().ToLowerInvariant())),
-            SHA256.HashData(Encoding.UTF8.GetBytes(credentials.User.ToLowerInvariant())));
-        return CryptographicOperations.FixedTimeEquals(expected, actual) & userMatches;
-    }
-
-    internal static void SaveCredentials(WebPanelCredentials credentials) =>
-        File.WriteAllText(CredentialsFile, JsonSerializer.Serialize(credentials));
-
-    private static WebPanelCredentials? Load()
-    {
-        try
-        {
-            return IsConfigured ? JsonSerializer.Deserialize<WebPanelCredentials>(File.ReadAllText(CredentialsFile)) : null;
-        }
-        catch (Exception exception) when (exception is IOException or JsonException)
-        {
-            MobileLog.Write("Web paneli giriş dosyası okunamadı: " + exception.Message);
-            return null;
-        }
-    }
+    internal static string LegacyCredentialsFile => Path.Combine(MobileApiPaths.Root, "web-panel.json");
 
     internal static string ClientIp(HttpContext context)
     {
@@ -75,7 +40,7 @@ internal sealed class WebPanelAuth
     }
 
     // Returns null on success or the message to show.
-    internal async Task<string?> LoginAsync(HttpContext context, string? user, string? password)
+    internal async Task<string?> LoginAsync(HttpContext context, string? userName, string? password)
     {
         string ip = ClientIp(context);
         DateTime now = DateTime.UtcNow;
@@ -89,24 +54,48 @@ internal sealed class WebPanelAuth
             return $"Çok sayıda hatalı deneme. {Math.Ceiling((state.LockedUntilUtc - now).TotalMinutes)} dakika sonra tekrar deneyin.";
         }
 
-        WebPanelCredentials? credentials = Load();
-        if (credentials is null)
+        if (!WebPanelUserStore.All().Any())
         {
             return "Panel girişi henüz yapılandırılmadı.";
         }
 
-        bool ok = !string.IsNullOrEmpty(user) && !string.IsNullOrEmpty(password) && user.Length <= 100 && password.Length <= 200
-            && Verify(credentials, user, password);
+        bool wellFormed = !string.IsNullOrEmpty(userName) && !string.IsNullOrEmpty(password) && userName.Length <= 100 && password.Length <= 200;
+        WebPanelUser? user = wellFormed ? WebPanelUserStore.FindByName(userName) : null;
+        bool ok = false;
+        if (user is not null)
+        {
+            ok = WebPanelUserStore.VerifyPassword(user, password!);
+        }
+        else if (wellFormed)
+        {
+            WebPanelUserStore.VerifyDummy(password!);
+        }
+
         if (!ok)
         {
             await Task.Delay(700);
             RegisterFailure(ip, now);
+            WebPanelAudit.Write(userName ?? "?", "Hatalı giriş denemesi", ip: ip);
             return "Kullanıcı adı veya şifre hatalı.";
         }
 
         _failures.TryRemove(ip, out _);
+        if (!user!.IsActive)
+        {
+            WebPanelAudit.Write(user.UserName, "Pasif hesapla giriş denemesi", ip: ip);
+            return "Bu hesap pasif durumda. Yöneticinize başvurun.";
+        }
+
+        WebPanelUser updated = WebPanelUserStore.Update(users =>
+        {
+            WebPanelUser target = users.First(u => u.Id == user.Id);
+            target.LastLoginAt = now;
+            target.LastLoginIp = ip;
+            return target;
+        });
+
         string token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        _sessions[TokenKey(token)] = new WebPanelSession(credentials.User, now + SessionLifetime, ip);
+        _sessions[TokenKey(token)] = new WebPanelSession(updated.Id, updated.CreatedAt, updated.SecurityStamp, now + SessionLifetime, ip);
         foreach ((string key, WebPanelSession session) in _sessions)
         {
             if (session.ExpiresUtc < now)
@@ -123,17 +112,20 @@ internal sealed class WebPanelAuth
             Path = "/panel",
             MaxAge = SessionLifetime
         });
-        MobileLog.Write($"Web paneline giriş yapıldı ({ip}).");
-        TelegramNotifier.Send($"🌐 Tüp takip paneline giriş yapıldı. IP: {ip}. Bu siz değilseniz panel şifresini değiştirin.");
+        MobileLog.Write($"Web paneline giriş yapıldı: {updated.UserName} ({ip}).");
+        WebPanelAudit.Write(updated.UserName, "Giriş", ip: ip);
+        if (!WebPanelTrustedIps.IsTrusted(ip))
+        {
+            TelegramNotifier.Send($"🌐 Tüp takip paneline giriş yapıldı. Kullanıcı: {updated.UserName} ({updated.Role}). IP: {ip}. Bu beklenmiyorsa hesabı Yönetim sekmesinden pasife alın.");
+        }
+
         return null;
     }
 
-    // Returns null on success or the message to show. Other sessions are signed out after a change.
+    // Returns null on success or the message to show. The user's other sessions are signed out after a change.
     internal async Task<string?> ChangePasswordAsync(HttpContext context, string? currentPassword, string? newPassword, string? repeat)
     {
-        WebPanelSession? session = Current(context);
-        WebPanelCredentials? credentials = Load();
-        if (session is null || credentials is null)
+        if (Current(context) is not (WebPanelSession session, WebPanelUser user))
         {
             return "Oturum kapalı; yeniden giriş yapın.";
         }
@@ -145,16 +137,16 @@ internal sealed class WebPanelAuth
             return $"Çok sayıda hatalı deneme. {Math.Ceiling((state.LockedUntilUtc - now).TotalMinutes)} dakika sonra tekrar deneyin.";
         }
 
-        if (string.IsNullOrEmpty(currentPassword) || currentPassword.Length > 200 || !Verify(credentials, credentials.User, currentPassword))
+        if (string.IsNullOrEmpty(currentPassword) || currentPassword.Length > 200 || !WebPanelUserStore.VerifyPassword(user, currentPassword))
         {
             await Task.Delay(700);
             RegisterFailure(ip, now);
             return "Mevcut şifre hatalı.";
         }
 
-        if (string.IsNullOrEmpty(newPassword) || newPassword.Length < 8 || newPassword.Length > 200)
+        if (WebPanelUserStore.PasswordProblem(newPassword, user.UserName) is string problem)
         {
-            return "Yeni şifre 8-200 karakter olmalı.";
+            return problem;
         }
 
         if (newPassword != repeat)
@@ -167,19 +159,181 @@ internal sealed class WebPanelAuth
             return "Yeni şifre eskisiyle aynı olamaz.";
         }
 
-        SaveCredentials(CreateCredentials(credentials.User, newPassword));
-        string currentKey = TokenKey(context.Request.Cookies[CookieName] ?? string.Empty);
-        foreach (string key in _sessions.Keys)
+        int stamp = WebPanelUserStore.Update(users =>
         {
-            if (key != currentKey)
-            {
-                _sessions.TryRemove(key, out _);
-            }
+            WebPanelUser target = users.First(u => u.Id == user.Id);
+            WebPanelUserStore.SetPassword(target, newPassword!);
+            target.MustChangePassword = false;
+            return target.SecurityStamp;
+        });
+
+        string currentKey = TokenKey(context.Request.Cookies[CookieName] ?? string.Empty);
+        _sessions[currentKey] = session with { Stamp = stamp };
+        DropSessions(user.Id, except: currentKey);
+        MobileLog.Write($"Web paneli şifresi değiştirildi: {user.UserName} ({ip}).");
+        WebPanelAudit.Write(user.UserName, "Şifre değiştirildi", user.UserName, ip: ip);
+        if (!WebPanelTrustedIps.IsTrusted(ip))
+        {
+            TelegramNotifier.Send($"🔑 Tüp takip paneli şifresi değiştirildi. Kullanıcı: {user.UserName}. IP: {ip}. Diğer açık oturumlar kapatıldı. Bu siz değilseniz hemen haber verin.");
         }
 
-        MobileLog.Write($"Web paneli şifresi değiştirildi ({ip}).");
-        TelegramNotifier.Send($"🔑 Tüp takip paneli şifresi değiştirildi. IP: {ip}. Diğer açık oturumlar kapatıldı. Bu siz değilseniz hemen haber verin.");
         return null;
+    }
+
+    // Administrator actions. Each returns null on success or the message to show.
+    internal string? CreateUser(WebPanelUser actor, string ip, string? userName, string? displayName, string? role, string? password, bool mustChange)
+    {
+        string name = (userName ?? string.Empty).Trim();
+        if (WebPanelUserStore.UserNameProblem(name) is string nameProblem)
+        {
+            return nameProblem;
+        }
+
+        if (PanelRoles.Normalize(role) is not string normalizedRole)
+        {
+            return "Geçerli bir yetki seçin.";
+        }
+
+        if (WebPanelUserStore.PasswordProblem(password, name) is string passwordProblem)
+        {
+            return passwordProblem;
+        }
+
+        string display = CleanDisplayName(displayName, name);
+        string? error = WebPanelUserStore.Update(users =>
+        {
+            if (users.Any(u => string.Equals(u.UserName, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                return "Bu kullanıcı adı zaten var (pasif hesaplar dahil).";
+            }
+
+            WebPanelUser created = new()
+            {
+                Id = users.Count == 0 ? 1 : users.Max(u => u.Id) + 1,
+                UserName = name,
+                DisplayName = display,
+                Role = normalizedRole,
+                CreatedBy = actor.UserName,
+                MustChangePassword = mustChange
+            };
+            WebPanelUserStore.SetPassword(created, password!);
+            users.Add(created);
+            return null;
+        });
+        if (error is null)
+        {
+            Notify(actor, ip, "Kullanıcı oluşturuldu", name, $"{display}, {normalizedRole}" + (mustChange ? ", ilk girişte şifre değiştirecek" : string.Empty),
+                $"👤 Tüp takip paneline yeni kullanıcı eklendi: {name} ({normalizedRole}). Ekleyen: {actor.UserName}.");
+        }
+
+        return error;
+    }
+
+    internal string? UpdateUser(WebPanelUser actor, string ip, int id, string? displayName, string? role, bool active)
+    {
+        if (PanelRoles.Normalize(role) is not string normalizedRole)
+        {
+            return "Geçerli bir yetki seçin.";
+        }
+
+        List<string> changes = [];
+        string? targetName = null;
+        string? error = WebPanelUserStore.Update(users =>
+        {
+            WebPanelUser? target = users.FirstOrDefault(u => u.Id == id);
+            if (target is null)
+            {
+                return "Kullanıcı bulunamadı.";
+            }
+
+            targetName = target.UserName;
+            bool losesAdmin = target.IsActive && target.Role == PanelRoles.Admin && (!active || normalizedRole != PanelRoles.Admin);
+            if (losesAdmin && target.Id == actor.Id)
+            {
+                return "Kendi hesabınızı pasife alamaz veya yönetici yetkinizi kaldıramazsınız. Bunu başka bir yönetici yapmalı.";
+            }
+
+            if (losesAdmin && !users.Any(u => u.Id != target.Id && u.IsActive && u.Role == PanelRoles.Admin))
+            {
+                return "Son aktif yönetici pasife alınamaz veya yetkisi düşürülemez. Önce başka bir yöneticiyi aktif edin.";
+            }
+
+            string display = CleanDisplayName(displayName, target.UserName);
+            if (display != target.DisplayName)
+            {
+                changes.Add($"ad: {display}");
+                target.DisplayName = display;
+            }
+
+            if (normalizedRole != target.Role)
+            {
+                changes.Add($"yetki: {target.Role} → {normalizedRole}");
+                target.Role = normalizedRole;
+                target.SecurityStamp++;
+            }
+
+            if (active != target.IsActive)
+            {
+                changes.Add(active ? "aktif edildi" : "pasife alındı");
+                target.IsActive = active;
+                target.SecurityStamp++;
+            }
+
+            return null;
+        });
+
+        if (error is null && changes.Count > 0)
+        {
+            DropSessions(id, except: null, onlyStale: true);
+            string summary = string.Join(", ", changes);
+            bool important = changes.Any(c => c.StartsWith("yetki", StringComparison.Ordinal) || c.Contains("aktif", StringComparison.Ordinal) || c.Contains("pasif", StringComparison.Ordinal));
+            Notify(actor, ip, "Kullanıcı güncellendi", targetName, summary,
+                important ? $"🛡 Tüp takip paneli kullanıcısı güncellendi: {targetName} ({summary}). Yapan: {actor.UserName}." : null);
+        }
+
+        return error;
+    }
+
+    internal string? ResetPassword(WebPanelUser actor, string ip, int id, string? password, bool mustChange)
+    {
+        WebPanelUser? existing = WebPanelUserStore.Find(id);
+        if (existing is null)
+        {
+            return "Kullanıcı bulunamadı.";
+        }
+
+        if (WebPanelUserStore.PasswordProblem(password, existing.UserName) is string problem)
+        {
+            return problem;
+        }
+
+        WebPanelUserStore.Update(users =>
+        {
+            WebPanelUser target = users.First(u => u.Id == id);
+            WebPanelUserStore.SetPassword(target, password!);
+            target.MustChangePassword = mustChange;
+            return 0;
+        });
+        DropSessions(id, except: null, onlyStale: true);
+        Notify(actor, ip, "Şifre sıfırlandı", existing.UserName, mustChange ? "geçici şifre; ilk girişte değiştirecek" : "kalıcı şifre",
+            $"🔑 Tüp takip paneli: {existing.UserName} kullanıcısının şifresi yönetici tarafından sıfırlandı. Yapan: {actor.UserName}.");
+        return null;
+    }
+
+    private static void Notify(WebPanelUser actor, string ip, string action, string? target, string detail, string? telegram)
+    {
+        MobileLog.Write($"Web paneli yönetimi: {action} {target} ({detail}) — {actor.UserName}, {ip}.");
+        WebPanelAudit.Write(actor.UserName, action, target, detail, ip);
+        if (telegram is not null && !WebPanelTrustedIps.IsTrusted(ip))
+        {
+            TelegramNotifier.Send(telegram + $" IP: {ip}.");
+        }
+    }
+
+    private static string CleanDisplayName(string? displayName, string fallback)
+    {
+        string text = string.Join(' ', (displayName ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return text.Length == 0 ? fallback : text.Length > 80 ? text[..80] : text;
     }
 
     private void RegisterFailure(string ip, DateTime now)
@@ -205,7 +359,8 @@ internal sealed class WebPanelAuth
         }
     }
 
-    internal WebPanelSession? Current(HttpContext context)
+    // The session and its account, or null when signed out, expired, deactivated or changed since login.
+    internal (WebPanelSession Session, WebPanelUser User)? Current(HttpContext context)
     {
         string token = context.Request.Cookies[CookieName] ?? string.Empty;
         if (token.Length is 0 or > 100 || !_sessions.TryGetValue(TokenKey(token), out WebPanelSession? session))
@@ -213,24 +368,41 @@ internal sealed class WebPanelAuth
             return null;
         }
 
-        if (session.ExpiresUtc < DateTime.UtcNow)
+        WebPanelUser? user = WebPanelUserStore.Find(session.UserId);
+        if (session.ExpiresUtc < DateTime.UtcNow || user is null || !user.IsActive || user.CreatedAt != session.UserCreatedAt)
         {
             _sessions.TryRemove(TokenKey(token), out _);
             return null;
         }
 
-        return session;
+        // A stale stamp is refused but not removed here: ChangePasswordAsync re-stamps its own session right after saving.
+        return user.SecurityStamp == session.Stamp ? (session, user) : null;
     }
 
     internal void Logout(HttpContext context)
     {
         string token = context.Request.Cookies[CookieName] ?? string.Empty;
-        if (token.Length > 0)
+        if (token.Length > 0 && _sessions.TryRemove(TokenKey(token), out WebPanelSession? session)
+            && WebPanelUserStore.Find(session.UserId) is { } user)
         {
-            _sessions.TryRemove(TokenKey(token), out _);
+            WebPanelAudit.Write(user.UserName, "Çıkış", ip: ClientIp(context));
         }
 
         context.Response.Cookies.Delete(CookieName, new CookieOptions { Path = "/panel" });
+    }
+
+    internal int ActiveSessionCount(int userId) => _sessions.Values.Count(s => s.UserId == userId && s.ExpiresUtc > DateTime.UtcNow);
+
+    private void DropSessions(int userId, string? except, bool onlyStale = false)
+    {
+        int stamp = WebPanelUserStore.Find(userId)?.SecurityStamp ?? -1;
+        foreach ((string key, WebPanelSession session) in _sessions)
+        {
+            if (session.UserId == userId && key != except && (!onlyStale || session.Stamp != stamp))
+            {
+                _sessions.TryRemove(key, out _);
+            }
+        }
     }
 
     private static string TokenKey(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));

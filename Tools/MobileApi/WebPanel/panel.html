@@ -67,6 +67,30 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
 .form-grid label { display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--muted); }
 .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
 .hint { font-size:12px; color:var(--muted); margin-top:6px; }
+.field { display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--muted); }
+.pick-row { display:flex; gap:6px; flex-wrap:wrap; }
+.pick-row select { flex:1 1 150px; }
+button.small, a.small { padding:5px 10px; font-size:13px; }
+button.link { background:none; border:none; color:var(--accent); cursor:pointer; padding:2px 4px; font:inherit; font-size:13px; text-decoration:underline; }
+button.danger { background:#fff; color:var(--bad); border:1px solid #fecaca; border-radius:8px; padding:5px 10px; cursor:pointer; font:inherit; font-size:13px; }
+.toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+.toolbar h2 { margin:0; flex:1; }
+.role { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:600; white-space:nowrap; }
+.role-Yönetici { background:#fbe9e2; color:var(--accent-dark); border:1px solid #f1c4b1; }
+.role-Operatör { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+.role-İzleyici { background:#f5f5f4; color:#57534e; border:1px solid var(--line); }
+.dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:#a8a29e; }
+.dot.on { background:var(--ok); }
+tr.off td { color:#a8a29e; }
+.roles-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px; }
+.roles-grid > div { border:1px solid var(--line); border-radius:12px; padding:12px; font-size:13px; color:var(--muted); }
+.roles-grid .role { margin-bottom:6px; }
+header .user .role { background:rgba(255,255,255,.2); color:#fff; border-color:rgba(255,255,255,.35); margin-left:6px; }
+dialog.narrow { width:min(520px,96vw); }
+.check { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--text); }
+.pw-row { display:flex; gap:6px; }
+.pw-row input { flex:1; }
+.badge.crm { background:#f5f3ff; border-color:#ddd6fe; }
 @media (max-width:640px) { main { padding:10px; } header { padding:10px 12px; } .hide-sm { display:none; } }
 </style>
 </head>
@@ -91,7 +115,9 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
       <button data-tab="ozet" class="active">Özet</button>
       <button data-tab="tupler">Tüpler</button>
       <button data-tab="hareketler">Hareketler</button>
-      <button data-tab="yeni">Yeni tüp</button>
+      <button data-tab="musteriler">Müşteriler</button>
+      <button data-tab="yeni" data-perm="tup-kayit">Yeni tüp</button>
+      <button data-tab="yonetim" data-perm="kullanici-yonetimi">Yönetim</button>
     </nav>
     <div class="spacer"></div>
     <span class="user" id="who"></span>
@@ -141,7 +167,7 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
           <label>Müşteri<input id="h-musteri-q" placeholder="Müşteri ara"><select id="h-musteri"><option value="">Tümü</option></select></label>
           <label>Ara<input id="h-q" placeholder="Seri no, müşteri, plaka, not"></label>
           <button class="primary" id="h-ara" type="button">Listele</button>
-          <a class="secondary" id="h-csv" href="#">Excel'e aktar (CSV)</a>
+          <a class="secondary" id="h-csv" href="#" data-perm="disa-aktar">Excel'e aktar (CSV)</a>
         </div>
       </div>
       <div class="card">
@@ -161,11 +187,50 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
           <label>Birim<select id="n-unit"><option>Litre</option><option>kg</option><option>m³</option></select></label>
           <label>Dolu / boş<select id="n-full"><option value="">Bilinmiyor</option><option value="true">Dolu</option><option value="false">Boş</option></select></label>
           <label>Test tarihi<input type="date" id="n-test"></label>
-          <label>Müşteri (isteğe bağlı)<input id="n-musteri-q" placeholder="Müşteri ara (ad, şehir, telefon)"><select id="n-musteri"><option value="">Depoda (müşteri yok)</option></select></label>
+          <div class="field">Müşteri (isteğe bağlı)<input id="n-musteri-q" placeholder="Müşteri ara (ad, şehir, telefon)">
+            <div class="pick-row"><select id="n-musteri"><option value="">Depoda (müşteri yok)</option></select><button class="secondary small" id="n-musteri-yeni" type="button" data-perm="musteri-ekle" title="Listede yoksa yeni müşteri kaydı açın">+ Yeni müşteri</button></div>
+          </div>
           <div style="display:flex;align-items:end"><button class="primary" type="submit">Kaydet</button></div>
         </form>
-        <div class="hint">Müşteri seçilmezse tüp "Depoda" olarak eklenir; seçilirse doğrudan o müşteriye teslim edilmiş olarak kaydedilir. Müşteri listesi ERP ve CRM kayıtlarından otomatik gelir. Aynı seri no veya barkod ikinci kez kaydedilemez.</div>
+        <div class="hint">Müşteri seçilmezse tüp "Depoda" olarak eklenir; seçilirse doğrudan o müşteriye teslim edilmiş olarak kaydedilir. Müşteri listesi ERP ve CRM kayıtlarından otomatik gelir; listede yoksa "+ Yeni müşteri" ile kayıt açabilirsiniz. Aynı seri no veya barkod ikinci kez kaydedilemez.</div>
         <div id="new-msg" class="msg hidden"></div>
+      </div>
+    </section>
+
+    <section data-page="musteriler" class="hidden">
+      <div class="card">
+        <div class="toolbar">
+          <h2>Müşteriler</h2>
+          <input id="c-q" placeholder="Ad, kod, şehir veya telefon ile ara" style="min-width:260px">
+          <button class="primary" id="c-ara" type="button">Ara</button>
+          <button class="secondary" id="c-yeni" type="button" data-perm="musteri-ekle">+ Yeni müşteri</button>
+        </div>
+        <div class="muted" id="c-count"></div>
+        <div class="table-wrap"><table id="customers"></table></div>
+        <div class="hint">Liste ERP müşterileri ile henüz müşteriye dönüşmemiş CRM firmalarını birlikte gösterir; elinde tüp olanlar önce gelir. Bir satıra tıklayınca o müşterideki tüpler açılır.</div>
+      </div>
+    </section>
+
+    <section data-page="yonetim" class="hidden">
+      <div id="admin-msg" class="msg hidden"></div>
+      <div class="card">
+        <div class="toolbar">
+          <h2>Kullanıcılar</h2>
+          <button class="primary" id="u-new" type="button">+ Yeni kullanıcı</button>
+        </div>
+        <div class="table-wrap"><table id="users"></table></div>
+        <div class="hint">Kullanıcılar silinmez, pasife alınır; pasif hesap giriş yapamaz ve açık oturumları hemen kapanır. Son aktif yönetici pasife alınamaz, kendi hesabınızı pasife alamaz veya yetkisini düşüremezsiniz.</div>
+      </div>
+      <div class="card">
+        <h2>Yetki düzeyleri</h2>
+        <div class="roles-grid" id="roles"></div>
+      </div>
+      <div class="card">
+        <div class="toolbar">
+          <h2>Denetim kaydı (son 200)</h2>
+          <button class="secondary small" id="audit-refresh" type="button">Yenile</button>
+        </div>
+        <div class="table-wrap"><table id="audit"></table></div>
       </div>
     </section>
   </main>
@@ -178,18 +243,20 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
   <div class="dlg-body">
     <div id="d-msg" class="msg hidden"></div>
     <div class="card"><h2>Bilgiler</h2><div class="kv" id="d-info"></div></div>
-    <div class="card">
+    <div class="card" data-perm="hareket">
       <h2>Hareket kaydet</h2>
       <div class="form-grid">
         <label>Yeni durum<select id="m-status"></select></label>
-        <label id="m-customer-wrap">Müşteri<input id="m-customer-q" placeholder="Müşteri ara"><select id="m-customer"></select></label>
+        <div class="field" id="m-customer-wrap">Müşteri<input id="m-customer-q" placeholder="Müşteri ara">
+          <div class="pick-row"><select id="m-customer"></select><button class="secondary small" id="m-customer-yeni" type="button" data-perm="musteri-ekle" title="Listede yoksa yeni müşteri kaydı açın">+ Yeni</button></div>
+        </div>
         <label id="m-plate-wrap">Plaka<input id="m-plate" list="plate-list" placeholder="01 ABC 123"></label>
         <label>Dolu / boş<select id="m-full"><option value="">Otomatik</option><option value="true">Dolu</option><option value="false">Boş</option></select></label>
         <label>Not<input id="m-note" maxlength="300"></label>
       </div>
       <div class="actions"><button class="primary" id="m-save" type="button">Hareketi kaydet</button></div>
     </div>
-    <div class="card">
+    <div class="card" data-perm="tup-duzenle">
       <h2>Tüp bilgilerini düzenle</h2>
       <div class="form-grid">
         <label>Gaz türü<input id="e-gas" list="gas-list" maxlength="80"></label>
@@ -208,14 +275,73 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
 <dialog id="password-dialog" style="width:min(420px,96vw)">
   <div class="dlg-head"><h3>Şifre değiştir</h3><button class="secondary" id="password-close" type="button">Kapat</button></div>
   <div class="dlg-body">
+    <div id="password-forced" class="msg warn hidden">Yönetici hesabınız için geçici bir şifre belirledi. Devam etmeden önce kendi şifrenizi oluşturun.</div>
     <form id="password-form" style="display:flex;flex-direction:column;gap:10px">
       <input type="text" name="username" autocomplete="username" id="password-user" class="hidden" readonly>
-      <input type="password" id="p-current" autocomplete="current-password" placeholder="Mevcut şifre" required maxlength="200">
-      <input type="password" id="p-new" autocomplete="new-password" placeholder="Yeni şifre (en az 8 karakter)" required minlength="8" maxlength="200">
+      <input type="password" id="p-current" autocomplete="current-password" placeholder="Mevcut (geçici) şifre" required maxlength="200">
+      <input type="password" id="p-new" autocomplete="new-password" placeholder="Yeni şifre (en az 8 karakter, harf ve rakam)" required minlength="8" maxlength="200">
       <input type="password" id="p-repeat" autocomplete="new-password" placeholder="Yeni şifre (tekrar)" required minlength="8" maxlength="200">
       <button class="primary" type="submit">Şifreyi değiştir</button>
-      <div class="hint">Değişiklikten sonra diğer cihazlardaki oturumlar kapanır ve Telegram'a bildirim gider.</div>
+      <div class="hint">Değişiklikten sonra diğer cihazlardaki oturumlarınız kapanır.</div>
       <div id="password-msg" class="msg hidden"></div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="customer-dialog" class="narrow">
+  <div class="dlg-head"><h3>Yeni müşteri</h3><button class="secondary" id="cu-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <form id="customer-form" class="form-grid">
+      <label style="grid-column:1/-1">Firma / müşteri adı *<input id="cu-name" required maxlength="200" autocomplete="off"></label>
+      <label>Yetkili kişi<input id="cu-contact" maxlength="150" autocomplete="off"></label>
+      <label>Telefon<input id="cu-phone" maxlength="50" inputmode="tel" autocomplete="off"></label>
+      <label>E-posta<input id="cu-email" type="email" maxlength="200" autocomplete="off"></label>
+      <label>Şehir<input id="cu-city" maxlength="100" autocomplete="off"></label>
+      <label>İlçe<input id="cu-district" maxlength="100" autocomplete="off"></label>
+      <label style="grid-column:1/-1">Adres<input id="cu-address" maxlength="500" autocomplete="off"></label>
+      <label>Vergi dairesi<input id="cu-taxoffice" maxlength="100" autocomplete="off"></label>
+      <label>Vergi / TC no<input id="cu-taxno" maxlength="20" inputmode="numeric" autocomplete="off"></label>
+      <div class="actions" style="grid-column:1/-1"><button class="primary" type="submit" id="cu-save">Müşteriyi kaydet</button></div>
+    </form>
+    <div id="cu-msg" class="msg hidden"></div>
+    <div id="cu-dup" class="actions hidden">
+      <button class="primary" id="cu-use" type="button">Mevcut kaydı seç</button>
+      <button class="secondary" id="cu-force" type="button">Yine de yeni kayıt aç</button>
+    </div>
+    <div class="hint">Kod otomatik verilir (M-yılayıgün-sıra). Aynı adla ERP müşterisi veya CRM firması varsa önce onu seçmeniz önerilir.</div>
+  </div>
+</dialog>
+
+<dialog id="user-dialog" class="narrow">
+  <div class="dlg-head"><h3 id="u-title">Yeni kullanıcı</h3><button class="secondary" id="u-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <form id="user-form" style="display:flex;flex-direction:column;gap:10px">
+      <label class="field">Kullanıcı adı (giriş adı)<input id="u-name" required minlength="3" maxlength="40" autocomplete="off" placeholder="ör. ahmet.yilmaz"></label>
+      <label class="field">Ad soyad<input id="u-display" maxlength="80" autocomplete="off"></label>
+      <label class="field">Yetki düzeyi<select id="u-role"></select></label>
+      <div class="muted" id="u-role-desc"></div>
+      <div class="field" id="u-pass-wrap">İlk şifre (en az 8 karakter, harf ve rakam)
+        <div class="pw-row"><input id="u-pass" type="text" minlength="8" maxlength="200" autocomplete="new-password"><button class="secondary small" id="u-gen" type="button">Şifre üret</button></div>
+      </div>
+      <label class="check" id="u-must-wrap"><input type="checkbox" id="u-must" checked> İlk girişte kendi şifresini belirlesin</label>
+      <label class="check hidden" id="u-active-wrap"><input type="checkbox" id="u-active"> Hesap aktif</label>
+      <button class="primary" type="submit" id="u-save">Kaydet</button>
+      <div id="u-msg" class="msg hidden"></div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="reset-dialog" class="narrow">
+  <div class="dlg-head"><h3 id="r-title">Şifre sıfırla</h3><button class="secondary" id="r-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <form id="reset-form" style="display:flex;flex-direction:column;gap:10px">
+      <div class="field">Yeni geçici şifre (en az 8 karakter, harf ve rakam)
+        <div class="pw-row"><input id="r-pass" type="text" required minlength="8" maxlength="200" autocomplete="new-password"><button class="secondary small" id="r-gen" type="button">Şifre üret</button></div>
+      </div>
+      <label class="check"><input type="checkbox" id="r-must" checked> İlk girişte kendi şifresini belirlesin</label>
+      <button class="primary" type="submit">Şifreyi sıfırla</button>
+      <div class="hint">Kullanıcının açık oturumları kapanır. Şifreyi kullanıcıya güvenli bir yoldan iletin.</div>
+      <div id="r-msg" class="msg hidden"></div>
     </form>
   </div>
 </dialog>

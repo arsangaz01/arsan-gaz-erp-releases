@@ -26,6 +26,9 @@ public sealed class CylinderRegisterPage : ContentPage
     private List<CustomerItem> _customers = [];
     private bool _saved;
 
+    // Leaving for the new-customer form is not leaving the registration.
+    private bool _customerFormOpen;
+
     private CylinderRegisterPage(string code)
     {
         Title = "Yeni tüp kaydı";
@@ -68,9 +71,11 @@ public sealed class CylinderRegisterPage : ContentPage
                     Ui.Section("Kimlik", Ui.Note("Barkod"), _barcode, Ui.Note("Seri numarası"), _serial),
                     Ui.Section("Tüp bilgisi", _gas, _otherGas, capacityRow, _fullness, testRow),
                     Ui.Section("Müşteri (isteğe bağlı)",
-                        Ui.Note("Seçerseniz tüp doğrudan bu müşteriye teslim edilmiş olarak kaydedilir. Liste ERP ve CRM kayıtlarından gelir."),
+                        Ui.Note("Seçerseniz tüp doğrudan bu müşteriye teslim edilmiş olarak kaydedilir. Liste ERP ve CRM kayıtlarından gelir; yoksa yeni müşteri açabilirsiniz."),
                         _customerSearch,
-                        Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
+                        Ui.ActionRow(
+                            Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
+                            Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync())),
                         _customer),
                     Ui.Primary("Kaydet", async (_, _) => await SaveAsync()),
                     _busy
@@ -111,7 +116,7 @@ public sealed class CylinderRegisterPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-        if (!_saved)
+        if (!_saved && !_customerFormOpen)
         {
             _result.TrySetResult(null);
         }
@@ -130,6 +135,30 @@ public sealed class CylinderRegisterPage : ContentPage
             _customer.SelectedIndex = 1;
         }
     });
+
+    private async Task NewCustomerAsync()
+    {
+        CustomerItem? created;
+        _customerFormOpen = true;
+        try
+        {
+            created = await CustomerCreatePage.CreateAsync(Navigation, _customerSearch.Text);
+        }
+        finally
+        {
+            _customerFormOpen = false;
+        }
+
+        if (created is null)
+        {
+            return;
+        }
+
+        _customers = [created];
+        _customerSearch.Text = created.Name;
+        ShowCustomers();
+        _customer.SelectedIndex = 1;
+    }
 
     private void ShowCustomers()
     {

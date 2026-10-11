@@ -9,19 +9,57 @@ if (args is ["--yerel-eslestir", { Length: > 0 } localDeviceName, { Length: > 0 
     return;
 }
 
-if (args is ["--panel-sifre-ayarla", { Length: > 0 } panelUser])
+// --panel-sifre-ayarla <user>: sets the password (read from standard input) of an existing panel user, or creates the
+// user as Yönetici. --panel-kullanici-ekle <user> <role>: adds a new user with that role.
+if (args is ["--panel-sifre-ayarla", { Length: > 0 }] or ["--panel-kullanici-ekle", { Length: > 0 }, { Length: > 0 }])
 {
     MobileApiPaths.Ensure();
+    WebPanelUserStore.EnsureMigrated();
+    string panelUser = args[1].Trim();
+    bool addOnly = args[0] == "--panel-kullanici-ekle";
+    string? panelRole = addOnly ? PanelRoles.Normalize(args[2]) : PanelRoles.Admin;
     string? panelPassword = Console.In.ReadLine();
-    if (string.IsNullOrEmpty(panelPassword) || panelPassword.Length < 8)
+    string? problem = WebPanelUserStore.UserNameProblem(panelUser)
+        ?? (panelRole is null ? "Yetki Yönetici, Operatör veya İzleyici olmalı." : null)
+        ?? WebPanelUserStore.PasswordProblem(panelPassword, panelUser);
+    if (problem is null)
     {
-        Console.Error.WriteLine("Şifre en az 8 karakter olmalı (standart girişten okunur).");
+        problem = WebPanelUserStore.Update(users =>
+        {
+            WebPanelUser? existing = users.FirstOrDefault(u => string.Equals(u.UserName, panelUser, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null && addOnly)
+            {
+                return "Bu kullanıcı adı zaten var.";
+            }
+
+            if (existing is null)
+            {
+                existing = new WebPanelUser
+                {
+                    Id = users.Count == 0 ? 1 : users.Max(u => u.Id) + 1,
+                    UserName = panelUser,
+                    DisplayName = panelUser,
+                    Role = panelRole!,
+                    CreatedBy = "Komut satırı"
+                };
+                users.Add(existing);
+            }
+
+            WebPanelUserStore.SetPassword(existing, panelPassword!);
+            existing.MustChangePassword = false;
+            return null;
+        });
+    }
+
+    if (problem is not null)
+    {
+        Console.Error.WriteLine(problem + " (Şifre standart girişten okunur.)");
         Environment.ExitCode = 1;
         return;
     }
 
-    WebPanelAuth.SaveCredentials(WebPanelAuth.CreateCredentials(panelUser, panelPassword));
-    MobileLog.Write("Web panel kullanıcısı ayarlandı: " + panelUser);
+    MobileLog.Write($"Web panel kullanıcısı komut satırından ayarlandı: {panelUser} ({panelRole})");
+    WebPanelAudit.Write("Komut satırı", addOnly ? "Kullanıcı oluşturuldu" : "Şifre ayarlandı", panelUser, panelRole, "yerel");
     return;
 }
 
@@ -32,6 +70,16 @@ if (!firstInstance)
 }
 
 MobileApiPaths.Ensure();
+WebPanelTrustedIps.EnsureConfigured();
+try
+{
+    WebPanelUserStore.EnsureMigrated();
+}
+catch (Exception exception) when (exception is IOException or System.Text.Json.JsonException)
+{
+    MobileLog.Write("Web paneli kullanıcıları hazırlanamadı: " + exception.Message);
+}
+
 TunnelService.ApplyPreferredPublicUrl();
 MobileLog.Write("Mobil sunucu başlatılıyor.");
 try

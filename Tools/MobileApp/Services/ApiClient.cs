@@ -11,6 +11,8 @@ public sealed record CustomerItem(int Id, string Code, string Name, string? City
     public string Subtitle => $"{Code} · {City ?? "-"} · müşteride {Cylinders} tüp";
 }
 
+public sealed record CustomerCreated(string Message, CustomerItem Customer);
+
 public sealed record CrmItem(int Id, string Name, string? City, string? Sector, string? Phone, string Status, int Score, string? FollowUp, int? FollowUpDays)
 {
     public string Subtitle => $"{City ?? "-"} · {Status} · puan {Score}";
@@ -153,6 +155,22 @@ public class ApiException(string message, int? statusCode = null, string? conten
     public string? Content { get; } = content;
 
     public bool IsCustomerConflict => StatusCode == 409;
+
+    // The record a new-customer request collided with (same name), or null for other errors.
+    public CustomerItem? ExistingCustomer()
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(Content ?? "{}");
+            return StatusCode == 409 && document.RootElement.TryGetProperty("existing", out JsonElement existing)
+                ? existing.Deserialize<CustomerItem>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     // Codes the server refused because the cylinder is registered to another customer.
     public IReadOnlyList<string> ConflictCodes()
@@ -331,6 +349,8 @@ public sealed class ApiClient
 
     public async Task<List<CustomerItem>> CustomersAsync(string query) =>
         await GetAsync<List<CustomerItem>>("/api/musteriler?q=" + Uri.EscapeDataString(query));
+
+    public Task<CustomerCreated> CreateCustomerAsync(object customer) => PostAsync<CustomerCreated>("/api/musteri", customer);
 
     public async Task<List<CrmItem>> CrmAsync(string query) =>
         await GetAsync<List<CrmItem>>("/api/crm?q=" + Uri.EscapeDataString(query));

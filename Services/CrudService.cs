@@ -43,6 +43,45 @@ public sealed class CrudService
   return customer.Id;
  }
  public static int? CrmIdFromCode(string? code)=>code!=null&&code.StartsWith(CrmCustomerCodePrefix,StringComparison.Ordinal)&&int.TryParse(code.AsSpan(CrmCustomerCodePrefix.Length),out int id)?id:null;
+ // Creates an ERP customer typed in by a user (CRM is not written). A name that already exists among active customers or
+ // not-yet-linked CRM companies throws CustomerDuplicateException with the existing picker entry unless allowDuplicateName.
+ public async Task<Customer> CreateCustomerAsync(Customer draft,bool allowDuplicateName=false)
+ {
+  string name=Clean(draft.CompanyName,200)??throw new ArgumentException("Müşteri adı zorunludur.");
+  if(name.Length<2)throw new ArgumentException("Müşteri adı en az 2 karakter olmalıdır.");
+  string? email=Clean(draft.Email,200);
+  if(email!=null&&(!email.Contains('@')||email.Contains(' ')))throw new ArgumentException("E-posta adresi geçersiz.");
+  string? code=Clean(draft.Code,50);
+  if(!allowDuplicateName)
+  {
+   string key=CustomerNameKey(name);
+   Customer? existing=(await CustomerChoicesAsync()).FirstOrDefault(x=>CustomerNameKey(x.CompanyName)==key);
+   if(existing!=null)throw new CustomerDuplicateException(existing);
+  }
+  await using var db=new ArsanGazDbContext();
+  if(code!=null&&await db.Customers.AnyAsync(x=>x.Code==code))throw new ArgumentException($"{code} kodu başka bir müşteride kullanılıyor.");
+  for(int attempt=0;;attempt++)
+  {
+   var customer=new Customer{Code=code??await NextCustomerCodeAsync(db),CompanyName=name,ContactName=Clean(draft.ContactName,150),Phone=Clean(draft.Phone,50),Email=email,
+    City=Clean(draft.City,100),District=Clean(draft.District,100),Address=Clean(draft.Address,500),TaxOffice=Clean(draft.TaxOffice,100),TaxNumber=Clean(draft.TaxNumber,20),IsActive=true};
+   db.Customers.Add(customer);
+   try{await db.SaveChangesAsync();return customer;}
+   catch(DbUpdateException) when(code==null&&attempt<3){db.Entry(customer).State=EntityState.Detached;}
+  }
+ }
+ public static string CustomerNameKey(string? name)=>string.Join(' ',(name??string.Empty).Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries)).ToUpper(Turkish);
+ private static readonly System.Globalization.CultureInfo Turkish=System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
+ private static async Task<string> NextCustomerCodeAsync(ArsanGazDbContext db)
+ {
+  string prefix=$"M-{DateTime.Now:yyyyMMdd}-";
+  List<string> used=await db.Customers.AsNoTracking().Where(x=>x.Code.StartsWith(prefix)).Select(x=>x.Code).ToListAsync();
+  return prefix+(used.Select(x=>int.TryParse(x.AsSpan(prefix.Length),out int n)?n:0).DefaultIfEmpty(0).Max()+1).ToString("D4");
+ }
+ private static string? Clean(string? value,int max)
+ {
+  string text=string.Join(' ',(value??string.Empty).Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries));
+  return text.Length==0?null:text.Length>max?throw new ArgumentException($"\"{text[..Math.Min(20,text.Length)]}…\" çok uzun (en fazla {max} karakter)."):text;
+ }
  private static async Task<List<CrmCompany>> CrmCompanyRowsAsync()
  {
   try
@@ -285,4 +324,10 @@ public sealed class CrudService
  }
  public async Task<List<Invoice>> OverdueInvoicesAsync(){await using var db=new ArsanGazDbContext();return await db.Invoices.AsNoTracking().Include(x=>x.Customer).Where(x=>x.DueDate<DateTime.Today&&x.PaidAmount<x.TotalAmount).OrderBy(x=>x.DueDate).ToListAsync();}
  public async Task<List<ErpTask>> TasksAsync(){await using var db=new ArsanGazDbContext();return await db.Tasks.AsNoTracking().OrderBy(x=>x.DueDate).ThenBy(x=>x.Title).ToListAsync();}
+}
+// Existing is a picker entry: a positive id for an ERP customer, a negative id for a CRM company.
+public sealed class CustomerDuplicateException(Customer existing):InvalidOperationException(
+ $"\"{existing.CompanyName}\" adlı {(existing.Id<0?"CRM firması":"müşteri")} zaten kayıtlı{(string.IsNullOrWhiteSpace(existing.City)?"":" ("+existing.City+")")}. Mevcut kaydı kullanabilir veya yine de yeni kayıt açabilirsiniz.")
+{
+ public Customer Existing{get;}=existing;
 }

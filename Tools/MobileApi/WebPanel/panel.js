@@ -3,6 +3,9 @@
 const $ = (id) => document.getElementById(id);
 let options = { statuses: [], gasTypes: [], plates: [], longDays: 60 };
 let current = null;
+let me = null;
+
+const can = (permission) => !!me && me.permissions.includes(permission);
 
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
@@ -39,13 +42,40 @@ async function api(path, options = {}) {
     showLogin("Oturum süresi doldu; yeniden giriş yapın.");
     throw new Error("Oturum kapalı.");
   }
+  if (response.status === 403 && data.mustChangePassword) {
+    forcePasswordChange();
+  }
   if (!response.ok) {
     const error = new Error(data.error || `Sunucu hatası (${response.status}).`);
     error.status = response.status;
+    error.data = data;
     throw error;
   }
   return data;
 }
+
+// Hides what the signed-in role may not do; the server enforces the same rules.
+function applyPermissions() {
+  for (const node of document.querySelectorAll("[data-perm]")) node.classList.toggle("hidden", !can(node.dataset.perm));
+}
+
+function roleBadge(role) { return el("span", { class: "role role-" + role }, role); }
+
+function forcePasswordChange() {
+  if ($("password-dialog").open && $("password-dialog").dataset.forced === "1") return;
+  $("password-dialog").dataset.forced = "1";
+  $("password-forced").classList.remove("hidden");
+  $("password-close").classList.add("hidden");
+  $("password-form").reset();
+  $("password-user").value = me ? me.user : "";
+  hide($("password-msg"));
+  if (!$("password-dialog").open) $("password-dialog").showModal();
+  $("p-current").focus();
+}
+
+$("password-dialog").addEventListener("cancel", (event) => {
+  if ($("password-dialog").dataset.forced === "1") event.preventDefault();
+});
 
 function badge(status, name) { return el("span", { class: "badge b" + status }, name); }
 
@@ -58,12 +88,17 @@ function showLogin(message) {
 
 async function start() {
   try {
-    const me = await api("/panel/api/ben");
-    $("who").textContent = me.user;
+    me = await api("/panel/api/ben");
+    $("who").replaceChildren(me.displayName && me.displayName !== me.user ? `${me.displayName} (${me.user})` : me.user, roleBadge(me.role));
+    applyPermissions();
     $("login").classList.add("hidden");
     $("app").classList.remove("hidden");
+    if (me.mustChangePassword) {
+      forcePasswordChange();
+      return;
+    }
     await loadOptions();
-    await loadSummary();
+    openTab("ozet");
     for (const picker of [cylinderCustomer, movementCustomer, newCustomer]) picker.search();
   } catch (error) {
     if (!$("app").classList.contains("hidden")) show($("global-msg"), error.message);
@@ -87,12 +122,17 @@ $("login-form").addEventListener("submit", async (event) => {
 
 $("logout").addEventListener("click", async () => {
   try { await api("/panel/cikis", { method: "POST" }); } catch { /* already logged out */ }
+  me = null;
+  for (const d of document.querySelectorAll("dialog")) if (d.open) d.close();
   showLogin();
 });
 
 $("password-open").addEventListener("click", () => {
   $("password-form").reset();
-  $("password-user").value = $("who").textContent;
+  $("password-user").value = me ? me.user : "";
+  delete $("password-dialog").dataset.forced;
+  $("password-forced").classList.add("hidden");
+  $("password-close").classList.remove("hidden");
   hide($("password-msg"));
   $("password-dialog").showModal();
   $("p-current").focus();
@@ -107,6 +147,13 @@ $("password-form").addEventListener("submit", async (event) => {
   try {
     const result = await api("/panel/api/sifre", { method: "POST", body: { mevcut: $("p-current").value, yeni: $("p-new").value, yeniTekrar: $("p-repeat").value } });
     $("password-form").reset();
+    if ($("password-dialog").dataset.forced === "1") {
+      delete $("password-dialog").dataset.forced;
+      $("password-dialog").close();
+      await start();
+      show($("global-msg"), "Şifreniz değiştirildi. Hoş geldiniz.", "ok");
+      return;
+    }
     show($("password-msg"), result.message, "ok");
   } catch (error) {
     show($("password-msg"), error.message);
@@ -126,6 +173,8 @@ function openTab(tab) {
   if (tab === "ozet") loadSummary();
   if (tab === "tupler") loadCylinders();
   if (tab === "hareketler") loadMovements();
+  if (tab === "musteriler") loadCustomers();
+  if (tab === "yonetim") loadAdmin();
 }
 
 async function loadOptions() {
@@ -164,7 +213,17 @@ function customerPicker(inputId, selectId, emptyLabel) {
     }
   }
   $(inputId).addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(search, 300); });
-  return { search, reset() { $(inputId).value = ""; select.replaceChildren(...(emptyLabel ? [el("option", { value: "" }, emptyLabel)] : [])); } };
+  return {
+    search,
+    reset() { $(inputId).value = ""; select.replaceChildren(...(emptyLabel ? [el("option", { value: "" }, emptyLabel)] : [])); },
+    query() { return $(inputId).value.trim(); },
+    // Selects a customer that was just created or picked from a duplicate warning.
+    choose(c) {
+      $(inputId).value = c.name;
+      select.replaceChildren(...(emptyLabel ? [el("option", { value: "" }, emptyLabel)] : []), el("option", { value: c.id }, customerLabel(c)));
+      select.value = String(c.id);
+    }
+  };
 }
 
 const cylinderCustomer = customerPicker("f-musteri-q", "f-musteri", "Tümü");
@@ -209,6 +268,7 @@ function openFiltered(filter) {
   $("f-durum").value = filter.durum ?? "";
   $("f-plaka").value = filter.plaka ?? "";
   cylinderCustomer.reset();
+  if (filter.customer) cylinderCustomer.choose(filter.customer);
   $("f-doluluk").value = "";
   $("f-uzun").checked = !!filter.uzun;
   $("f-pasif").checked = !!filter.pasif;
@@ -411,5 +471,255 @@ $("new-form").addEventListener("submit", async (event) => {
     show($("new-msg"), error.message);
   }
 });
+
+// ---- New customer dialog -------------------------------------------------------------------------
+
+let customerDone = null;
+let customerDuplicate = null;
+const customerFields = { name: "cu-name", contactName: "cu-contact", phone: "cu-phone", email: "cu-email", city: "cu-city", district: "cu-district", address: "cu-address", taxOffice: "cu-taxoffice", taxNumber: "cu-taxno" };
+
+// onDone(customer, message) runs after a customer is created or an existing duplicate is chosen.
+function openCustomerDialog(prefill, onDone) {
+  customerDone = onDone;
+  customerDuplicate = null;
+  $("customer-form").reset();
+  $("cu-name").value = prefill || "";
+  hide($("cu-msg"));
+  $("cu-dup").classList.add("hidden");
+  $("customer-dialog").showModal();
+  $("cu-name").focus();
+}
+
+async function saveCustomer(allowDuplicate) {
+  const body = { allowDuplicate };
+  for (const [key, id] of Object.entries(customerFields)) body[key] = $(id).value.trim() || null;
+  if (!body.name) { show($("cu-msg"), "Müşteri adı zorunludur."); return; }
+  $("cu-save").disabled = true;
+  try {
+    const result = await api("/panel/api/musteri", { method: "POST", body });
+    $("customer-dialog").close();
+    if (customerDone) customerDone(result.customer, result.message);
+  } catch (error) {
+    if (error.status === 409 && error.data && error.data.duplicate) {
+      customerDuplicate = error.data.existing;
+      show($("cu-msg"), error.message, "warn");
+      $("cu-dup").classList.remove("hidden");
+    } else {
+      show($("cu-msg"), error.message);
+    }
+  } finally {
+    $("cu-save").disabled = false;
+  }
+}
+
+$("customer-form").addEventListener("submit", (event) => { event.preventDefault(); saveCustomer(false); });
+$("cu-force").addEventListener("click", () => saveCustomer(true));
+$("cu-close").addEventListener("click", () => $("customer-dialog").close());
+$("cu-use").addEventListener("click", () => {
+  const existing = customerDuplicate;
+  $("customer-dialog").close();
+  if (existing && customerDone) customerDone(existing, `Mevcut kayıt seçildi: ${existing.name}.`);
+});
+
+$("n-musteri-yeni").addEventListener("click", () => openCustomerDialog(newCustomer.query(), (c, message) => {
+  newCustomer.choose(c);
+  show($("new-msg"), message + " Tüp kaydında bu müşteri seçili.", "ok");
+}));
+
+$("m-customer-yeni").addEventListener("click", () => openCustomerDialog(moveCustomer.query(), (c, message) => {
+  moveCustomer.choose(c);
+  show($("d-msg"), message + " Hareket için seçildi; kaydetmek için \"Hareketi kaydet\"e basın.", "ok");
+}));
+
+$("c-yeni").addEventListener("click", () => openCustomerDialog($("c-q").value.trim(), async (c, message) => {
+  $("c-q").value = c.name;
+  await loadCustomers();
+  show($("global-msg"), message, "ok");
+}));
+
+// ---- Customers tab -------------------------------------------------------------------------------
+
+$("c-ara").addEventListener("click", loadCustomers);
+$("c-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadCustomers(); });
+
+async function loadCustomers() {
+  try {
+    const rows = await api("/panel/api/musteriler?take=200&q=" + encodeURIComponent($("c-q").value.trim()));
+    $("c-count").textContent = rows.length >= 200 ? "İlk 200 kayıt gösteriliyor; aramayı daraltın." : `${rows.length} kayıt`;
+    const head = el("tr", {}, ...["Müşteri", "Kod", "Şehir", "Telefon", "Müşterideki tüp", "Kaynak"].map((h) => el("th", {}, h)));
+    const body = rows.map((c) => el("tr", { class: "click", onclick: () => openCustomerCylinders(c) },
+      el("td", {}, el("b", {}, c.name)),
+      el("td", { class: "muted" }, c.code),
+      el("td", {}, c.city || "-"),
+      el("td", {}, c.phone || "-"),
+      el("td", {}, String(c.cylinders)),
+      el("td", {}, c.fromCrm ? el("span", { class: "badge crm" }, "CRM") : el("span", { class: "badge" }, "ERP"))));
+    $("customers").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6, class: "muted" }, "Eşleşen müşteri yok. Yeni kayıt açmak için \"+ Yeni müşteri\"ye basın."))])));
+  } catch (error) {
+    show($("global-msg"), error.message);
+  }
+}
+
+function openCustomerCylinders(c) {
+  openFiltered({ customer: c });
+}
+
+// ---- Administration ------------------------------------------------------------------------------
+
+let users = [];
+let editingUser = null;
+let resetUser = null;
+
+async function loadAdmin() {
+  hide($("admin-msg"));
+  $("roles").replaceChildren(...me.roles.map((r) => el("div", {}, roleBadge(r.name), el("div", {}, r.description))));
+  try {
+    users = await api("/panel/api/yonetim/kullanicilar");
+    renderUsers();
+    await loadAudit();
+  } catch (error) {
+    show($("admin-msg"), error.message);
+  }
+}
+
+function renderUsers() {
+  const head = el("tr", {}, ...["Kullanıcı", "Yetki", "Durum", "Son giriş", "Açık oturum", "Oluşturan", ""].map((h) => el("th", {}, h)));
+  const body = users.map((u) => el("tr", { class: u.isActive ? "" : "off" },
+    el("td", {}, el("b", {}, u.displayName), u.isSelf ? el("span", { class: "muted" }, " (siz)") : null, el("div", { class: "muted" }, u.userName)),
+    el("td", {}, roleBadge(u.role)),
+    el("td", {}, el("span", { class: "dot" + (u.isActive ? " on" : "") }), u.isActive ? "Aktif" : "Pasif",
+      u.mustChangePassword ? el("div", { class: "warn-text muted" }, "Şifre değiştirmesi bekleniyor") : null),
+    el("td", {}, u.lastLogin || "Hiç giriş yapmadı", u.lastLoginIp ? el("div", { class: "muted" }, u.lastLoginIp) : null),
+    el("td", {}, String(u.sessions)),
+    el("td", {}, u.createdBy || "-", el("div", { class: "muted" }, u.created)),
+    el("td", {},
+      el("button", { class: "link", type: "button", onclick: () => openUserDialog(u) }, "Düzenle"),
+      el("button", { class: "link", type: "button", onclick: () => openResetDialog(u) }, "Şifre sıfırla"),
+      u.isSelf ? null : el("button", { class: u.isActive ? "danger" : "link", type: "button", onclick: () => toggleUser(u) }, u.isActive ? "Pasife al" : "Aktif et"))));
+  $("users").replaceChildren(el("thead", {}, head), el("tbody", {}, ...body));
+}
+
+async function loadAudit() {
+  const rows = await api("/panel/api/yonetim/denetim");
+  const head = el("tr", {}, ...["Zaman", "Kullanıcı", "İşlem", "Hedef", "Ayrıntı", "IP"].map((h) => el("th", {}, h)));
+  const body = rows.map((a) => el("tr", {},
+    el("td", {}, a.at), el("td", {}, a.actor),
+    el("td", { class: a.action.includes("Hatalı") || a.action.includes("Pasif") ? "warn-text" : "" }, a.action),
+    el("td", {}, a.target || "-"), el("td", { class: "muted" }, a.detail || ""), el("td", { class: "muted" }, a.ip || "")));
+  $("audit").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6, class: "muted" }, "Kayıt yok."))])));
+}
+
+$("audit-refresh").addEventListener("click", async () => {
+  try { await loadAudit(); } catch (error) { show($("admin-msg"), error.message); }
+});
+
+function generatePassword() {
+  const letters = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
+  const digits = "23456789";
+  const all = letters + digits;
+  const random = new Uint32Array(12);
+  crypto.getRandomValues(random);
+  const chars = Array.from(random, (n) => all[n % all.length]);
+  chars[random[0] % 6] = letters[random[1] % letters.length];
+  chars[6 + (random[2] % 6)] = digits[random[3] % digits.length];
+  return chars.join("");
+}
+
+function fillRoles(selected) {
+  $("u-role").replaceChildren(...me.roles.map((r) => el("option", { value: r.name }, r.name)));
+  $("u-role").value = selected;
+  showRoleDescription();
+}
+
+function showRoleDescription() {
+  const role = me.roles.find((r) => r.name === $("u-role").value);
+  $("u-role-desc").textContent = role ? role.description : "";
+}
+
+$("u-role").addEventListener("change", showRoleDescription);
+$("u-gen").addEventListener("click", () => { $("u-pass").value = generatePassword(); });
+$("r-gen").addEventListener("click", () => { $("r-pass").value = generatePassword(); });
+$("u-close").addEventListener("click", () => $("user-dialog").close());
+$("r-close").addEventListener("click", () => $("reset-dialog").close());
+$("u-new").addEventListener("click", () => openUserDialog(null));
+
+function openUserDialog(u) {
+  editingUser = u;
+  $("user-form").reset();
+  hide($("u-msg"));
+  $("u-title").textContent = u ? `Kullanıcıyı düzenle: ${u.userName}` : "Yeni kullanıcı";
+  $("u-name").value = u ? u.userName : "";
+  $("u-name").disabled = !!u;
+  $("u-display").value = u ? u.displayName : "";
+  fillRoles(u ? u.role : "Operatör");
+  $("u-pass").required = !u;
+  $("u-pass-wrap").classList.toggle("hidden", !!u);
+  $("u-must-wrap").classList.toggle("hidden", !!u);
+  $("u-active-wrap").classList.toggle("hidden", !u || u.isSelf);
+  $("u-active").checked = u ? u.isActive : true;
+  $("u-role").disabled = !!u && u.isSelf;
+  $("user-dialog").showModal();
+  (u ? $("u-display") : $("u-name")).focus();
+}
+
+$("user-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("u-save").disabled = true;
+  try {
+    let result;
+    if (editingUser) {
+      result = await api(`/panel/api/yonetim/kullanici/${editingUser.id}`, {
+        method: "POST", body: { adSoyad: $("u-display").value.trim(), rol: $("u-role").value, aktif: editingUser.isSelf ? true : $("u-active").checked }
+      });
+    } else {
+      result = await api("/panel/api/yonetim/kullanici", {
+        method: "POST",
+        body: { kullaniciAdi: $("u-name").value.trim(), adSoyad: $("u-display").value.trim(), rol: $("u-role").value, sifre: $("u-pass").value, sifreDegistirsin: $("u-must").checked }
+      });
+    }
+    $("user-dialog").close();
+    await loadAdmin();
+    show($("admin-msg"), result.message + (editingUser ? "" : " Giriş bilgilerini kullanıcıya güvenli bir yoldan iletin."), "ok");
+  } catch (error) {
+    show($("u-msg"), error.message);
+  } finally {
+    $("u-save").disabled = false;
+  }
+});
+
+function openResetDialog(u) {
+  resetUser = u;
+  $("reset-form").reset();
+  hide($("r-msg"));
+  $("r-title").textContent = `Şifre sıfırla: ${u.userName}`;
+  $("r-must").checked = !u.isSelf;
+  $("reset-dialog").showModal();
+  $("r-pass").focus();
+}
+
+$("reset-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const result = await api(`/panel/api/yonetim/kullanici/${resetUser.id}/sifre`, { method: "POST", body: { sifre: $("r-pass").value, sifreDegistirsin: $("r-must").checked } });
+    $("reset-dialog").close();
+    if (resetUser.isSelf) { showLogin("Şifreniz sıfırlandı; yeni şifreyle tekrar giriş yapın."); return; }
+    await loadAdmin();
+    show($("admin-msg"), result.message, "ok");
+  } catch (error) {
+    show($("r-msg"), error.message);
+  }
+});
+
+async function toggleUser(u) {
+  const activate = !u.isActive;
+  if (!activate && !window.confirm(`${u.userName} pasife alınsın mı? Giriş yapamaz ve açık oturumları hemen kapanır (silinmez, tekrar aktif edilebilir).`)) return;
+  try {
+    const result = await api(`/panel/api/yonetim/kullanici/${u.id}`, { method: "POST", body: { adSoyad: u.displayName, rol: u.role, aktif: activate } });
+    await loadAdmin();
+    show($("admin-msg"), result.message, "ok");
+  } catch (error) {
+    show($("admin-msg"), error.message);
+  }
+}
 
 start().then(() => { if ($("app").classList.contains("hidden")) showLogin(); });
