@@ -1,0 +1,8 @@
+<!-- ArsanTüpTakip kendi ayarlarını kullanır; depo kökündeki Directory.Build.props (ArsanGaz ERP) buraya uygulanmaz. -->
+<Project>
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+</Project>

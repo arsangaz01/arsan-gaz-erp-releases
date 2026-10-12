@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# ArsanTüpTakip gece yedeği (root olarak, arsantuptakip-backup.timer): veritabanı (pg_dump -Fc) + veri klasörü
+# (panel kullanıcıları, cihazlar, denetim kaydı). Sunucuda 14 gün, Google Drive'da (ArsanTupTakip-Yedek/nightly) 90 gün tutulur.
+# Drive bağlantısı ArsanGazERP'nin /etc/arsangaz/rclone.conf dosyasından salt okunur alınır: geçici bir kopyası kullanılır,
+# böylece rclone'un yenilediği erişim anahtarı asıl dosyaya geri yazılmaz.
+set -uo pipefail
+db=arsantuptakip
+data=/var/lib/arsantuptakip
+dest=/var/backups/arsantuptakip
+conf=/etc/arsangaz/rclone.conf
+remote=gdrive:ArsanTupTakip-Yedek/nightly
+status=/var/lib/arsantuptakip-backup/status.json
+keep_local_days=14
+keep_remote=90d
+
+write_status() {
+    mkdir -p "$(dirname "$status")"
+    printf '{"ok":%s,"utc":"%s","message":"%s"}\n' "$1" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" > "$status"
+}
+
+fail() {
+    echo "HATA: $1" >&2
+    write_status false "$1"
+    exit 1
+}
+
+install -d -m 700 -o root -g root "$dest"
+stamp=$(date +%Y%m%d-%H%M)
+dump="$dest/arsantuptakip-$stamp.dump"
+files="$dest/arsantuptakip-veri-$stamp.tar.gz"
+
+runuser -u postgres -- pg_dump -Fc "$db" > "$dump.tmp" || fail "pg_dump başarısız"
+[ -s "$dump.tmp" ] || fail "pg_dump boş dosya üretti"
+mv "$dump.tmp" "$dump"
+chmod 600 "$dump"
+tar -czf "$files" -C "$data" --exclude='*.log' --exclude='*.log.old' --exclude='*.apk' . || fail "veri klasörü arşivlenemedi"
+chmod 600 "$files"
+find "$dest" -maxdepth 1 -type f -name 'arsantuptakip-*' -mtime +"$keep_local_days" -delete
+
+[ -f "$conf" ] || fail "yerel yedek alındı ($stamp) ama Drive bağlantısı yok (/etc/arsangaz/rclone.conf)"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+cp "$conf" "$tmp/rclone.conf"
+chmod 600 "$tmp/rclone.conf"
+rc() { rclone --config "$tmp/rclone.conf" --retries 5 --low-level-retries 10 "$@"; }
+out=$(rc copy "$dest" "$remote" --include "arsantuptakip-*$stamp*" 2>&1) || fail "Drive yükleme hatası: $(echo "$out" | tail -n 1)"
+for f in "$dump" "$files"; do
+    size=$(rc lsl "$remote/$(basename "$f")" 2>/dev/null | awk '{print $1}')
+    [ "$size" = "$(stat -c %s "$f")" ] || fail "Drive'daki $(basename "$f") boyutu farklı veya dosya yok"
+done
+rc delete "$remote" --min-age "$keep_remote" >/dev/null 2>&1 || true
+count=$(rc lsf "$remote" | wc -l)
+write_status true "arsantuptakip-$stamp Drive'da, toplam $count dosya"
+echo "ArsanTüpTakip yedeği tamam: $(basename "$dump"), $(basename "$files"); Drive'da $count dosya"

@@ -1,0 +1,31 @@
+# ArsanTüpTakip API + web paneli. ArsanGazERP'den tamamen ayrı: kendi kullanıcısı, verisi, veritabanı ve portu.
+# Yalnızca 127.0.0.1:5080 dinler; dışarıya açılmaz (cloudflared yönlendirmesi henüz yok).
+[Unit]
+Description=ArsanTupTakip API (127.0.0.1:5080)
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=arsantuptakip
+Group=arsantuptakip
+WorkingDirectory=/opt/arsantuptakip/api
+EnvironmentFile=/etc/arsantuptakip/api.env
+Environment=TUPTAKIP_DATA_DIR=/var/lib/arsantuptakip
+Environment=TUPTAKIP_PORT=5080
+Environment=TUPTAKIP_PATH_BASE=/tuptakip
+Environment=HOME=/var/lib/arsantuptakip
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=DOTNET_NOLOGO=1
+ExecStart=/usr/bin/dotnet /opt/arsantuptakip/api/ArsanTupTakip.Api.dll
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/arsantuptakip
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

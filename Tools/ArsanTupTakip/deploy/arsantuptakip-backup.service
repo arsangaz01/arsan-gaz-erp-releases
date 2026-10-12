@@ -1,0 +1,9 @@
+[Unit]
+Description=ArsanTupTakip gece yedegi (veritabani + veri klasoru, Google Drive kopyasi)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/arsantuptakip-backup
+Nice=10

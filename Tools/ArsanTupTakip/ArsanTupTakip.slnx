@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ArsanTupTakip.Api/ArsanTupTakip.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ArsanTupTakip.Tests/ArsanTupTakip.Tests.csproj" />
+  </Folder>
+</Solution>

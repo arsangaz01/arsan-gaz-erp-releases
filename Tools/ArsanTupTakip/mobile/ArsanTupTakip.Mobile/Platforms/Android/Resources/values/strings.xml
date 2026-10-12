@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Overrides the MAUI Shell overflow tab label ("More") shown when there are more than five tabs. -->
+    <string name="overflow_tab_title">Diğer</string>
+</resources>
