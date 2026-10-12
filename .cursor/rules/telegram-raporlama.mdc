@@ -21,6 +21,9 @@ AgentWatcher çalışıyorsa mesaj birkaç saniye içinde iletilir.
   gider; son cevap için `Send-Telegram.ps1` çalıştırma (çift mesaj olur). Son cevabı Telegram'da da okunacak biçimde,
   kendi başına anlaşılır yaz.
 - `Send-Telegram.ps1` yalnızca iş sürerken ara bildirim veya onay sorusu göndermek için kullanılır.
+- İstisna: arka plan görevi/alt ajan bitiş bildirimiyle (system_notification) başlayan turlarda afterAgentResponse kancası
+ tetiklenmiyor. Bu turlarda kullanıcıyı ilgilendiren sonucu (yayın, tamamlanan iş, hata) `Send-Telegram.ps1` ile ayrıca gönder;
+ yalnızca ara adım bildirimleri için gönderme. Kontrol: `%LOCALAPPDATA%\ArsanGazERP\AgentWatcherData\Logs\cursor-chat-hook.log`.
 - Onay gerektiren her durumda (ERP'yi kapatıp güncelleme, deploy, commit/push, geri alınamaz işlem): soruyu
   "Onaylıyor musun? Evet/Hayır yazın" diye sor; son cevap olarak Telegram'a da gider. Telegram'dan gelen "evet/hayır"
   cevabı yeni bir istek olarak bu sohbete düşer; onu onay sayabilirsin. AskQuestion kartı Telegram'a gitmez; onay
