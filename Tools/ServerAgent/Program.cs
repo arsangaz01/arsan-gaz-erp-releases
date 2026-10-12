@@ -51,6 +51,33 @@ if (args is ["--check"])
     return;
 }
 
+// --command "/yayin": runs one Telegram command through the same handler (operator test over SSH as user arsangaz);
+// replies print here, background release results go to the Telegram outbox like a real command.
+if (args is ["--command", { Length: > 0 } commandText])
+{
+    if (!commandText.StartsWith('/'))
+    {
+        Console.Error.WriteLine("Yalnızca /komut çalıştırılabilir (düz metin Cursor kuyruğuna gider).");
+        Environment.ExitCode = 2;
+        return;
+    }
+
+    ServerPaths.Ensure();
+    ArsanGazERP.AgentWatcher.TelegramCopilotInbox commandInbox = new(ServerPaths.CopilotInbox, ServerPaths.TelegramOutbox);
+    ServerCommands commands = new(commandInbox, () => 0, notify: text =>
+    {
+        Console.WriteLine("[Telegram'a gönderilen]\n" + text);
+        return ArsanGazERP.Services.TelegramOutbox.TryQueue(text);
+    });
+    Console.WriteLine(await commands.HandleAsync(0, commandText, options.ChatId, CancellationToken.None));
+    if (commands.BackgroundRelease is { } background)
+    {
+        await background;
+    }
+
+    return;
+}
+
 using CancellationTokenSource stopping = new();
 using PosixSignalRegistration terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
 {

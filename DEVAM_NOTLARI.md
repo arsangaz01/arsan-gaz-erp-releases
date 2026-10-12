@@ -12,6 +12,16 @@ Durum: site, veritabanı (PostgreSQL), Telegram dinleme Oracle sunucusunda; PC'd
 - [x] Sunucu dışı yedek kopyası — tamamlandı (12 Ekim 04:42). `arsangaz-pg-offsite.timer` her gün ~03:45'te gece
   yedeğini rclone ile Google Drive `ArsanGazERP-Yedek/nightly` klasörüne gönderir (erişim drive.file ile sınırlı,
   Drive'da 90 gün saklanır, hata olursa Telegram'a bildirim). Bağlantı: `Tools\Server\Connect-DriveBackup.ps1`.
+- [x] Elektrik kesikken telefondan geliştirme + yayın (12 Ekim 05:30). Akış: Telegram'a istek → sunucu Cursor ajanı
+  derler/test eder (MobileApi, ServerAgent, masaüstü ERP/AgentWatcher derleme kontrolü, köprü testleri) → `cursor/server-agent`
+  dalına push → GitHub CI (`.github/workflows/ci.yml`) → `/yayin` (bekleyenler + CI) → `/yayin_onay <kod>` → main'e
+  birleştirme + push, MobileApi önce test örneğinde (5078, prod'un kopyası `arsangaz_staging` DB) sonra prod'da, sağlık
+  kontrolü başarısızsa otomatik geri dönüş; masaüstü/Watcher PC açılınca AutoSync ile; mobil APK CI'da imzalanır (`/apk`).
+  Ayrıntı: `Tools/ServerAgent/README.md` → "Telefondan geliştirme ve yayın".
+- [ ] Kullanıcı: GitHub'a yayın anahtarını (arsangaz-release, yazma izinli) eklemek ve `GITHUB_ACTIONS_TOKEN`'ı
+  (`Set-ServerAgentValue.ps1 -Key GITHUB_ACTIONS_TOKEN -FromClipboard`) girmek. Bunlar olmadan `/yayin` GitHub'a bağlanamaz.
+- [ ] Öneri: `RELEASES_REPO_TOKEN` depo düzeyinde secret; sunucu ajanı kendi dalında iş akışını değiştirip okuyabilir.
+  Yalnızca `v*` etiketlerine izinli bir ortama (environment) taşınmalı (APK anahtarı zaten `android-signing` ortamında, yalnızca main).
 
 ## Bekleyen kararlar (kullanıcıdan)
 1. **Commit + push onayı**: kampanya, Gmail göndericisi, mobil 1.6.1 ve hata düzeltmeleri. Henüz commit yok.

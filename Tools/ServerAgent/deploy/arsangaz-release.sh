@@ -62,7 +62,7 @@ need_root() { [ "$(id -u)" = 0 ] || die "root olarak çalışmalı (sudo)." 2; }
 # ---------------------------------------------------------------- git
 ensure_repo() {
   if [ ! -d "$REPO/.git" ]; then
-    install -d -m 0700 "$BASE"
+    install -d -m 0700 "$REPO"
     git init -q -b main "$REPO"
     git_r remote add origin "$REPO_URL"
     git_r config user.name "Arsan Gaz Yayin (sunucu)"
@@ -222,11 +222,11 @@ swap_in() {
 refresh_staging_db() {
   local password
   password=$(grep -oP '(?<=Password=)[^;]+' "$STAGING_ENV")
-  runuser -u postgres -- psql -qAt -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS arsangaz_staging WITH (FORCE)" \
+  timeout 120 runuser -u postgres -- psql -qAt -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS arsangaz_staging WITH (FORCE)" \
     -c "CREATE DATABASE arsangaz_staging OWNER arsangaz_staging" >/dev/null
-  # Read-only dump of production into the throw-away staging database.
-  runuser -u postgres -- pg_dump --no-owner --no-privileges -d arsangaz \
-    | PGPASSWORD="$password" psql -h 127.0.0.1 -U arsangaz_staging -d arsangaz_staging -qAt -v ON_ERROR_STOP=1 >/dev/null
+  # Read-only dump of production into the throw-away staging database; never wait long for a production lock.
+  timeout 300 runuser -u postgres -- pg_dump --lock-wait-timeout=60s --no-owner --no-privileges -d arsangaz \
+    | PGPASSWORD="$password" timeout 300 psql -h 127.0.0.1 -U arsangaz_staging -d arsangaz_staging -qAt -v ON_ERROR_STOP=1 >/dev/null
 }
 
 stage() {
@@ -543,7 +543,9 @@ spool() {
 
 main() {
   need_root
-  install -d -m 0700 "$BASE" "$STATE" "$LOGDIR"
+  # The build user must be able to traverse $BASE to reach $BUILD; everything else below it stays root-only.
+  install -d -m 0711 "$BASE"
+  install -d -m 0700 "$STATE" "$LOGDIR"
   exec 9>"$BASE/.lock"
   flock -w 7200 9 || die "Başka bir yayın işlemi sürüyor."
   if [ "${1:-}" = --spool ]; then spool; return; fi
