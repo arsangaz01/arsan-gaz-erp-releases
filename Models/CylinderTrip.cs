@@ -1,0 +1,48 @@
+using System;
+using System.Collections.Generic;
+
+namespace ArsanGazERP.Models;
+
+public enum CylinderTripStatus
+{
+    Active = 1,
+    Closed = 2
+}
+
+public sealed class CylinderTrip
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public CylinderTripStatus Status { get; set; } = CylinderTripStatus.Active;
+    public DateTime StartedAt { get; set; } = DateTime.Now;
+    public DateTime? ClosedAt { get; set; }
+    public string? Note { get; set; }
+    public string? CreatedBy { get; set; }
+    public ICollection<CylinderTripVehicle> Vehicles { get; set; } = new List<CylinderTripVehicle>();
+    public ICollection<CylinderTripCylinder> Cylinders { get; set; } = new List<CylinderTripCylinder>();
+}
+
+public sealed class CylinderTripVehicle
+{
+    public int Id { get; set; }
+    public int TripId { get; set; }
+    public CylinderTrip Trip { get; set; } = null!;
+    public string Plate { get; set; } = string.Empty;
+    public DateTime AddedAt { get; set; } = DateTime.Now;
+    public DateTime? ReturnedAt { get; set; }
+}
+
+public sealed class CylinderTripCylinder
+{
+    public int Id { get; set; }
+    public int TripId { get; set; }
+    public CylinderTrip Trip { get; set; } = null!;
+    public int CylinderId { get; set; }
+    public Cylinder Cylinder { get; set; } = null!;
+    public string VehiclePlate { get; set; } = string.Empty;
+    public string SerialNumber { get; set; } = string.Empty;
+    public string GasType { get; set; } = string.Empty;
+    public DateTime LoadedAt { get; set; } = DateTime.Now;
+    public DateTime? DeliveredAt { get; set; }
+    public DateTime? ReturnedAt { get; set; }
+}

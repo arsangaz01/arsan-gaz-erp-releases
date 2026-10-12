@@ -59,6 +59,8 @@
     <Compile Include="..\..\Services\CrudService.cs" Link="Shared\CrudService.cs" />
     <Compile Include="..\..\Services\CylinderSchemaService.cs" Link="Shared\CylinderSchemaService.cs" />
     <Compile Include="..\..\Services\CylinderTracking.cs" Link="Shared\CylinderTracking.cs" />
+    <Compile Include="..\..\Services\CylinderTripTracking.cs" Link="Shared\CylinderTripTracking.cs" />
+    <Compile Include="..\..\Services\CylinderTripService.cs" Link="Shared\CylinderTripService.cs" />
     <Compile Include="..\..\Services\CursorEscalationService.cs" Link="Shared\CursorEscalationService.cs" />
     <Compile Include="..\..\Services\CursorJarvisBrain.cs" Link="Shared\CursorJarvisBrain.cs" />
     <Compile Include="..\..\Services\DailyBriefingService.cs" Link="Shared\DailyBriefingService.cs" />

@@ -131,6 +131,7 @@ builder.Services.AddHostedService<CursorRelayNotifier>();
 WebApplication app = builder.Build();
 app.UseMiddleware<DeviceAuthMiddleware>();
 MobileEndpoints.Map(app);
+CylinderTripEndpoints.Map(app);
 MobileCampaignEndpoints.Map(app);
 WebPanelEndpoints.Map(app);
 

@@ -27,6 +27,39 @@ CREATE TABLE IF NOT EXISTS CylinderAudits (
 );
 CREATE INDEX IF NOT EXISTS IX_CylinderAudits_CustomerId_AuditedAt ON CylinderAudits(CustomerId, AuditedAt);
 CREATE INDEX IF NOT EXISTS IX_Cylinders_Status ON Cylinders(Status);
+CREATE TABLE IF NOT EXISTS CylinderTrips (
+ Id INTEGER NOT NULL CONSTRAINT PK_CylinderTrips PRIMARY KEY AUTOINCREMENT,
+ Title TEXT NOT NULL DEFAULT '',
+ Status INTEGER NOT NULL DEFAULT 1,
+ StartedAt TEXT NOT NULL,
+ ClosedAt TEXT NULL,
+ Note TEXT NULL,
+ CreatedBy TEXT NULL
+);
+CREATE INDEX IF NOT EXISTS IX_CylinderTrips_Status ON CylinderTrips(Status);
+CREATE TABLE IF NOT EXISTS CylinderTripVehicles (
+ Id INTEGER NOT NULL CONSTRAINT PK_CylinderTripVehicles PRIMARY KEY AUTOINCREMENT,
+ TripId INTEGER NOT NULL,
+ Plate TEXT NOT NULL,
+ AddedAt TEXT NOT NULL,
+ ReturnedAt TEXT NULL,
+ CONSTRAINT FK_CylinderTripVehicles_Trip FOREIGN KEY (TripId) REFERENCES CylinderTrips(Id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS IX_CylinderTripVehicles_TripId_Plate ON CylinderTripVehicles(TripId, Plate);
+CREATE TABLE IF NOT EXISTS CylinderTripCylinders (
+ Id INTEGER NOT NULL CONSTRAINT PK_CylinderTripCylinders PRIMARY KEY AUTOINCREMENT,
+ TripId INTEGER NOT NULL,
+ CylinderId INTEGER NOT NULL,
+ VehiclePlate TEXT NOT NULL,
+ SerialNumber TEXT NOT NULL,
+ GasType TEXT NOT NULL DEFAULT '',
+ LoadedAt TEXT NOT NULL,
+ DeliveredAt TEXT NULL,
+ ReturnedAt TEXT NULL,
+ CONSTRAINT FK_CylinderTripCylinders_Trip FOREIGN KEY (TripId) REFERENCES CylinderTrips(Id) ON DELETE CASCADE,
+ CONSTRAINT FK_CylinderTripCylinders_Cylinder FOREIGN KEY (CylinderId) REFERENCES Cylinders(Id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS IX_CylinderTripCylinders_TripId_CylinderId ON CylinderTripCylinders(TripId, CylinderId);
 """;
 
     public static async Task EnsureAsync(CancellationToken cancellationToken = default)

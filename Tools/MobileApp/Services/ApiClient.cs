@@ -60,6 +60,34 @@ public sealed record CylinderListItem(
 public sealed record CylinderBulkResult(string Code, bool Ok, string Message);
 public sealed record CylinderBulkResponse(string Message, int Ok, int Failed, List<CylinderBulkResult> Results);
 public sealed record CylinderAuditResponse(string Message, int Expected, int Found, List<string> Missing, List<string> Unexpected, List<string> Unknown);
+
+public sealed record TripVehicleSummary(string Plate, int LoadedCount, bool OnTrip, DateTime? ReturnedAt);
+
+public sealed record ActiveTripSummary(
+    int Id,
+    string Title,
+    DateTime StartedAt,
+    string? Note,
+    List<TripVehicleSummary> Vehicles,
+    int LoadedTotal,
+    int DeliveredTotal,
+    int ReturnedTotal);
+
+public sealed record TripGasShortage(string GasType, int Count);
+
+public sealed record TripReconcileResponse(
+    string Message,
+    bool HasAlerts,
+    List<string> NotDeliveredNotReturned,
+    List<TripGasShortage> ShortagesByGas,
+    List<string> UnexpectedReturnCodes,
+    List<string> LoadedButNotAccountedFor);
+
+public sealed record TripStartResponse(int Id, string Title, DateTime StartedAt, string Message);
+
+public sealed record TripLoadResponse(string Message, int Added, int Skipped, List<string> Messages);
+
+public sealed record TripCloseResponse(string Message, int TripId, TripReconcileResponse Reconcile);
 public sealed record ChatTurn(string Role, string Content);
 public sealed record AgentReply(string Agent, string Role, string Text, bool Ok);
 
@@ -399,6 +427,29 @@ public sealed class ApiClient
 
     public Task<CylinderAuditResponse> AuditCustomerAsync(int customerId, IReadOnlyList<string> codes, string? note) =>
         PostAsync<CylinderAuditResponse>("/api/tup/sayim", new { customerId, codes, note });
+
+    public Task<List<ActiveTripSummary>> ActiveTripsAsync() => GetAsync<List<ActiveTripSummary>>("/api/sefer/aktif");
+
+    public Task<TripStartResponse> StartTripAsync(string? note, IReadOnlyList<string>? plates) =>
+        PostAsync<TripStartResponse>("/api/sefer/baslat", new { note, plates });
+
+    public Task<string> AddTripVehicleAsync(int tripId, string plate) =>
+        PostMessageAsync("/api/sefer/arac", new { tripId, plate });
+
+    public Task<TripLoadResponse> LoadTripCylindersAsync(int tripId, string plate, IReadOnlyList<string> codes) =>
+        PostAsync<TripLoadResponse>("/api/sefer/yukle", new { tripId, plate, codes });
+
+    public Task<string> DeliverTripCylindersAsync(int tripId, int customerId, IReadOnlyList<string> codes, string? note) =>
+        PostMessageAsync("/api/sefer/teslim", new { tripId, customerId, codes, note });
+
+    public Task<TripReconcileResponse> ReturnTripCylindersAsync(int tripId, string plate, IReadOnlyList<string> codes, string? note) =>
+        PostAsync<TripReconcileResponse>("/api/sefer/donus", new { tripId, plate, codes, note });
+
+    public Task<TripReconcileResponse> CheckTripAsync(int tripId, string? plate) =>
+        GetAsync<TripReconcileResponse>("/api/sefer/" + tripId + "/kontrol" + (string.IsNullOrEmpty(plate) ? string.Empty : "?plaka=" + Uri.EscapeDataString(plate)));
+
+    public Task<TripCloseResponse> CloseTripAsync(int tripId) =>
+        PostAsync<TripCloseResponse>("/api/sefer/kapat", new { tripId });
 
     public Task<string> AddCrmNoteAsync(int id, string text) =>
         PostMessageAsync($"/api/crm/{id}/not", new { text });

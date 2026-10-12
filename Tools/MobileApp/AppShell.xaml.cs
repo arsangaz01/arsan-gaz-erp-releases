@@ -24,6 +24,7 @@ public partial class AppShell : Shell
                 _connection,
                 _ajan,
                 LazyTab("Tüp", () => new CylinderPage()),
+                LazyTab("Sefer", () => new CylinderTripPage()),
                 LazyTab("CRM", () => new CrmPage(followUps: false)),
                 LazyTab("Takip", () => new CrmPage(followUps: true)),
                 LazyTab("Kampanya", () => new CampaignPage()),

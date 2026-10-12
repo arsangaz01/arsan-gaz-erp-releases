@@ -393,7 +393,7 @@ internal static class MobileEndpoints
         }
     }
 
-    private static string DeviceName(HttpContext context) =>
+    internal static string DeviceName(HttpContext context) =>
         context.Items["device"] is PairedDevice device ? device.Name : "bilinmeyen cihaz";
 
     private static bool Contains(string? value, string term) =>
