@@ -148,6 +148,10 @@ out=$(run act_apk "$C2"); check "apk: failed download -> retry" "@@APK_STATE=ret
 DOWNLOAD_FAILS=0
 
 out=$(run act_apkwatch)
+check "apkwatch: unapproved mobile change is held" "@@APK_STATE=held" "$out"
+refute "apkwatch: held APK is not published" '"versionCode":25' "$(cat "$APK_DIR/ArsanGazERP-Mobil.apk.meta.json" 2>/dev/null)"
+echo "$C2" > "$STATE/approved-sha"
+out=$(run act_apkwatch)
 check "apkwatch: notices main is ahead of /indir" "@@APK_BEHIND=1" "$out"
 check "apkwatch: publishes the 40 MB APK" "@@APK_STATE=published" "$out"
 check "apk meta written" '"versionCode":25' "$(cat "$APK_DIR/ArsanGazERP-Mobil.apk.meta.json")"

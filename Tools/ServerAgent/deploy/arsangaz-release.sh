@@ -172,10 +172,13 @@ build_mobileapi() {
   git_r archive "$sha" | tar -x -C "$BUILD/src"
   chown -R "$BUILD_USER:$BUILD_USER" "$BUILD/src"
   say "🔨 MobileApi derleniyor ($(short "$sha"))..."
+  # No build servers and fd 9 closed: a lingering VBCSCompiler/MSBuild node would keep the release lock held forever.
   if ! timeout 1500 runuser -u "$BUILD_USER" -- env -i HOME="$BUILD/home" PATH="$SDK:/usr/bin:/bin" DOTNET_ROOT="$SDK" \
       DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 NUGET_PACKAGES="$BUILD/home/.nuget/packages" \
+      DOTNET_CLI_USE_MSBUILD_SERVER=0 \
       "$SDK/dotnet" publish "$BUILD/src/Tools/MobileApi/ArsanGazERP.MobileApi.csproj" -p:ArsanLinux=true -c Release \
-      -o "$BUILD/out" -nologo -v q -clp:ErrorsOnly > "$LOGDIR/build-$STAMP.log" 2>&1; then
+      -p:UseSharedCompilation=false -nodeReuse:false \
+      -o "$BUILD/out" -nologo -v q -clp:ErrorsOnly > "$LOGDIR/build-$STAMP.log" 2>&1 9>&-; then
     say "Derleme hatası (son satırlar):"; grep -E 'error' "$LOGDIR/build-$STAMP.log" | tail -n 8 | sed -E 's#/var/lib/arsangaz-release/build/src/##'
     return 1
   fi
@@ -391,6 +394,7 @@ act_publish() {
     trailer APK none
   fi
   trailer MAIN "$newmain"
+  [ $rc -eq 0 ] && printf '%s\n' "$newmain" > "$STATE/approved-sha"
   return $rc
 }
 
@@ -541,6 +545,13 @@ act_apkwatch() {
   fi
   say "📱 main'de $exp_name (build $exp_code) var, telefonlara sunulan $cur_name (build $cur_code)."
   trailer APK_BEHIND 1
+  # Only finish releases approved with /yayin_onay; a mobile change pushed straight to main waits for approval.
+  local approved; approved=$(cat "$STATE/approved-sha" 2>/dev/null || cat "$STATE/apk-sha" 2>/dev/null || true)
+  if [ -z "$approved" ] || ! git_r cat-file -e "$approved^{commit}" 2>/dev/null \
+      || ! git_r diff --quiet "$approved" "$main" -- Tools/MobileApp; then
+    say "⏸ Bu mobil değişiklik henüz /yayin_onay ile yayınlanmadı; APK onaydan sonra yayınlanacak."
+    trailer APK_STATE held; return 0
+  fi
   act_apk "$main"
 }
 

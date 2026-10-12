@@ -471,6 +471,12 @@ internal sealed class ServerCommands(
             }
 
             string state = result.Value("APK_STATE");
+            if (result.Succeeded && state == "held")
+            {
+                apkBehindSinceUtc = null;
+                return "held";
+            }
+
             if (result.Value("APK_BEHIND") == "1" && state == "published")
             {
                 apkBehindSinceUtc = null;

@@ -163,6 +163,7 @@ internal static class SelfTest
         {
             ("apkwatch", 1) => (0, "📱 main'de 1.7.6 (build 24) var\n📱 Yeni APK yayında: 1.7.6\n@@MAIN=" + Main40 + "\n@@APK_BEHIND=1\n@@APK_STATE=published\n"),
             ("apkwatch", 2 or 3) => (0, "❌ APK imza sertifikası telefondakiyle aynı değil; yayınlanmadı.\n@@MAIN=" + Main40 + "\n@@APK_BEHIND=1\n@@APK_STATE=failed\n"),
+            ("apkwatch", 4) => (0, "⏸ Bu mobil değişiklik henüz /yayin_onay ile yayınlanmadı\n@@MAIN=" + Main40 + "\n@@APK_BEHIND=1\n@@APK_STATE=held\n"),
             ("apkwatch", _) => (0, "📱 /indir güncel\n@@MAIN=" + Main40 + "\n@@APK_BEHIND=0\n@@APK_STATE=published\n"),
             _ => (2, "?\n")
         });
@@ -170,6 +171,7 @@ internal static class SelfTest
         expect(await commands.WatchApkOnceAsync(CancellationToken.None) == "published", "apk watch publishes a missed APK");
         expect(await commands.WatchApkOnceAsync(CancellationToken.None) == "failed", "apk watch reports a failure");
         await commands.WatchApkOnceAsync(CancellationToken.None);
+        expect(await commands.WatchApkOnceAsync(CancellationToken.None) == "held", "apk watch waits for /yayin_onay");
         expect(await commands.WatchApkOnceAsync(CancellationToken.None) == "current", "apk watch is quiet when /indir is current");
         lock (notes) snapshot = [.. notes];
         expect(snapshot.Count(note => note.Contains("yayınlanmamış kalan APK", StringComparison.Ordinal)) == 1
