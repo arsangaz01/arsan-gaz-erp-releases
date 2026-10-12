@@ -44,8 +44,12 @@ if ($FromClipboard) {
     $clip = [string](Get-Clipboard -Raw)
     for ($try = 0; $clip.Trim() -notmatch $prefix -and $try -lt 5; $try++) {
         Write-Host "Panoda $Key yok (muhtemelen komutun kendisi kopyalandi)." -ForegroundColor Yellow
-        Read-Host 'Anahtari simdi kopyalayin, sonra buraya donup Enter tusuna basin' | Out-Null
-        $clip = [string](Get-Clipboard -Raw)
+        $typed = Read-Host 'Anahtari simdi kopyalayin, sonra buraya donup yalnizca Enter tusuna basin (yapistirsaniz da gorunmez)' -AsSecureString
+        $clip = if ($typed.Length -gt 0) {
+            [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($typed))
+        } else {
+            [string](Get-Clipboard -Raw)
+        }
     }
     if ($clip.Trim() -notmatch $prefix) { throw "Panoda gecerli bir $Key bulunamadi; hicbir sey degistirilmedi." }
     $secure = New-Object System.Security.SecureString
@@ -77,7 +81,7 @@ if ($code -ne 0) { throw "Sunucu degeri kabul etmedi: $($output | Select-Object 
 Write-Output ($output | Select-Object -Last 1)
 
 if ($Key -eq 'GITHUB_ACTIONS_TOKEN') {
-    & ssh @ssh 'sudo /usr/local/sbin/arsangaz-release pending | grep -E "^CI|^@@CI"'
+    & ssh @ssh 'sudo /usr/local/sbin/arsangaz-release pending | grep -E ^@*CI'
     return
 }
 
