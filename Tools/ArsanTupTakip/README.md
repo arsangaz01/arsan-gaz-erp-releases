@@ -15,8 +15,28 @@ Telegram botu yoktur (kendi botu: @TuptakipArsanbot, aşağıda). Kod ERP'den ko
 | `bot/` | @TuptakipArsanbot (`telegram-bot.js`) ve sunucu Cursor ajanı (`dev-agent.js`), Node.js |
 | `deploy/` | systemd servisleri, yedek betiği/zamanlayıcısı, yayın betiği, kurulum ve doğrulama betikleri |
 
-CI: `.github/workflows/arsantuptakip.yml` (API derleme + testler, bot testleri, yayın betiği benzetim testi,
-mobil Debug derleme; APK yayınlanmaz).
+CI: `.github/workflows/arsantuptakip.yml` (API derleme + testler, bot testleri, yayın betiği benzetim testi).
+Dallarda mobil iş imzasız Debug derler; main'de `mobil-apk` işi imzalı Release APK üretir (aşağıda).
+
+## Mobil APK (imzalı, mevcut uygulamayla yan yana)
+
+- Paket `com.arsantuptakip.mobil` (ArsanGaz uygulaması `com.arsangaz.erpmobile`); iki uygulama aynı telefonda yan yana durur.
+- İmza: mevcut uygulamanın anahtarı (GitHub `android-signing` ortamındaki sırlar, yalnızca main). Sertifika SHA-256
+  `80ae16de…0153`; CI ve sunucu betiği bunu denetler. Mevcut iş akışlarına ve sırlara dokunulmadı.
+- main'e her push'ta `mobil-apk` işi APK'yı `arsantuptakip-mobile-apk` artefaktına koyar (`ArsanTupTakip-Mobil.apk` +
+  `apk-info.json`; 14 gün). Aynı işte sunucu betiğinin APK okuyucusu (`arsantuptakip-release apkinfo`) aapt ile karşılaştırılır.
+- Yayın: Telegram'da `/apk` → `/apk_onay <kod>` (veya sunucuda `sudo arsantuptakip-release apk <sha>`). Betik main'deki
+  mobil kodla aynı koddan derlenmiş en yeni başarılı çalışmanın artefaktını indirir; zip bütünlüğü, `apksigner` ile imza
+  sertifikası, ikili manifestten paket adı + versionCode/versionName (csproj ve `apk-info.json` ile aynı olmalı) ve
+  build numarasının yayındakinden büyük olması denetlenir. Sonra `/var/lib/arsantuptakip/ArsanTupTakip-Mobil.apk`
+  (+ `.meta.json`, önceki 3 sürüm `.bak-*`) yazılır; API bunları okur:
+  `https://arsantuptakip.com/tuptakip/indir` (APK) ve `/tuptakip/api/guncelleme` (`publishedMobileVersion/Build`, `apkReady`).
+  Uygulama açılışta güncellemeyi önerir.
+- Yeni APK için `mobile/ArsanTupTakip.Mobile/ArsanTupTakip.Mobile.csproj` içinde `ApplicationVersion` (build) artırılmalı;
+  aynı build yeniden yayınlanmaz.
+- GitHub okuma anahtarı: `/etc/arsantuptakip/github.env` (`GITHUB_ACTIONS_TOKEN`, root:root 600); `install-bot.sh`
+  bir kez `/etc/arsangaz/release.env`'den yazdırmadan kopyalar. Otomatik (zamanlı) APK yayını yoktur.
+- Kurulum notu: telefonda tarayıcıdan indirilen APK için "bilinmeyen kaynaklardan yükleme" izni gerekebilir.
 
 ## Sunucu düzeni (Oracle sunucusu)
 
@@ -61,6 +81,7 @@ ERP'nin servislerine, botuna, `arsangaz-release` düzenine ve `/etc/arsangaz` do
 | `/yayin` | Yayın bekleyen değişiklikleri gösterir, 15 dk geçerli 6 haneli onay kodu verir |
 | `/yayin_onay <kod>` | Sunucuda derleme + testler → (ajan dalıysa) main'e birleştirme ve GitHub'a gönderme → `/opt/arsantuptakip/api` kurulumu → sağlık kontrolü; geçmezse önceki kuruluma otomatik döner |
 | `/geri_al` → `/geri_al <kod>` | Bir önceki kuruluma döner (şimdiki kurulum yedek olur) |
+| `/apk` → `/apk_onay <kod>` | main'deki mobil uygulamanın imzalı APK'sını GitHub'dan alıp doğrular ve `/tuptakip/indir`'e koyar |
 | `/iptal`, `/yeni`, `/yardim` | Süren isteği durdurur / yeni Cursor konuşması / komut listesi |
 
 Komut olmayan her mesaj (metin, fotoğraf, belge, video; video karelere çevrilir) bir geliştirme isteğidir:
@@ -76,7 +97,7 @@ Komut olmayan her mesaj (metin, fotoğraf, belge, video; video karelere çevrili
 
 Sunucu düzeni:
 
-- Yayın betiği: `/usr/local/sbin/arsantuptakip-release status|sync|pending|publish <sha>|previous|rollback` (root).
+- Yayın betiği: `/usr/local/sbin/arsantuptakip-release status|sync|pending|publish <sha>|previous|rollback|apkcheck|apk <sha>` (root).
   Bot yalnızca bu betiği sudo ile çalıştırabilir (`/etc/sudoers.d/arsantuptakip-bot`); değiştiren eylemler ayrı bir
   geçici systemd birimi olarak çalışır. Durum/depo: `/var/lib/arsantuptakip-release` (ajanın okuduğu ayna: `mirror.git`).
   Derleme kullanıcısı `tuptakipbuild`. Kurulum `api` + `api.prev`; yayınlanan commit `api/.release-sha` dosyasında.
@@ -84,6 +105,8 @@ Sunucu düzeni:
 - Ayarlar (root:root 600, yalnızca systemd okur): `/etc/arsantuptakip/telegram.env` (`TUPTAKIP_TELEGRAM_BOT_TOKEN`,
   `TUPTAKIP_TELEGRAM_CHAT_ID`), `/etc/arsantuptakip/agent.env` (`CURSOR_API_KEY`). Kurulum betiği sohbet kimliğini ve
   Cursor anahtarını mevcut sistemden yalnızca bir kez, yazdırmadan kopyalar.
+- Bildirim kutusu: `/var/lib/arsantuptakip-queue/notices/<ad>.txt` (grup `tuptakipq`, 0660) dosyasını bot olduğu gibi
+  Telegram'a gönderip siler (sunucu betikleri/yönetici duyuruları için).
 - Bot/ajan kodu `/opt/arsantuptakip-bot/app`; `/yayin` bunları güncellemez. Güncellemek için Windows'tan:
 
 ```powershell
@@ -120,7 +143,6 @@ Yönetici panelde **Cihazlar → Eşleştirme kodu oluştur** ile 6 haneli kod a
 2. `/etc/arsantuptakip/api.env` içine `TUPTAKIP_PUBLIC_URL=...` ekleyip servisi yeniden başlatmak;
    mobilde `ServerUrlCoordinator.DefaultServerUrl` değerini aynı adresle doldurmak.
 3. İlk yöneticiyi yukarıdaki komutla oluşturmak.
-4. APK imzalama anahtarı oluşturup Release APK'yı `/var/lib/arsantuptakip/ArsanTupTakip-Mobil.apk`
-   (+ `.meta.json`) olarak yayınlamak.
+4. ~~İmzalı APK yayını~~ — yapıldı (yukarıda "Mobil APK").
 5. Ortağın eski sanal sunucusundaki verileri geçiş planına göre `arsantuptakip` veritabanına aktarmak.
 6. İstenirse Honeywell el terminali desteği. (Ayrı Telegram botu kuruldu: yukarıdaki bölüm.)

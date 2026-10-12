@@ -36,9 +36,16 @@ Yapıldı (commit a4c6cb5, CI "ArsanTupTakip" api + mobil-derleme yeşil):
   ilk yönetici `yonetici` (geçici şifre: sunucu /etc/arsantuptakip/ilk-sifre.txt, PC AgentWatcherData\ArsanTupTakip-ilk-sifre.txt;
   ilk girişte değişir). Panel: https://arsantuptakip.com/tuptakip/panel. Mobil öntanımlı adres aynı.
 - Telegram: @TuptakipArsanbot (arsantuptakip-bot) + arsantuptakip-agent (commit 81693a6); deploy key arsantuptakip-release@oracle
+- 12 Ekim 21:03: imzalı APK yayında — 1.0.0 (build 1), https://arsantuptakip.com/tuptakip/indir (commit d83b68d, CI çalışma
+  38287947132). CI `mobil-apk` işi (yalnız main, `android-signing` ortamı, mevcut anahtar; ci.yml/release.yml ve sırlar
+  değişmedi) → `arsantuptakip-release apkcheck|apk <sha>` (GitHub anahtarı `/etc/arsantuptakip/github.env`, root 600) →
+  bot `/apk` → `/apk_onay <kod>`; bot bildirim kutusu `queue/notices/*.txt`. Doğrulandı: indirilen APK paket
+  com.arsantuptakip.mobil, 1.0.0/1, sertifika 80ae16de…, v1+v2+v3 imza; /tuptakip/api/guncelleme apkReady=true build 1.
+  Mevcut sistem önce/sonra aynı (/indir 1.7.9 build 27 aynı dosya, /api/guncelleme, /panel 200, arsangaz-release sha aynı).
+  API kodu değişmedi (zaten veri klasöründeki APK + meta'yı okuyor); `/opt/arsantuptakip/api` hâlâ elle kurulan sürüm.
 Sıradaki (kullanıcı "devam" deyince):
 - [x] Dışa açma, public URL, mobil sunucu adresi, ilk yönetici hesabı
-- [ ] APK imza anahtarı + yayın (paket ayrı, mevcut uygulamayla yan yana)
+- [x] APK imza + yayın (paket ayrı, mevcut uygulamayla yan yana; yeni sürüm için csproj ApplicationVersion artır, /apk)
 - [x] Ayrı Telegram botu (kullanıcının kendi hesabı)
 - [ ] Eski sanal sunucudan veri geçişi, Honeywell el terminali
 
