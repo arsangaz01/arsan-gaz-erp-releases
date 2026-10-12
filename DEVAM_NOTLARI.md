@@ -1,5 +1,17 @@
 # Devam Notları — 11 Ekim 2026, 01:20
 
+## Mevcut sistem (arsantuptakip.com) — ayrıntılı yetkiler + mobil kullanıcı girişi (12 Ekim 2026, mobil 1.8.0 / build 28)
+- Yetki kataloğu `Tools/MobileApi/PanelPermissions.cs` (≈30 izin, gruplu). Rol = şablon; Yönetim → Kullanıcılar → "Yetkiler"
+  ile kişiye ek/çıkarma yapılır, "Rol varsayılanına dön" sıfırlar. Kişiye özel farklar DB'de değil `web-panel-users.json`
+  kullanıcı kaydında (`Extra`/`Removed`) tutulur (panel kullanıcıları zaten orada). Yönetici her izne sahip, son aktif yönetici düşürülemez.
+- Her /api ve /panel/api uç noktası sunucuda izin denetler (endpoint metadata; self-test kapsamı denetler); arayüz yetkisiz düğmeleri gizler.
+- Mobil: kod eşleştirme kaldırıldı (/api/pair → 410). Giriş panel kullanıcı adı/şifresiyle (`/api/giris`); belirteç kullanıcıya bağlı,
+  24 saat mutlak; panel oturumu 1 saat mutlak. Şifre/rol değişince kullanıcının tüm oturumları düşer. Yönetim → "Mobil oturumlar" kapatılabilir.
+- Eşzamanlılık: tüp hareketi koşullu güncelleme (çakışma → 409 "Bu kayıt başka bir kullanıcı tarafından değiştirildi…"),
+  panel tüp düzenleme sürüm karşılaştırmalı, sefer yüklemede (TripId, CylinderId) tekil, POST'larda Idempotency-Key (kullanıcı bazlı).
+  CRM notu/takip ve aynı müşteriyi iki kişinin eklemesi son yazan kazanır (bilinen sınır).
+- Test: `ArsanGazERP.MobileApi --self-test` (CI sunucu işinde Linux'ta da koşar).
+
 ## GEÇİŞ — eski sistemden tüp takip sistemine taşıma (beklemede, kullanıcı "sonra yapacağız" dedi, 12 Ekim 2026)
 Hedef: firmadaki eski programın tüm verisi (tüpler, stok, müşteriler, hareketler, bakiyeler) bir kez bizim sunucuya
 taşınacak; bundan sonra iş yalnızca bizim sistemden (ERP + mobil + web paneli) yürüyecek. Eski sistem bir süre salt-okunur yedek kalır.

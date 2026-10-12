@@ -109,6 +109,11 @@ jobs:
         with:
           global-json-file: global.json
       - run: dotnet build Tools/MobileApi/ArsanGazERP.MobileApi.csproj -p:ArsanLinux=true -c Release -nologo -clp:ErrorsOnly
+      # The server build targets linux-arm64; the self-test needs the runner's own native SQLite, hence linux-x64.
+      - name: MobileApi --self-test (yetkiler, giriş, oturum süreleri, eşzamanlılık)
+        run: |
+          dotnet build Tools/MobileApi/ArsanGazERP.MobileApi.csproj -p:ArsanLinux=true -p:RuntimeIdentifier=linux-x64 -c Release -nologo -clp:ErrorsOnly
+          dotnet Tools/MobileApi/bin-linux/Release/net10.0/linux-x64/ArsanGazERP.MobileApi.dll --self-test
       - run: dotnet build Tools/ServerAgent/ArsanGazERP.ServerAgent.csproj -c Release -nologo -clp:ErrorsOnly
       - name: ServerAgent --self-test
         run: dotnet Tools/ServerAgent/bin/Release/net10.0/ArsanGazERP.ServerAgent.dll --self-test

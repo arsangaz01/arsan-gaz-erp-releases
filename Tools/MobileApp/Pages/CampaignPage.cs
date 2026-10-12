@@ -109,7 +109,7 @@ public sealed class CampaignPage : ContentPage
                         "1 · Grup",
                         _group,
                         Row(Ui.Secondary("Yenile", async (_, _) => await LoadAsync()),
-                            Ui.Secondary("➕ Yeni grup", (_, _) => _newGroup.IsVisible = !_newGroup.IsVisible)),
+                            Ui.Allowed(Ui.Secondary("➕ Yeni grup", (_, _) => _newGroup.IsVisible = !_newGroup.IsVisible), "kampanya-yonet")),
                         _newGroup),
                     Ui.Section(
                         "2 · Mesaj",
@@ -154,8 +154,8 @@ public sealed class CampaignPage : ContentPage
     {
         bool semi = _mode.SelectedIndex == 0;
         bool email = _mode.SelectedIndex == 1;
-        _semiAuto.IsVisible = semi;
-        _scheduled.IsVisible = !semi;
+        _semiAuto.IsVisible = semi && ApiClient.Instance.Can("kampanya-whatsapp");
+        _scheduled.IsVisible = !semi && ApiClient.Instance.Can("kampanya-yonet");
         _subject.IsVisible = email;
         _template.IsVisible = _mode.SelectedIndex == 2;
         _spacing.Text = email ? "90" : "60";

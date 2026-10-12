@@ -11,21 +11,30 @@ namespace ArsanGazERP.MobileApi;
 internal sealed record PanelLoginRequest(string? Kullanici, string? Sifre);
 internal sealed record PanelPasswordRequest(string? Mevcut, string? Yeni, string? YeniTekrar);
 internal sealed record PanelMoveRequest(CylinderStatus Status, int? CustomerId, string? Plate, bool? IsFull, string? Note, bool Confirm = false);
-internal sealed record PanelEditRequest(string? GasType, decimal Capacity, string? CapacityUnit, DateTime? TestDueDate, bool IsActive);
+internal sealed record PanelEditRequest(string? GasType, decimal Capacity, string? CapacityUnit, DateTime? TestDueDate, bool IsActive, string? Surum = null);
 internal sealed record PanelUserCreateRequest(string? KullaniciAdi, string? AdSoyad, string? Rol, string? Sifre, bool SifreDegistirsin = true);
 internal sealed record PanelUserUpdateRequest(string? AdSoyad, string? Rol, bool Aktif);
 internal sealed record PanelTripLoadRequest(string? Plate, List<string?>? Codes);
 internal sealed record PanelUserPasswordRequest(string? Sifre, bool SifreDegistirsin = true);
+internal sealed record PanelPermissionsRequest(List<string>? Izinler, bool Sifirla = false);
 
-// Endpoint metadata read by the /panel/api filter.
+// Endpoint metadata read by the /panel/api filter and the /api middleware.
 internal sealed record PanelPermission(string Name);
 internal sealed class PanelOpenBeforePasswordChange;
+
+internal static class EndpointRules
+{
+    internal static TBuilder Requires<TBuilder>(this TBuilder builder, string permission) where TBuilder : IEndpointConventionBuilder =>
+        builder.WithMetadata(new PanelPermission(permission));
+
+    internal static TBuilder SignedIn<TBuilder>(this TBuilder builder) where TBuilder : IEndpointConventionBuilder =>
+        builder.WithMetadata(new SignedInOnly());
+}
 
 // Browser panel for inspecting and managing cylinder tracking: /panel (page) and /panel/api/* (data).
 internal static class WebPanelEndpoints
 {
-    private static RouteHandlerBuilder Requires(this RouteHandlerBuilder builder, string permission) =>
-        builder.WithMetadata(new PanelPermission(permission));
+    private static readonly SemaphoreSlim EditGate = new(1, 1);
 
     private const int MaxMovementRows = 500;
     private const int MaxExportRows = 20_000;
@@ -33,7 +42,8 @@ internal static class WebPanelEndpoints
 
     public static void Map(WebApplication app)
     {
-        WebPanelAuth auth = new();
+        WebPanelAuth auth = app.Services.GetRequiredService<WebPanelAuth>();
+        DeviceStore devices = app.Services.GetRequiredService<DeviceStore>();
 
         app.Use(async (context, next) =>
         {
@@ -87,10 +97,9 @@ internal static class WebPanelEndpoints
                 return Results.Json(new { error = "Devam etmeden önce şifrenizi değiştirmelisiniz.", mustChangePassword = true }, statusCode: StatusCodes.Status403Forbidden);
             }
 
-            string permission = metadata?.GetMetadata<PanelPermission>()?.Name ?? PanelRoles.View;
-            if (!PanelRoles.Has(user.Role, permission))
+            if (DeviceAuthMiddleware.PermissionProblem(metadata, user) is string problem)
             {
-                return Results.Json(new { error = $"Bu işlem için yetkiniz yok (yetki düzeyiniz: {user.Role})." }, statusCode: StatusCodes.Status403Forbidden);
+                return Results.Json(new { error = problem, forbidden = true }, statusCode: StatusCodes.Status403Forbidden);
             }
 
             context.Items["panelUser"] = user.UserName;
@@ -106,21 +115,86 @@ internal static class WebPanelEndpoints
                 user = user.UserName,
                 displayName = user.DisplayName,
                 role = user.Role,
-                permissions = PanelRoles.Permissions(user.Role),
+                permissions = PanelRoles.Effective(user),
                 mustChangePassword = user.MustChangePassword,
+                sessionMinutes = (int)WebPanelAuth.SessionLifetime.TotalMinutes,
                 roles = PanelRoles.All.Select(r => new { name = r, description = PanelRoles.Description(r) })
             });
-        }).WithMetadata(new PanelOpenBeforePasswordChange());
+        }).SignedIn().WithMetadata(new PanelOpenBeforePasswordChange());
 
         api.MapPost("/sifre", async (PanelPasswordRequest request, HttpContext context) =>
         {
             string? error = await auth.ChangePasswordAsync(context, request.Mevcut, request.Yeni, request.YeniTekrar);
             return error is null ? Results.Ok(new { message = "Şifre değiştirildi. Diğer cihazlardaki oturumlar kapatıldı." }) : Results.BadRequest(new { error });
-        }).WithMetadata(new PanelOpenBeforePasswordChange());
+        }).SignedIn().WithMetadata(new PanelOpenBeforePasswordChange());
+
+        api.MapGet("/yonetim/yetkiler", () => Results.Ok(new
+        {
+            groups = PanelPermissions.Catalog.GroupBy(p => p.Group).Select(g => new
+            {
+                name = g.Key,
+                items = g.Select(p => new { key = p.Key, label = p.Label, adminOnly = p.AdminOnly })
+            }),
+            roles = PanelRoles.All.Select(r => new { name = r, description = PanelRoles.Description(r), defaults = PanelRoles.Defaults(r) })
+        })).Requires(PanelPermissions.ManageUsers);
+
+        api.MapPost("/yonetim/kullanici/{id:int}/yetkiler", (int id, PanelPermissionsRequest request, HttpContext context) =>
+        {
+            string? error = auth.SetPermissions(Account(context), WebPanelAuth.ClientIp(context), id, request.Izinler, request.Sifirla);
+            return error is null
+                ? Results.Ok(new { message = request.Sifirla ? "Yetkiler rolün varsayılanına döndü." : "Yetkiler kaydedildi; kullanıcının bir sonraki işleminden itibaren geçerli." })
+                : Results.BadRequest(new { error });
+        }).Requires(PanelPermissions.ManageUsers);
+
+        api.MapGet("/yonetim/cihazlar", () =>
+        {
+            DateTime now = DateTime.UtcNow;
+            return Results.Ok(devices.All()
+                .OrderBy(d => d.UserId is null)
+                .ThenByDescending(d => d.LastSeenUtc ?? d.CreatedUtc)
+                .Select(d =>
+                {
+                    WebPanelUser? owner = d.UserId is int userId ? WebPanelUserStore.Find(userId) : null;
+                    string state = d.UserId is null ? "Eski eşleştirme (giriş yapılmamış, erişimi yok)"
+                        : owner is null ? "Kullanıcı silinmiş"
+                        : d.ExpiresUtc is not DateTime expires || expires <= now ? "Süresi doldu"
+                        : !owner.IsActive ? "Hesap pasif"
+                        : owner.SecurityStamp != d.Stamp ? "Şifre/yetki değişti; yeniden giriş gerekli"
+                        : "Aktif";
+                    return new
+                    {
+                        d.Id,
+                        d.Name,
+                        User = owner?.UserName,
+                        DisplayName = owner?.DisplayName,
+                        State = state,
+                        Active = state == "Aktif",
+                        Created = LocalText(d.CreatedUtc),
+                        LastSeen = d.LastSeenUtc is DateTime seen ? LocalText(seen) : null,
+                        Expires = d.ExpiresUtc is DateTime until ? LocalText(until) : null,
+                        d.Ip
+                    };
+                }));
+        }).Requires(PanelPermissions.ManageDevices);
+
+        api.MapPost("/yonetim/cihaz/{id}/kapat", (string id, HttpContext context) =>
+        {
+            PairedDevice? device = devices.All().FirstOrDefault(d => d.Id == id);
+            if (device is null || !devices.Remove(id))
+            {
+                return Results.NotFound(new { error = "Cihaz oturumu bulunamadı (zaten kapanmış olabilir)." });
+            }
+
+            string owner = device.UserId is int userId ? WebPanelUserStore.Find(userId)?.UserName ?? "?" : "eski eşleştirme";
+            WebPanelAudit.Write(Account(context).UserName, "Mobil oturum kapatıldı", device.Name, owner, WebPanelAuth.ClientIp(context));
+            return Results.Ok(new { message = $"{device.Name} ({owner}) oturumu kapatıldı; telefon yeniden giriş isteyecek." });
+        }).Requires(PanelPermissions.ManageDevices);
 
         api.MapGet("/yonetim/kullanicilar", (HttpContext context) =>
         {
             int self = Account(context).Id;
+            DateTime now = DateTime.UtcNow;
+            IReadOnlyList<PairedDevice> phones = devices.All();
             return Results.Ok(WebPanelUserStore.All()
                 .OrderByDescending(u => u.IsActive)
                 .ThenBy(u => Array.IndexOf(PanelRoles.All, u.Role))
@@ -139,21 +213,25 @@ internal static class WebPanelEndpoints
                     u.LastLoginIp,
                     PasswordChanged = u.PasswordChangedAt is DateTime changed ? LocalText(changed) : null,
                     Sessions = auth.ActiveSessionCount(u.Id),
+                    Phones = phones.Count(d => d.UserId == u.Id && d.Stamp == u.SecurityStamp && d.ExpiresUtc > now),
+                    Permissions = PanelRoles.Effective(u),
+                    Extra = u.Role == PanelRoles.Admin ? [] : u.ExtraPermissions.Where(PanelPermissions.IsKnown).ToList(),
+                    Removed = u.Role == PanelRoles.Admin ? [] : u.RemovedPermissions.Where(PanelPermissions.IsKnown).ToList(),
                     IsSelf = u.Id == self
                 }));
-        }).Requires(PanelRoles.ManageUsers);
+        }).Requires(PanelPermissions.ManageUsers);
 
         api.MapPost("/yonetim/kullanici", (PanelUserCreateRequest request, HttpContext context) =>
         {
             string? error = auth.CreateUser(Account(context), WebPanelAuth.ClientIp(context), request.KullaniciAdi, request.AdSoyad, request.Rol, request.Sifre, request.SifreDegistirsin);
             return error is null ? Results.Ok(new { message = $"{request.KullaniciAdi?.Trim()} kullanıcısı oluşturuldu." }) : Results.BadRequest(new { error });
-        }).Requires(PanelRoles.ManageUsers);
+        }).Requires(PanelPermissions.ManageUsers);
 
         api.MapPost("/yonetim/kullanici/{id:int}", (int id, PanelUserUpdateRequest request, HttpContext context) =>
         {
             string? error = auth.UpdateUser(Account(context), WebPanelAuth.ClientIp(context), id, request.AdSoyad, request.Rol, request.Aktif);
             return error is null ? Results.Ok(new { message = "Kullanıcı güncellendi. Yetkisi veya durumu değiştiyse açık oturumları kapatıldı." }) : Results.BadRequest(new { error });
-        }).Requires(PanelRoles.ManageUsers);
+        }).Requires(PanelPermissions.ManageUsers);
 
         api.MapPost("/yonetim/kullanici/{id:int}/sifre", (int id, PanelUserPasswordRequest request, HttpContext context) =>
         {
@@ -161,7 +239,7 @@ internal static class WebPanelEndpoints
             return error is null
                 ? Results.Ok(new { message = "Şifre sıfırlandı; kullanıcının açık oturumları kapatıldı." + (request.SifreDegistirsin ? " İlk girişte yeni şifre belirleyecek." : string.Empty) })
                 : Results.BadRequest(new { error });
-        }).Requires(PanelRoles.ManageUsers);
+        }).Requires(PanelPermissions.ManageUsers);
 
         api.MapGet("/yonetim/denetim", () => Results.Ok(WebPanelAudit.Latest(200).Select(e => new
         {
@@ -171,7 +249,7 @@ internal static class WebPanelEndpoints
             e.Target,
             e.Detail,
             e.Ip
-        }))).Requires(PanelRoles.ManageUsers);
+        }))).Requires(PanelPermissions.AuditLog);
 
         api.MapPost("/musteri", async (CustomerCreateRequest request, HttpContext context) =>
         {
@@ -182,7 +260,7 @@ internal static class WebPanelEndpoints
             }
 
             return result;
-        }).Requires(PanelRoles.AddCustomer);
+        }).Requires(PanelPermissions.CustomerCreate);
 
         api.MapGet("/ozet", async () =>
         {
@@ -195,7 +273,7 @@ internal static class WebPanelEndpoints
             int testSoon = await db.Cylinders.AsNoTracking().CountAsync(c => c.IsActive && c.TestDueDate != null && c.TestDueDate <= today.AddDays(30));
             List<object> recent = (await MovementQuery(db).Take(10).ToListAsync()).Select(MovementRow).ToList();
             return Results.Ok(new { overview, todayMoves, weekMoves, inactive, testSoon, recent });
-        });
+        }).Requires(PanelPermissions.Summary);
 
         api.MapGet("/tupler", async (string? q, int? durum, string? plaka, int? musteri, string? doluluk, bool? uzun, bool? pasif) =>
         {
@@ -251,7 +329,7 @@ internal static class WebPanelEndpoints
                     TestDue = c.TestDueDate?.ToString("dd.MM.yyyy", Turkish),
                     TestOverdue = c.TestDueDate != null && c.TestDueDate < today
                 }));
-        });
+        }).Requires(PanelPermissions.CylinderView);
 
         api.MapGet("/tup/{id:int}", async (int id) =>
         {
@@ -294,9 +372,10 @@ internal static class WebPanelEndpoints
                     Plate = m.VehiclePlate,
                     Fullness = CylinderTracking.FullnessName(m.IsFull),
                     Note = m.Description
-                })
+                }),
+                Version = EditVersion(c)
             });
-        });
+        }).Requires(PanelPermissions.CylinderView);
 
         api.MapGet("/hareketler", async (string? bas, string? bit, int? musteri, int? durum, string? q) =>
         {
@@ -308,7 +387,7 @@ internal static class WebPanelEndpoints
                 truncated = rows.Count > MaxMovementRows,
                 limit = MaxMovementRows
             });
-        });
+        }).Requires(PanelPermissions.MovementView);
 
         api.MapGet("/hareketler.csv", async (string? bas, string? bit, int? musteri, int? durum, string? q) =>
         {
@@ -328,13 +407,13 @@ internal static class WebPanelEndpoints
 
             byte[] bytes = [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(csv.ToString())];
             return Results.File(bytes, "text/csv; charset=utf-8", $"tup-hareketleri-{DateTime.Now:yyyyMMdd-HHmm}.csv");
-        }).Requires(PanelRoles.Export);
+        }).Requires(PanelPermissions.Export);
 
         api.MapGet("/seferler", async (string? durum) =>
         {
             bool? active = durum switch { "aktif" => true, "kapali" => false, _ => null };
             return Results.Ok((await new CylinderTripService().TripsAsync(active)).Select(TripRow));
-        });
+        }).Requires(PanelPermissions.TripView);
 
         api.MapGet("/sefer/{id:int}", async (int id) =>
         {
@@ -367,9 +446,9 @@ internal static class WebPanelEndpoints
                     At = u.At.ToString("dd.MM.yyyy HH:mm", Turkish)
                 })
             });
-        });
+        }).Requires(PanelPermissions.TripView);
 
-        api.MapGet("/sefer/{id:int}/yuk", async (int id, string? plaka) => await VehicleEndpoints.TripLoadAsync(id, plaka));
+        api.MapGet("/sefer/{id:int}/yuk", async (int id, string? plaka) => await VehicleEndpoints.TripLoadAsync(id, plaka)).Requires(PanelPermissions.TripView);
 
         api.MapPost("/sefer/baslat", async (TripStartRequest request, HttpContext context) =>
         {
@@ -383,7 +462,7 @@ internal static class WebPanelEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        }).Requires(PanelRoles.Move);
+        }).Requires(PanelPermissions.TripStart);
 
         api.MapPost("/sefer/{id:int}/yukle", async (int id, PanelTripLoadRequest request, HttpContext context) =>
         {
@@ -397,7 +476,7 @@ internal static class WebPanelEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        }).Requires(PanelRoles.Move);
+        }).Requires(PanelPermissions.TripLoad);
 
         api.MapPost("/sefer/{id:int}/kapat", async (int id, HttpContext context) =>
         {
@@ -411,15 +490,15 @@ internal static class WebPanelEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        }).Requires(PanelRoles.Move);
+        }).Requires(PanelPermissions.TripClose);
 
-        api.MapGet("/araclar", async (bool? pasif) => Results.Ok((await new VehicleService().ListAsync(pasif == true)).Select(VehicleEndpoints.VehicleRow)));
+        api.MapGet("/araclar", async (bool? pasif) => Results.Ok((await new VehicleService().ListAsync(pasif == true)).Select(VehicleEndpoints.VehicleRow))).Requires(PanelPermissions.VehicleView);
 
         api.MapGet("/arac/{id:int}", async (int id) =>
         {
             VehicleDetail? detail = await new VehicleService().DetailAsync(id);
             return detail is null ? Results.NotFound(new { error = "Araç bulunamadı." }) : Results.Ok(VehicleEndpoints.DetailDto(detail));
-        });
+        }).Requires(PanelPermissions.VehicleView);
 
         api.MapPost("/arac", async (VehicleSaveRequest request, HttpContext context) =>
             await VehicleEndpoints.SaveAsync(async () =>
@@ -427,7 +506,7 @@ internal static class WebPanelEndpoints
                 Vehicle vehicle = await new VehicleService().CreateAsync(request.Input);
                 WebPanelAudit.Write((string)context.Items["panelUser"]!, "Araç eklendi", vehicle.Plate, vehicle.Name, WebPanelAuth.ClientIp(context));
                 return vehicle;
-            }, v => $"{v.Plate} araç olarak kaydedildi.")).Requires(PanelRoles.Vehicles);
+            }, v => $"{v.Plate} araç olarak kaydedildi.")).Requires(PanelPermissions.VehicleManage);
 
         api.MapPost("/arac/{id:int}", async (int id, VehicleSaveRequest request, HttpContext context) =>
             await VehicleEndpoints.SaveAsync(async () =>
@@ -435,9 +514,9 @@ internal static class WebPanelEndpoints
                 Vehicle vehicle = await new VehicleService().UpdateAsync(id, request.Input);
                 WebPanelAudit.Write((string)context.Items["panelUser"]!, vehicle.IsActive ? "Araç güncellendi" : "Araç pasif", vehicle.Plate, null, WebPanelAuth.ClientIp(context));
                 return vehicle;
-            }, v => $"{v.Plate} güncellendi." + (v.IsActive ? string.Empty : " Araç pasif; yeni seferlerde seçilemez."))).Requires(PanelRoles.Vehicles);
+            }, v => $"{v.Plate} güncellendi." + (v.IsActive ? string.Empty : " Araç pasif; yeni seferlerde seçilemez."))).Requires(PanelPermissions.VehicleManage);
 
-        api.MapGet("/musteriler", async (string? q, int? take) => Results.Ok(await CustomerChoices.SearchAsync(q, take ?? 50)));
+        api.MapGet("/musteriler", async (string? q, int? take) => Results.Ok(await CustomerChoices.SearchAsync(q, take ?? 50))).Requires(PanelPermissions.CustomerView);
 
         api.MapGet("/secenekler", async () => Results.Ok(new
         {
@@ -445,11 +524,26 @@ internal static class WebPanelEndpoints
             gasTypes = await new CrudService().KnownGasTypesAsync(),
             plates = await new CrudService().KnownVehiclePlatesAsync(),
             longDays = CylinderTracking.LongAtCustomerDays
-        }));
+        })).SignedIn();
 
         api.MapPost("/tup/{id:int}/hareket", async (int id, PanelMoveRequest request, HttpContext context) =>
         {
             string note = $"Web panel ({context.Items["panelUser"]})" + (string.IsNullOrWhiteSpace(request.Note) ? string.Empty : ": " + request.Note.Trim());
+            await using (ArsanGazDbContext db = new())
+            {
+                CylinderStatus? from = await db.Cylinders.AsNoTracking().Where(c => c.Id == id).Select(c => (CylinderStatus?)c.Status).FirstOrDefaultAsync();
+                if (from is null)
+                {
+                    return Results.NotFound(new { error = "Tüp bulunamadı." });
+                }
+
+                string needed = PanelPermissions.ForMove((int)from.Value, (int)request.Status);
+                if (!PanelRoles.Has(Account(context), needed))
+                {
+                    return Results.Json(new { error = DeviceAuthMiddleware.MissingPermission(needed), forbidden = true }, statusCode: StatusCodes.Status403Forbidden);
+                }
+            }
+
             try
             {
                 string? warning = await new CrudService().MoveCylinderAsync(
@@ -460,11 +554,15 @@ internal static class WebPanelEndpoints
             {
                 return Results.Json(new { error = conflict.Message, conflict = true }, statusCode: StatusCodes.Status409Conflict);
             }
+            catch (StaleRecordException stale)
+            {
+                return Results.Json(new { error = stale.Message, stale = true }, statusCode: StatusCodes.Status409Conflict);
+            }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        }).Requires(PanelRoles.Move);
+        }).Requires(PanelPermissions.CylinderView).WithMetadata(new MovePermissionChecked());
 
         api.MapPost("/tup", async (NewCylinderRequest request, HttpContext context) =>
         {
@@ -483,7 +581,7 @@ internal static class WebPanelEndpoints
             {
                 return Results.BadRequest(new { error = "Bu seri numarası veya barkod zaten kayıtlı." });
             }
-        }).Requires(PanelRoles.Register);
+        }).Requires(PanelPermissions.CylinderRegister);
 
         api.MapPost("/tup/{id:int}/duzenle", async (int id, PanelEditRequest request) =>
         {
@@ -492,24 +590,44 @@ internal static class WebPanelEndpoints
                 return Results.BadRequest(new { error = "Gaz türü zorunludur ve kapasite sıfırdan büyük olmalıdır." });
             }
 
-            await using ArsanGazDbContext db = new();
-            Cylinder? cylinder = await db.Cylinders.FirstOrDefaultAsync(c => c.Id == id);
-            if (cylinder is null)
+            // Panel edits are serialized and compared with the version the editor loaded, so two people editing the same
+            // cylinder cannot silently overwrite each other.
+            await EditGate.WaitAsync();
+            try
             {
-                return Results.NotFound(new { error = "Tüp bulunamadı." });
-            }
+                await using ArsanGazDbContext db = new();
+                Cylinder? cylinder = await db.Cylinders.FirstOrDefaultAsync(c => c.Id == id);
+                if (cylinder is null)
+                {
+                    return Results.NotFound(new { error = "Tüp bulunamadı." });
+                }
 
-            cylinder.GasType = request.GasType.Trim();
-            cylinder.Capacity = request.Capacity;
-            cylinder.CapacityUnit = string.IsNullOrWhiteSpace(request.CapacityUnit) ? "Litre" : request.CapacityUnit.Trim();
-            cylinder.TestDueDate = request.TestDueDate?.Date;
-            cylinder.IsActive = request.IsActive;
-            await db.SaveChangesAsync();
-            return Results.Ok(new { message = $"{cylinder.SerialNumber} güncellendi." + (request.IsActive ? string.Empty : " Tüp pasife alındı; listelerde görünmez.") });
-        }).Requires(PanelRoles.Edit);
+                if (request.Surum is { Length: > 0 } loaded && loaded != EditVersion(cylinder))
+                {
+                    return Results.Json(new { error = StaleRecordException.DefaultMessage, stale = true }, statusCode: StatusCodes.Status409Conflict);
+                }
+
+                cylinder.GasType = request.GasType.Trim();
+                cylinder.Capacity = request.Capacity;
+                cylinder.CapacityUnit = string.IsNullOrWhiteSpace(request.CapacityUnit) ? "Litre" : request.CapacityUnit.Trim();
+                cylinder.TestDueDate = request.TestDueDate?.Date;
+                cylinder.IsActive = request.IsActive;
+                await db.SaveChangesAsync();
+                return Results.Ok(new { message = $"{cylinder.SerialNumber} güncellendi." + (request.IsActive ? string.Empty : " Tüp pasife alındı; listelerde görünmez."), version = EditVersion(cylinder) });
+            }
+            finally
+            {
+                EditGate.Release();
+            }
+        }).Requires(PanelPermissions.CylinderEdit);
     }
 
     private static WebPanelUser Account(HttpContext context) => (WebPanelUser)context.Items["panelAccount"]!;
+
+    // Fingerprint of the editable cylinder fields, sent with the detail and compared on save.
+    internal static string EditVersion(Cylinder c) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\u001f",
+            c.GasType, c.Capacity.ToString(CultureInfo.InvariantCulture), c.CapacityUnit, c.TestDueDate?.ToString("yyyy-MM-dd") ?? "", c.IsActive ? "1" : "0"))))[..16];
 
     private static object TripRow(TripListItem t) => new
     {

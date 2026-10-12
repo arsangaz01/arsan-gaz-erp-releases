@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -6,59 +5,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace ArsanGazERP.MobileApi;
-
-// Roles of the browser panel and what each may do. The server checks these on every /panel/api call.
-internal static class PanelRoles
-{
-    internal const string Admin = "Yönetici";
-    internal const string Operator = "Operatör";
-    internal const string Viewer = "İzleyici";
-    internal static readonly string[] All = [Admin, Operator, Viewer];
-
-    internal const string View = "goruntule";
-    internal const string Export = "disa-aktar";
-    internal const string Move = "hareket";
-    internal const string Register = "tup-kayit";
-    internal const string Edit = "tup-duzenle";
-    internal const string AddCustomer = "musteri-ekle";
-    internal const string Vehicles = "arac-yonetimi";
-    internal const string ManageUsers = "kullanici-yonetimi";
-
-    private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
-
-    internal static IReadOnlyList<string> Permissions(string? role) => role switch
-    {
-        Admin => [View, Export, Move, Register, Edit, AddCustomer, Vehicles, ManageUsers],
-        Operator => [View, Export, Move, Register, Edit, AddCustomer, Vehicles],
-        Viewer => [View, Export],
-        _ => []
-    };
-
-    internal static bool Has(string? role, string permission) => Permissions(role).Contains(permission);
-
-    internal static string Description(string role) => role switch
-    {
-        Admin => "Her şey: tüp, müşteri, araç ve sefer işlemleri, kullanıcı yönetimi, denetim kaydı.",
-        Operator => "Görüntüleme, tüp hareketi, yeni tüp, tüp düzenleme, yeni müşteri, araç kaydı, sefer başlatma/yükleme, Excel'e aktarma.",
-        Viewer => "Yalnızca görüntüleme ve Excel'e aktarma; kayıt değiştiremez.",
-        _ => string.Empty
-    };
-
-    internal static string? Normalize(string? role)
-    {
-        string text = new((role ?? string.Empty).Trim().ToUpper(Turkish).Select(c => c switch
-        {
-            'İ' => 'I', 'Ö' => 'O', 'Ü' => 'U', 'Ç' => 'C', 'Ş' => 'S', 'Ğ' => 'G', _ => c
-        }).ToArray());
-        return text switch
-        {
-            "YONETICI" or "ADMIN" => Admin,
-            "OPERATOR" => Operator,
-            "IZLEYICI" or "VIEWER" => Viewer,
-            _ => null
-        };
-    }
-}
 
 internal sealed class WebPanelUser
 {
@@ -76,6 +22,10 @@ internal sealed class WebPanelUser
     public string? LastLoginIp { get; set; }
     public DateTime? PasswordChangedAt { get; set; }
     public bool MustChangePassword { get; set; }
+
+    // Per-user changes to the role defaults, set by an administrator. Not used for Yönetici.
+    public List<string> ExtraPermissions { get; set; } = [];
+    public List<string> RemovedPermissions { get; set; } = [];
 
     // Raised on deactivation, role change and password change; sessions carrying an older value are refused.
     public int SecurityStamp { get; set; }

@@ -45,7 +45,7 @@ public sealed class VehiclePage : ContentPage
             RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star)]
         };
         root.Add(Ui.ActionRow(
-            Ui.Primary("+ Araç ekle", async (_, _) => await Navigation.PushAsync(new VehicleEditPage(null))),
+            Ui.Allowed(Ui.Primary("+ Araç ekle", async (_, _) => await Navigation.PushAsync(new VehicleEditPage(null))), "arac-yonetimi"),
             Ui.Secondary("Yenile", async (_, _) => await LoadAsync())), 0, 0);
         root.Add(new HorizontalStackLayout
         {

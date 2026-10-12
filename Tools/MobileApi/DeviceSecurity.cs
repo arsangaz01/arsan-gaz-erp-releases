@@ -4,8 +4,14 @@ using System.Text.Json;
 
 namespace ArsanGazERP.MobileApi;
 
-internal sealed record PairedDevice(string Id, string Name, string TokenHash, DateTime CreatedUtc, DateTime? LastSeenUtc);
+// A signed-in phone. Tokens issued since 1.8.0 carry the panel user, the user's security stamp and an absolute expiry;
+// rows without a user are pre-1.8.0 pairings, which no longer grant access and are only kept so the admin sees them.
+internal sealed record PairedDevice(
+    string Id, string Name, string TokenHash, DateTime CreatedUtc, DateTime? LastSeenUtc,
+    int? UserId = null, DateTime? UserCreatedAt = null, int? Stamp = null, DateTime? ExpiresUtc = null, string? Ip = null);
 
+// devices.json. Every login adds its own row with its own random token, so the same user can be signed in on several
+// phones at once and a new login never replaces another one.
 internal sealed class DeviceStore
 {
     private readonly Lock _gate = new();
@@ -42,14 +48,24 @@ internal sealed class DeviceStore
         }
     }
 
-    public string Add(string name)
+    public IReadOnlyList<PairedDevice> All()
     {
-        string token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        PairedDevice device = new(Guid.NewGuid().ToString("N"), name, Hash(token), DateTime.UtcNow, null);
         lock (_gate)
         {
             ReloadIfChanged();
+            return [.. _devices];
+        }
+    }
+
+    public string AddForUser(string name, WebPanelUser user, DateTime nowUtc, TimeSpan lifetime, string ip, out PairedDevice device)
+    {
+        string token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        device = new(Guid.NewGuid().ToString("N"), name, Hash(token), nowUtc, nowUtc, user.Id, user.CreatedAt, user.SecurityStamp, nowUtc + lifetime, ip);
+        lock (_gate)
+        {
+            ReloadIfChanged();
+            _devices.RemoveAll(d => d.ExpiresUtc is DateTime expires && expires < nowUtc);
             _devices.Add(device);
             Save();
         }
@@ -59,6 +75,11 @@ internal sealed class DeviceStore
 
     public PairedDevice? Validate(string token)
     {
+        if (token.Length is 0 or > 200)
+        {
+            return null;
+        }
+
         byte[] candidate = Convert.FromHexString(Hash(token));
         lock (_gate)
         {
@@ -84,18 +105,37 @@ internal sealed class DeviceStore
         }
     }
 
-    public bool Remove(string id)
+    public bool UpdateStamp(string id, int stamp) => Change(devices =>
+    {
+        int index = devices.FindIndex(d => d.Id == id);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        devices[index] = devices[index] with { Stamp = stamp };
+        return true;
+    });
+
+    public bool Remove(string id) => Change(devices => devices.RemoveAll(device => device.Id == id) > 0);
+
+    public int RemoveForUser(int userId, string? exceptId) =>
+        Change(devices => devices.RemoveAll(d => d.UserId == userId && d.Id != exceptId));
+
+    private T Change<T>(Func<List<PairedDevice>, T> change)
     {
         lock (_gate)
         {
             ReloadIfChanged();
-            int removed = _devices.RemoveAll(device => device.Id == id);
-            if (removed > 0)
+            int before = _devices.Count;
+            List<PairedDevice> snapshot = [.. _devices];
+            T result = change(_devices);
+            if (_devices.Count != before || !_devices.SequenceEqual(snapshot))
             {
                 Save();
             }
 
-            return removed > 0;
+            return result;
         }
     }
 
@@ -118,115 +158,33 @@ internal sealed class DeviceStore
 
     private void Save()
     {
-        string temporary = MobileApiPaths.DevicesFile + ".tmp";
+        string temporary = MobileApiPaths.DevicesFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(_devices, new JsonSerializerOptions { WriteIndented = true }));
         File.Move(temporary, MobileApiPaths.DevicesFile, overwrite: true);
         _loadedWriteUtc = LastWriteUtc();
     }
 }
 
-internal sealed class PairingService(DeviceStore devices)
+// Endpoint metadata: any signed-in user may call it (no specific permission needed).
+internal sealed class SignedInOnly;
+
+// Endpoint metadata: the handler additionally checks tup-hareket / tup-cikis / tup-iade for each cylinder it moves.
+internal sealed class MovePermissionChecked;
+
+// Checks the phone's token, the user behind it, the 24-hour expiry, the forced password change and the endpoint's
+// permission on every /api call. Endpoints without permission metadata are refused.
+internal sealed class DeviceAuthMiddleware(RequestDelegate next, DeviceStore devices, WebPanelAuth auth)
 {
-    private const int MaximumAttempts = 5;
-    private static readonly TimeSpan CodeLifetime = TimeSpan.FromMinutes(10);
-    private static readonly TimeSpan RequestInterval = TimeSpan.FromSeconds(60);
+    internal static bool IsPublic(PathString path) =>
+        path.StartsWithSegments("/api/pair")
+        || path.StartsWithSegments("/api/merhaba")
+        || path.StartsWithSegments("/api/guncelleme")
+        || path.StartsWithSegments("/api/giris");
 
-    private readonly Lock _gate = new();
-    private string? _code;
-    private DateTime _expiresUtc;
-    private int _attempts;
-    private DateTime _lastRequestUtc = DateTime.MinValue;
-    private int _requestsToday;
-    private DateOnly _requestDay;
-
-    public string RequestCode()
-    {
-        string code;
-        lock (_gate)
-        {
-            DateTime now = DateTime.UtcNow;
-            if (now - _lastRequestUtc < RequestInterval)
-            {
-                return "Eşleştirme kodu az önce gönderildi; Telegram'ı kontrol edin veya 1 dakika sonra tekrar deneyin.";
-            }
-
-            DateOnly today = DateOnly.FromDateTime(now);
-            if (_requestDay != today)
-            {
-                _requestDay = today;
-                _requestsToday = 0;
-            }
-
-            if (++_requestsToday > 10)
-            {
-                return "Bugün için eşleştirme kodu sınırına ulaşıldı.";
-            }
-
-            code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
-            _code = code;
-            _expiresUtc = now + CodeLifetime;
-            _attempts = 0;
-            _lastRequestUtc = now;
-        }
-
-        string? serverUrl = MobileConnectionHub.ReadPublicUrl();
-        string addressLine = serverUrl is { Length: > 0 }
-            ? $"\nSunucu adresi (uygulamada Bağlantı > Telegram'dan bağlan):\n{serverUrl}"
-            : string.Empty;
-        TelegramNotifier.Send(
-            $"📱 Mobil ERP eşleştirme kodu: {code}\n" +
-            "10 dakika geçerli, tek kullanımlık. Bu isteği siz yapmadıysanız kodu kimseyle paylaşmayın." +
-            addressLine);
-        MobileLog.Write("Eşleştirme kodu Telegram'a gönderildi.");
-        return "Eşleştirme kodu Telegram'a gönderildi.";
-    }
-
-    public string? TryPair(string code, string deviceName)
-    {
-        lock (_gate)
-        {
-            if (_code is null || DateTime.UtcNow > _expiresUtc)
-            {
-                _code = null;
-                return null;
-            }
-
-            if (++_attempts > MaximumAttempts)
-            {
-                _code = null;
-                MobileLog.Write("Eşleştirme kodu çok fazla hatalı denemeden sonra iptal edildi.");
-                return null;
-            }
-
-            string candidate = code.Trim();
-            bool matches = candidate.Length == _code.Length && CryptographicOperations.FixedTimeEquals(
-                Encoding.ASCII.GetBytes(candidate),
-                Encoding.ASCII.GetBytes(_code));
-            if (!matches)
-            {
-                return null;
-            }
-
-            _code = null;
-        }
-
-        string name = string.IsNullOrWhiteSpace(deviceName) ? "Telefon" : deviceName.Trim()[..Math.Min(deviceName.Trim().Length, 60)];
-        string token = devices.Add(name);
-        TelegramNotifier.Send($"✅ Mobil ERP'ye yeni cihaz eşleşti: {name}. Bu siz değilseniz bilgisayarda devices.json dosyasından cihazı silin.");
-        MobileLog.Write("Yeni cihaz eşleşti: " + name);
-        return token;
-    }
-}
-
-internal sealed class DeviceAuthMiddleware(RequestDelegate next, DeviceStore devices)
-{
     public async Task InvokeAsync(HttpContext context)
     {
         PathString path = context.Request.Path;
-        if (!path.StartsWithSegments("/api")
-            || path.StartsWithSegments("/api/pair")
-            || path.StartsWithSegments("/api/merhaba")
-            || path.StartsWithSegments("/api/guncelleme"))
+        if (!path.StartsWithSegments("/api") || IsPublic(path))
         {
             await next(context);
             return;
@@ -236,16 +194,67 @@ internal sealed class DeviceAuthMiddleware(RequestDelegate next, DeviceStore dev
         PairedDevice? device = header.StartsWith("Bearer ", StringComparison.Ordinal)
             ? devices.Validate(header["Bearer ".Length..].Trim())
             : null;
-        if (device is null)
+        (WebPanelUser? user, string? error) = auth.CheckDevice(device, devices);
+        if (user is null)
         {
-            await Task.Delay(400);
+            await Task.Delay(device is null ? 400 : 0);
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            await context.Response.WriteAsJsonAsync(new { error = "Cihaz eşleşmemiş veya erişim anahtarı geçersiz." });
+            await context.Response.WriteAsJsonAsync(new { error, loginRequired = true });
+            return;
+        }
+
+        EndpointMetadataCollection? metadata = context.GetEndpoint()?.Metadata;
+        if (user.MustChangePassword && metadata?.GetMetadata<PanelOpenBeforePasswordChange>() is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { error = "Devam etmeden önce şifrenizi değiştirmelisiniz.", mustChangePassword = true });
+            return;
+        }
+
+        if (PermissionProblem(metadata, user) is string problem)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { error = problem, forbidden = true });
             return;
         }
 
         context.Items["device"] = device;
+        context.Items["panelAccount"] = user;
+        context.Items["panelUser"] = user.UserName;
         await next(context);
+    }
+
+    // Shared with the panel filter: null when allowed, otherwise the message to show.
+    internal static string? PermissionProblem(EndpointMetadataCollection? metadata, WebPanelUser user)
+    {
+        if (metadata?.GetMetadata<PanelPermission>() is { } required)
+        {
+            return PanelRoles.Has(user, required.Name) ? null : MissingPermission(required.Name);
+        }
+
+        return metadata?.GetMetadata<SignedInOnly>() is not null ? null : "Bu işlem tanımlı bir yetkiye bağlı değil; erişim kapalı.";
+    }
+
+    internal static string MissingPermission(string key) =>
+        $"Bu işlem için yetkiniz yok ({PanelPermissions.Catalog.FirstOrDefault(p => p.Key == key)?.Label ?? key}). Yöneticinizden yetki isteyin.";
+
+    // Moves need a permission that depends on where each cylinder is now; null when all of them are allowed.
+    internal static async Task<string?> MoveProblemAsync(WebPanelUser user, IEnumerable<string?> codes, ArsanGazERP.Models.CylinderStatus target)
+    {
+        ArsanGazERP.Services.CrudService crud = new();
+        foreach (string code in ArsanGazERP.Services.CylinderTracking.CleanCodes(codes))
+        {
+            if (await crud.FindCylinderByCodeAsync(code) is { } cylinder)
+            {
+                string needed = PanelPermissions.ForMove((int)cylinder.Status, (int)target);
+                if (!PanelRoles.Has(user, needed))
+                {
+                    return MissingPermission(needed) + $" Tüp: {cylinder.SerialNumber}.";
+                }
+            }
+        }
+
+        return null;
     }
 }
 
@@ -253,8 +262,16 @@ internal static class TelegramNotifier
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
 
+    // Set by --self-test so test logins never reach the real chat.
+    internal static bool Disabled { get; set; }
+
     public static void Send(string text)
     {
+        if (Disabled)
+        {
+            return;
+        }
+
         if (!OperatingSystem.IsWindows()
             && Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN") is { Length: > 0 } botToken
             && Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID") is { Length: > 0 } chatIdText)

@@ -3,36 +3,46 @@ using ArsanGazMobile.Services;
 
 namespace ArsanGazMobile;
 
+// Tabs follow the signed-in user's permissions; the server enforces the same rules on every request.
 public partial class AppShell : Shell
 {
-    private readonly ShellContent _connection;
-    private readonly ShellContent _ajan;
+    private readonly ShellContent? _start;
 
-    public AppShell()
+    public AppShell(UserSession session)
     {
         InitializeComponent();
-        _connection = new ShellContent
+        ShellContent connection = new()
         {
             Title = "Bağlantı",
             ContentTemplate = new DataTemplate(typeof(ConnectionPage))
         };
-        _ajan = LazyTab("Ajan", () => new ChatPage());
-        Items.Add(new TabBar
+        List<ShellContent> tabs = [connection];
+        void Add(string title, string permission, Func<Page> create)
         {
-            Items =
+            if (session.Can(permission))
             {
-                _connection,
-                _ajan,
-                LazyTab("Tüp", () => new CylinderPage()),
-                LazyTab("Sefer", () => new CylinderTripPage()),
-                LazyTab("Araç", () => new VehiclePage()),
-                LazyTab("CRM", () => new CrmPage(followUps: false)),
-                LazyTab("Takip", () => new CrmPage(followUps: true)),
-                LazyTab("Kampanya", () => new CampaignPage()),
-                LazyTab("Özet", () => new SummaryPage())
+                tabs.Add(LazyTab(title, create));
             }
-        });
-        CurrentItem = _connection;
+        }
+
+        Add("Tüp", "tup-goruntule", () => new CylinderPage());
+        Add("Sefer", "sefer-goruntule", () => new CylinderTripPage());
+        Add("Ajan", "asistan|cursor-gorev", () => new ChatPage());
+        Add("Araç", "arac-goruntule", () => new VehiclePage());
+        Add("CRM", "crm-goruntule", () => new CrmPage(followUps: false));
+        Add("Takip", "crm-goruntule", () => new CrmPage(followUps: true));
+        Add("Kampanya", "kampanya-goruntule", () => new CampaignPage());
+        Add("Özet", "ozet|rapor|hareket-goruntule", () => new SummaryPage());
+
+        TabBar bar = new();
+        foreach (ShellContent tab in tabs)
+        {
+            bar.Items.Add(tab);
+        }
+
+        Items.Add(bar);
+        _start = tabs.Count > 1 ? tabs[1] : connection;
+        CurrentItem = _start;
     }
 
     private static ShellContent LazyTab(string title, Func<Page> create) =>
@@ -59,12 +69,10 @@ public partial class AppShell : Shell
         try
         {
             await ServerUrlCoordinator.BootstrapAsync();
+            await ApiClient.Instance.RefreshSessionAsync();
         }
         catch (ApiException)
         {
         }
-
-        bool ready = ApiClient.Instance.ServerUrl.Length > 0 && await ApiClient.Instance.IsPairedAsync();
-        CurrentItem = ready ? _ajan : _connection;
     }
 }

@@ -10,8 +10,10 @@ internal static class MobileApiPaths
             ? port
             : 5077;
 
-    public static string Root { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ArsanGazERP", "MobileApi");
+    // ARSANGAZ_MOBILEAPI_DIR is used by --self-test so it never touches the real users, devices or logs.
+    public static string Root { get; } = Environment.GetEnvironmentVariable("ARSANGAZ_MOBILEAPI_DIR") is { Length: > 0 } custom
+        ? custom
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ArsanGazERP", "MobileApi");
 
     public static string DevicesFile => Path.Combine(Root, "devices.json");
     public static string TunnelUrlFile => Path.Combine(Root, "tunnel-url.txt");

@@ -5,7 +5,7 @@ namespace ArsanGazMobile.Pages;
 public sealed class ConnectionPage : ContentPage
 {
     private readonly Entry _server;
-    private readonly Entry _code;
+    private readonly Label _account = new() { FontSize = 14 };
     private readonly Label _state = new() { FontSize = 14 };
     private readonly Label _hub = new() { FontSize = 13, TextColor = Ui.Muted };
     private readonly Label _update = new() { FontSize = 14 };
@@ -15,8 +15,7 @@ public sealed class ConnectionPage : ContentPage
     {
         Title = "Bağlantı";
         Ui.ApplyPageChrome(this);
-        _server = Ui.TextField("https://….trycloudflare.com", Keyboard.Url);
-        _code = Ui.TextField("6 haneli kod", Keyboard.Numeric, maxLength: 6);
+        _server = Ui.TextField("https://arsantuptakip.com", Keyboard.Url);
         _state.FontSize = 14;
         Content = new ScrollView
         {
@@ -26,6 +25,12 @@ public sealed class ConnectionPage : ContentPage
                 Spacing = 14,
                 Children =
                 {
+                    Ui.Section(
+                        "Oturum",
+                        _account,
+                        Ui.ActionRow(
+                            Ui.Secondary("Şifre değiştir", async (_, _) => await ChangePasswordAsync()),
+                            Ui.Secondary("Çıkış yap", async (_, _) => await LogoutAsync()))),
                     Ui.Section(
                         "Sistem durumu",
                         Ui.Note("Telefon, bilgisayardaki ERP + Watcher + Telegram + PC ajan köprüsü ile aynı hatta çalışır."),
@@ -40,21 +45,14 @@ public sealed class ConnectionPage : ContentPage
                             Ui.Secondary("APK indir (tarayıcı)", async (_, _) => await OpenDownloadAsync()))),
                     Ui.Section(
                         "Sunucu",
-                        Ui.Note("Eşleştikten sonra adres PC'den otomatik güncellenir."),
+                        Ui.Note("Giriş yaptıktan sonra adres sunucudan otomatik güncellenir."),
                         _server,
                         Ui.ActionRow(
                             Ui.Primary("Telegram'dan bağlan", async (_, _) => await ConnectFromTelegramAsync()),
                             Ui.Secondary("PC'den adres al", async (_, _) => await RefreshServerFromPcAsync())),
                         Ui.Secondary("Kaydet ve test et", async (_, _) => await SaveAndTestAsync())),
                     _busy,
-                    _state,
-                    Ui.Section(
-                        "Telefonu eşleştir",
-                        Ui.Note("Kod iste → Telegram → kodu gir → Eşleştir."),
-                        Ui.Secondary("Kod iste (Telegram)", async (_, _) => await RequestCodeAsync()),
-                        _code,
-                        Ui.Primary("Eşleştir", async (_, _) => await PairAsync()),
-                        Ui.Secondary("Eşleşmeyi kaldır", async (_, _) => await UnpairAsync()))
+                    _state
                 }
             }
         };
@@ -65,7 +63,7 @@ public sealed class ConnectionPage : ContentPage
         base.OnAppearing();
         _server.Text = ApiClient.Instance.ServerUrl;
         await TrySilentBootstrapAsync();
-        await RefreshStateAsync();
+        RefreshAccount();
         await RefreshHubAsync();
         await CheckUpdateAsync(showAlerts: false);
     }
@@ -80,10 +78,11 @@ public sealed class ConnectionPage : ContentPage
                 _server.Text = ApiClient.Instance.ServerUrl;
             }
 
-            if (await ApiClient.Instance.IsPairedAsync())
+            if (await ApiClient.Instance.IsSignedInAsync())
             {
                 await ApiClient.Instance.TryRefreshServerUrlFromPcAsync();
                 _server.Text = ApiClient.Instance.ServerUrl;
+                await ApiClient.Instance.RefreshSessionAsync();
             }
         }
         catch (ApiException)
@@ -93,9 +92,9 @@ public sealed class ConnectionPage : ContentPage
 
     private async Task RefreshHubAsync()
     {
-        if (ApiClient.Instance.ServerUrl.Length == 0 || !await ApiClient.Instance.IsPairedAsync())
+        if (ApiClient.Instance.ServerUrl.Length == 0 || !await ApiClient.Instance.IsSignedInAsync())
         {
-            _hub.Text = "Durum için önce sunucuya bağlanıp telefonu eşleştirin.";
+            _hub.Text = "Durum için önce sunucuya bağlanıp giriş yapın.";
             return;
         }
 
@@ -184,7 +183,7 @@ public sealed class ConnectionPage : ContentPage
             try
             {
                 await ApkUpdater.DownloadAndInstallAsync(server, progress);
-                _update.Text = "Kurulum ekranında \"Güncelle\"ye basın; uygulama yeni sürümle açılır, eşleşme korunur.";
+                _update.Text = "Kurulum ekranında \"Güncelle\"ye basın; uygulama yeni sürümle açılır, oturum korunur.";
             }
             catch (Exception exception) when (exception is HttpRequestException or IOException or TaskCanceledException)
             {
@@ -222,20 +221,23 @@ public sealed class ConnectionPage : ContentPage
 
     private Task RefreshServerFromPcAsync() => Ui.RunAsync(this, _busy, async () =>
     {
-        if (!await ApiClient.Instance.IsPairedAsync())
+        if (!await ApiClient.Instance.IsSignedInAsync())
         {
-            throw new ApiException("Önce telefonu eşleştirin.");
+            throw new ApiException("Önce giriş yapın.");
         }
 
         await ApiClient.Instance.TryRefreshServerUrlFromPcAsync();
         _server.Text = ApiClient.Instance.ServerUrl;
-        _state.Text = "Sunucu adresi bilgisayardan güncellendi.";
+        _state.Text = "Sunucu adresi güncellendi.";
     });
 
-    private async Task RefreshStateAsync()
+    private void RefreshAccount()
     {
-        bool paired = await ApiClient.Instance.IsPairedAsync();
-        _state.Text = paired ? "Bu telefon eşleşmiş." : "Bu telefon henüz eşleşmedi.";
+        UserSession? session = ApiClient.Instance.Session;
+        _account.Text = session is null
+            ? "Giriş yapılmamış."
+            : $"{session.Caption}\nCihaz: {session.Device}" +
+              (session.ExpiresUtc is { } expires ? $"\nOturum bitişi: {expires.ToLocalTime():dd.MM.yyyy HH:mm} (24 saat)" : string.Empty);
     }
 
     private Task SaveAndTestAsync() => Ui.RunAsync(this, _busy, async () =>
@@ -243,39 +245,34 @@ public sealed class ConnectionPage : ContentPage
         ApiClient.Instance.ServerUrl = _server.Text ?? string.Empty;
         _server.Text = ApiClient.Instance.ServerUrl;
         string version = await ApiClient.Instance.HelloAsync();
-        bool paired = await ApiClient.Instance.IsPairedAsync();
-        if (paired)
-        {
-            await ApiClient.Instance.TextAsync("/api/ozet");
-        }
-
-        _state.Text = $"Sunucuya bağlanıldı (API {version})." + (paired ? " Eşleşme geçerli." : " Şimdi eşleştirin.");
+        await ApiClient.Instance.RefreshSessionAsync();
+        RefreshAccount();
+        _state.Text = $"Sunucuya bağlanıldı (API {version}). Oturum geçerli.";
         await RefreshHubAsync();
     });
 
-    private Task RequestCodeAsync() => Ui.RunAsync(this, _busy, async () =>
+    private async Task ChangePasswordAsync()
     {
-        ApiClient.Instance.ServerUrl = _server.Text ?? string.Empty;
-        await DisplayAlertAsync("Eşleştirme", await ApiClient.Instance.RequestPairingCodeAsync(), "Tamam");
-    });
-
-    private Task PairAsync() => Ui.RunAsync(this, _busy, async () =>
-    {
-        ApiClient.Instance.ServerUrl = _server.Text ?? string.Empty;
-        string name = $"{DeviceInfo.Current.Manufacturer} {DeviceInfo.Current.Model}".Trim();
-        await ApiClient.Instance.PairAsync(_code.Text ?? string.Empty, name);
-        _code.Text = string.Empty;
-        await RefreshStateAsync();
-        await RefreshHubAsync();
-        await DisplayAlertAsync("Eşleştirme", "Telefon eşleşti. Ajan sekmesi ERP ajanlarına, Telegram PC tarafına bağlıdır.", "Tamam");
-    });
-
-    private async Task UnpairAsync()
-    {
-        if (await DisplayAlertAsync("Eşleşme", "Bu telefonun eşleşmesi kaldırılsın mı?", "Kaldır", "Vazgeç"))
+        await Navigation.PushAsync(new PasswordPage(forced: false, done: async () =>
         {
-            ApiClient.Instance.Unpair();
-            await RefreshStateAsync();
-        }
+            await Navigation.PopAsync();
+            RefreshAccount();
+            await DisplayAlertAsync("Şifre", "Şifre değişti. Diğer telefonlardaki oturumlarınız kapatıldı.", "Tamam");
+        }));
     }
-}
+
+    private async Task LogoutAsync()
+    {
+        int pending = OfflineMoves.Pending.Count;
+        string question = pending > 0
+            ? $"{pending} çevrimdışı hareket henüz gönderilmedi. Çıkış yaparsanız bir sonraki girişte gönderilir. Yine de çıkılsın mı?"
+            : "Bu telefondaki oturum kapatılsın mı?";
+        if (!await DisplayAlertAsync("Çıkış", question, "Çıkış yap", "Vazgeç"))
+        {
+            return;
+        }
+
+        await ApiClient.Instance.LogoutAsync();
+        (Application.Current as App)?.ShowLogin(null);
+    }
+

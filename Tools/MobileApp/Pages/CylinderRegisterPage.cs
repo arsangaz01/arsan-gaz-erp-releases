@@ -75,7 +75,7 @@ public sealed class CylinderRegisterPage : ContentPage
                         _customerSearch,
                         Ui.ActionRow(
                             Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
-                            Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync())),
+                            Ui.Allowed(Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync()), "musteri-ekle")),
                         _customer),
                     Ui.Primary("Kaydet", async (_, _) => await SaveAsync()),
                     _busy

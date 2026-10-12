@@ -29,11 +29,11 @@ public sealed class TripStartPage : ContentPage
                     Ui.Section("Araçlar", _vehicles),
                     Ui.Section("Not", _note),
                     Ui.Primary("🚚 Seferi başlat", async (_, _) => await StartAsync()),
-                    Ui.Secondary("+ Yeni araç ekle", async (_, _) =>
+                    Ui.Allowed(Ui.Secondary("+ Yeni araç ekle", async (_, _) =>
                     {
                         _addingVehicle = true;
                         await Navigation.PushAsync(new VehicleEditPage(null));
-                    }),
+                    }), "arac-yonetimi"),
                     _busy
                 }
             }

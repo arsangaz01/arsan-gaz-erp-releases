@@ -305,7 +305,37 @@ public sealed class CylinderTripService
 
         if (added > 0)
         {
-            await db.SaveChangesAsync();
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Another user loaded some of these cylinders onto the same trip at the same moment (unique trip/cylinder
+                // index): save the rows one by one and report the ones already there.
+                List<CylinderTripCylinder> rows = db.ChangeTracker.Entries<CylinderTripCylinder>()
+                    .Where(e => e.State == EntityState.Added).Select(e => e.Entity).ToList();
+                db.ChangeTracker.Clear();
+                foreach (CylinderTripCylinder row in rows)
+                {
+                    db.CylinderTripCylinders.Add(new CylinderTripCylinder
+                    {
+                        TripId = row.TripId, CylinderId = row.CylinderId, VehiclePlate = row.VehiclePlate,
+                        SerialNumber = row.SerialNumber, GasType = row.GasType, LoadedAt = row.LoadedAt
+                    });
+                    try
+                    {
+                        await db.SaveChangesAsync();
+                    }
+                    catch (DbUpdateException)
+                    {
+                        db.ChangeTracker.Clear();
+                        added--;
+                        skipped++;
+                        messages.Add($"{row.SerialNumber}: aynı anda başka bir kullanıcı tarafından sefere yüklendi.");
+                    }
+                }
+            }
         }
 
         return new TripLoadResult(added, skipped, messages);

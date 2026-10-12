@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ArsanGazERP.MobileApi;
 
-internal sealed record PairRequest(string Code, string? DeviceName);
+internal sealed record MobileLoginRequest(string? Kullanici, string? Sifre, string? Cihaz);
 internal sealed record MoveRequest(string Code, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null, bool ConfirmCustomerChange = false);
 internal sealed record BulkMoveRequest(List<string?>? Codes, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null, bool ConfirmCustomerChange = false);
 internal sealed record AuditRequest(int CustomerId, List<string?>? Codes, string? Note);
@@ -69,27 +69,59 @@ internal static class MobileEndpoints
                         ? "Güncel sunucu adresi. Eşleşmiş uygulama bunu otomatik kaydeder."
                         : "Tünel adresi henüz yok; Telegram bildirimini bekleyin."
             });
-        });
+        }).SignedIn();
 
-        app.MapGet("/api/hub", () => Results.Ok(MobileConnectionHub.GetHubStatus()));
+        app.MapGet("/api/hub", () => Results.Ok(MobileConnectionHub.GetHubStatus())).SignedIn();
 
         app.MapGet("/indir", () => File.Exists(MobileApiPaths.ApkFile)
             ? Results.File(MobileApiPaths.ApkFile, "application/vnd.android.package-archive", "ArsanGazERP-Mobil.apk", enableRangeProcessing: true)
             : Results.NotFound("APK henüz yüklenmedi."));
 
-        app.MapPost("/api/pair/request", (PairingService pairing) => Results.Ok(new { message = pairing.RequestCode() }));
+        // 6-digit Telegram pairing gave a phone full access without a user; since 1.8.0 phones sign in with the panel
+        // user name and password instead.
+        app.MapPost("/api/pair/request", () => PairingRemoved());
+        app.MapPost("/api/pair", () => PairingRemoved());
 
-        app.MapPost("/api/pair", (PairRequest request, PairingService pairing) =>
-            pairing.TryPair(request.Code ?? string.Empty, request.DeviceName ?? string.Empty) is { } token
-                ? Results.Ok(new { token })
-                : Results.Json(new { error = "Kod hatalı veya süresi dolmuş. Yeni kod isteyin." }, statusCode: StatusCodes.Status400BadRequest));
+        app.MapPost("/api/giris", async (MobileLoginRequest request, HttpContext context, WebPanelAuth auth, DeviceStore devices) =>
+        {
+            (MobileLogin? login, string? error) = await auth.MobileLoginAsync(WebPanelAuth.ClientIp(context), request.Kullanici, request.Sifre, request.Cihaz, devices);
+            return login is null
+                ? Results.Json(new { error }, statusCode: StatusCodes.Status401Unauthorized)
+                : Results.Ok(new { token = login.Token, user = Me(login.User, login.Device) });
+        });
 
-        app.MapGet("/api/ozet", () => Text(() => "ERP\n" + ErpTools.Summary() + "\nCRM\n" + ErpTools.CrmSummary()));
+        app.MapGet("/api/ben", (HttpContext context) => Results.Ok(Me(Account(context), (PairedDevice)context.Items["device"]!)))
+            .SignedIn().WithMetadata(new PanelOpenBeforePasswordChange());
 
-        app.MapGet("/api/musteriler", async (string? q) => Results.Ok(await CustomerChoices.SearchAsync(q)));
+        app.MapPost("/api/sifre", async (PanelPasswordRequest request, HttpContext context, WebPanelAuth auth, DeviceStore devices) =>
+        {
+            PairedDevice device = (PairedDevice)context.Items["device"]!;
+            WebPanelUser user = Account(context);
+            (string? error, int stamp) = await auth.ChangeOwnPasswordAsync(user, WebPanelAuth.ClientIp(context), request.Mevcut, request.Yeni, request.YeniTekrar, "mobil");
+            if (error is not null)
+            {
+                return Results.BadRequest(new { error });
+            }
+
+            devices.UpdateStamp(device.Id, stamp);
+            devices.RemoveForUser(user.Id, exceptId: device.Id);
+            return Results.Ok(new { message = "Şifre değiştirildi. Diğer telefon ve tarayıcılardaki oturumlarınız kapatıldı." });
+        }).SignedIn().WithMetadata(new PanelOpenBeforePasswordChange());
+
+        app.MapPost("/api/cikis", (HttpContext context, DeviceStore devices) =>
+        {
+            PairedDevice device = (PairedDevice)context.Items["device"]!;
+            devices.Remove(device.Id);
+            WebPanelAudit.Write(Account(context).UserName, "Mobil çıkış", device.Name, ip: WebPanelAuth.ClientIp(context));
+            return Results.Ok(new { message = "Çıkış yapıldı." });
+        }).SignedIn().WithMetadata(new PanelOpenBeforePasswordChange());
+
+        app.MapGet("/api/ozet", () => Text(() => "ERP\n" + ErpTools.Summary() + "\nCRM\n" + ErpTools.CrmSummary())).Requires(PanelPermissions.Summary);
+
+        app.MapGet("/api/musteriler", async (string? q) => Results.Ok(await CustomerChoices.SearchAsync(q))).Requires(PanelPermissions.CustomerView);
 
         app.MapPost("/api/musteri", (CustomerCreateRequest request, HttpContext context) =>
-            CustomerChoices.CreateAsync(request, "mobil: " + DeviceName(context)));
+            CustomerChoices.CreateAsync(request, "mobil: " + DeviceName(context))).Requires(PanelPermissions.CustomerCreate);
 
         app.MapGet("/api/crm", async (string? q) =>
         {
@@ -106,7 +138,7 @@ internal static class MobileEndpoints
                 .OrderByDescending(c => c.Score).ThenBy(c => c.CompanyName)
                 .Take(40)
                 .Select(CrmView));
-        });
+        }).Requires(PanelPermissions.CrmView);
 
         app.MapGet("/api/takipler", async (int? gun) =>
         {
@@ -119,7 +151,7 @@ internal static class MobileEndpoints
                 .Take(100)
                 .ToListAsync();
             return Results.Ok(companies.Select(CrmView));
-        });
+        }).Requires(PanelPermissions.CrmView);
 
         app.MapPost("/api/crm/{id:int}/not", async (int id, CrmNoteRequest request, HttpContext context) =>
         {
@@ -146,7 +178,7 @@ internal static class MobileEndpoints
             company.LastContactAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync();
             return Results.Ok(new { message = $"Not {company.CompanyName} kartına kaydedildi." });
-        });
+        }).Requires(PanelPermissions.CrmWrite);
 
         app.MapPost("/api/crm/{id:int}/takip", async (int id, CrmFollowUpRequest request, HttpContext context) =>
         {
@@ -168,7 +200,7 @@ internal static class MobileEndpoints
             });
             await db.SaveChangesAsync();
             return Results.Ok(new { message = $"{company.CompanyName} için takip {request.Date:dd.MM.yyyy} tarihine kaydedildi." });
-        });
+        }).Requires(PanelPermissions.CrmWrite);
 
         app.MapGet("/api/tup", async (string kod) =>
         {
@@ -185,7 +217,7 @@ internal static class MobileEndpoints
                     Customer = cylinder.CurrentCustomer?.CompanyName,
                     Detail = ErpTools.FindCylinder(kod!)
                 });
-        });
+        }).Requires(PanelPermissions.CylinderView);
 
         app.MapPost("/api/tup/hareket", async (MoveRequest request, HttpContext context) =>
         {
@@ -194,6 +226,12 @@ internal static class MobileEndpoints
             if (cylinder is null)
             {
                 return Results.NotFound(new { error = "Tüp bulunamadı." });
+            }
+
+            string needed = PanelPermissions.ForMove((int)cylinder.Status, (int)request.Status);
+            if (!PanelRoles.Has(Account(context), needed))
+            {
+                return Results.Json(new { error = DeviceAuthMiddleware.MissingPermission(needed), forbidden = true }, statusCode: StatusCodes.Status403Forbidden);
             }
 
             string? warning;
@@ -216,10 +254,15 @@ internal static class MobileEndpoints
                 message = $"{cylinder.SerialNumber}: {ErpTools.StatusName((int)cylinder.Status)} → {ErpTools.StatusName((int)request.Status)} kaydedildi."
                     + (warning is null ? string.Empty : "\n" + warning)
             });
-        });
+        }).Requires(PanelPermissions.CylinderView).WithMetadata(new MovePermissionChecked());
 
         app.MapPost("/api/tup/toplu-hareket", async (BulkMoveRequest request, HttpContext context) =>
         {
+            if (await DeviceAuthMiddleware.MoveProblemAsync(Account(context), request.Codes ?? [], request.Status) is { } denied)
+            {
+                return Results.Json(new { error = denied, forbidden = true }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
             try
             {
                 string note = string.IsNullOrWhiteSpace(request.Note) ? $"Mobil toplu ({DeviceName(context)})" : request.Note.Trim();
@@ -242,7 +285,7 @@ internal static class MobileEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(PanelPermissions.CylinderView).WithMetadata(new MovePermissionChecked());
 
         app.MapPost("/api/tup/yeni", async (NewCylinderRequest request, HttpContext context) =>
         {
@@ -266,19 +309,19 @@ internal static class MobileEndpoints
             {
                 return Results.BadRequest(new { error = "Bu seri numarası veya barkod zaten kayıtlı." });
             }
-        });
+        }).Requires(PanelPermissions.CylinderRegister);
 
-        app.MapGet("/api/tup/gaz-turleri", async () => Results.Ok(await new CrudService().KnownGasTypesAsync()));
+        app.MapGet("/api/tup/gaz-turleri", async () => Results.Ok(await new CrudService().KnownGasTypesAsync())).SignedIn();
 
-        app.MapGet("/api/tup/durum", async () => Results.Ok(await new CrudService().CylinderOverviewAsync()));
+        app.MapGet("/api/tup/durum", async () => Results.Ok(await new CrudService().CylinderOverviewAsync())).Requires(PanelPermissions.CylinderView);
 
         app.MapGet("/api/tup/liste", async (int? durum, string? plaka, bool? uzun) =>
         {
             CylinderStatus? status = durum is int value && Enum.IsDefined((CylinderStatus)value) ? (CylinderStatus)value : null;
             return Results.Ok(await new CrudService().CylinderListAsync(status, plaka, uzun == true));
-        });
+        }).Requires(PanelPermissions.CylinderView);
 
-        app.MapGet("/api/araclar", async () => Results.Ok(await new CrudService().KnownVehiclePlatesAsync()));
+        app.MapGet("/api/araclar", async () => Results.Ok(await new CrudService().KnownVehiclePlatesAsync())).SignedIn();
 
         app.MapPost("/api/tup/sayim", async (AuditRequest request, HttpContext context) =>
         {
@@ -292,16 +335,16 @@ internal static class MobileEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(PanelPermissions.CylinderAudit);
 
-        app.MapGet("/api/tup/uzun-sure", (int? gun) => Text(() => ErpTools.LongAtCustomer(gun ?? CylinderTracking.LongAtCustomerDays)));
+        app.MapGet("/api/tup/uzun-sure", (int? gun) => Text(() => ErpTools.LongAtCustomer(gun ?? CylinderTracking.LongAtCustomerDays))).Requires(PanelPermissions.Reports);
 
-        app.MapGet("/api/tahmin", () => Text(ErpTools.ReorderForecasts));
-        app.MapGet("/api/test-tarihleri", (int? gun) => Text(() => ErpTools.TestDue(gun ?? 30)));
-        app.MapGet("/api/hareketler", (int? gun) => Text(() => ErpTools.RecentMovements(gun ?? 7)));
-        app.MapGet("/api/musterideki-tupler", (string? musteri) => Text(() => ErpTools.CylindersAtCustomers(musteri)));
+        app.MapGet("/api/tahmin", () => Text(ErpTools.ReorderForecasts)).Requires(PanelPermissions.Reports);
+        app.MapGet("/api/test-tarihleri", (int? gun) => Text(() => ErpTools.TestDue(gun ?? 30))).Requires(PanelPermissions.Reports);
+        app.MapGet("/api/hareketler", (int? gun) => Text(() => ErpTools.RecentMovements(gun ?? 7))).Requires(PanelPermissions.MovementView);
+        app.MapGet("/api/musterideki-tupler", (string? musteri) => Text(() => ErpTools.CylindersAtCustomers(musteri))).Requires(PanelPermissions.Reports);
 
-        app.MapGet("/api/ajanlar", () => Results.Ok(AgentChatService.Profiles.Select(p => new { p.Id, p.Name, p.Role })));
+        app.MapGet("/api/ajanlar", () => Results.Ok(AgentChatService.Profiles.Select(p => new { p.Id, p.Name, p.Role }))).Requires(PanelPermissions.Assistant);
 
         app.MapPost("/api/sohbet", async (ChatRequest request, MobileChatService chat, HttpContext context) =>
         {
@@ -319,11 +362,11 @@ internal static class MobileEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(PanelPermissions.Assistant);
 
         app.MapPost("/api/cursor", async (HttpContext context) =>
         {
-            string device = context.Items["device"] is PairedDevice paired ? paired.Name : "Telefon";
+            string device = DeviceName(context);
             try
             {
                 if (context.Request.HasFormContentType)
@@ -354,12 +397,33 @@ internal static class MobileEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(PanelPermissions.CursorTask);
 
         app.MapGet("/api/cursor/{id}", (string id) => CursorRelay.GetStatus(id) is { } status
             ? Results.Ok(status)
-            : Results.NotFound(new { error = "İstek bulunamadı." }));
+            : Results.NotFound(new { error = "İstek bulunamadı." })).Requires(PanelPermissions.CursorTask);
     }
+
+    private static IResult PairingRemoved() => Results.Json(new
+    {
+        error = "Kodla eşleştirme kaldırıldı. Uygulamayı güncelleyin (1.8.0) ve web paneldeki kullanıcı adı ve şifrenizle giriş yapın.",
+        loginRequired = true
+    }, statusCode: StatusCodes.Status410Gone);
+
+    private static WebPanelUser Account(HttpContext context) => (WebPanelUser)context.Items["panelAccount"]!;
+
+    internal static object Me(WebPanelUser user, PairedDevice device) => new
+    {
+        user.Id,
+        user.UserName,
+        user.DisplayName,
+        user.Role,
+        RoleName = PanelRoles.Description(user.Role),
+        Permissions = PanelRoles.Effective(user),
+        user.MustChangePassword,
+        ExpiresUtc = device.ExpiresUtc,
+        Device = device.Name
+    };
 
     private static object CrmView(CrmCompany c) => new
     {
@@ -394,7 +458,9 @@ internal static class MobileEndpoints
     }
 
     internal static string DeviceName(HttpContext context) =>
-        context.Items["device"] is PairedDevice device ? device.Name : "bilinmeyen cihaz";
+        context.Items["device"] is PairedDevice device
+            ? (context.Items["panelUser"] is string user ? $"{user} · {device.Name}" : device.Name)
+            : "bilinmeyen cihaz";
 
     private static bool Contains(string? value, string term) =>
         value is not null && Turkish.CompareInfo.IndexOf(value, term, CompareOptions.IgnoreCase) >= 0;

@@ -33,7 +33,7 @@ public static class FollowUpReminder
             return;
         }
 
-        if (!await ApiClient.Instance.IsPairedAsync() || ApiClient.Instance.ServerUrl.Length == 0)
+        if (!await ApiClient.Instance.IsSignedInAsync() || ApiClient.Instance.ServerUrl.Length == 0 || !ApiClient.Instance.Can("crm-goruntule"))
         {
             return;
         }

@@ -269,6 +269,13 @@ public static class Ui
         return shell;
     }
 
+    // Shows the view only if the signed-in user has the permission ("a|b" = any); the server checks it again.
+    public static T Allowed<T>(T view, string permission) where T : VisualElement
+    {
+        view.IsVisible = ApiClient.Instance.Can(permission);
+        return view;
+    }
+
     public static async Task RunAsync(Page page, ActivityIndicator? busy, Func<Task> action)
     {
         if (busy is not null)
@@ -279,6 +286,10 @@ public static class Ui
         try
         {
             await action();
+        }
+        catch (ApiException exception) when (exception.HasFlag("loginRequired") || exception.HasFlag("mustChangePassword"))
+        {
+            // The sign-in or password screen takes over and shows the reason.
         }
         catch (ApiException exception)
         {

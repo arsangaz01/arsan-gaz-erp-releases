@@ -18,7 +18,7 @@ public static class ServerUrlCoordinator
             await ApiClient.Instance.TryApplyTelegramClipboardUrlAsync();
         }
 
-        if (await ApiClient.Instance.IsPairedAsync())
+        if (await ApiClient.Instance.IsSignedInAsync())
         {
             await RefreshIfDueAsync(force: true);
         }
@@ -26,7 +26,7 @@ public static class ServerUrlCoordinator
 
     public static async Task RefreshIfDueAsync(bool force = false)
     {
-        if (!AutoManaged || !await ApiClient.Instance.IsPairedAsync())
+        if (!AutoManaged || !await ApiClient.Instance.IsSignedInAsync())
         {
             return;
         }
@@ -73,7 +73,7 @@ public static class ServerUrlCoordinator
                 return;
             }
 
-            if (await ApiClient.Instance.IsPairedAsync())
+            if (await ApiClient.Instance.IsSignedInAsync())
             {
                 await RefreshIfDueAsync(force: true);
             }

@@ -85,6 +85,12 @@ public sealed class CylinderConflictException(IReadOnlyList<CylinderCustomerConf
     public IReadOnlyList<CylinderCustomerConflict> Conflicts { get; } = conflicts;
 }
 
+// The record changed between reading and saving (another user or device saved first); nothing was written.
+public sealed class StaleRecordException() : InvalidOperationException(DefaultMessage)
+{
+    public const string DefaultMessage = "Bu kayıt başka bir kullanıcı tarafından değiştirildi, yenileyip tekrar deneyin.";
+}
+
 public static class CylinderTracking
 {
     public const int Warehouse = 1;

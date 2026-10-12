@@ -18,21 +18,21 @@ internal static class VehicleEndpoints
 
     public static void Map(WebApplication app)
     {
-        app.MapGet("/api/arac-kayit", async (bool? pasif) => Results.Ok((await new VehicleService().ListAsync(pasif == true)).Select(VehicleRow)));
+        app.MapGet("/api/arac-kayit", async (bool? pasif) => Results.Ok((await new VehicleService().ListAsync(pasif == true)).Select(VehicleRow))).Requires(PanelPermissions.VehicleView);
 
         app.MapGet("/api/arac-kayit/{id:int}", async (int id) =>
         {
             VehicleDetail? detail = await new VehicleService().DetailAsync(id);
             return detail is null ? Results.NotFound(new { error = "Araç bulunamadı." }) : Results.Ok(DetailDto(detail));
-        });
+        }).Requires(PanelPermissions.VehicleView);
 
         app.MapPost("/api/arac-kayit", async (VehicleSaveRequest request) =>
-            await SaveAsync(() => new VehicleService().CreateAsync(request.Input), v => $"{v.Plate} araç olarak kaydedildi."));
+            await SaveAsync(() => new VehicleService().CreateAsync(request.Input), v => $"{v.Plate} araç olarak kaydedildi.")).Requires(PanelPermissions.VehicleManage);
 
         app.MapPost("/api/arac-kayit/{id:int}", async (int id, VehicleSaveRequest request) =>
-            await SaveAsync(() => new VehicleService().UpdateAsync(id, request.Input), v => $"{v.Plate} güncellendi." + (v.IsActive ? string.Empty : " Araç pasif; yeni seferlerde seçilemez.")));
+            await SaveAsync(() => new VehicleService().UpdateAsync(id, request.Input), v => $"{v.Plate} güncellendi." + (v.IsActive ? string.Empty : " Araç pasif; yeni seferlerde seçilemez."))).Requires(PanelPermissions.VehicleManage);
 
-        app.MapGet("/api/sefer/{tripId:int}/yuk", async (int tripId, string? plaka) => await TripLoadAsync(tripId, plaka));
+        app.MapGet("/api/sefer/{tripId:int}/yuk", async (int tripId, string? plaka) => await TripLoadAsync(tripId, plaka)).Requires(PanelPermissions.TripView);
     }
 
     internal static async Task<IResult> SaveAsync(Func<Task<Vehicle>> save, Func<Vehicle, string> message)

@@ -8,11 +8,9 @@ if (!OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable("ARSANGAZ
     Environment.SetEnvironmentVariable("XDG_DATA_HOME", dataDirectory);
 }
 
-if (args is ["--yerel-eslestir", { Length: > 0 } localDeviceName, { Length: > 0 } tokenFile])
+if (args is ["--self-test"])
 {
-    MobileApiPaths.Ensure();
-    File.WriteAllText(tokenFile, new DeviceStore().Add(localDeviceName));
-    MobileLog.Write("Yerel komutla cihaz eşleştirildi: " + localDeviceName);
+    Environment.ExitCode = await MobileApiSelfTest.RunAsync();
     return;
 }
 
@@ -27,7 +25,7 @@ if (args is ["--panel-sifre-ayarla", { Length: > 0 }] or ["--panel-kullanici-ekl
     string? panelRole = addOnly ? PanelRoles.Normalize(args[2]) : PanelRoles.Admin;
     string? panelPassword = Console.In.ReadLine();
     string? problem = WebPanelUserStore.UserNameProblem(panelUser)
-        ?? (panelRole is null ? "Yetki Yönetici, Operatör veya İzleyici olmalı." : null)
+        ?? (panelRole is null ? "Yetki Yönetici, Operatör, Saha veya İzleyici olmalı." : null)
         ?? WebPanelUserStore.PasswordProblem(panelPassword, panelUser);
     if (problem is null)
     {
@@ -98,43 +96,7 @@ catch (Exception exception)
     MobileLog.Write("Tüp takip şeması hazırlanamadı: " + exception.GetBaseException().Message);
 }
 
-WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
-{
-    Args = args,
-    ContentRootPath = AppContext.BaseDirectory
-});
-builder.Logging.ClearProviders();
-if (!OperatingSystem.IsWindows())
-{
-    builder.Logging.AddSimpleConsole(options => options.SingleLine = true).SetMinimumLevel(LogLevel.Warning);
-}
-builder.WebHost.UseUrls($"http://127.0.0.1:{MobileApiPaths.Port}");
-builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 80 * 1024 * 1024);
-builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-    options.SerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
-});
-builder.Services.AddSingleton<DeviceStore>();
-builder.Services.AddSingleton<PairingService>();
-builder.Services.AddSingleton<MobileChatService>();
-if (OperatingSystem.IsWindows())
-{
-    builder.Services.AddHostedService<TunnelService>();
-}
-else
-{
-    MobileLog.Write("Linux sunucu modu: tünel (cloudflared) ayrı systemd servisi olarak çalışır; PC kontrol komutları kapalı.");
-}
-builder.Services.AddHostedService<CursorRelayNotifier>();
-
-WebApplication app = builder.Build();
-app.UseMiddleware<DeviceAuthMiddleware>();
-MobileEndpoints.Map(app);
-CylinderTripEndpoints.Map(app);
-VehicleEndpoints.Map(app);
-MobileCampaignEndpoints.Map(app);
-WebPanelEndpoints.Map(app);
+WebApplication app = MobileApiHost.Build(args, hostedServices: true);
 
 try
 {

@@ -181,19 +181,26 @@ public sealed class CrudService
    movementCustomerId=id;
   }
 
-  var c=await db.Cylinders.Include(x=>x.CurrentCustomer).FirstOrDefaultAsync(x=>x.Id==cylinderId)??throw new InvalidOperationException("Tüp bulunamadı.");
+  var c=await db.Cylinders.AsNoTracking().Include(x=>x.CurrentCustomer).FirstOrDefaultAsync(x=>x.Id==cylinderId)??throw new InvalidOperationException("Tüp bulunamadı.");
   var conflict=CylinderTracking.CustomerConflict(c.SerialNumber,(int)c.Status,c.CurrentCustomerId,c.CurrentCustomer?.CompanyName,c.LastMovementAt,c.IsFull,(int)target,movementCustomerId,targetName,DateTime.Today);
   if(conflict!=null&&!confirmedCustomerChange)throw new CylinderConflictException([conflict]);
   if(conflict!=null)note=$"{note} · Uyarı onaylandı: tüp önceden {conflict.CurrentCustomer} müşterisindeydi".Trim(' ','·');
   var old=c.Status;
   int? previousCustomerId=c.CurrentCustomerId;
-  c.Status=target;
-  c.CurrentCustomerId=movementCustomerId;
-  c.IsFull=CylinderTracking.NextFullness((int)old,(int)target,c.IsFull,isFull);
-  c.VehiclePlate=plate;
-  c.LastMovementAt=DateTime.Now;
-  db.CylinderMovements.Add(new CylinderMovement{CylinderId=c.Id,CustomerId=movementCustomerId??previousCustomerId,FromStatus=old,ToStatus=target,MovementType=movementType,Description=note,MovementDate=DateTime.Now,VehiclePlate=plate,IsFull=c.IsFull});
+  string? previousPlate=c.VehiclePlate;
+  bool? nextFull=CylinderTracking.NextFullness((int)old,(int)target,c.IsFull,isFull);
+  DateTime now=DateTime.Now;
+  // Saved only if the cylinder is still where it was read; a simultaneous move by another user or device wins and
+  // this one is refused instead of silently overwriting it.
+  await using var transaction=await db.Database.BeginTransactionAsync();
+  int changed=await db.Cylinders
+   .Where(x=>x.Id==c.Id&&x.Status==old&&x.CurrentCustomerId==previousCustomerId&&x.VehiclePlate==previousPlate)
+   .ExecuteUpdateAsync(s=>s.SetProperty(x=>x.Status,target).SetProperty(x=>x.CurrentCustomerId,movementCustomerId)
+    .SetProperty(x=>x.IsFull,nextFull).SetProperty(x=>x.VehiclePlate,plate).SetProperty(x=>x.LastMovementAt,now));
+  if(changed==0)throw new StaleRecordException();
+  db.CylinderMovements.Add(new CylinderMovement{CylinderId=c.Id,CustomerId=movementCustomerId??previousCustomerId,FromStatus=old,ToStatus=target,MovementType=movementType,Description=note,MovementDate=now,VehiclePlate=plate,IsFull=nextFull});
   await db.SaveChangesAsync();
+  await transaction.CommitAsync();
   return conflict is null?null:$"⚠ Tüp önceden {conflict.CurrentCustomer} müşterisindeydi; {conflict.TargetCustomer} müşterisine aktarıldı.";
  }
  public async Task<List<CylinderBulkResult>> MoveCylindersAsync(IEnumerable<string?> codes,CylinderStatus target,int? customerId,string note,string movementType,string? vehiclePlate=null,bool? isFull=null,bool confirmedCustomerChange=false)

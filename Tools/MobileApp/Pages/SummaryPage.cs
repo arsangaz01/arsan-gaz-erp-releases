@@ -18,11 +18,11 @@ public sealed class SummaryPage : ContentPage
             ColumnSpacing = 8,
             RowSpacing = 8
         };
-        buttons.Add(Ui.Secondary("Genel özet", async (_, _) => await ShowAsync("Genel özet", "/api/ozet")), 0, 0);
-        buttons.Add(Ui.Secondary("Sipariş tahmini", async (_, _) => await ShowAsync("Sipariş tahmini", "/api/tahmin")), 1, 0);
-        buttons.Add(Ui.Secondary("Test tarihi yaklaşan", async (_, _) => await ShowAsync("Test tarihi 30 gün içinde", "/api/test-tarihleri?gun=30")), 0, 1);
-        buttons.Add(Ui.Secondary("Son hareketler", async (_, _) => await ShowAsync("Son 7 gün hareketleri", "/api/hareketler?gun=7")), 1, 1);
-        buttons.Add(Ui.Secondary("Müşterideki tüpler", async (_, _) => await ShowAsync("Müşterideki tüpler", "/api/musterideki-tupler")), 0, 2);
+        buttons.Add(Ui.Allowed(Ui.Secondary("Genel özet", async (_, _) => await ShowAsync("Genel özet", "/api/ozet")), "ozet"), 0, 0);
+        buttons.Add(Ui.Allowed(Ui.Secondary("Sipariş tahmini", async (_, _) => await ShowAsync("Sipariş tahmini", "/api/tahmin")), "rapor"), 1, 0);
+        buttons.Add(Ui.Allowed(Ui.Secondary("Test tarihi yaklaşan", async (_, _) => await ShowAsync("Test tarihi 30 gün içinde", "/api/test-tarihleri?gun=30")), "rapor"), 0, 1);
+        buttons.Add(Ui.Allowed(Ui.Secondary("Son hareketler", async (_, _) => await ShowAsync("Son 7 gün hareketleri", "/api/hareketler?gun=7")), "hareket-goruntule"), 1, 1);
+        buttons.Add(Ui.Allowed(Ui.Secondary("Müşterideki tüpler", async (_, _) => await ShowAsync("Müşterideki tüpler", "/api/musterideki-tupler")), "rapor"), 0, 2);
 
         Ui.ApplyPageChrome(this);
         Content = new ScrollView
@@ -44,7 +44,7 @@ public sealed class SummaryPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        if (string.IsNullOrEmpty(_text.Text) && await ApiClient.Instance.IsPairedAsync())
+        if (string.IsNullOrEmpty(_text.Text) && await ApiClient.Instance.IsSignedInAsync() && ApiClient.Instance.Can("ozet"))
         {
             await ShowAsync("Genel özet", "/api/ozet");
         }

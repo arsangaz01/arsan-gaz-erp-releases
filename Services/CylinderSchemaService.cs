@@ -111,6 +111,16 @@ SELECT DISTINCT p.Plate, 1, datetime('now', 'localtime') FROM (
             await using SqliteCommand command = connection.CreateCommand();
             command.CommandText = AuditTableSql;
             await command.ExecuteNonQueryAsync(cancellationToken);
+
+            // Two users loading the same cylinder onto a trip at once must not create two rows. Skipped (and retried at
+            // the next start) while old duplicate rows exist, so existing data is never deleted.
+            await using SqliteCommand unique = connection.CreateCommand();
+            unique.CommandText = "SELECT COUNT(*) FROM (SELECT 1 FROM CylinderTripCylinders GROUP BY TripId, CylinderId HAVING COUNT(*) > 1);";
+            if (Convert.ToInt64(await unique.ExecuteScalarAsync(cancellationToken)) == 0)
+            {
+                unique.CommandText = "CREATE UNIQUE INDEX IF NOT EXISTS UX_CylinderTripCylinders_TripId_CylinderId ON CylinderTripCylinders(TripId, CylinderId);";
+                await unique.ExecuteNonQueryAsync(cancellationToken);
+            }
         }
         finally
         {

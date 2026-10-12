@@ -29,7 +29,7 @@ public sealed class VehicleDetailPage : ContentPage
                 Children =
                 {
                     Ui.Section("Araç bilgileri", _info, _warning,
-                        Ui.ActionRow(Ui.Secondary("Düzenle", async (_, _) => await EditAsync()), _toggle)),
+                        Ui.Allowed(Ui.ActionRow(Ui.Secondary("Düzenle", async (_, _) => await EditAsync()), _toggle), "arac-yonetimi")),
                     Ui.Section("Araçtaki tüpler (gaz türüne göre)", _groups),
                     Ui.Section("Sefer geçmişi (son 30)", _trips),
                     _busy

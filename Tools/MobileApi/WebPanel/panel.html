@@ -94,6 +94,17 @@ button.small:active:not(:disabled), a.small:active { transform:scale(0.97); }
 .role-Yönetici { background:#dbeafe; color:var(--navy); border:1px solid #93c5fd; }
 .role-Operatör { background:#e0f2fe; color:#0369a1; border:1px solid #7dd3fc; }
 .role-İzleyici { background:#f3f4f6; color:#4b5563; border:1px solid var(--line); }
+.role-Saha { background:#ecfdf5; color:#047857; border:1px solid #6ee7b7; }
+.perm-custom { font-size:12px; color:#b45309; margin-top:3px; }
+.perm-groups { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px; }
+.perm-group { border:1px solid var(--line); border-radius:12px; padding:8px 10px 10px; margin:0; }
+.perm-group legend { font-weight:600; font-size:13px; padding:0 4px; color:var(--navy); }
+.perm-item { display:flex; align-items:center; gap:8px; padding:6px 4px; font-size:14px; color:var(--text); cursor:pointer; border-radius:8px; }
+.perm-item input { width:18px; height:18px; flex:none; }
+.perm-item span:first-of-type { flex:1; }
+.perm-item.perm-diff { background:#fffbeb; }
+.perm-note { font-size:11px; color:#b45309; white-space:nowrap; }
+dialog.wide { width:min(900px,98vw); }
 .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:#9ca3af; }
 .dot.on { background:var(--sea); }
 tr.off td { color:#a8a29e; }
@@ -149,14 +160,14 @@ tr.alarm-row td { background:#fef2f2; }
   <header>
     <h1>Arsan Gaz · Tüp Takip</h1>
     <nav>
-      <button data-tab="ozet" class="active">Özet</button>
-      <button data-tab="tupler">Tüpler</button>
-      <button data-tab="hareketler">Hareketler</button>
-      <button data-tab="seferler">Seferler</button>
-      <button data-tab="araclar">Araç İşlemleri</button>
-      <button data-tab="musteriler">Müşteriler</button>
+      <button data-tab="ozet" data-perm="ozet">Özet</button>
+      <button data-tab="tupler" data-perm="tup-goruntule">Tüpler</button>
+      <button data-tab="hareketler" data-perm="hareket-goruntule">Hareketler</button>
+      <button data-tab="seferler" data-perm="sefer-goruntule">Seferler</button>
+      <button data-tab="araclar" data-perm="arac-goruntule">Araç İşlemleri</button>
+      <button data-tab="musteriler" data-perm="musteri-goruntule">Müşteriler</button>
       <button data-tab="yeni" data-perm="tup-kayit">Yeni tüp</button>
-      <button data-tab="yonetim" data-perm="kullanici-yonetimi">Yönetim</button>
+      <button data-tab="yonetim" data-perm="kullanici-yonetimi|cihaz-yonetimi|denetim-kaydi">Yönetim</button>
     </nav>
     <div class="spacer"></div>
     <span class="user" id="who"></span>
@@ -219,7 +230,7 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="card">
         <div class="toolbar">
           <h2>Seferde olan araçlar</h2>
-          <button class="primary small" id="s-baslat" type="button" data-perm="hareket">🚚 Sefer başlat</button>
+          <button class="primary small" id="s-baslat" type="button" data-perm="sefer-baslat">🚚 Sefer başlat</button>
           <button class="secondary small" id="s-yenile" type="button">Yenile</button>
         </div>
         <div id="s-alarm" class="alarm-box hidden"></div>
@@ -288,19 +299,27 @@ tr.alarm-row td { background:#fef2f2; }
 
     <section data-page="yonetim" class="hidden">
       <div id="admin-msg" class="msg hidden"></div>
-      <div class="card">
+      <div class="card" data-perm="kullanici-yonetimi">
         <div class="toolbar">
           <h2>Kullanıcılar</h2>
           <button class="primary" id="u-new" type="button">+ Yeni kullanıcı</button>
         </div>
         <div class="table-wrap"><table id="users"></table></div>
-        <div class="hint">Kullanıcılar silinmez, pasife alınır; pasif hesap giriş yapamaz ve açık oturumları hemen kapanır. Son aktif yönetici pasife alınamaz, kendi hesabınızı pasife alamaz veya yetkisini düşüremezsiniz.</div>
+        <div class="hint">Aynı kullanıcı adı ve şifre web panelde ve mobil uygulamada geçerlidir. Panel oturumu girişten 1 saat, telefon oturumu 24 saat sonra kapanır. "Yetkiler" ile her kullanıcının neleri yapabileceğini rolün dışında da tek tek seçebilirsiniz. Kullanıcılar silinmez, pasife alınır; pasif hesap giriş yapamaz ve açık oturumları hemen kapanır. Son aktif yönetici pasife alınamaz, kendi hesabınızı pasife alamaz veya yetkisini düşüremezsiniz.</div>
       </div>
-      <div class="card">
-        <h2>Yetki düzeyleri</h2>
+      <div class="card" data-perm="kullanici-yonetimi">
+        <h2>Roller (varsayılan yetki şablonları)</h2>
         <div class="roles-grid" id="roles"></div>
       </div>
-      <div class="card">
+      <div class="card" data-perm="cihaz-yonetimi">
+        <div class="toolbar">
+          <h2>Mobil oturumlar (telefonlar)</h2>
+          <button class="secondary small" id="devices-refresh" type="button">Yenile</button>
+        </div>
+        <div class="table-wrap"><table id="devices"></table></div>
+        <div class="hint">Telefonlar web panel kullanıcı adı ve şifresiyle giriş yapar; her girişin kendi oturumu vardır. "Oturumu kapat" o telefondan yeniden giriş ister. "Eski eşleştirme" satırları 1.8.0 öncesi kodla eşleşmiş telefonlardır; artık erişimleri yoktur, uygulama güncellenip giriş yapılmalıdır.</div>
+      </div>
+      <div class="card" data-perm="denetim-kaydi">
         <div class="toolbar">
           <h2>Denetim kaydı (son 200)</h2>
           <button class="secondary small" id="audit-refresh" type="button">Yenile</button>
@@ -319,7 +338,7 @@ tr.alarm-row td { background:#fef2f2; }
   <div class="dlg-body">
     <div id="d-msg" class="msg hidden"></div>
     <div class="card"><h2>Bilgiler</h2><div class="kv" id="d-info"></div></div>
-    <div class="card" data-perm="hareket">
+    <div class="card" data-perm="tup-hareket|tup-cikis|tup-iade">
       <h2>Hareket kaydet</h2>
       <div class="form-grid">
         <label>Yeni durum<select id="m-status"></select></label>
@@ -354,17 +373,17 @@ tr.alarm-row td { background:#fef2f2; }
     <div id="t-alarm" class="alarm-box hidden"></div>
     <div id="t-msg" class="msg hidden"></div>
     <div class="card"><h2>Bilgiler</h2><div class="kv" id="t-info"></div></div>
-    <div class="card hidden" id="t-load-card" data-perm="hareket">
-      <h2>Araca yükle (tüp okut)</h2>
-      <div class="form-grid">
+    <div class="card hidden" id="t-load-card">
+      <h2 data-perm="sefer-yukle">Araca yükle (tüp okut)</h2>
+      <div class="form-grid" data-perm="sefer-yukle">
         <label>Araç<select id="t-load-plate"></select></label>
         <label style="grid-column:1/-1">Barkod / seri no (barkod okuyucu ile okutun veya her satıra bir kod yazın)<textarea id="t-load-codes" rows="4" placeholder="Okutulan kodlar alt alta gelir"></textarea></label>
       </div>
       <div class="actions">
-        <button class="primary" id="t-load-save" type="button">Araca yükle</button>
-        <span class="muted" id="t-load-count"></span>
+        <button class="primary" id="t-load-save" type="button" data-perm="sefer-yukle">Araca yükle</button>
+        <span class="muted" id="t-load-count" data-perm="sefer-yukle"></span>
         <span class="spacer" style="flex:1"></span>
-        <button class="danger" id="t-close-trip" type="button">Seferi kapat</button>
+        <button class="danger" id="t-close-trip" type="button" data-perm="sefer-kapat">Seferi kapat</button>
       </div>
     </div>
     <div class="card">
@@ -481,6 +500,21 @@ tr.alarm-row td { background:#fef2f2; }
       <button class="primary" type="submit" id="u-save">Kaydet</button>
       <div id="u-msg" class="msg hidden"></div>
     </form>
+  </div>
+</dialog>
+
+<dialog id="perm-dialog" class="wide">
+  <div class="dlg-head"><h3 id="pm-title">Yetkiler</h3><button class="secondary" id="pm-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <div class="muted" id="pm-role" style="margin-bottom:10px"></div>
+    <div id="pm-admin" class="msg warn hidden">Yönetici rolü her yetkiye sahiptir ve daraltılamaz. Daha az yetki vermek için önce "Düzenle"den rolünü değiştirin.</div>
+    <div class="perm-groups" id="pm-groups"></div>
+    <div class="actions" style="margin-top:12px">
+      <button class="primary" id="pm-save" type="button">Yetkileri kaydet</button>
+      <button class="secondary" id="pm-reset" type="button">Rolün varsayılanına dön</button>
+    </div>
+    <div id="pm-msg" class="msg hidden"></div>
+    <div class="hint">Sarı satırlar rolün varsayılanından farklıdır. Değişiklik kullanıcının bir sonraki işleminden itibaren web panelde ve mobil uygulamada geçerli olur. Rol değiştirilirse özel seçimler sıfırlanır.</div>
   </div>
 </dialog>
 

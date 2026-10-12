@@ -5,7 +5,8 @@ let options = { statuses: [], gasTypes: [], plates: [], longDays: 60 };
 let current = null;
 let me = null;
 
-const can = (permission) => !!me && me.permissions.includes(permission);
+// "a|b" = any of them.
+const can = (permission) => !!me && permission.split("|").some((p) => me.permissions.includes(p));
 
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
@@ -98,8 +99,10 @@ async function start() {
       return;
     }
     await loadOptions();
-    openTab("ozet");
-    for (const picker of [cylinderCustomer, movementCustomer, newCustomer]) picker.search();
+    const first = [...document.querySelectorAll("nav button")].find((b) => !b.classList.contains("hidden"));
+    if (first) openTab(first.dataset.tab);
+    else show($("global-msg"), "Hesabınıza henüz hiçbir ekran yetkisi verilmemiş. Yöneticinizden yetki isteyin.", "warn");
+    if (can("musteri-goruntule")) for (const picker of [cylinderCustomer, movementCustomer, newCustomer]) picker.search();
   } catch (error) {
     if (!$("app").classList.contains("hidden")) show($("global-msg"), error.message);
   }
@@ -421,7 +424,10 @@ async function saveMove(confirm) {
     await openDetail(current.id);
     show($("d-msg"), result.message, result.message.includes("⚠") ? "warn" : "ok");
   } catch (error) {
-    if (error.status === 409 && !confirm) {
+    if (error.status === 409 && error.data && error.data.stale) {
+      await openDetail(current.id);
+      show($("d-msg"), error.message, "warn");
+    } else if (error.status === 409 && !confirm) {
       if (window.confirm(error.message + "\n\nYine de kaydedilsin mi?")) await saveMove(true);
       else show($("d-msg"), "Hareket kaydedilmedi.", "warn");
     } else {
@@ -440,12 +446,17 @@ $("e-save").addEventListener("click", async () => {
   try {
     const result = await api(`/panel/api/tup/${current.id}/duzenle`, {
       method: "POST",
-      body: { gasType: $("e-gas").value.trim(), capacity, capacityUnit: $("e-unit").value, testDueDate: $("e-test").value || null, isActive: active }
+      body: { gasType: $("e-gas").value.trim(), capacity, capacityUnit: $("e-unit").value, testDueDate: $("e-test").value || null, isActive: active, surum: current.version || null }
     });
     await openDetail(current.id);
     show($("d-msg"), result.message, "ok");
   } catch (error) {
-    show($("d-msg"), error.message);
+    if (error.status === 409 && error.data && error.data.stale) {
+      await openDetail(current.id);
+      show($("d-msg"), error.message + " Güncel bilgiler yüklendi.", "warn");
+    } else {
+      show($("d-msg"), error.message);
+    }
   } finally {
     $("e-save").disabled = false;
   }
@@ -605,7 +616,7 @@ async function openTrip(id, keepMessage = false) {
   const sameTrip = currentTrip && currentTrip.id === t.id;
   currentTrip = t;
   if (!keepMessage) hide($("t-msg"));
-  $("t-load-card").classList.toggle("hidden", !(t.active && can("hareket")));
+  $("t-load-card").classList.toggle("hidden", !(t.active && can("sefer-yukle|sefer-kapat")));
   const plates = t.vehicles.map((v) => v.plate);
   const loadPlate = sameTrip ? $("t-load-plate").value : "";
   $("t-load-plate").replaceChildren(...t.vehicles.filter((v) => v.onTrip).map((v) => el("option", { value: v.plate }, v.plate)));
@@ -960,29 +971,43 @@ let users = [];
 let editingUser = null;
 let resetUser = null;
 
+let catalog = null;
+
 async function loadAdmin() {
   hide($("admin-msg"));
   $("roles").replaceChildren(...me.roles.map((r) => el("div", {}, roleBadge(r.name), el("div", {}, r.description))));
   try {
-    users = await api("/panel/api/yonetim/kullanicilar");
-    renderUsers();
-    await loadAudit();
+    if (can("kullanici-yonetimi")) {
+      [users, catalog] = await Promise.all([api("/panel/api/yonetim/kullanicilar"), api("/panel/api/yonetim/yetkiler")]);
+      renderUsers();
+    }
+    if (can("cihaz-yonetimi")) await loadDevices();
+    if (can("denetim-kaydi")) await loadAudit();
   } catch (error) {
     show($("admin-msg"), error.message);
   }
 }
 
+function permissionSummary(u) {
+  if (u.role === "Yönetici") return el("div", { class: "muted" }, "Tüm yetkiler");
+  const parts = [];
+  if (u.extra.length) parts.push(`+${u.extra.length} ek`);
+  if (u.removed.length) parts.push(`−${u.removed.length} çıkarıldı`);
+  return el("div", { class: parts.length ? "perm-custom" : "muted" }, parts.length ? "Özel: " + parts.join(", ") : `${u.permissions.length} yetki (rol varsayılanı)`);
+}
+
 function renderUsers() {
-  const head = el("tr", {}, ...["Kullanıcı", "Yetki", "Durum", "Son giriş", "Açık oturum", "Oluşturan", ""].map((h) => el("th", {}, h)));
+  const head = el("tr", {}, ...["Kullanıcı", "Rol / yetkiler", "Durum", "Son giriş", "Açık oturum", "Oluşturan", ""].map((h) => el("th", {}, h)));
   const body = users.map((u) => el("tr", { class: u.isActive ? "" : "off" },
     el("td", {}, el("b", {}, u.displayName), u.isSelf ? el("span", { class: "muted" }, " (siz)") : null, el("div", { class: "muted" }, u.userName)),
-    el("td", {}, roleBadge(u.role)),
+    el("td", {}, roleBadge(u.role), permissionSummary(u)),
     el("td", {}, el("span", { class: "dot" + (u.isActive ? " on" : "") }), u.isActive ? "Aktif" : "Pasif",
       u.mustChangePassword ? el("div", { class: "warn-text muted" }, "Şifre değiştirmesi bekleniyor") : null),
     el("td", {}, u.lastLogin || "Hiç giriş yapmadı", u.lastLoginIp ? el("div", { class: "muted" }, u.lastLoginIp) : null),
-    el("td", {}, String(u.sessions)),
+    el("td", {}, `${u.sessions} tarayıcı`, el("div", { class: "muted" }, `${u.phones} telefon`)),
     el("td", {}, u.createdBy || "-", el("div", { class: "muted" }, u.created)),
     el("td", {},
+      el("button", { class: "link", type: "button", onclick: () => openPermDialog(u) }, "Yetkiler"),
       el("button", { class: "link", type: "button", onclick: () => openUserDialog(u) }, "Düzenle"),
       el("button", { class: "link", type: "button", onclick: () => openResetDialog(u) }, "Şifre sıfırla"),
       u.isSelf ? null : el("button", { class: u.isActive ? "danger" : "link", type: "button", onclick: () => toggleUser(u) }, u.isActive ? "Pasife al" : "Aktif et"))));
@@ -1002,6 +1027,93 @@ async function loadAudit() {
 $("audit-refresh").addEventListener("click", async () => {
   try { await loadAudit(); } catch (error) { show($("admin-msg"), error.message); }
 });
+
+// ---- Phones signed in with a panel user ----------------------------------------------------------
+
+async function loadDevices() {
+  const rows = await api("/panel/api/yonetim/cihazlar");
+  const head = el("tr", {}, ...["Kullanıcı", "Telefon", "Giriş", "Son görülme", "Oturum bitişi", "Durum", ""].map((h) => el("th", {}, h)));
+  const body = rows.map((d) => el("tr", { class: d.active ? "" : "off" },
+    el("td", {}, d.user ? el("b", {}, d.displayName || d.user) : el("span", { class: "muted" }, "—"), d.user ? el("div", { class: "muted" }, d.user) : null),
+    el("td", {}, d.name, d.ip ? el("div", { class: "muted" }, d.ip) : null),
+    el("td", {}, d.created),
+    el("td", {}, d.lastSeen || "-"),
+    el("td", {}, d.expires || "-"),
+    el("td", { class: d.active ? "" : "muted" }, el("span", { class: "dot" + (d.active ? " on" : "") }), d.state),
+    el("td", {}, el("button", { class: d.active ? "danger" : "link", type: "button", onclick: () => closeDevice(d) }, d.active ? "Oturumu kapat" : "Kaydı sil"))));
+  $("devices").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 7, class: "muted" }, "Giriş yapmış telefon yok."))])));
+}
+
+async function closeDevice(d) {
+  if (d.active && !window.confirm(`${d.name} (${d.user}) telefonundaki oturum kapatılsın mı? Uygulama yeniden giriş isteyecek.`)) return;
+  try {
+    const result = await api(`/panel/api/yonetim/cihaz/${encodeURIComponent(d.id)}/kapat`, { method: "POST" });
+    await loadDevices();
+    show($("admin-msg"), result.message, "ok");
+  } catch (error) {
+    show($("admin-msg"), error.message);
+  }
+}
+
+$("devices-refresh").addEventListener("click", async () => {
+  try { await loadDevices(); } catch (error) { show($("admin-msg"), error.message); }
+});
+
+// ---- Per-user permissions ------------------------------------------------------------------------
+
+let permUser = null;
+
+function openPermDialog(u) {
+  permUser = u;
+  hide($("pm-msg"));
+  $("pm-title").textContent = `Yetkiler: ${u.displayName} (${u.userName})`;
+  const admin = u.role === "Yönetici";
+  const role = catalog.roles.find((r) => r.name === u.role);
+  const defaults = new Set(role ? role.defaults : []);
+  $("pm-role").replaceChildren(roleBadge(u.role), " ", role ? role.description : "");
+  $("pm-admin").classList.toggle("hidden", !admin);
+  $("pm-save").disabled = admin;
+  $("pm-reset").disabled = admin;
+  const granted = new Set(u.permissions);
+  $("pm-groups").replaceChildren(...catalog.groups.map((g) => el("fieldset", { class: "perm-group" },
+    el("legend", {}, g.name),
+    ...g.items.map((p) => {
+      const box = el("input", { type: "checkbox", value: p.key });
+      box.checked = granted.has(p.key);
+      box.disabled = admin || p.adminOnly;
+      const note = el("span", { class: "perm-note" });
+      const mark = () => {
+        const differs = !admin && box.checked !== defaults.has(p.key);
+        note.textContent = p.adminOnly ? "yalnızca Yönetici" : differs ? (box.checked ? "rol dışı ek" : "rolden çıkarıldı") : "";
+        label.classList.toggle("perm-diff", differs);
+      };
+      const label = el("label", { class: "perm-item" }, box, el("span", {}, p.label), note);
+      box.addEventListener("change", mark);
+      mark();
+      return label;
+    }))));
+  $("perm-dialog").showModal();
+}
+
+async function savePermissions(reset) {
+  const wanted = [...$("pm-groups").querySelectorAll("input[type=checkbox]")].filter((b) => b.checked && !b.disabled).map((b) => b.value);
+  if (reset && !window.confirm(`${permUser.userName} kullanıcısının yetkileri "${permUser.role}" rolünün varsayılanına dönsün mü?`)) return;
+  $("pm-save").disabled = $("pm-reset").disabled = true;
+  try {
+    const result = await api(`/panel/api/yonetim/kullanici/${permUser.id}/yetkiler`, { method: "POST", body: { izinler: wanted, sifirla: reset } });
+    $("perm-dialog").close();
+    await loadAdmin();
+    show($("admin-msg"), `${permUser.userName}: ${result.message}`, "ok");
+  } catch (error) {
+    show($("pm-msg"), error.message);
+  } finally {
+    $("pm-save").disabled = $("pm-reset").disabled = false;
+  }
+}
+
+$("pm-save").addEventListener("click", () => savePermissions(false));
+$("pm-reset").addEventListener("click", () => savePermissions(true));
+$("pm-close").addEventListener("click", () => $("perm-dialog").close());
 
 function generatePassword() {
   const letters = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";

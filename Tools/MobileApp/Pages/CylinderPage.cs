@@ -94,7 +94,7 @@ public sealed class CylinderPage : ContentPage
                 _customerSearch,
                 Ui.ActionRow(
                     Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
-                    Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync())),
+                    Ui.Allowed(Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync()), "musteri-ekle")),
                 _customer
             }
         };
@@ -111,7 +111,7 @@ public sealed class CylinderPage : ContentPage
             _vehiclePanel,
             _fullness,
             _note,
-            Ui.Primary("Kaydet", async (_, _) => await MoveAsync(confirm: true)));
+            Ui.Allowed(Ui.Primary("Kaydet", async (_, _) => await MoveAsync(confirm: true)), "tup-hareket|tup-cikis|tup-iade"));
         _movePanel.IsVisible = false;
         _singlePanel = Ui.Section(
             "Tek tüp",
@@ -119,7 +119,7 @@ public sealed class CylinderPage : ContentPage
             _code,
             Ui.ActionRow(
                 Ui.Secondary("Sorgula", async (_, _) => await LookupAsync(_code.Text, quick: false)),
-                Ui.Secondary("➕ Yeni tüp", async (_, _) => await RegisterNewAsync())),
+                Ui.Allowed(Ui.Secondary("➕ Yeni tüp", async (_, _) => await RegisterNewAsync()), "tup-kayit")),
             _detail);
         _batchPanel = Ui.Section(
             "Toplu okutma",
@@ -158,7 +158,7 @@ public sealed class CylinderPage : ContentPage
                     _pendingPanel,
                     Ui.ActionRow(
                         Ui.Secondary("📊 Tüp durumu", async (_, _) => await Navigation.PushAsync(new CylinderStatusPage())),
-                        Ui.Secondary("📋 Müşteride sayım", async (_, _) => await Navigation.PushAsync(new CylinderAuditPage()))),
+                        Ui.Allowed(Ui.Secondary("📋 Müşteride sayım", async (_, _) => await Navigation.PushAsync(new CylinderAuditPage())), "tup-sayim")),
                     Ui.Card(modeRow),
                     _singlePanel,
                     _batchPanel,

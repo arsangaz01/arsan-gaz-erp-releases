@@ -59,6 +59,12 @@ SELECT DISTINCT p.Plate, TRUE, LOCALTIMESTAMP(0) FROM (
  UNION SELECT TRIM(VehiclePlate) FROM CylinderTripCylinders
 ) p WHERE p.Plate <> ''
 ON CONFLICT (Plate) DO NOTHING;
+DO $$
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM CylinderTripCylinders GROUP BY TripId, CylinderId HAVING COUNT(*) > 1) THEN
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_cylindertripcylinders_tripid_cylinderid ON CylinderTripCylinders(TripId, CylinderId);
+ END IF;
+END $$;
 """;
 
     public const string Crm = """

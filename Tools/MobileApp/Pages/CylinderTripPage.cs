@@ -55,13 +55,13 @@ public sealed class CylinderTripPage : ContentPage
                 Children =
                 {
                     Ui.Note("\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteriye teslim ve depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir."),
-                    Ui.Primary("🚚 Sefer Başlat", async (_, _) => await StartTripAsync()),
+                    Ui.Allowed(Ui.Primary("🚚 Sefer Başlat", async (_, _) => await StartTripAsync()), "sefer-baslat"),
                     Ui.Section(
                         "Seferdeki araçlar",
                         _overview,
                         Ui.ActionRow(
                             Ui.Secondary("Yenile", async (_, _) => await RefreshTripsAsync()),
-                            Ui.Secondary("Sefere araç ekle", async (_, _) => await AddVehicleAsync()))),
+                            Ui.Allowed(Ui.Secondary("Sefere araç ekle", async (_, _) => await AddVehicleAsync()), "sefer-baslat"))),
                     Ui.Section(
                         "Sefer ve araç",
                         _trip,
@@ -80,7 +80,7 @@ public sealed class CylinderTripPage : ContentPage
                             Ui.Secondary("Kodu ekle", (_, _) => AddManual()),
                             Ui.Secondary("Listeyi temizle", (_, _) => { _scanned.Clear(); RefreshScanned(); })),
                         _scannedText,
-                        Ui.Primary("Kaydet / kontrol et", async (_, _) => await SubmitAsync())),
+                        Ui.Allowed(Ui.Primary("Kaydet / kontrol et", async (_, _) => await SubmitAsync()), "sefer-yukle|sefer-teslim")),
                     _busy,
                     _resultCard,
                     Ui.Section(
@@ -89,7 +89,7 @@ public sealed class CylinderTripPage : ContentPage
                         _groupsTotal,
                         _groups,
                         Ui.Secondary("Listeyi yenile", async (_, _) => await RefreshGroupsAsync())),
-                    Ui.Secondary("Seferi kapat", async (_, _) => await CloseTripAsync())
+                    Ui.Allowed(Ui.Secondary("Seferi kapat", async (_, _) => await CloseTripAsync()), "sefer-kapat")
                 }
             }
         };

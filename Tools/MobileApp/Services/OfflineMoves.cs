@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace ArsanGazMobile.Services;
 
-public sealed record PendingMove(string Code, int Status, int? CustomerId, string? Note, string Label, DateTime SavedAt, string? Plate = null, bool? IsFull = null);
+public sealed record PendingMove(string Code, int Status, int? CustomerId, string? Note, string Label, DateTime SavedAt, string? Plate = null, bool? IsFull = null, string? RequestId = null);
 
 // Cylinder movements recorded without a connection; they are sent in order once the computer is reachable.
 public static class OfflineMoves
@@ -17,7 +17,7 @@ public static class OfflineMoves
     public static void Add(PendingMove move)
     {
         List<PendingMove> moves = Load();
-        moves.Add(move);
+        moves.Add(move.RequestId is null ? move with { RequestId = Guid.NewGuid().ToString("N") } : move);
         Save(moves);
     }
 
@@ -42,7 +42,8 @@ public static class OfflineMoves
                 string note = $"{move.Note} (telefonda çevrimdışı kaydedildi: {move.SavedAt:dd.MM.yyyy HH:mm})".Trim();
                 try
                 {
-                    string message = await ApiClient.Instance.MoveCylinderAsync(move.Code, move.Status, move.CustomerId, note, move.Plate, move.IsFull, confirmCustomerChange: true);
+                    string message = await ApiClient.Instance.MoveCylinderAsync(move.Code, move.Status, move.CustomerId, note, move.Plate, move.IsFull,
+                        confirmCustomerChange: true, requestId: move.RequestId ?? $"{move.Code}-{move.SavedAt.Ticks}");
                     if (message.Contains('⚠'))
                     {
                         warnings.Add($"{move.Code} – {move.Label}: {message}");
@@ -52,7 +53,7 @@ public static class OfflineMoves
                 {
                     return (sent, null, Warning());
                 }
-                catch (ApiException exception) when (!IsPermanentRejection(exception.StatusCode))
+                catch (ApiException exception) when (!IsPermanentRejection(exception.StatusCode) && !exception.IsForbidden)
                 {
                     return (sent, $"{move.Code} – {move.Label}: {exception.Message} (kayıt kuyrukta bekliyor)", Warning());
                 }

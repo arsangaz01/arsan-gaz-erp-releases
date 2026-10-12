@@ -73,7 +73,7 @@ internal static class MobileCampaignEndpoints
                 maxEmailAttachmentKb = CampaignStore.MaximumEmailAttachmentBytes / 1024,
                 optOut = WhatsAppOptOutLine
             });
-        });
+        }).Requires(PanelPermissions.CampaignView);
 
         app.MapGet("/api/kampanya/filtreler", async () =>
         {
@@ -88,7 +88,7 @@ internal static class MobileCampaignEndpoints
                 sectors = TopValues(companies.Select(c => c.Sector)),
                 statuses = TopValues(companies.Select(c => c.Status))
             });
-        });
+        }).Requires(PanelPermissions.CampaignView);
 
         app.MapPost("/api/kampanya/grup/onizle", async (CampaignGroupFilter filter) =>
         {
@@ -100,7 +100,7 @@ internal static class MobileCampaignEndpoints
                 withMobile = matches.Count(c => MobilePhone(c.Phone) is not null),
                 sample = matches.Take(8).Select(c => c.CompanyName)
             });
-        });
+        }).Requires(PanelPermissions.CampaignView);
 
         app.MapPost("/api/kampanya/grup", async (CampaignGroupFilter filter, CancellationToken ct) =>
         {
@@ -118,7 +118,7 @@ internal static class MobileCampaignEndpoints
                     matches.Select(c => c.Id).ToArray(), ct);
                 return Results.Ok(new { id = group.Id, name = group.Name, count = group.ContactIds.Count });
             });
-        });
+        }).Requires(PanelPermissions.CampaignManage);
 
         app.MapGet("/api/kampanya/gruplar", async (CancellationToken ct) => await Guard(async () =>
         {
@@ -127,13 +127,13 @@ internal static class MobileCampaignEndpoints
                 .Where(g => g.Population == CampaignPopulation.CrmCompanies)
                 .OrderByDescending(g => g.UpdatedAtUtc)
                 .Select(g => new { id = g.Id, name = g.Name, count = g.ContactIds.Count, updated = g.UpdatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm", Turkish) }));
-        }));
+        })).Requires(PanelPermissions.CampaignView);
 
         app.MapDelete("/api/kampanya/grup/{id:guid}", async (Guid id, CancellationToken ct) => await Guard(async () =>
         {
             await Service.Value.DeleteGroupAsync(id, ct);
             return Results.Ok(new { message = "Grup silindi (firmalar CRM'de kalır)." });
-        }));
+        })).Requires(PanelPermissions.CampaignManage);
 
         app.MapGet("/api/kampanya/grup/{id:guid}/whatsapp", async (Guid id, CancellationToken ct) => await Guard(async () =>
         {
@@ -151,7 +151,7 @@ internal static class MobileCampaignEndpoints
                 skippedOptOut = members.Count(m => optedOut.Contains(m.ContactId)),
                 skippedNoMobile = members.Count(m => !optedOut.Contains(m.ContactId) && MobilePhone(m.Phone) is null)
             });
-        }));
+        })).Requires(PanelPermissions.CampaignWhatsApp);
 
         app.MapPost("/api/kampanya/whatsapp-gonderildi", async (CampaignContactRequest request, HttpContext context) =>
         {
@@ -169,7 +169,7 @@ internal static class MobileCampaignEndpoints
             company.LastContactAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync();
             return Results.Ok(new { message = "Kaydedildi." });
-        });
+        }).Requires(PanelPermissions.CampaignWhatsApp);
 
         app.MapPost("/api/kampanya/ret", async (CampaignContactRequest request, HttpContext context, CancellationToken ct) =>
         {
@@ -196,7 +196,7 @@ internal static class MobileCampaignEndpoints
                     ? Results.BadRequest(new { error = "Firmanın kayıtlı e-posta/telefonu yok." })
                     : Results.Ok(new { message = $"{target.CompanyName}: {string.Join(" ve ", done)} listesinden çıkarıldı." });
             });
-        });
+        }).Requires(PanelPermissions.CampaignWhatsApp);
 
         app.MapPost("/api/kampanya/ek", async (HttpContext context) =>
         {
@@ -225,7 +225,7 @@ internal static class MobileCampaignEndpoints
                 sizeKb = file.Length / 1024,
                 emailOk = file.Length <= CampaignStore.MaximumEmailAttachmentBytes
             });
-        });
+        }).Requires(PanelPermissions.CampaignManage);
 
         app.MapPost("/api/kampanya/hazirla", async (CampaignPrepareRequest request, CancellationToken ct) => await Guard(async () =>
         {
@@ -297,7 +297,7 @@ internal static class MobileCampaignEndpoints
                 estimatedDays = (int)Math.Ceiling(eligible / (double)perDay),
                 preview = channel == CampaignChannel.Email ? content : $"Şablon: {template?.Name}"
             });
-        }));
+        })).Requires(PanelPermissions.CampaignManage);
 
         app.MapPost("/api/kampanya/{id:guid}/baslat", async (Guid id, CampaignLaunchRequest request, HttpContext context, CancellationToken ct) => await Guard(async () =>
         {
@@ -308,7 +308,7 @@ internal static class MobileCampaignEndpoints
                 $"Kanal: {(launched.Input.Channel == CampaignChannel.Email ? "E-posta (Gmail)" : "WhatsApp")}, " +
                 $"başlangıç {launched.Input.StartsAtUtc.ToLocalTime():dd.MM.yyyy HH:mm}, durum {StateName(launched.State)}.");
             return Results.Ok(new { message = $"Kampanya {StateName(launched.State).ToLowerInvariant()}.", state = launched.State.ToString(), revision = launched.Revision });
-        }));
+        })).Requires(PanelPermissions.CampaignManage);
 
         app.MapGet("/api/kampanya/liste", async (CancellationToken ct) => await Guard(async () =>
         {
@@ -335,25 +335,25 @@ internal static class MobileCampaignEndpoints
                 });
             }
             return Results.Ok(items);
-        }));
+        })).Requires(PanelPermissions.CampaignView);
 
         app.MapPost("/api/kampanya/{id:guid}/duraklat", async (Guid id, CampaignRevisionRequest request, CancellationToken ct) => await Guard(async () =>
         {
             CampaignSnapshot paused = await Service.Value.PauseAsync(id, request.Revision, ct);
             return Results.Ok(new { message = "Kampanya duraklatıldı.", revision = paused.Revision });
-        }));
+        })).Requires(PanelPermissions.CampaignManage);
 
         app.MapPost("/api/kampanya/{id:guid}/devam", async (Guid id, CampaignRevisionRequest request, CancellationToken ct) => await Guard(async () =>
         {
             CampaignSnapshot resumed = await Service.Value.ResumeAsync(id, request.Revision, new ActivationAcknowledgement(true, true, true), ct);
             return Results.Ok(new { message = "Kampanya devam ediyor.", revision = resumed.Revision });
-        }));
+        })).Requires(PanelPermissions.CampaignManage);
 
         app.MapPost("/api/kampanya/{id:guid}/iptal", async (Guid id, CampaignRevisionRequest request, CancellationToken ct) => await Guard(async () =>
         {
             CampaignSnapshot cancelled = await Service.Value.CancelAsync(id, request.Revision, ct);
             return Results.Ok(new { message = "Kampanya iptal edildi.", revision = cancelled.Revision });
-        }));
+        })).Requires(PanelPermissions.CampaignManage);
     }
 
     private static async Task<List<CrmCompany>> MatchAsync(CampaignGroupFilter filter)

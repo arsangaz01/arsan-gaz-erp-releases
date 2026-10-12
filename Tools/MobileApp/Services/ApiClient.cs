@@ -245,6 +245,23 @@ public sealed record CampaignListItem(
         (Failed > 0 ? $" · {Failed} başarısız" : string.Empty) + $" · başlangıç {StartsAt}";
 }
 
+// The signed-in panel user as last reported by the server; permissions decide which tabs and buttons are shown.
+public sealed record UserSession(
+    int Id,
+    string UserName,
+    string DisplayName,
+    string Role,
+    string RoleName,
+    List<string> Permissions,
+    bool MustChangePassword,
+    DateTime? ExpiresUtc,
+    string Device)
+{
+    public bool Can(string permission) => permission.Split('|').Any(Permissions.Contains);
+
+    public string Caption => (DisplayName == UserName ? UserName : $"{DisplayName} ({UserName})") + " · " + Role;
+}
+
 public class ApiException(string message, int? statusCode = null, string? content = null) : Exception(message)
 {
     public int? StatusCode { get; } = statusCode;
@@ -252,6 +269,23 @@ public class ApiException(string message, int? statusCode = null, string? conten
     public string? Content { get; } = content;
 
     public bool IsCustomerConflict => StatusCode == 409;
+
+    // 403 because the user lacks the permission (not because of a pending password change).
+    public bool IsForbidden => StatusCode == 403 && HasFlag("forbidden");
+
+    public bool HasFlag(string name)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(Content ?? "{}");
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.True;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     // The record a new-customer request collided with (same name), or null for other errors.
     public CustomerItem? ExistingCustomer()
@@ -296,6 +330,8 @@ public sealed class ApiClient
 {
     private const string ServerKey = "server_url";
     private const string TokenKey = "device_token";
+    private const string SessionKey = "user_session";
+    private const string IdempotencyHeader = "Idempotency-Key";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -304,6 +340,7 @@ public sealed class ApiClient
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(200) };
     private string? _token;
+    private UserSession? _session;
 
     public static ApiClient Instance { get; } = new();
 
@@ -312,8 +349,6 @@ public sealed class ApiClient
         get => Preferences.Default.Get(ServerKey, string.Empty);
         set => Preferences.Default.Set(ServerKey, NormalizeUrl(value));
     }
-
-    public async Task<bool> IsPairedAsync() => !string.IsNullOrEmpty(await GetTokenAsync());
 
     public static string NormalizeUrl(string value)
     {
@@ -421,25 +456,95 @@ public sealed class ApiClient
         }
     }
 
-    public async Task<string> RequestPairingCodeAsync()
+    // Same user name and password as the web panel. The server issues a token for this phone, valid for 24 hours.
+    public async Task<UserSession> LoginAsync(string userName, string password, string deviceName)
     {
-        using HttpResponseMessage response = await SendAsync(HttpMethod.Post, "/api/pair/request", new { }, authorize: false);
-        return (await ReadAsync<JsonElement>(response)).GetProperty("message").GetString() ?? string.Empty;
-    }
-
-    public async Task PairAsync(string code, string deviceName)
-    {
-        using HttpResponseMessage response = await SendAsync(HttpMethod.Post, "/api/pair", new { code, deviceName }, authorize: false);
-        string token = (await ReadAsync<JsonElement>(response)).GetProperty("token").GetString()
-            ?? throw new ApiException("Sunucu anahtar döndürmedi.");
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Post, "/api/giris",
+            new { kullanici = userName.Trim(), sifre = password, cihaz = deviceName }, authorize: false);
+        JsonElement json = await ReadAsync<JsonElement>(response);
+        string token = json.GetProperty("token").GetString() ?? throw new ApiException("Sunucu oturum anahtarı döndürmedi.");
+        UserSession session = json.GetProperty("user").Deserialize<UserSession>(Json) ?? throw new ApiException("Sunucu kullanıcı bilgisi döndürmedi.");
         await SecureStorage.Default.SetAsync(TokenKey, token);
         _token = token;
+        SaveSession(session);
+        return session;
     }
 
-    public void Unpair()
+    public async Task<UserSession> RefreshSessionAsync()
+    {
+        UserSession session = await GetAsync<UserSession>("/api/ben");
+        SaveSession(session);
+        return session;
+    }
+
+    public async Task<string> ChangePasswordAsync(string current, string next, string repeat)
+    {
+        string message = await PostMessageAsync("/api/sifre", new { mevcut = current, yeni = next, yeniTekrar = repeat });
+        await RefreshSessionAsync();
+        return message;
+    }
+
+    public async Task LogoutAsync()
+    {
+        try
+        {
+            if (await GetTokenAsync() is not null && ServerUrl.Length > 0)
+            {
+                using HttpResponseMessage response = await SendAsync(HttpMethod.Post, "/api/cikis", new { });
+            }
+        }
+        catch (ApiException)
+        {
+        }
+
+        ClearSession();
+    }
+
+    // Signed in with a token that has not passed its 24-hour expiry (the server has the final word).
+    public async Task<bool> IsSignedInAsync() =>
+        Session is { } session && (session.ExpiresUtc is not DateTime expires || expires > DateTime.UtcNow) && !string.IsNullOrEmpty(await GetTokenAsync());
+
+    public UserSession? Session
+    {
+        get
+        {
+            if (_session is null && Preferences.Default.Get(SessionKey, string.Empty) is { Length: > 0 } json)
+            {
+                try
+                {
+                    _session = JsonSerializer.Deserialize<UserSession>(json, Json);
+                }
+                catch (JsonException)
+                {
+                    _session = null;
+                }
+            }
+
+            return _session;
+        }
+    }
+
+    public bool Can(string permission) => Session?.Can(permission) == true;
+
+    // Raised (on any thread) when the server refuses the token: expired, signed out by the administrator, password
+    // or role changed. The app returns to the sign-in screen with the message.
+    public event Action<string>? SessionEnded;
+
+    // Raised when the server requires a new password before anything else.
+    public event Action? PasswordChangeRequired;
+
+    private void SaveSession(UserSession session)
+    {
+        _session = session;
+        Preferences.Default.Set(SessionKey, JsonSerializer.Serialize(session, Json));
+    }
+
+    private void ClearSession()
     {
         SecureStorage.Default.Remove(TokenKey);
+        Preferences.Default.Remove(SessionKey);
         _token = null;
+        _session = null;
     }
 
     public Task<string> TextAsync(string path) => GetTextAsync(path);
@@ -458,8 +563,9 @@ public sealed class ApiClient
     public async Task<CylinderInfo> CylinderAsync(string code) =>
         await GetAsync<CylinderInfo>("/api/tup?kod=" + Uri.EscapeDataString(code));
 
-    public Task<string> MoveCylinderAsync(string code, int status, int? customerId, string? note, string? plate = null, bool? isFull = null, bool confirmCustomerChange = false) =>
-        PostMessageAsync("/api/tup/hareket", new { code, status, customerId, note, plate, isFull, confirmCustomerChange });
+    // requestId: the offline queue keeps one per scan so a resend after a lost answer is not saved twice.
+    public Task<string> MoveCylinderAsync(string code, int status, int? customerId, string? note, string? plate = null, bool? isFull = null, bool confirmCustomerChange = false, string? requestId = null) =>
+        PostMessageAsync("/api/tup/hareket", new { code, status, customerId, note, plate, isFull, confirmCustomerChange }, requestId);
 
     public Task<CylinderBulkResponse> MoveCylindersAsync(IReadOnlyList<string> codes, int status, int? customerId, string? note, string? plate, bool? isFull, bool confirmCustomerChange = false) =>
         PostAsync<CylinderBulkResponse>("/api/tup/toplu-hareket", new { codes, status, customerId, note, plate, isFull, confirmCustomerChange });
@@ -593,9 +699,10 @@ public sealed class ApiClient
             throw new ApiException("Sunucu adresi girilmemiş. Bağlantı sekmesinden adresi girin.");
         }
 
-        string token = await GetTokenAsync() ?? throw new ApiException("Bu telefon henüz eşleşmedi.");
+        string token = await GetTokenAsync() ?? throw new ApiException("Giriş yapılmamış. Kullanıcı adı ve şifrenizle giriş yapın.");
         using HttpRequestMessage request = new(HttpMethod.Post, server + path) { Content = content };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Add(IdempotencyHeader, Guid.NewGuid().ToString("N"));
         try
         {
             return await _http.SendAsync(request);
@@ -663,9 +770,9 @@ public sealed class ApiClient
         return (await ReadAsync<JsonElement>(response)).GetProperty("text").GetString() ?? string.Empty;
     }
 
-    private async Task<string> PostMessageAsync(string path, object body)
+    private async Task<string> PostMessageAsync(string path, object body, string? idempotencyKey = null)
     {
-        using HttpResponseMessage response = await SendAsync(HttpMethod.Post, path, body);
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Post, path, body, idempotencyKey: idempotencyKey);
         return (await ReadAsync<JsonElement>(response)).GetProperty("message").GetString() ?? "Kaydedildi.";
     }
 
@@ -677,7 +784,8 @@ public sealed class ApiClient
 
     private async Task<string?> GetTokenAsync() => _token ??= await SecureStorage.Default.GetAsync(TokenKey);
 
-    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body, bool authorize = true)
+    // Every POST carries an Idempotency-Key, reused when the request is resent, so the server applies it only once.
+    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body, bool authorize = true, string? idempotencyKey = null)
     {
         string server = ServerUrl;
         if (server.Length == 0)
@@ -685,10 +793,16 @@ public sealed class ApiClient
             throw new ApiException("Sunucu adresi girilmemiş. Bağlantı sekmesinden adresi girin.");
         }
 
+        string? key = method == HttpMethod.Post ? idempotencyKey ?? Guid.NewGuid().ToString("N") : null;
         using HttpRequestMessage request = new(method, server + path);
+        if (key is not null)
+        {
+            request.Headers.Add(IdempotencyHeader, key);
+        }
+
         if (authorize)
         {
-            string token = await GetTokenAsync() ?? throw new ApiException("Bu telefon henüz eşleşmedi. Bağlantı sekmesinden eşleştirin.");
+            string token = await GetTokenAsync() ?? throw new ApiException("Giriş yapılmamış. Kullanıcı adı ve şifrenizle giriş yapın.");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
@@ -707,9 +821,14 @@ public sealed class ApiClient
             if (!string.Equals(server, ServerUrl, StringComparison.OrdinalIgnoreCase))
             {
                 using HttpRequestMessage retry = new(method, ServerUrl + path);
+                if (key is not null)
+                {
+                    retry.Headers.Add(IdempotencyHeader, key);
+                }
+
                 if (authorize)
                 {
-                    string token = await GetTokenAsync() ?? throw new ApiException("Bu telefon henüz eşleşmedi.");
+                    string token = await GetTokenAsync() ?? throw new ApiException("Giriş yapılmamış.");
                     retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 }
 
@@ -736,19 +855,36 @@ public sealed class ApiClient
         }
     }
 
-    private static async Task<T> ReadAsync<T>(HttpResponseMessage response)
+    private async Task<T> ReadAsync<T>(HttpResponseMessage response)
     {
         string content = await response.Content.ReadAsStringAsync();
         if (!response.IsSuccessStatusCode)
         {
             string? error = null;
+            bool loginRequired = false;
+            bool mustChangePassword = false;
             try
             {
                 using JsonDocument document = JsonDocument.Parse(content);
-                error = document.RootElement.TryGetProperty("error", out JsonElement value) ? value.GetString() : null;
+                if (document.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    error = document.RootElement.TryGetProperty("error", out JsonElement value) ? value.GetString() : null;
+                    loginRequired = document.RootElement.TryGetProperty("loginRequired", out JsonElement login) && login.ValueKind == JsonValueKind.True;
+                    mustChangePassword = document.RootElement.TryGetProperty("mustChangePassword", out JsonElement change) && change.ValueKind == JsonValueKind.True;
+                }
             }
             catch (JsonException)
             {
+            }
+
+            if (loginRequired)
+            {
+                ClearSession();
+                SessionEnded?.Invoke(error ?? "Oturum kapandı; yeniden giriş yapın.");
+            }
+            else if (mustChangePassword)
+            {
+                PasswordChangeRequired?.Invoke();
             }
 
             if (error is null && response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.BadGateway
@@ -761,7 +897,7 @@ public sealed class ApiClient
 
             throw new ApiException(response.StatusCode switch
             {
-                HttpStatusCode.Unauthorized => error ?? "Eşleşme geçersiz. Bağlantı'dan yeniden eşleştirin.",
+                HttpStatusCode.Unauthorized => error ?? "Oturum geçersiz; yeniden giriş yapın.",
                 _ => error ?? $"Sunucu hatası ({(int)response.StatusCode})."
             }, (int)response.StatusCode, content);
         }
