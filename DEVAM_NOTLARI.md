@@ -9,7 +9,9 @@ Durum: site, veritabanı (PostgreSQL), Telegram dinleme Oracle sunucusunda; PC'd
 - [ ] Gmail anahtarını sunucuya güvenli girmek (kampanya e-postaları sunucudan gitsin) — kullanıcı sonra yapacak.
 - [ ] WhatsApp/Meta anahtarını sunucuya güvenli girmek (kampanya WhatsApp'ları sunucudan gitsin) — kullanıcı sonra yapacak.
 - [ ] Sunucu ajanında eksik komutlar: prospect tarama, /gorev, /ekip, /ara, satır içi butonlar, LLM sohbeti.
-- [ ] Sunucu dışı yedek kopyası (pg_dump → OneDrive/Drive).
+- [x] Sunucu dışı yedek kopyası — tamamlandı (12 Ekim 04:42). `arsangaz-pg-offsite.timer` her gün ~03:45'te gece
+  yedeğini rclone ile Google Drive `ArsanGazERP-Yedek/nightly` klasörüne gönderir (erişim drive.file ile sınırlı,
+  Drive'da 90 gün saklanır, hata olursa Telegram'a bildirim). Bağlantı: `Tools\Server\Connect-DriveBackup.ps1`.
 
 ## Bekleyen kararlar (kullanıcıdan)
 1. **Commit + push onayı**: kampanya, Gmail göndericisi, mobil 1.6.1 ve hata düzeltmeleri. Henüz commit yok.

@@ -16,12 +16,13 @@ $ssh = @('-i', $KeyPath, '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', $Serv
 
 $rclone = Get-Command rclone -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
 if (-not $rclone) {
-    $rclone = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\rclone.exe'
+    $rclone = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet') -Recurse -Filter rclone.exe -ErrorAction SilentlyContinue |
+        Select-Object -First 1 -ExpandProperty FullName
 }
-if (-not (Test-Path $rclone)) { throw 'rclone bulunamadi. Kurulum: winget install Rclone.Rclone' }
+if (-not $rclone) { throw 'rclone bulunamadi. Kurulum: winget install Rclone.Rclone' }
 
 Write-Host 'Tarayicida Google girisi acilacak. Yedeklerin gidecegi Google hesabini secip izin verin.' -ForegroundColor Cyan
-$options = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"scope":"drive.file"}'))
+$options = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"scope":"drive.file"}')).TrimEnd('=').Replace('+', '-').Replace('/', '_')
 $output = & $rclone authorize drive $options
 if ($LASTEXITCODE -ne 0) { throw "Google yetkilendirmesi tamamlanmadi (rclone cikis kodu $LASTEXITCODE)." }
 
