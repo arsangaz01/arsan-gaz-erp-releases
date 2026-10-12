@@ -20,6 +20,8 @@ param(
     [string]$Key,
     [Parameter(ParameterSetName = 'Status', Mandatory = $true)]
     [switch]$Status,
+    [Parameter(ParameterSetName = 'Set')]
+    [switch]$FromClipboard,
     [switch]$NoRestart,
     [string]$ServerHost = 'arsangaz@144.24.189.205',
     [string]$KeyPath = (Join-Path $env:USERPROFILE '.ssh\arsangaz_hetzner')
@@ -33,11 +35,20 @@ if ($Status) {
     exit $LASTEXITCODE
 }
 
-$secure = Read-Host -Prompt "$Key (yazdiginiz gorunmez)" -AsSecureString
+if ($FromClipboard) {
+    $secure = New-Object System.Security.SecureString
+    foreach ($ch in [string](Get-Clipboard -Raw)) { $secure.AppendChar($ch) }
+    Set-Clipboard -Value ' '
+} else {
+    $secure = Read-Host -Prompt "$Key (yazdiginiz gorunmez)" -AsSecureString
+}
 $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
 try {
     $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr).Trim()
     if (-not $plain) { throw 'Bos deger girildi; hicbir sey degistirilmedi.' }
+    if ($Key -eq 'TELEGRAM_BOT_TOKEN' -and $plain -notmatch '^\d{8,12}:[A-Za-z0-9_-]{35}$') {
+        throw "Bot token bicimi hatali ($($plain.Length) karakter; 46 olmali). Hicbir sey degistirilmedi."
+    }
     $output = $plain | & ssh @ssh "sudo /opt/arsangaz/bin/set-agent-value.sh $Key" 2>&1
     $code = $LASTEXITCODE
 }
