@@ -55,6 +55,14 @@ Yapıldı (commit a4c6cb5, CI "ArsanTupTakip" api + mobil-derleme yeşil):
   com.arsantuptakip.mobil, 1.0.0/1, sertifika 80ae16de…, v1+v2+v3 imza; /tuptakip/api/guncelleme apkReady=true build 1.
   Mevcut sistem önce/sonra aynı (/indir 1.7.9 build 27 aynı dosya, /api/guncelleme, /panel 200, arsangaz-release sha aynı).
   API kodu değişmedi (zaten veri klasöründeki APK + meta'yı okuyor); `/opt/arsantuptakip/api` hâlâ elle kurulan sürüm.
+- 12 Ekim 22:04: yetkiler + mobil giriş yayında (commit 231b364; main 6b0892d, CI 38294580996 yeşil). API 1.1.0
+  `arsantuptakip-release publish` ile kuruldu (ilk release-script kurulumu; önceki elle kurulum api.prev'de), APK 1.1.0
+  (build 2) `/tuptakip/indir`'de. 35 yetkilik katalog (`Api/Permissions.cs`), rol = şablon + kullanıcıya özel farklar
+  (`tuptakip.user_permission_overrides`), panel Yönetim → Kullanıcılar işaret listesi, tüm uç noktalarda sunucu denetimi.
+  Mobil giriş panel kullanıcı adı/şifresiyle (`/api/giris`), mobil 24 saat / panel 1 saat kesin süre, eşleştirme kaldırıldı.
+  Eşzamanlılık: xmin satır sürümü (409 "Bu kayıt başka bir kullanıcı tarafından değiştirildi..."), `Idempotency-Key`
+  (`tuptakip.request_keys`). Testler CI'da geçici PostgreSQL ile. Doğrulandı: panel 200, guncelleme 1.1.0/2, yonetici
+  Yönetici+aktif (dokunulmadı), ArsanGaz /panel 200 ve servisler aynı. Gerçek kullanıcıyla canlı giriş denenmedi.
 Sıradaki (kullanıcı "devam" deyince):
 - [x] Dışa açma, public URL, mobil sunucu adresi, ilk yönetici hesabı
 - [x] APK imza + yayın (paket ayrı, mevcut uygulamayla yan yana; yeni sürüm için csproj ApplicationVersion artır, /apk)
