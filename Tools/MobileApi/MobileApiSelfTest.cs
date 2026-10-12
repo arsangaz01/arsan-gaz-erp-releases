@@ -217,6 +217,14 @@ internal static class MobileApiSelfTest
         now = now.AddMinutes(1);
         Check(auth.CheckDevice(devices.Validate(login.Token), devices).User is null, "mobil oturum 24 saatten uzun sürdü");
         Check(devices.Validate(login.Token) is null, "süresi dolan mobil oturum silinmedi");
+
+        WebPanelUser lifetimeAdmin = AddUser("sureyonetici", PanelRoles.Admin);
+        (MobileLogin? adminLogin, string? adminError) = await auth.MobileLoginAsync("yerel", "sureyonetici", Password, "Telefon", devices);
+        Check(adminLogin is not null, "yönetici mobil girişi başarısız: " + adminError);
+        Check(adminLogin!.Device.ExpiresUtc == now + WebPanelAuth.AdminMobileLifetime, "yönetici mobil oturumu çıkışa kadar sürmüyor");
+        now = now.AddDays(30);
+        Check(auth.CheckDevice(devices.Validate(adminLogin.Token), devices).User?.Id == lifetimeAdmin.Id, "yönetici mobil oturumu 30 gün sonra kapandı");
+        now = now.AddDays(-30);
     }
 
     private static async Task ParallelLoginsAsync()

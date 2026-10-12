@@ -237,7 +237,9 @@ public sealed class ConnectionPage : ContentPage
         _account.Text = session is null
             ? "Giriş yapılmamış."
             : $"{session.Caption}\nCihaz: {session.Device}" +
-              (session.ExpiresUtc is { } expires ? $"\nOturum bitişi: {expires.ToLocalTime():dd.MM.yyyy HH:mm} (24 saat)" : string.Empty);
+              (session.ExpiresUtc is not { } expires ? string.Empty
+                : expires > DateTime.UtcNow.AddDays(30) ? "\nOturum: çıkış yapana kadar açık (yönetici)"
+                : $"\nOturum bitişi: {expires.ToLocalTime():dd.MM.yyyy HH:mm} (24 saat)");
     }
 
     private Task SaveAndTestAsync() => Ui.RunAsync(this, _busy, async () =>

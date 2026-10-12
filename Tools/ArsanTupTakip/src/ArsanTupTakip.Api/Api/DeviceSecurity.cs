@@ -24,6 +24,11 @@ internal sealed record MobileSession(
 internal sealed class DeviceStore
 {
     internal static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(24);
+    // Yönetici phones stay signed in until they log out (or password/role change, or revoke).
+    internal static readonly TimeSpan AdminSessionLifetime = TimeSpan.FromDays(3650);
+
+    internal static TimeSpan LifetimeFor(WebPanelUser user) =>
+        user.Role == PanelRoles.Admin ? AdminSessionLifetime : SessionLifetime;
 
     private readonly Lock _gate = new();
     private readonly Func<DateTime> _clock;
@@ -73,7 +78,7 @@ internal sealed class DeviceStore
         string trimmed = (deviceName ?? string.Empty).Trim();
         string name = trimmed.Length == 0 ? "Telefon" : trimmed[..Math.Min(trimmed.Length, 60)];
         DateTime now = _clock();
-        MobileSession session = new(Guid.NewGuid().ToString("N"), name, Hash(token), now, now + SessionLifetime, now,
+        MobileSession session = new(Guid.NewGuid().ToString("N"), name, Hash(token), now, now + LifetimeFor(user), now,
             user.Id, user.UserName, user.CreatedAt, user.SecurityStamp, ip);
         lock (_gate)
         {

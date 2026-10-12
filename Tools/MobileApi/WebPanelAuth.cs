@@ -22,6 +22,11 @@ internal sealed class WebPanelAuth
     internal const string CsrfHeader = "X-Panel-Istek";
     internal static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(1);
     internal static readonly TimeSpan MobileLifetime = TimeSpan.FromHours(24);
+    // Yönetici phones stay signed in until they log out (or password/role change, or revoke).
+    internal static readonly TimeSpan AdminMobileLifetime = TimeSpan.FromDays(3650);
+
+    internal static TimeSpan MobileLifetimeFor(WebPanelUser user) =>
+        user.Role == PanelRoles.Admin ? AdminMobileLifetime : MobileLifetime;
     private const int MaxFailuresPerIp = 5;
     private const int MaxFailuresPerHour = 20;
     private static readonly TimeSpan LockTime = TimeSpan.FromMinutes(15);
@@ -153,7 +158,7 @@ internal sealed class WebPanelAuth
         return token;
     }
 
-    // Phone login with the panel credentials. Each call issues a new token valid for 24 hours.
+    // Phone login with the panel credentials. Each call issues a new token valid for 24 hours (Yönetici: until logout).
     internal async Task<(MobileLogin? Login, string? Error)> MobileLoginAsync(string ip, string? userName, string? password, string? deviceName, DeviceStore devices)
     {
         (WebPanelUser? user, string? error) = await AuthenticateAsync(ip, userName, password, "mobil");
@@ -163,7 +168,7 @@ internal sealed class WebPanelAuth
         }
 
         string name = string.IsNullOrWhiteSpace(deviceName) ? "Telefon" : deviceName.Trim()[..Math.Min(deviceName.Trim().Length, 60)];
-        string token = devices.AddForUser(name, user, UtcNow(), MobileLifetime, ip, out PairedDevice device);
+        string token = devices.AddForUser(name, user, UtcNow(), MobileLifetimeFor(user), ip, out PairedDevice device);
         MobileLog.Write($"Mobil uygulamaya giriş yapıldı: {user.UserName} / {name} ({ip}).");
         WebPanelAudit.Write(user.UserName, "Mobil giriş", name, ip: ip);
         if (!WebPanelTrustedIps.IsTrusted(ip))

@@ -74,7 +74,9 @@ public sealed class AccountPage : ContentPage
         _info.Text = string.Join(Environment.NewLine,
             $"Kullanıcı: {account.DisplayName} ({account.User})",
             $"Rol: {account.RoleText}",
-            $"Oturum bitişi: {account.ExpiresUtc.ToLocalTime():dd.MM.yyyy HH:mm} (girişten 24 saat sonra)");
+            account.ExpiresUtc > DateTime.UtcNow.AddDays(30)
+                ? "Oturum: çıkış yapana kadar açık (yönetici)"
+                : $"Oturum bitişi: {account.ExpiresUtc.ToLocalTime():dd.MM.yyyy HH:mm} (girişten 24 saat sonra)");
         _permissions.Text = $"{account.Permissions.Count} yetki tanımlı. Yetkileri yönetici web panelden değiştirir; değişiklik için \"Yetkileri yenile\"ye basın.";
     }
 

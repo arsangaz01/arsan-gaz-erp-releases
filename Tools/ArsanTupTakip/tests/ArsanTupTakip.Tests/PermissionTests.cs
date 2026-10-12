@@ -130,6 +130,14 @@ internal static class PermissionTests
         now = now.AddMinutes(1).AddSeconds(1);
         Check(devices.Validate(token!) is null, "Mobil oturum 24 saat dolunca geçersiz olmalı.");
         Check(devices.All().All(s => s.Id != session.Id), "Süresi dolan mobil oturum listede görünmemeli.");
+
+        WebPanelUser rootAdmin = WebPanelUserStore.FindByName("yonetici")!;
+        Check(auth.CreateUser(rootAdmin, "127.0.0.1", "yonetici3", "Telefon Yöneticisi", PanelRoles.Admin, Password, false, null) is null, "İkinci yönetici açılabilmeli.");
+        var (adminToken, adminSession, _, adminError) = await auth.MobileLoginAsync(Context("10.1.0.3"), devices, "yonetici3", Password, "Yönetici telefonu");
+        Check(adminError is null && adminToken is not null, "Yönetici mobil girişi yapılabilmeli.");
+        Check(adminSession!.ExpiresUtc == now + DeviceStore.AdminSessionLifetime, "Yönetici mobil oturumu çıkış yapılana kadar sürmeli.");
+        now = now.AddDays(30);
+        Check(devices.Validate(adminToken!) is not null, "Yönetici mobil oturumu 30 gün sonra da geçerli olmalı.");
     }
 
     private static async Task ParallelLoginsStayIndependent()
