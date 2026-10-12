@@ -1,5 +1,29 @@
 # Devam Notları — 11 Ekim 2026, 01:20
 
+## GEÇİŞ — eski sistemden tüp takip sistemine taşıma (beklemede, kullanıcı "sonra yapacağız" dedi, 12 Ekim 2026)
+Hedef: firmadaki eski programın tüm verisi (tüpler, stok, müşteriler, hareketler, bakiyeler) bir kez bizim sunucuya
+taşınacak; bundan sonra iş yalnızca bizim sistemden (ERP + mobil + web paneli) yürüyecek. Eski sistem bir süre salt-okunur yedek kalır.
+
+### 1. Veri taşıma (tek seferlik)
+- Eski sistem: firmadaki bir cihazda çalışan sanal sunucu. Program adı, sürümü ve veritabanı türü bilinmiyor.
+- Erişim yolu (kullanıcı seçecek): Tailscale (önerilen; geçiş bitince kaldırılır), AnyDesk/TeamViewer ya da USB ile yedek.
+- Gerekenler: cihazda yönetici yetkili Windows hesabı, program adı/sürümü, veritabanı kullanıcı/şifresi (PC'de girilir, Telegram'a yazılmaz).
+- Lisans sözleşmesi verinin dışarı alınmasını kısıtlıyor mu, kontrol edilecek.
+- [ ] Tam yedek al (eski sisteme yazma yok)
+- [ ] Yedeği sunucuda aç, tablo/alan eşleştirmesi çıkar
+- [ ] Canlı veri kopyasında deneme aktarımı (barkod/seri no/vergi no ile eşleştirme, çift kayıt önleme)
+- [ ] Özet ve sayımları kullanıcıya sun, onaydan sonra canlıya al
+
+### 2. El terminali (Honeywell, Android varsayılıyor)
+- Model ve Android sürümü kullanıcıdan öğrenilecek. Kurulum: terminal tarayıcısından arsantuptakip.com/indir.
+- Yarım çalışma `gecis/el-terminali` dalında (7d26dcc, derlenmedi, yayınlanmadı): `HardwareScanner.cs` (Otomatik/Kamera/El terminali modu,
+  Data Intent ayarları), `ScanInput.cs` (barkod alanına odak, klavye gizleme).
+- [ ] MainActivity: hızlı tuş dizisi (wedge + Enter) dinleyicisi ve Data Intent alıcısı (eylem `com.arsangaz.erpmobile.BARCODE`, veri `data`)
+- [ ] Tüp, Sefer, Müşteride sayım ve kamera ekranlarına bağla
+- [ ] "El terminali" ayar/test ekranı (Bağlantı sekmesi)
+- [ ] Mobil 1.8.0 / build 28, CI yeşil, APK yayını
+- Terminal Windows CE çıkarsa web paneli seçeneği değerlendirilecek.
+
 ## Sunucuya taşıma — yapılacaklar listesi (12 Ekim 2026)
 Durum: site, veritabanı (PostgreSQL), Telegram dinleme Oracle sunucusunda; PC'de AutoSync çalışıyor.
 - [x] Cursor ajanını sunucuya kurmak — tamamlandı (12 Ekim 04:25). `arsangaz-cursoragent` servisi (kullanıcı
