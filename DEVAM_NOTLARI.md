@@ -1,5 +1,13 @@
 # Devam Notları — 11 Ekim 2026, 01:20
 
+## Sunucuya taşıma — yapılacaklar listesi (12 Ekim 2026)
+Durum: site, veritabanı (PostgreSQL), Telegram dinleme Oracle sunucusunda; PC'de AutoSync çalışıyor.
+- [ ] Cursor ajanını sunucuya kurmak (Cursor API anahtarı gerekiyor) — sırada.
+- [ ] Gmail anahtarını sunucuya güvenli girmek (kampanya e-postaları sunucudan gitsin) — kullanıcı sonra yapacak.
+- [ ] WhatsApp/Meta anahtarını sunucuya güvenli girmek (kampanya WhatsApp'ları sunucudan gitsin) — kullanıcı sonra yapacak.
+- [ ] Sunucu ajanında eksik komutlar: prospect tarama, /gorev, /ekip, /ara, satır içi butonlar, LLM sohbeti.
+- [ ] Sunucu dışı yedek kopyası (pg_dump → OneDrive/Drive).
+
 ## Bekleyen kararlar (kullanıcıdan)
 1. **Commit + push onayı**: kampanya, Gmail göndericisi, mobil 1.6.1 ve hata düzeltmeleri. Henüz commit yok.
    Worker yapılandırma dosyaları commit'e girmeyecek.
