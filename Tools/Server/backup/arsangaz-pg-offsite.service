@@ -1,0 +1,9 @@
+[Unit]
+Description=ArsanGazERP gece yedeğini Google Drive'a gönder
+After=network-online.target arsangaz-pg-backup@nightly.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/arsangaz-pg-offsite
+Nice=10

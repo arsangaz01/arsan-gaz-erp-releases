@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Gece yedeklerinin bir kopyasını Google Drive'a gönderir (root olarak, arsangaz-pg-offsite.timer).
+# Drive bağlantısı /etc/arsangaz/rclone.conf içinde (Tools/Server/Connect-DriveBackup.ps1 ile kurulur).
+# Drive'da 90 günden eski kopyalar silinir. Hata olursa Telegram'a bildirim düşer.
+set -uo pipefail
+conf=/etc/arsangaz/rclone.conf
+remote=gdrive:ArsanGazERP-Yedek/nightly
+src=/var/backups/arsangaz/nightly
+outbox=/var/lib/arsangaz-data/prod/ArsanGazERP/AgentWatcherData/TelegramOutbox
+status=/var/lib/arsangaz-offsite/status.json
+keep=90d
+
+notify() {
+    local chat
+    chat=$(sed -n 's/^TELEGRAM_CHAT_ID=//p' /etc/arsangaz/serveragent.env 2>/dev/null | tr -d '"\r')
+    [ -n "$chat" ] && [ -d "$outbox" ] || return 0
+    MSG="$1" CHAT="$chat" OUT="$outbox" python3 - <<'PY'
+import json, os, uuid, datetime
+now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+item_id = "offsite-backup-" + uuid.uuid4().hex[:12]
+item = {"Id": item_id, "Kind": "telegram-copilot-direct-response", "TaskId": item_id,
+        "ChatId": int(os.environ["CHAT"]), "Report": os.environ["MSG"], "CreatedUtc": now,
+        "NextAttemptUtc": now, "Attempts": 0, "DeliveredChunkCount": 0, "Receipts": [],
+        "FilePaths": [], "DeliveredFileCount": 0, "LastError": None}
+path = os.path.join(os.environ["OUT"], item_id + ".json")
+with open(path + ".tmp", "w", encoding="utf-8") as f:
+    json.dump(item, f, ensure_ascii=False)
+os.rename(path + ".tmp", path)
+PY
+    chown arsangaz:arsangaz "$outbox"/offsite-backup-*.json 2>/dev/null || true
+}
+
+write_status() {
+    mkdir -p "$(dirname "$status")"
+    printf '{"ok":%s,"utc":"%s","message":"%s"}\n' "$1" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" > "$status"
+}
+
+fail() {
+    echo "HATA: $1" >&2
+    write_status false "$1"
+    notify "⚠️ Sunucu dışı yedek (Google Drive) başarısız: $1
+Yedekler sunucuda alınmaya devam ediyor; yalnızca Drive kopyası eksik."
+    exit 1
+}
+
+[ -f "$conf" ] || fail "Drive bağlantısı kurulmamış (/etc/arsangaz/rclone.conf yok)"
+latest=$(ls -1t "$src"/arsangaz-*.dump 2>/dev/null | head -n 1)
+[ -n "$latest" ] || fail "sunucuda gece yedeği bulunamadı"
+[ "$(find "$latest" -mmin -1500 | wc -l)" -eq 1 ] || fail "son gece yedeği 25 saatten eski: $(basename "$latest")"
+
+rc() { rclone --config "$conf" --retries 5 --low-level-retries 10 "$@"; }
+out=$(rc copy "$src" "$remote" --include 'arsangaz-*.dump' 2>&1) || fail "yükleme hatası: $(echo "$out" | tail -n 1)"
+rc lsf "$remote" | grep -qx "$(basename "$latest")" || fail "yüklenen dosya Drive'da görünmüyor"
+remote_size=$(rc lsl "$remote/$(basename "$latest")" | awk '{print $1}')
+[ "$remote_size" = "$(stat -c %s "$latest")" ] || fail "Drive'daki dosya boyutu farklı"
+rc delete "$remote" --min-age "$keep" >/dev/null 2>&1 || true
+count=$(rc lsf "$remote" | wc -l)
+write_status true "$(basename "$latest") Drive'da, toplam $count kopya"
+echo "Drive yedeği tamam: $(basename "$latest") ($remote_size bayt), Drive'da $count kopya"

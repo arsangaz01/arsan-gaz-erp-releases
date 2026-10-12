@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Standart girdiden `rclone authorize drive` çıktısını okur ve /etc/arsangaz/rclone.conf dosyasını (0600 root) yazar.
+# Erişim yalnızca rclone'un oluşturduğu dosyalarla sınırlıdır (scope drive.file). Çağıran: Connect-DriveBackup.ps1.
+set -euo pipefail
+conf=/etc/arsangaz/rclone.conf
+umask 077
+token=$(python3 -c '
+import base64, json, sys
+raw = sys.stdin.read().strip()
+try:
+    data = json.loads(raw)
+except ValueError:
+    try:
+        data = json.loads(base64.b64decode(raw + "=" * (-len(raw) % 4)))
+    except Exception:
+        sys.exit("gecersiz Google yetki bilgisi")
+if isinstance(data, dict) and "token" in data:
+    data = data["token"]
+    if isinstance(data, str):
+        data = json.loads(data)
+if not (isinstance(data, dict) and data.get("refresh_token") and data.get("access_token")):
+    sys.exit("gecersiz Google yetki bilgisi")
+print(json.dumps(data, separators=(",", ":")))
+')
+tmp=$(mktemp /etc/arsangaz/.rclone.XXXXXX)
+printf '[gdrive]\ntype = drive\nscope = drive.file\ntoken = %s\n' "$token" > "$tmp"
+chmod 600 "$tmp"
+rclone --config "$tmp" mkdir gdrive:ArsanGazERP-Yedek/nightly
+rclone --config "$tmp" lsd gdrive: | grep -q 'ArsanGazERP-Yedek' || { rm -f "$tmp"; echo "Drive klasörü oluşturulamadı" >&2; exit 1; }
+mv "$tmp" "$conf"
+echo "Drive bağlantısı kaydedildi (klasör: ArsanGazERP-Yedek)"
