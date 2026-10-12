@@ -143,16 +143,19 @@ public sealed class CylinderTripPage : ContentPage
 
     private async Task ScanAsync()
     {
-        string? value = await ScanPage.ScanAsync(Navigation);
-        if (value is not null)
+        try
         {
-            Add([value]);
+            Add(await ScanPage.ScanOneOrManyAsync(Navigation, _scanned));
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Kamera", exception.Message, "Tamam");
         }
     }
 
     private async Task ScanManyAsync()
     {
-        IReadOnlyList<string> codes = await ScanPage.ScanManyAsync(Navigation);
+        IReadOnlyList<string> codes = await ScanPage.ScanManyAsync(Navigation, _scanned);
         Add(codes);
     }
 

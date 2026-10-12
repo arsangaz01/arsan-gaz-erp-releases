@@ -93,7 +93,7 @@ public sealed class CylinderAuditPage : ContentPage
     {
         try
         {
-            Add(await ScanPage.ScanManyAsync(Navigation));
+            Add(await ScanPage.ScanManyAsync(Navigation, _scanned));
         }
         catch (Exception exception)
         {

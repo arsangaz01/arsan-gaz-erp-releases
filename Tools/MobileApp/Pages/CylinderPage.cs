@@ -317,7 +317,7 @@ public sealed class CylinderPage : ContentPage
     {
         try
         {
-            AddToBatch(await ScanPage.ScanManyAsync(Navigation));
+            AddToBatch(await ScanPage.ScanManyAsync(Navigation, _batch));
         }
         catch (Exception exception)
         {

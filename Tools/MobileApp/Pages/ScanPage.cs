@@ -6,15 +6,23 @@ namespace ArsanGazMobile.Pages;
 
 public sealed class ScanPage : ContentPage
 {
+    // Android's photo picker rejects limits above MediaStore.getPickImagesMaxLimit() (100 on most devices).
+    private const int MaxGalleryImages = 50;
+    private const string AddAllOption = "Tümünü ekle";
+
     private readonly TaskCompletionSource<IReadOnlyList<string>?> _result = new();
     private readonly CameraBarcodeReaderView _reader;
     private readonly bool _continuous;
+    private readonly bool _allowMany;
+    private readonly HashSet<string> _known;
     private readonly List<string> _codes = [];
     private readonly Label _counter = new() { FontSize = 16, TextColor = Colors.White, HorizontalTextAlignment = TextAlignment.Center, Margin = new Thickness(12, 8) };
 
-    private ScanPage(bool continuous)
+    private ScanPage(bool continuous, bool allowMany, IEnumerable<string>? known)
     {
         _continuous = continuous;
+        _allowMany = allowMany;
+        _known = new HashSet<string>(known ?? [], StringComparer.OrdinalIgnoreCase);
         Title = "Barkod okut";
         _reader = new CameraBarcodeReaderView
         {
@@ -52,9 +60,10 @@ public sealed class ScanPage : ContentPage
         if (continuous)
         {
             _counter.Text = "Tüpleri sırayla okutun. Bitince \"Bitti\"ye basın.";
-            root.Add(_counter, 0, 0);
         }
 
+        _counter.IsVisible = continuous;
+        root.Add(_counter, 0, 0);
         root.Add(_reader, 0, 1);
         root.Add(buttons, 0, 2);
         Content = root;
@@ -62,14 +71,18 @@ public sealed class ScanPage : ContentPage
 
     public static async Task<string?> ScanAsync(INavigation navigation)
     {
-        IReadOnlyList<string>? codes = await OpenAsync(navigation, continuous: false);
+        IReadOnlyList<string>? codes = await OpenAsync(navigation, continuous: false, allowMany: false, known: null);
         return codes?.FirstOrDefault();
     }
 
-    public static async Task<IReadOnlyList<string>> ScanManyAsync(INavigation navigation) =>
-        await OpenAsync(navigation, continuous: true) ?? [];
+    // Single scan, but when several codes come from gallery images the user may add them all at once.
+    public static async Task<IReadOnlyList<string>> ScanOneOrManyAsync(INavigation navigation, IEnumerable<string>? known = null) =>
+        await OpenAsync(navigation, continuous: false, allowMany: true, known) ?? [];
 
-    private static async Task<IReadOnlyList<string>?> OpenAsync(INavigation navigation, bool continuous)
+    public static async Task<IReadOnlyList<string>> ScanManyAsync(INavigation navigation, IEnumerable<string>? known = null) =>
+        await OpenAsync(navigation, continuous: true, allowMany: true, known) ?? [];
+
+    private static async Task<IReadOnlyList<string>?> OpenAsync(INavigation navigation, bool continuous, bool allowMany, IEnumerable<string>? known)
     {
         PermissionStatus status = await Permissions.RequestAsync<Permissions.Camera>();
         if (status != PermissionStatus.Granted)
@@ -77,7 +90,7 @@ public sealed class ScanPage : ContentPage
             throw new InvalidOperationException("Barkod okutmak için kamera izni gerekli.");
         }
 
-        ScanPage page = new(continuous);
+        ScanPage page = new(continuous, allowMany, known);
         await navigation.PushModalAsync(page);
         return await page._result.Task;
     }
@@ -119,45 +132,64 @@ public sealed class ScanPage : ContentPage
         }
 
         _reader.IsDetecting = false;
+        string previousCounter = _counter.Text;
         try
         {
-            FileResult? file = source == "Fotoğraf çek"
-                ? await MediaPicker.Default.CapturePhotoAsync(new MediaPickerOptions { Title = "Barkodun fotoğrafı" })
-                : (await MediaPicker.Default.PickPhotosAsync(new MediaPickerOptions { Title = "Barkodlu görüntü", SelectionLimit = 1 }))?.FirstOrDefault();
-            if (file is null)
+            List<FileResult> files = [];
+            if (source == "Fotoğraf çek")
+            {
+                FileResult? shot = await MediaPicker.Default.CapturePhotoAsync(new MediaPickerOptions { Title = "Barkodun fotoğrafı" });
+                if (shot is not null)
+                {
+                    files.Add(shot);
+                }
+            }
+            else
+            {
+                List<FileResult>? picked = await MediaPicker.Default.PickPhotosAsync(
+                    new MediaPickerOptions { Title = "Barkodlu görüntüler", SelectionLimit = MaxGalleryImages });
+                files.AddRange(picked?.OfType<FileResult>() ?? []);
+            }
+
+            if (files.Count == 0)
             {
                 return;
             }
 
-            IReadOnlyList<string> found;
-            await using (Stream stream = await file.OpenReadAsync())
+            if (files.Count == 1)
             {
-                found = await ImageBarcodeReader.ReadAsync(stream);
-            }
-
-            if (found.Count == 0)
-            {
-                await DisplayAlertAsync("Barkod bulunamadı",
-                    "Görüntüde okunabilir barkod veya QR kod yok. Barkodun net, düz ve tamamen göründüğü bir fotoğraf deneyin.", "Tamam");
+                await HandleFoundAsync(await ReadImageAsync(files[0]), imageCount: 1, emptyImages: 0);
                 return;
             }
 
-            Buzz();
-            if (_continuous)
+            // One image at a time: each decode holds a full-size bitmap, so parallel reads risk running out of memory.
+            List<string> found = [];
+            int emptyImages = 0;
+            _counter.IsVisible = true;
+            for (int i = 0; i < files.Count; i++)
             {
-                List<string> fresh = found.Where(code => !_codes.Contains(code, StringComparer.OrdinalIgnoreCase)).ToList();
-                _codes.AddRange(fresh);
-                _counter.Text = $"🖼 Görüntüden {found.Count} kod bulundu, {fresh.Count} yeni · toplam {_codes.Count} tüp";
-                return;
+                _counter.Text = $"🖼 {i + 1}/{files.Count} resim okunuyor… · {found.Count} kod";
+                IReadOnlyList<string> codes;
+                try
+                {
+                    codes = await ReadImageAsync(files[i]);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    codes = [];
+                }
+
+                if (codes.Count == 0)
+                {
+                    emptyImages++;
+                }
+
+                found.AddRange(codes);
             }
 
-            string? chosen = found.Count == 1
-                ? found[0]
-                : await DisplayActionSheetAsync("Görüntüde birden çok kod var", "Vazgeç", null, found.ToArray());
-            if (chosen is not null && found.Contains(chosen))
-            {
-                await CloseAsync([chosen]);
-            }
+            _counter.Text = previousCounter;
+            _counter.IsVisible = _continuous;
+            await HandleFoundAsync(found.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), files.Count, emptyImages);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -167,8 +199,75 @@ public sealed class ScanPage : ContentPage
         {
             if (!_result.Task.IsCompleted)
             {
+                if (_counter.Text.Contains("okunuyor", StringComparison.Ordinal))
+                {
+                    _counter.Text = previousCounter;
+                }
+
+                _counter.IsVisible = _continuous;
                 _reader.IsDetecting = true;
             }
+        }
+    }
+
+    private static async Task<IReadOnlyList<string>> ReadImageAsync(FileResult file)
+    {
+        await using Stream stream = await file.OpenReadAsync();
+        return await ImageBarcodeReader.ReadAsync(stream);
+    }
+
+    private async Task HandleFoundAsync(IReadOnlyList<string> found, int imageCount, int emptyImages)
+    {
+        List<string> fresh = found
+            .Where(code => !_known.Contains(code) && !_codes.Contains(code, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        string summary = $"{imageCount} resimden {found.Count} kod bulundu, {fresh.Count} yeni";
+        if (emptyImages > 0)
+        {
+            summary += $". {emptyImages} resimde okunabilir barkod yok";
+        }
+
+        if (found.Count == 0)
+        {
+            await DisplayAlertAsync("Barkod bulunamadı", imageCount == 1
+                ? "Görüntüde okunabilir barkod veya QR kod yok. Barkodun net, düz ve tamamen göründüğü bir fotoğraf deneyin."
+                : $"{imageCount} resmin hiçbirinde okunabilir barkod veya QR kod yok. Barkodun net, düz ve tamamen göründüğü fotoğraflar deneyin.", "Tamam");
+            return;
+        }
+
+        Buzz();
+        if (_continuous)
+        {
+            _codes.AddRange(fresh);
+            _counter.Text = $"🖼 {summary} · toplam {_codes.Count} tüp";
+            if (imageCount > 1)
+            {
+                await DisplayAlertAsync("Galeriden okuma", summary + ".", "Tamam");
+            }
+
+            return;
+        }
+
+        if (found.Count == 1)
+        {
+            if (emptyImages > 0)
+            {
+                await DisplayAlertAsync("Galeriden okuma", summary + ".", "Tamam");
+            }
+
+            await CloseAsync([found[0]]);
+            return;
+        }
+
+        string[] options = _allowMany ? found.Prepend(AddAllOption).ToArray() : found.ToArray();
+        string? chosen = await DisplayActionSheetAsync(summary, "Vazgeç", null, options);
+        if (_allowMany && chosen == AddAllOption)
+        {
+            await CloseAsync(found);
+        }
+        else if (chosen is not null && found.Contains(chosen))
+        {
+            await CloseAsync([chosen]);
         }
     }
 
