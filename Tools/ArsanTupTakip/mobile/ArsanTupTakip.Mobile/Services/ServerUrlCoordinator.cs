@@ -4,7 +4,7 @@ public static class ServerUrlCoordinator
 {
     // Placeholder: the public address is decided when connections are set up. Until then the user types it on the
     // Bağlantı screen or opens an arsantuptakip://server?u=<adres> link.
-    public const string DefaultServerUrl = "";
+    public const string DefaultServerUrl = "https://arsantuptakip.com/tuptakip";
 
     private const string LastRefreshKey = "server_url_last_refresh_utc";
     private const string AutoManagedKey = "server_url_auto_managed";

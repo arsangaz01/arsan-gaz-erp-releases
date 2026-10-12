@@ -31,9 +31,13 @@ Yapıldı (commit a4c6cb5, CI "ArsanTupTakip" api + mobil-derleme yeşil):
 - 12 Ekim 20:35: ayrı bot @TuptakipArsanbot + sunucu Cursor ajanı kuruldu (`Tools/ArsanTupTakip/bot`, servisler
   `arsantuptakip-bot`/`arsantuptakip-agent`, dal `cursor/arsantuptakip-agent`, yayın `/yayin` → `/yayin_onay <kod>`,
   `/geri_al`; ayrıntı README). Henüz hiç `/yayin_onay` yapılmadı: `/opt/arsantuptakip/api` hâlâ elle kurulan sürüm.
+- Kullanıma alındı (12 Ekim ~20:45): cloudflared'e arsantuptakip.com + www için `^/tuptakip(/.*)?$` → 127.0.0.1:5080
+  kuralı (yedek /etc/cloudflared/config.yml.bak-*; mevcut site yanıtları önce/sonra aynı), TUPTAKIP_PUBLIC_URL,
+  ilk yönetici `yonetici` (geçici şifre: sunucu /etc/arsantuptakip/ilk-sifre.txt, PC AgentWatcherData\ArsanTupTakip-ilk-sifre.txt;
+  ilk girişte değişir). Panel: https://arsantuptakip.com/tuptakip/panel. Mobil öntanımlı adres aynı.
+- Telegram: @TuptakipArsanbot (arsantuptakip-bot) + arsantuptakip-agent (commit 81693a6); deploy key arsantuptakip-release@oracle
 Sıradaki (kullanıcı "devam" deyince):
-- [ ] Dışa açma: cloudflared'e /tuptakip yolu veya alt alan adı (mevcut tüneli taşıdığı için dikkatli; önce/sonra kontrol)
-- [ ] TUPTAKIP_PUBLIC_URL + mobil sunucu adresi; ilk yönetici hesabı (komut README.md'de, şifre ekrana yazılmaz)
+- [x] Dışa açma, public URL, mobil sunucu adresi, ilk yönetici hesabı
 - [ ] APK imza anahtarı + yayın (paket ayrı, mevcut uygulamayla yan yana)
 - [x] Ayrı Telegram botu (kullanıcının kendi hesabı)
 - [ ] Eski sanal sunucudan veri geçişi, Honeywell el terminali

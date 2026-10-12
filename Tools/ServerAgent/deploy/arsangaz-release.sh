@@ -50,7 +50,7 @@ GH_REPO=arsangaz01/arsan-gaz-erp-kaynak
 CI_WORKFLOW=ci.yml
 MOBILEAPI_PATHS=(Tools/MobileApi Data Models Services Tools/ErpMcpServer global.json Directory.Build.props)
 NO_DOCS=(':(exclude,glob)**/*.md')
-DESKTOP_EXCLUDE='^(Tools/(MobileApp|MobileApi|ServerAgent|CursorTelegramBridge|PgHarness)/|CloudAgentWorker/|docs/|\.github/|.*\.md$)'
+DESKTOP_EXCLUDE='^(Tools/(MobileApp|MobileApi|ServerAgent|CursorTelegramBridge|PgHarness|ArsanTupTakip)/|CloudAgentWorker/|docs/|\.github/|.*\.md$)'
 
 GITHUB_ACTIONS_TOKEN=""
 RELEASE_TEST_BUNDLE=""
