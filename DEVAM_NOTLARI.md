@@ -4,6 +4,16 @@
 Hedef: firmadaki eski programın tüm verisi (tüpler, stok, müşteriler, hareketler, bakiyeler) bir kez bizim sunucuya
 taşınacak; bundan sonra iş yalnızca bizim sistemden (ERP + mobil + web paneli) yürüyecek. Eski sistem bir süre salt-okunur yedek kalır.
 
+### 0. Ortak için ayrı ve bağımsız tüp takip sistemi (kullanıcı isteği, 12 Ekim 19:24)
+Tüp takip (mobil + site + el terminali + geçiş verisi) ortağın kullanımı için bizim sistemden tamamen ayrılacak; bizdeki sistem aynen kalır.
+Altyapı/kod aynı, veri ve erişim ayrı; geliştirme yine Cursor + Telegram + sunucu üzerinden.
+- Ayrı PostgreSQL veritabanı + yalnız ona yetkili ayrı DB kullanıcısı (bizim erp/crm şemalarına erişemez)
+- Ayrı MobileApi örneği (ayrı systemd servisi, ayrı port, ayrı veri klasörü, ayrı panel şifresi), ayrı alan adı/alt alan (cloudflared)
+- Ayrı APK (farklı paket adı/uygulama adı, öntanımlı sunucu ortağın adresi) → aynı telefonda ikisi birlikte kurulabilir
+- Ayrı Telegram botu + ayrı sunucu ajanı örneği (ortağın telefonu/sohbeti); ERP masaüstü ve bizim müşteri verisi bu sisteme bağlanmaz
+- Ayrı gece yedeği (Drive'da ayrı klasör)
+- Bekleyen kararlar: sistem/uygulama adı, alan adı, Telegram'da kim yönetecek, kod ortak mı (güncellemeler ikisine de) yoksa ayrı kopya mı, başlangıç verisi boş mu
+
 ### 1. Veri taşıma (tek seferlik)
 - Eski sistem: firmadaki bir cihazda çalışan sanal sunucu. Program adı, sürümü ve veritabanı türü bilinmiyor.
 - Erişim yolu (kullanıcı seçecek): Tailscale (önerilen; geçiş bitince kaldırılır), AnyDesk/TeamViewer ya da USB ile yedek.
