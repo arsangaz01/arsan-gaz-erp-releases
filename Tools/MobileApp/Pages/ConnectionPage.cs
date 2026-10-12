@@ -275,4 +275,5 @@ public sealed class ConnectionPage : ContentPage
         await ApiClient.Instance.LogoutAsync();
         (Application.Current as App)?.ShowLogin(null);
     }
+}
 
