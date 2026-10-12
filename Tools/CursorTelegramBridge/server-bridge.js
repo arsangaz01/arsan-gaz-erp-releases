@@ -12,6 +12,7 @@ const { execFile } = require("node:child_process");
 const { Agent, Cursor, AgentNotFoundError, AuthenticationError } = require("@cursor/sdk");
 const { buildPrompt, describeToolCall } = require("./bridge");
 const { maskPii } = require("./pii-mask");
+const { doneCheck, formatDoneCheck } = require("./done-check");
 const { createInboxClient, isPcOnline, pickClaimable, DEFAULT_WAIT_MINUTES } = require("./server-inbox");
 
 const env = process.env;
@@ -54,8 +55,13 @@ const SERVER_RULES = [
   "- Telegram köprüsü: (cd Tools/CursorTelegramBridge && npm ci --no-audit --no-fund) && node --test Tools/CursorTelegramBridge/*.test.js",
   "- Mobil uygulama (Tools/MobileApp) sunucuda derlenemez; GitHub CI derler. Mobil uygulamayı değiştirirsen Tools/MobileApp/ArsanGazMobile.csproj",
   "  içinde ApplicationVersion'u 1 artır ve ApplicationDisplayVersion'u yükselt; yoksa telefonlar güncellemeyi almaz.",
-  "- Yeni EF tablosu/kolonu eklersen PostgreSQL için Data/PostgresSchema.cs içindeki Erp/Crm ek SQL'ine de CREATE TABLE/INDEX IF NOT EXISTS",
-  "  (veya ALTER TABLE ... ADD COLUMN IF NOT EXISTS) ekle: prod PostgreSQL'de EF tabloları yalnızca şema boşken oluşturulur, sonradan eklenenler oluşmaz.",
+  "- Yeni EF tablosu/kolonu eklersen İKİ yere de ekle: SQLite (Data/ArsanGazDbContext.cs + Services/*SchemaService.cs, ör. CylinderSchemaService.cs)",
+  "  ve PostgreSQL (Data/PostgresSchema.cs içindeki Erp/Crm/Campaign SQL'i: CREATE TABLE/INDEX IF NOT EXISTS veya ALTER TABLE ... ADD COLUMN IF NOT EXISTS).",
+  "  Prod PostgreSQL kullanır; EF tabloları orada yalnızca şema boşken oluşur, sonradan eklenenler oluşmaz.",
+  "- Masaüstü/servis mantığını değiştirdiysen testleri çalıştır: Tools/AgentWatcher.Tests (Windows'a özel; sunucuda derlenemiyorsa GitHub CI 'masaustu' işi çalıştırır).",
+  "Tamamlanma ölçütü: işe başlamadan isteği bileşenlere ayır: mobil uygulama, web paneli/sitesi, ERP masaüstü, AgentWatcher, sunucu (MobileApi/ServerAgent).",
+  "Son mesajında her bileşen için bir kontrol listesi satırı yaz: '✅ yapıldı', '❌ yapılmadı (neden)' veya '➖ istenmedi'.",
+  "İstenen bir bileşeni yapmadıysan bunu açıkça söyle; yapılmış gibi gösterme. Bu kontrol listesine ek olarak sistem git farkından otomatik bir kontrol ekler.",
   "Tüp takibine (mobil uygulama) yeni bir özellik eklerken kullanıcı web sitesinden/panelden söz ediyorsa veya özellik ofisten izlenecek",
   "bir veri üretiyorsa web panelini de güncelle (Tools/MobileApi/WebPanel/panel.html + panel.js, /panel/api uçları WebPanelEndpoints.cs).",
   "Derleme veya test başarısızsa düzelt; düzeltemiyorsan commit etme ve nedenini yaz.",
@@ -132,7 +138,7 @@ async function writeStatus() {
 
 function git(args, options = {}) {
   return new Promise((resolve, reject) => {
-    execFile("git", args, { cwd: options.cwd ?? workspace, timeout: options.timeoutMs ?? 120_000 }, (error, stdout, stderr) => {
+    execFile("git", args, { cwd: options.cwd ?? workspace, timeout: options.timeoutMs ?? 120_000, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) reject(new Error(String(stderr || error.message).trim().split("\n").pop()));
       else resolve(stdout.trim());
     });
@@ -296,6 +302,7 @@ async function processRequest(id, reason) {
     const attachmentPaths = await fetchAttachments(id, request.attachments);
     const workspaceNote = await refreshWorkspace();
     if (workspaceNote) log(`Depo notu (${id}): ${workspaceNote}`);
+    const startHead = await git(["rev-parse", "HEAD"]).catch(() => null);
 
     agent = await openAgent(request.channel);
     const prompt = [...SERVER_RULES, ...(workspaceNote ? [`Not: ${workspaceNote}.`] : []), "", await releaseStatusText(), "",
@@ -345,7 +352,8 @@ async function processRequest(id, reason) {
       return;
     }
     if (result.status !== "finished") throw new Error(`Cursor ajanı işi tamamlayamadı (${result.error?.message ?? result.status}).`);
-    const report = REPORT_HEADER + ((result.result || streamedText).trim() || "Cursor ajanı işi bitirdi ancak metin raporu üretmedi.");
+    const report = REPORT_HEADER + ((result.result || streamedText).trim() || "Cursor ajanı işi bitirdi ancak metin raporu üretmedi.")
+      + await runDoneCheck(id, request.text, startHead);
     await inbox.put(id, "completion", { id, taskId: request.taskId, status: "completed", report, updatedUtc: nowIso() });
     await inbox.put(id, "progress", { id, stage: "completed", steps, updatedUtc: nowIso() }).catch(() => undefined);
     status.lastResult = { id, status: "completed", updatedUtc: nowIso() };
@@ -363,6 +371,22 @@ async function processRequest(id, reason) {
     await fs.rm(path.join(stateDir, "attachments", id), { recursive: true, force: true }).catch(() => undefined);
     if (agent) await agent[Symbol.asyncDispose]?.().catch(() => undefined);
     await writeStatus();
+  }
+}
+
+// Commits the agent made during this run, checked against the definition of done (done-check.js).
+async function runDoneCheck(id, requestText, startHead) {
+  try {
+    const endHead = await git(["rev-parse", "HEAD"]);
+    if (!startHead || endHead === startHead) return "";
+    const files = (await git(["diff", "--name-only", startHead, endHead])).split("\n").filter(Boolean);
+    const diff = await git(["diff", "--unified=0", startHead, endHead, "--", "*.cs", "*.csproj"]);
+    const result = doneCheck({ requestText, files, diff });
+    if (result.warnings.length > 0) log(`Tamamlanma kontrolü uyarıları (${id}): ${result.warnings.length}`);
+    return formatDoneCheck(result);
+  } catch (error) {
+    log(`Tamamlanma kontrolü yapılamadı (${id}): ${error.message}`);
+    return "\n\n🔎 Otomatik kontrol yapılamadı: " + error.message;
   }
 }
 

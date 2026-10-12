@@ -57,6 +57,13 @@ veritabanına erişimi yoktur; kuyruğa yalnızca `cursor-inbox.sh` ile (`sudo -
    Mobil uygulama değiştiyse CI main'de imzalı APK üretir; sunucu indirip imzayı ve sürüm numarasını kontrol edip `/indir`'e koyar.
 5. `/geri_al` → `/geri_al_onay`: MobileApi'yi son yedeğe döndürür. `/yayin_durum`: sürümler ve yedekler. `/apk`: APK'yı yeniden dener.
 6. Onay kodu dalın o anki ucuna bağlıdır; `/yayin`'dan sonra dal değişirse eski kod reddedilir, `/yayin` ile yeniden bakın.
+7. Son mesaj `arsangaz-release verify` kontrol listesidir: main GitHub'da, prod MobileApi main ile aynı kod ve `/panel` 200,
+   telefonlara sunulan APK (`/api/guncelleme`) main'deki `ApplicationVersion`'a eşit. "Yayın tamamlandı" yalnızca hepsi
+   doğrulanınca yazılır; aksi halde "Yayın eksik: ..." ve sonraki adım. APK adımı geçici hatalarda 5 kez artan beklemeyle denenir.
+8. ServerAgent 15 dakikada bir `apkwatch` çalıştırır: main'in `ApplicationVersion`'u `/indir`'dekinden büyükse CI APK'sını yayınlar;
+   yayınlayamazsa her olay için bir kez Telegram'a uyarı yazar.
+9. Testler: `deploy/test-release.sh` (yayın betiği, çok MB'lık GitHub yanıtları ve 40 MB APK ile sandbox) ve
+   `deploy/test-cursor-queue.sh`; ikisi CI'da (sunucu işi) ve `Deploy-Server.ps1` kurulumdan önce sunucuda çalışır.
 
 Parçalar: `/usr/local/sbin/arsangaz-release` (`deploy/arsangaz-release.sh`, root). ServerAgent bunu doğrudan çalıştıramaz; beyaz
 listedeki isteği `/var/lib/arsangaz-data/prod/ArsanGazERP/Release/requests` klasörüne yazar, `arsangaz-release.path` root'ta

@@ -29,6 +29,10 @@ $Inbox = Join-Path $LocalData 'AgentWatcherData\CopilotInbox'
 $StateDir = Join-Path $LocalData 'ServerInboxSync'
 $LogPath = Join-Path $StateDir 'sync.log'
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
+$BridgeScript = Join-Path (Split-Path $PSScriptRoot) 'CursorTelegramBridge\bridge.js'
+$script:LastBridgeStart = [DateTime]::MinValue
+$script:BridgeAlerted = $false
+$script:OpenIds = @()
 New-Item -ItemType Directory -Force -Path $Inbox, $StateDir | Out-Null
 
 function Write-Log([string]$Message) {
@@ -85,6 +89,65 @@ function Import-Request([string]$Id, [bool]$ServerNotifies) {
     [IO.File]::WriteAllText((Join-Path $StateDir "$Id.owner"), $(if ($ServerNotifies) { 'server' } else { 'pc' }), $Utf8)
 }
 
+function Test-BridgeRunning {
+    try {
+        $bridgePid = [int]([IO.File]::ReadAllText((Join-Path $LocalData 'AgentWatcherData\cursor-bridge.pid')).Trim())
+        return (Get-Process -Id $bridgePid -ErrorAction Stop).ProcessName -eq 'node'
+    }
+    catch { return $false }
+}
+
+function Test-IdeWatcherRunning {
+    $status = Join-Path $Inbox 'ide-session-status.json'
+    return (Test-Path -LiteralPath $status) -and ((Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $status).LastWriteTimeUtc).TotalSeconds -lt 90
+}
+
+# Something on the PC must be able to run a request before the sync takes it from the server: the open IDE chat
+# (ide-watch.ps1) or bridge.js, which is also the IDE chat's fallback. A dead bridge is restarted (at most every
+# 5 minutes); if nothing can run, the request stays on the server and its Cursor agent answers it.
+function Confirm-PcWorker {
+    if (Test-BridgeRunning) { $script:BridgeAlerted = $false; return $true }
+    $ide = Test-IdeWatcherRunning
+    if (((Get-Date) - $script:LastBridgeStart).TotalMinutes -lt 5) { return $ide }
+    $script:LastBridgeStart = Get-Date
+    try {
+        $node = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
+        if (-not $node) { $node = Join-Path $env:ProgramFiles 'nodejs\node.exe' }
+        if (-not (Test-Path -LiteralPath $node)) { throw 'node.exe bulunamadi' }
+        if (-not (Test-Path -LiteralPath $BridgeScript)) { throw "bridge.js yok: $BridgeScript" }
+        Start-Process -FilePath $node -ArgumentList "`"$BridgeScript`"" -WorkingDirectory (Split-Path $BridgeScript) -WindowStyle Hidden | Out-Null
+        foreach ($i in 1..10) { Start-Sleep -Seconds 1; if (Test-BridgeRunning) { break } }
+        if (-not (Test-BridgeRunning)) { throw 'bridge.js 10 sn icinde calismaya baslamadi' }
+        Write-Log 'bridge.js was not running; started it.'
+        $script:BridgeAlerted = $false
+        return $true
+    }
+    catch {
+        Write-Log "bridge.js could not be started: $($_.Exception.Message)"
+        if (-not $script:BridgeAlerted) {
+            $script:BridgeAlerted = $true
+            $note = Join-Path $StateDir 'bridge-alert.txt'
+            # ASCII only: Windows PowerShell 5.1 reads this BOM-less script in the ANSI code page.
+            [IO.File]::WriteAllText($note, "UYARI: Bilgisayardaki Cursor koprusu (bridge.js) calismiyor ve yeniden baslatilamadi: $($_.Exception.Message)`n" +
+                "Telegram istekleri bu arada sunucudaki Cursor ajanina birakiliyor. Kopruyu duzeltmek icin PC'de Cursor_Telegram_Giris.cmd calistirin.", $Utf8)
+            try { & (Join-Path $PSScriptRoot 'Send-Telegram.ps1') -Path $note | Out-Null } catch { Write-Log "Telegram alert failed: $($_.Exception.Message)" }
+        }
+        return $ide
+    }
+}
+
+# A request the server took back (server Cursor agent) must not also run on the PC later.
+function Remove-ServerTakenCopies([string[]]$Listed) {
+    foreach ($id in $script:OpenIds) {
+        if ($Listed -contains $id) { continue }
+        if (Test-Path -LiteralPath (Join-Path $Inbox "$id.completion.json")) { continue }
+        if ((Test-Path -LiteralPath (Join-Path $Inbox "$id.progress.json")) -or (Test-Path -LiteralPath (Join-Path $Inbox "$id.ide-started.json"))) { continue }
+        Remove-Item -LiteralPath (Join-Path $Inbox "$id.request.json"), (Join-Path $Inbox "$id.ide-claim.json") -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $StateDir "$id.owner"), (Join-Path $StateDir "$id.hashes") -ErrorAction SilentlyContinue
+        Write-Log "Request is no longer open on the server (taken by the server Cursor agent); local copy removed: $id"
+    }
+}
+
 function Send-File([string]$Id, [string]$Kind, [string]$Path) {
     $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes($Path))
     Invoke-Server "put $Id $Kind" $content | Out-Null
@@ -97,7 +160,7 @@ function Sync-Open([string]$Id) {
         foreach ($line in [IO.File]::ReadAllLines($hashFile)) { $parts = $line -split '=', 2; if ($parts.Count -eq 2) { $sent[$parts[0]] = $parts[1] } }
     }
 
-    foreach ($kind in 'ide-claim', 'progress') {
+    foreach ($kind in 'ide-claim', 'ide-started', 'progress') {
         $path = Join-Path $Inbox "$Id.$kind.json"
         if (-not (Test-Path -LiteralPath $path)) { continue }
         $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
@@ -126,16 +189,26 @@ function Sync-Open([string]$Id) {
 function Invoke-SyncPass {
     $lines = Invoke-Server "poll $env:COMPUTERNAME"
     $serverNotifies = $lines -contains 'TELEGRAM 1'
+    $worker = $null
+    $listed = @()
     foreach ($line in $lines) {
         if ($line -notmatch '^(NEW|OPEN) ([A-Za-z0-9_-]{1,80})$') { continue }
         try {
+            $kind = $Matches[1]
             $id = $Matches[2]
+            $listed += $id
+            if ($kind -eq 'NEW') {
+                if ($null -eq $worker) { $worker = Confirm-PcWorker }
+                if (-not $worker) { continue }
+            }
             # An OPEN request without an owner file was marked but its copy failed; copy it again.
-            if ($Matches[1] -eq 'NEW' -or -not (Test-Path -LiteralPath (Join-Path $StateDir "$id.owner"))) { Import-Request $id $serverNotifies }
+            if ($kind -eq 'NEW' -or -not (Test-Path -LiteralPath (Join-Path $StateDir "$id.owner"))) { Import-Request $id $serverNotifies }
             else { Sync-Open $id }
         }
         catch { Write-Log "Sync failed for ${id}: $($_.Exception.Message)" }
     }
+    Remove-ServerTakenCopies $listed
+    $script:OpenIds = @($listed | Where-Object { Test-Path -LiteralPath (Join-Path $StateDir "$_.owner") })
 }
 
 $mutex = New-Object System.Threading.Mutex($false, 'Local\ArsanGazERP.ServerInboxSync')

@@ -166,7 +166,8 @@ internal sealed class ServerCommands(
             case "/yayin_onay":
                 return StartPublish(argument);
             case "/apk":
-                return StartBackground("📱 APK kontrol ediliyor; sonuç buraya gelecek.", token => FollowApkAsync(string.Empty, token));
+                return StartBackground("📱 APK kontrol ediliyor; sonuç buraya gelecek.",
+                    async token => notify((await FollowApkAsync(string.Empty, token)).Text));
             case "/geri_al":
                 return await RollbackPreviewAsync(cancellationToken);
             case "/geri_al_onay":
@@ -308,48 +309,190 @@ internal sealed class ServerCommands(
         return startedText;
     }
 
+    // The final message says "tamamlandı" only when `arsangaz-release verify` confirms every server-side part is live.
     private async Task PublishAsync(string commit, string force, CancellationToken cancellationToken)
     {
         ReleaseResult result = await release.RunAsync("publish", commit, force, TimeSpan.FromHours(2), cancellationToken);
-        string header = result.Succeeded ? "✅ Yayın tamamlandı" : result.Finished ? "❌ Yayın tamamlanamadı" : "⏳ Yayın sürüyor";
-        notify($"{header} ({commit})\n\n{result.Text}");
+        if (!result.Finished)
+        {
+            notify($"⏳ Yayın sürüyor ({commit}); 2 saatte bitmedi. Durum için /yayin_durum yazın.\n\n{result.Text}");
+            return;
+        }
+
+        string? apkText = null;
         if (result.Succeeded && result.Value("APK") == "needed")
         {
-            await FollowApkAsync(result.Value("MAIN"), cancellationToken);
+            notify($"🚀 Sunucu adımları bitti ({commit}); telefon APK'sı bekleniyor. Son kontrol listesi APK adımından sonra gelecek.\n\n{result.Text}");
+            apkText = (await FollowApkAsync(result.Value("MAIN"), cancellationToken)).Text;
         }
+
+        string main = result.Value("MAIN");
+        ReleaseResult verify = await release.RunAsync(
+            "verify", CommitId.IsMatch(main) ? main : commit, string.Empty, TimeSpan.FromMinutes(5), cancellationToken);
+        notify(FormatReleaseReport(commit, result, verify, apkText));
     }
 
+    internal static string FormatReleaseReport(string commit, ReleaseResult publish, ReleaseResult verify, string? apkText)
+    {
+        bool verified = publish.Succeeded && verify.Succeeded && verify.Value("VERIFIED") == "1";
+        string[] missing = verify.Value("MISSING").Split(',', StringSplitOptions.RemoveEmptyEntries);
+        StringBuilder text = new();
+        if (verified)
+        {
+            text.AppendLine($"✅ Yayın tamamlandı ({commit}): sunucudaki tüm parçalar doğrulandı.");
+        }
+        else if (!publish.Succeeded)
+        {
+            text.AppendLine($"❌ Yayın tamamlanamadı ({commit}).");
+        }
+        else
+        {
+            string names = missing.Length == 0
+                ? "doğrulama çalışmadı"
+                : string.Join(", ", missing.Select(part => part switch
+                {
+                    "main" => "GitHub main",
+                    "web" => "web sitesi/MobileApi",
+                    "apk" => "telefon APK'sı",
+                    _ => part
+                }));
+            text.AppendLine($"⚠️ Yayın eksik ({commit}): {names}.");
+        }
+
+        text.AppendLine().AppendLine("Kontrol listesi:");
+        text.AppendLine(verify.Finished && verify.Text.Length > 0 ? verify.Text : "❓ Doğrulama yapılamadı: " + verify.Text);
+        text.AppendLine(publish.Value("DESKTOP") == "1"
+            ? "⏳ Masaüstü ERP/AgentWatcher: main'de; bilgisayar açılınca AutoSync uygular (sunucudan doğrulanamaz)."
+            : "➖ Masaüstü ERP/AgentWatcher: bu yayında değişiklik yok.");
+
+        if (!verified)
+        {
+            List<string> next = [];
+            if (!publish.Succeeded) next.Add("hata nedenini aşağıda okuyun, düzeltip /yayin ile tekrar bakın");
+            if (missing.Contains("apk")) next.Add("/apk ile tekrar deneyin (sunucu da 15 dakikada bir kendisi dener)");
+            if (missing.Contains("web")) next.Add("/yayin_durum ile bakın, gerekirse /yayin ile yeniden yayınlayın");
+            if (missing.Contains("main")) next.Add("/yayin ile main durumunu kontrol edin");
+            if (next.Count == 0) next.Add("/yayin_durum ile durumu kontrol edin");
+            text.AppendLine().AppendLine("Sonraki adım: " + string.Join("; ", next) + ".");
+        }
+
+        if (apkText is { Length: > 0 })
+        {
+            text.AppendLine().AppendLine("APK adımı:").AppendLine(apkText);
+        }
+
+        text.AppendLine().AppendLine("Yayın adımları:").Append(publish.Text);
+        return text.ToString().TrimEnd();
+    }
+
+    private const int MaxApkRetries = 5;
+
     // The signed APK is built by GitHub Actions after main is pushed; poll until it is published or clearly stuck.
-    private async Task FollowApkAsync(string mainCommit, CancellationToken cancellationToken)
+    // Transient problems (GitHub API, download, a crashed runner) are retried with backoff before giving up.
+    private async Task<(bool Published, string Text)> FollowApkAsync(string mainCommit, CancellationToken cancellationToken)
     {
         string argument = CommitId.IsMatch(mainCommit) && mainCommit.Length == 40 ? mainCommit : string.Empty;
         DateTime deadline = DateTime.UtcNow + TimeSpan.FromMinutes(90);
         bool announcedWaiting = false;
+        int failures = 0;
         while (true)
         {
             ReleaseResult result = await release.RunAsync("apk", argument, string.Empty, TimeSpan.FromMinutes(15), cancellationToken);
             string state = result.Value("APK_STATE");
-            if (result.Finished && state != "waiting")
+            if (result.Finished && state == "published")
             {
-                notify(result.Text);
-                return;
+                return (true, result.Text);
             }
 
-            if (DateTime.UtcNow > deadline)
+            if (result.Finished && state is "failed" or "blocked")
             {
-                notify("📱 APK 90 dakika içinde hazır olmadı. GitHub Actions'taki CI çalışmasını kontrol edin; sonra /apk yazın.\n" + result.Text);
-                return;
+                return (false, result.Text + "\n❌ APK yayınlanamadı. Sorun giderilince /apk ile tekrar deneyin.");
             }
 
-            if (!announcedWaiting && result.Finished)
+            TimeSpan delay = apkPollInterval;
+            if (state != "waiting")
+            {
+                failures++;
+                Log.Write("RELEASE", $"APK adımı geçici hata ({failures}/{MaxApkRetries}): {Shorten(result.Text, 300)}");
+                if (failures >= MaxApkRetries)
+                {
+                    return (false, $"❌ APK adımı {failures} denemede başarısız oldu.\nNeden: {Shorten(result.Text, 800)}\n/apk ile tekrar deneyin.");
+                }
+
+                delay = TimeSpan.FromTicks(Math.Min(apkPollInterval.Ticks << (failures - 1), TimeSpan.FromMinutes(15).Ticks));
+            }
+            else if (!announcedWaiting)
             {
                 notify(result.Text + " Hazır olunca bildireceğim.");
                 announcedWaiting = true;
             }
 
-            await Task.Delay(apkPollInterval, cancellationToken);
+            if (DateTime.UtcNow + delay > deadline)
+            {
+                return (false, "❌ APK 90 dakika içinde hazır olmadı. GitHub Actions'taki CI çalışmasını kontrol edin; sonra /apk ile tekrar deneyin.\n" + result.Text);
+            }
+
+            await Task.Delay(delay, cancellationToken);
         }
     }
+
+    private string? apkWatchAlerted;
+    private DateTime? apkBehindSinceUtc;
+
+    // Safety net run every 15 minutes by ServerAgentHost: if main's ApplicationVersion is ahead of what phones are
+    // offered, the release script publishes the CI artifact; a failure or a long wait is reported once per commit.
+    public async Task<string?> WatchApkOnceAsync(CancellationToken cancellationToken)
+    {
+        if (Interlocked.CompareExchange(ref releaseRunning, 1, 0) != 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            ReleaseResult result = await release.RunAsync("apkwatch", string.Empty, string.Empty, TimeSpan.FromMinutes(20), cancellationToken);
+            if (!result.Finished)
+            {
+                return null;
+            }
+
+            string alertFile = Path.Combine(ServerPaths.StateRoot, "apkwatch-alerted.txt");
+            apkWatchAlerted ??= File.Exists(alertFile) ? File.ReadAllText(alertFile).Trim() : string.Empty;
+            if (result.Succeeded && result.Value("APK_BEHIND") == "0")
+            {
+                apkBehindSinceUtc = null;
+                return "current";
+            }
+
+            string state = result.Value("APK_STATE");
+            if (result.Value("APK_BEHIND") == "1" && state == "published")
+            {
+                apkBehindSinceUtc = null;
+                notify("📱 Otomatik kontrol: yayınlanmamış kalan APK bulundu ve /indir'e kondu.\n" + result.Text);
+                return "published";
+            }
+
+            apkBehindSinceUtc ??= DateTime.UtcNow;
+            bool stuck = state is "failed" or "blocked" || !result.Succeeded || result.Value("APK_BEHIND") != "1"
+                         || DateTime.UtcNow - apkBehindSinceUtc > TimeSpan.FromHours(2);
+            string key = (result.Value("MAIN") is { Length: > 0 } main ? main : "hata") + ":" + (stuck ? "stuck" : "wait");
+            if (stuck && apkWatchAlerted != key)
+            {
+                apkWatchAlerted = key;
+                File.WriteAllText(alertFile, key);
+                notify("⚠️ Otomatik APK kontrolü: main'deki mobil uygulama sürümü telefonlara sunulmuyor.\n" + result.Text +
+                       "\n/apk ile tekrar deneyin; düzelmezse GitHub Actions'taki CI çalışmasına bakın.");
+            }
+
+            return state.Length > 0 ? state : "error";
+        }
+        finally
+        {
+            Volatile.Write(ref releaseRunning, 0);
+        }
+    }
+
+    private static string Shorten(string text, int length) => text.Length <= length ? text : text[..length] + "…";
 
     private async Task<string> RollbackPreviewAsync(CancellationToken cancellationToken)
     {

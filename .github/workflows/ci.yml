@@ -91,6 +91,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build .\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj -c Release -nologo -clp:ErrorsOnly
           exit $LASTEXITCODE
+      - name: AgentWatcher.Tests (ERP servisleri, Sefer/tüp takibi, Telegram, kampanya)
+        shell: pwsh
+        run: |
+          dotnet run --project .\Tools\AgentWatcher.Tests\ArsanGazERP.AgentWatcher.Tests.csproj -c Release -nologo
+          exit $LASTEXITCODE
 
   server:
     name: sunucu
@@ -107,6 +112,10 @@ jobs:
       - run: dotnet build Tools/ServerAgent/ArsanGazERP.ServerAgent.csproj -c Release -nologo -clp:ErrorsOnly
       - name: ServerAgent --self-test
         run: dotnet Tools/ServerAgent/bin/Release/net10.0/ArsanGazERP.ServerAgent.dll --self-test
+      - name: Yayın betiği (sandbox, büyük GitHub yanıtları ve APK)
+        run: bash Tools/ServerAgent/deploy/test-release.sh
+      - name: Cursor kuyruğu (sunucu/PC sahiplenme)
+        run: bash Tools/ServerAgent/deploy/test-cursor-queue.sh
 
   bridge:
     name: kopru

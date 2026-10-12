@@ -45,3 +45,11 @@ test("rules cover panel updates and the PostgreSQL schema", () => {
   assert.match(rules, /panel\.html/);
   assert.match(rules, /henüz yayında DEĞİL/);
 });
+
+test("rules demand a per-component checklist and both database schemas", () => {
+  const rules = SERVER_RULES.join("\n");
+  assert.match(rules, /kontrol listesi/);
+  assert.match(rules, /'❌ yapılmadı \(neden\)'/);
+  assert.match(rules, /SchemaService\.cs/);
+  assert.match(rules, /AgentWatcher\.Tests/);
+});

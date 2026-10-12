@@ -19,6 +19,14 @@ is_done() {
 require_claim() { [ -e "$INBOX/$1.server-claim" ] || { echo "not claimed by the server" >&2; exit 5; }; }
 lock() { exec 9>"$INBOX/.claim.lock"; flock -w 10 9 || { echo "lock busy" >&2; exit 6; }; }
 age_of() { echo $(( $(date +%s) - $(stat -c %Y "$1") )); }
+# A request the PC took over stays the PC's while the PC shows life for it (progress, IDE start, result) or for
+# PC_STALE_SEC after the hand-over. Afterwards the server may claim it: the IDE watcher and bridge.js both died.
+PC_STALE_SEC=${CURSOR_PC_STALE_SEC:-1200}
+pc_owns() {
+  [ -e "$INBOX/$1.pc-forwarded" ] || return 1
+  if [ -e "$INBOX/$1.progress.json" ] || [ -e "$INBOX/$1.ide-started.json" ] || [ -e "$INBOX/$1.ack.json" ]; then return 0; fi
+  [ "$(age_of "$INBOX/$1.pc-forwarded")" -lt "$PC_STALE_SEC" ]
+}
 
 case "${1:-}" in
   list)
@@ -35,7 +43,7 @@ case "${1:-}" in
       [[ "$id" =~ ^[A-Za-z0-9_-]{1,80}$ ]] || continue
       is_done "$id" && continue
       if [ -e "$INBOX/$id.server-claim" ]; then echo "MINE $id"; continue; fi
-      [ -e "$INBOX/$id.pc-forwarded" ] && continue
+      pc_owns "$id" && continue
       echo "REQ $id $(age_of "$request")"
     done
     ;;
@@ -43,7 +51,7 @@ case "${1:-}" in
     valid_id "${2:-}"
     lock
     if [ ! -e "$INBOX/$2.request.json" ]; then echo "GONE"; exit 0; fi
-    if is_done "$2" || [ -e "$INBOX/$2.pc-forwarded" ] || [ -e "$INBOX/$2.server-claim" ]; then echo "TAKEN"; exit 0; fi
+    if is_done "$2" || pc_owns "$2" || [ -e "$INBOX/$2.server-claim" ]; then echo "TAKEN"; exit 0; fi
     printf '{"host":"%s","claimedUtc":"%s"}\n' "$(hostname)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$INBOX/$2.server-claim"
     echo "CLAIMED"
     ;;

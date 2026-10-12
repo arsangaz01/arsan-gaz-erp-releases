@@ -73,6 +73,11 @@ internal static class SelfTest
         return failures.Count == 0 ? 0 : 1;
     }
 
+    private static readonly string Main40 = new('f', 40);
+    private const string PublishOutput = "🌐 MobileApi yayında\n@@APK=needed\n@@DESKTOP=1\n@@MAIN=";
+    private const string VerifiedOutput =
+        "✅ main GitHub'da: fffffff\n✅ Web sitesi/MobileApi prod: fffffff\n✅ Telefon APK (/indir): 1.7.5 (build 23) = main'deki 1.7.5 (build 23)\n@@MISSING=\n@@VERIFIED=1\n";
+
     // /yayin, /yayin_onay and the APK follow-up against a fake root runner on a temporary spool folder.
     private static async Task ReleaseCommandsAsync(TelegramCopilotInbox inbox, Action<bool, string> expect)
     {
@@ -81,13 +86,22 @@ internal static class SelfTest
         Directory.CreateDirectory(Path.Combine(spool, "results"));
         List<string> notes = [];
         List<string> requests = [];
+        FakeRelease fake = new((action, call) => action switch
+        {
+            "pending" => (0, "📦 bekleyen 1 commit\n@@TARGET=abc1234" + new string('0', 33) + "\n@@PENDING=1\n@@MOBILEAPI=1\n@@CI=success\n"),
+            "publish" => (0, PublishOutput + Main40 + "\n"),
+            "apk" => call == 1 ? (0, "📱 APK derlemesi sürüyor.\n@@APK_STATE=waiting\n") : (0, "📱 Yeni APK yayında: 1.7.5\n@@APK_STATE=published\n"),
+            "verify" => (0, VerifiedOutput),
+            _ => (2, "?\n")
+        });
         using CancellationTokenSource stop = new();
-        Task runner = FakeReleaseRunnerAsync(spool, requests, stop.Token);
-        ServerCommands commands = new(inbox, () => 0, new ReleaseClient(spool), text =>
+        Task runner = FakeReleaseRunnerAsync(spool, requests, fake, stop.Token);
+        ServerCommands NewCommands() => new(inbox, () => 0, new ReleaseClient(spool), text =>
         {
             lock (notes) notes.Add(text);
             return true;
         }, TimeSpan.FromMilliseconds(100));
+        ServerCommands commands = NewCommands();
 
         string pending = await commands.HandleAsync(90, "/yayin", ChatId, CancellationToken.None);
         expect(pending.Contains("bekleyen 1 commit", StringComparison.Ordinal) && pending.Contains("/yayin_onay abc1234", StringComparison.Ordinal)
@@ -101,22 +115,96 @@ internal static class SelfTest
         expect((await commands.HandleAsync(94, "/yayin_onay abc1234", ChatId, CancellationToken.None)).Contains("zaten sürüyor", StringComparison.Ordinal),
             "a second release is refused while one runs");
         await commands.BackgroundRelease!.WaitAsync(TimeSpan.FromSeconds(30));
-        expect(notes.Any(note => note.StartsWith("✅ Yayın tamamlandı", StringComparison.Ordinal) && note.Contains("MobileApi yayında", StringComparison.Ordinal)),
-            "release result is sent to Telegram");
-        expect(notes.Any(note => note.Contains("Yeni APK yayında", StringComparison.Ordinal)), "APK is followed until it is published");
+        string[] snapshot;
+        lock (notes) snapshot = [.. notes];
+        string? final = snapshot.LastOrDefault();
+        expect(final is not null && final.StartsWith("✅ Yayın tamamlandı", StringComparison.Ordinal)
+               && final.Contains("Kontrol listesi", StringComparison.Ordinal) && final.Contains("✅ Telefon APK", StringComparison.Ordinal)
+               && final.Contains("AutoSync", StringComparison.Ordinal) && final.Contains("MobileApi yayında", StringComparison.Ordinal),
+            "verified release ends with a per-component checklist");
+        expect(snapshot.Count(note => note.Contains("tamamlandı", StringComparison.Ordinal)) == 1,
+            "'tamamlandı' is said only once, after verification");
+        expect(snapshot.Any(note => note.StartsWith("🚀 Sunucu adımları bitti", StringComparison.Ordinal)), "interim note while the APK is pending");
         lock (requests)
         {
-            expect(requests.SequenceEqual(["pending:", "publish:abc1234", "apk:" + new string('f', 40), "apk:" + new string('f', 40)]),
+            expect(requests.SequenceEqual(["pending:", "publish:abc1234", "apk:" + Main40, "apk:" + Main40, "verify:" + Main40]),
                 "runner received exactly the expected whitelisted requests");
+            requests.Clear();
         }
+
+        // Today's failure: the APK step crashes (argv overflow). Retried with backoff, then reported as missing.
+        lock (notes) notes.Clear();
+        fake.Reset((action, _) => action switch
+        {
+            "publish" => (0, PublishOutput + Main40 + "\n"),
+            "apk" => (126, "/usr/local/sbin/arsangaz-release: line 398: /usr/bin/python3: Argument list too long\n"),
+            "verify" => (0, "✅ main GitHub'da\n✅ Web sitesi/MobileApi prod\n❌ Telefon APK (/indir): 1.7.5 (build 23); main'deki 1.7.6 (build 24) henüz yayında değil\n@@MISSING=apk\n@@VERIFIED=0\n"),
+            _ => (2, "?\n")
+        });
+        commands = NewCommands();
+        await commands.HandleAsync(95, "/yayin_onay abc1234", ChatId, CancellationToken.None);
+        await commands.BackgroundRelease!.WaitAsync(TimeSpan.FromSeconds(60));
+        lock (notes) snapshot = [.. notes];
+        final = snapshot.LastOrDefault() ?? string.Empty;
+        expect(final.StartsWith("⚠️ Yayın eksik (abc1234): telefon APK'sı.", StringComparison.Ordinal)
+               && final.Contains("/apk ile tekrar deneyin", StringComparison.Ordinal)
+               && final.Contains("Argument list too long", StringComparison.Ordinal),
+            "failed APK step gives 'eksik' with cause and next step");
+        expect(!snapshot.Any(note => note.Contains("tamamlandı", StringComparison.Ordinal)), "no 'tamamlandı' when the APK is missing");
+        lock (requests)
+        {
+            expect(requests.Count(request => request.StartsWith("apk:", StringComparison.Ordinal)) == 5, "APK step retried 5 times with backoff");
+            requests.Clear();
+        }
+
+        // Periodic safety net: a missed APK is published; a stuck one is reported once.
+        lock (notes) notes.Clear();
+        fake.Reset((action, call) => (action, call) switch
+        {
+            ("apkwatch", 1) => (0, "📱 main'de 1.7.6 (build 24) var\n📱 Yeni APK yayında: 1.7.6\n@@MAIN=" + Main40 + "\n@@APK_BEHIND=1\n@@APK_STATE=published\n"),
+            ("apkwatch", 2 or 3) => (0, "❌ APK imza sertifikası telefondakiyle aynı değil; yayınlanmadı.\n@@MAIN=" + Main40 + "\n@@APK_BEHIND=1\n@@APK_STATE=failed\n"),
+            ("apkwatch", _) => (0, "📱 /indir güncel\n@@MAIN=" + Main40 + "\n@@APK_BEHIND=0\n@@APK_STATE=published\n"),
+            _ => (2, "?\n")
+        });
+        commands = NewCommands();
+        expect(await commands.WatchApkOnceAsync(CancellationToken.None) == "published", "apk watch publishes a missed APK");
+        expect(await commands.WatchApkOnceAsync(CancellationToken.None) == "failed", "apk watch reports a failure");
+        await commands.WatchApkOnceAsync(CancellationToken.None);
+        expect(await commands.WatchApkOnceAsync(CancellationToken.None) == "current", "apk watch is quiet when /indir is current");
+        lock (notes) snapshot = [.. notes];
+        expect(snapshot.Count(note => note.Contains("yayınlanmamış kalan APK", StringComparison.Ordinal)) == 1
+               && snapshot.Count(note => note.StartsWith("⚠️ Otomatik APK kontrolü", StringComparison.Ordinal)) == 1,
+            "apk watch notifies once per event");
 
         await stop.CancelAsync();
         await runner.ContinueWith(_ => { });
     }
 
-    private static async Task FakeReleaseRunnerAsync(string spool, List<string> seen, CancellationToken cancellationToken)
+    private sealed class FakeRelease(Func<string, int, (int Code, string Output)> respond)
     {
-        int apkCalls = 0;
+        private readonly Dictionary<string, int> calls = new(StringComparer.Ordinal);
+
+        public (int Code, string Output) Next(string action)
+        {
+            lock (calls)
+            {
+                calls[action] = calls.GetValueOrDefault(action) + 1;
+                return respond(action, calls[action]);
+            }
+        }
+
+        public void Reset(Func<string, int, (int Code, string Output)> next)
+        {
+            lock (calls)
+            {
+                calls.Clear();
+                respond = next;
+            }
+        }
+    }
+
+    private static async Task FakeReleaseRunnerAsync(string spool, List<string> seen, FakeRelease fake, CancellationToken cancellationToken)
+    {
         while (!cancellationToken.IsCancellationRequested)
         {
             foreach (string request in Directory.GetFiles(Path.Combine(spool, "requests"), "*.req"))
@@ -126,20 +214,14 @@ internal static class SelfTest
                 string id = Path.GetFileNameWithoutExtension(request);
                 File.Delete(request);
                 lock (seen) seen.Add(fields["action"] + ":" + fields["arg1"]);
-                string output = fields["action"] switch
-                {
-                    "pending" => "📦 bekleyen 1 commit\n@@TARGET=abc1234" + new string('0', 33) + "\n@@PENDING=1\n@@MOBILEAPI=1\n@@CI=success\n",
-                    "publish" => "🌐 MobileApi yayında\n@@APK=needed\n@@MAIN=" + new string('f', 40) + "\n",
-                    "apk" => ++apkCalls == 1 ? "📱 APK derlemesi sürüyor.\n@@APK_STATE=waiting\n" : "📱 Yeni APK yayında: 1.7.5\n@@APK_STATE=published\n",
-                    _ => "?\n"
-                };
+                (int code, string output) = fake.Next(fields["action"]);
                 if (fields["action"] == "publish")
                 {
                     await Task.Delay(500, cancellationToken);
                 }
 
                 await File.WriteAllTextAsync(Path.Combine(spool, "results", id + ".out"), output, cancellationToken);
-                await File.WriteAllTextAsync(Path.Combine(spool, "results", id + ".done"), "0\n", cancellationToken);
+                await File.WriteAllTextAsync(Path.Combine(spool, "results", id + ".done"), code + "\n", cancellationToken);
             }
 
             await Task.Delay(50, cancellationToken).ContinueWith(_ => { });

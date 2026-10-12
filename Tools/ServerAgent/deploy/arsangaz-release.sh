@@ -3,6 +3,8 @@
 #   pending                 cursor/server-agent'ta bekleyenler, değişen bileşenler, CI durumu
 #   publish <sha> [force]   dalı main'e birleştirir, main'i push eder, MobileApi'yi test örneğinde dener ve prod'a alır
 #   apk <sha>               main'deki mobil uygulamanın imzalı APK'sını GitHub Actions'tan alıp /indir'e koyar
+#   verify <sha>            yayın kontrol listesi: main, prod MobileApi + /panel, telefonların gördüğü APK sürümü
+#   apkwatch                main'in ApplicationVersion'u /indir'dekinden büyükse APK'yı yayınlamayı dener (ServerAgent 15 dk)
 #   rollback                prod MobileApi'yi bir önceki sürüme döndürür
 #   status                  sunucudaki sürümler ve yedekler
 #   stage <sha>             (yalnızca komut satırı) derleyip sadece test örneğinde dener
@@ -35,7 +37,11 @@ STAGING_PORT=5078
 STAGING_DATA=/var/lib/arsangaz-data/staging
 STAGING_ENV=/etc/arsangaz/mobileapi-staging.env
 APK_DIR=/var/lib/arsangaz-data/prod/ArsanGazERP/MobileApi
+APK_OWNER=arsangaz
+APK_GROUP=arsangaz
 APK_ARTIFACT=arsangaz-mobile-apk
+MOBILE_CSPROJ=Tools/MobileApp/ArsanGazMobile.csproj
+PUBLIC_URL=https://arsantuptakip.com
 # World-readable, secret-free summary for the server Cursor agent ($BASE is 0711, so only this path is reachable).
 PUBLIC_STATUS=$BASE/public/status.json
 # SHA-256 of the signing certificate of the APK installed on the phones (PC debug.keystore, verified 2026-10-12).
@@ -48,7 +54,8 @@ DESKTOP_EXCLUDE='^(Tools/(MobileApp|MobileApi|ServerAgent|CursorTelegramBridge|P
 
 GITHUB_ACTIONS_TOKEN=""
 RELEASE_TEST_BUNDLE=""
-if [ -f "$CONFIG" ]; then
+# test-release.sh sources this file with ARSANGAZ_RELEASE_SANDBOX=1 and its own paths; the real key is never read.
+if [ -z "${ARSANGAZ_RELEASE_SANDBOX:-}" ] && [ -f "$CONFIG" ]; then
   GITHUB_ACTIONS_TOKEN=$(grep -E '^GITHUB_ACTIONS_TOKEN=' "$CONFIG" | tail -n1 | cut -d= -f2- || true)
   RELEASE_TEST_BUNDLE=$(grep -E '^RELEASE_TEST_BUNDLE=' "$CONFIG" | tail -n1 | cut -d= -f2- || true)
 fi
@@ -199,7 +206,7 @@ health() {
   return 1
 }
 
-prune_backups() { ls -dt "$1".bak-2* 2>/dev/null | tail -n +4 | xargs -r rm -rf; }
+prune_backups() { ls -dt "$1".bak-2* 2>/dev/null | tail -n +4 | xargs -r rm -rf || true; }
 
 # Moves $new into $dir (old one -> $dir.bak-STAMP), restarts, health-checks, and on failure puts the old build back.
 # Returns 0 ok, 2 rolled back, 3 rollback failed too. SIMULATE_FAIL=1 forces a failed check (refused for production).
@@ -369,6 +376,9 @@ act_publish() {
   fi
   if touches_desktop "$oldmain" "$newmain"; then
     say "🖥 Masaüstü ERP / AgentWatcher değişiklikleri main'de; bilgisayar açılınca AutoSync otomatik derleyip uygular."
+    trailer DESKTOP 1
+  else
+    trailer DESKTOP 0
   fi
   if touches_server_agents "$oldmain" "$newmain"; then
     say "ℹ️ Sunucu ajanı / Cursor köprüsü değişti; bunlar otomatik yayınlanmaz (PC'den Deploy-Server.ps1)."
@@ -391,11 +401,13 @@ act_apk() {
   [ -n "$GITHUB_ACTIONS_TOKEN" ] || { say "📱 APK alınamıyor: GITHUB_ACTIONS_TOKEN girilmemiş."; trailer APK_STATE blocked; return 0; }
   fetch
   [ -n "$sha" ] || sha=$(rev origin/main)
-  if [ "$(cat "$STATE/apk-sha" 2>/dev/null)" != "" ] && git_r diff --quiet "$(cat "$STATE/apk-sha")" "$sha" -- Tools/MobileApp 2>/dev/null; then
+  if [ "$(cat "$STATE/apk-sha" 2>/dev/null)" != "" ] && git_r diff --quiet "$(cat "$STATE/apk-sha")" "$sha" -- Tools/MobileApp 2>/dev/null \
+      && [ "$(apk_current | cut -d' ' -f1)" -ge "$(apk_expected "$sha" | cut -d' ' -f1)" ]; then
     say "📱 Yayındaki APK main ile güncel."; trailer APK_STATE published; return 0
   fi
   local runs pick
-  runs=$(gh_api GET "/actions/workflows/$CI_WORKFLOW/runs?branch=main&per_page=30") || { say "GitHub API okunamadı."; trailer APK_STATE waiting; return 0; }
+  runs=$(gh_api GET "/actions/workflows/$CI_WORKFLOW/runs?branch=main&per_page=30") \
+    || { say "📱 GitHub API şu an okunamadı (geçici olabilir)."; trailer APK_STATE retry; return 0; }
   pick=$(py_json "$runs" '
 import json, sys
 for r in json.load(sys.stdin).get("workflow_runs", []):
@@ -426,8 +438,8 @@ for r in json.load(sys.stdin).get("workflow_runs", []):
   local tmp=$BUILD/apk
   rm -rf "$tmp"; install -d -m 0700 "$tmp"
   curl -fsSL --max-time 300 -H "Authorization: Bearer $GITHUB_ACTIONS_TOKEN" -o "$tmp/a.zip" "${found#* }" \
-    || { say "APK indirilemedi."; trailer APK_STATE failed; return 0; }
-  (cd "$tmp" && unzip -q a.zip) || { say "APK arşivi açılamadı."; trailer APK_STATE failed; return 0; }
+    || { say "📱 APK GitHub'dan indirilemedi (geçici olabilir)."; trailer APK_STATE retry; return 0; }
+  (cd "$tmp" && unzip -q a.zip) || { say "📱 APK arşivi açılamadı (eksik indirme olabilir)."; trailer APK_STATE retry; return 0; }
   [ -f "$tmp/ArsanGazERP-Mobil.apk" ] && [ -f "$tmp/apk-info.json" ] || { say "Arşivde APK veya apk-info.json yok."; trailer APK_STATE failed; return 0; }
   local name code cert current
   read -r name code cert <<<"$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["versionName"], int(d["versionCode"]), d["certSha256"].lower())' "$tmp/apk-info.json")"
@@ -441,16 +453,95 @@ for r in json.load(sys.stdin).get("workflow_runs", []):
     trailer APK_STATE failed; return 0
   fi
   [ -f "$APK_DIR/ArsanGazERP-Mobil.apk" ] && cp -p "$APK_DIR/ArsanGazERP-Mobil.apk" "$APK_DIR/ArsanGazERP-Mobil.apk.bak-$STAMP"
-  install -m 0600 -o arsangaz -g arsangaz "$tmp/ArsanGazERP-Mobil.apk" "$APK_DIR/ArsanGazERP-Mobil.apk.upload"
+  install -m 0600 -o "$APK_OWNER" -g "$APK_GROUP" "$tmp/ArsanGazERP-Mobil.apk" "$APK_DIR/ArsanGazERP-Mobil.apk.upload"
   printf '{"versionName":"%s","versionCode":%d}\n' "$name" "$code" > "$tmp/meta"
-  install -m 0600 -o arsangaz -g arsangaz "$tmp/meta" "$APK_DIR/ArsanGazERP-Mobil.apk.meta.json.upload"
+  install -m 0600 -o "$APK_OWNER" -g "$APK_GROUP" "$tmp/meta" "$APK_DIR/ArsanGazERP-Mobil.apk.meta.json.upload"
   mv -f "$APK_DIR/ArsanGazERP-Mobil.apk.upload" "$APK_DIR/ArsanGazERP-Mobil.apk"
   mv -f "$APK_DIR/ArsanGazERP-Mobil.apk.meta.json.upload" "$APK_DIR/ArsanGazERP-Mobil.apk.meta.json"
-  ls -t "$APK_DIR"/ArsanGazERP-Mobil.apk.bak-2* 2>/dev/null | tail -n +4 | xargs -r rm -f
+  # With pipefail a missing backup (first publish) makes ls fail; that must not abort a finished publish.
+  ls -t "$APK_DIR"/ArsanGazERP-Mobil.apk.bak-2* 2>/dev/null | tail -n +4 | xargs -r rm -f || true
   printf '%s\n' "$sha" > "$STATE/apk-sha"
   rm -rf "$tmp"
   say "📱 Yeni APK yayında: $name (build $code). Telefonlar uygulamayı açınca güncelleme önerir; arsantuptakip.com/indir"
   trailer APK_STATE published
+}
+
+# "<ApplicationVersion> <ApplicationDisplayVersion>" of the mobile app at a commit; "0 -" when unreadable.
+apk_expected() {
+  local xml code name
+  xml=$(git_r show "$1:$MOBILE_CSPROJ" 2>/dev/null) || { echo "0 -"; return 0; }
+  code=$(grep -oP '(?<=<ApplicationVersion>)[0-9]+' <<<"$xml" | head -n1 || true)
+  name=$(grep -oP '(?<=<ApplicationDisplayVersion>)[^<]+' <<<"$xml" | head -n1 || true)
+  echo "${code:-0} ${name:--}"
+}
+
+# "<versionCode> <versionName>" phones are offered right now (prod /api/guncelleme), else the published meta file.
+apk_current() {
+  local json
+  json=$(curl -fsS --max-time 10 "http://127.0.0.1:$PROD_PORT/api/guncelleme" 2>/dev/null || true)
+  if [ -n "$json" ] && py_json "$json" '
+import json, sys
+d = json.load(sys.stdin)
+print(int(d.get("publishedMobileBuild") or 0) if d.get("apkReady") else 0, d.get("publishedMobileVersion") or "-")' 2>/dev/null; then
+    return 0
+  fi
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(int(d["versionCode"]), d.get("versionName") or "-")' \
+    "$APK_DIR/ArsanGazERP-Mobil.apk.meta.json" 2>/dev/null || echo "0 -"
+}
+
+# Checklist of what is really live for a released main commit. VERIFIED=1 only when every server-side part matches.
+act_verify() {
+  local want=$1 main deployed panel public exp_code exp_name cur_code cur_name missing=()
+  [[ "$want" =~ ^[0-9a-f]{7,40}$ ]] || die "Geçersiz commit kimliği." 2
+  fetch
+  main=$(rev origin/main)
+  if [ -n "$main" ] && [[ "$main" == "$want"* ]]; then
+    say "✅ main GitHub'da: $(short "$main")"
+  else
+    say "❌ GitHub'daki main $(short "$want") değil (şu an $(short "$main"))"; missing+=(main)
+  fi
+  want=$(rev "$want"); [ -n "$want" ] || want=$main
+
+  deployed=$(deployed_sha "$PROD_DIR")
+  panel=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:$PROD_PORT/panel" 2>/dev/null || true)
+  if [ "$panel" != 200 ]; then
+    say "❌ Web sitesi/MobileApi: /panel HTTP ${panel:-yok} (prod $(short "$deployed"))"; missing+=(web)
+  elif ! known_commit "$deployed" || touches_mobileapi "$deployed" "$want"; then
+    say "❌ Web sitesi/MobileApi prod $(short "$deployed"): main'deki MobileApi/web değişiklikleri yayında değil"; missing+=(web)
+  else
+    public=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$PUBLIC_URL/panel" 2>/dev/null || true)
+    say "✅ Web sitesi/MobileApi prod: $(short "$deployed") (main ile aynı kod), /panel HTTP 200, genel adres HTTP ${public:-yok}"
+  fi
+
+  read -r exp_code exp_name <<<"$(apk_expected "$want")"
+  read -r cur_code cur_name <<<"$(apk_current)"
+  if [ "${exp_code:-0}" -le 0 ]; then
+    say "❌ main'deki mobil uygulama sürümü (ApplicationVersion) okunamadı; APK doğrulanamadı"; missing+=(apk)
+  elif [ "${cur_code:-0}" -ge "$exp_code" ]; then
+    say "✅ Telefon APK (/indir): $cur_name (build $cur_code) = main'deki $exp_name (build $exp_code)"
+  else
+    say "❌ Telefon APK (/indir): $cur_name (build $cur_code); main'deki $exp_name (build $exp_code) henüz yayında değil"; missing+=(apk)
+  fi
+  trailer MISSING "$(IFS=,; echo "${missing[*]}")"
+  if [ ${#missing[@]} -eq 0 ]; then trailer VERIFIED 1; else trailer VERIFIED 0; fi
+}
+
+# Safety net for a missed APK: main's ApplicationVersion is ahead of what phones are offered.
+act_apkwatch() {
+  local main exp_code exp_name cur_code cur_name
+  fetch
+  main=$(rev origin/main)
+  [ -n "$main" ] || die "origin/main okunamadı."
+  read -r exp_code exp_name <<<"$(apk_expected "$main")"
+  read -r cur_code cur_name <<<"$(apk_current)"
+  trailer MAIN "$main"
+  if [ "${exp_code:-0}" -le "${cur_code:-0}" ]; then
+    say "📱 /indir güncel: $cur_name (build $cur_code)."
+    trailer APK_BEHIND 0; trailer APK_STATE published; return 0
+  fi
+  say "📱 main'de $exp_name (build $exp_code) var, telefonlara sunulan $cur_name (build $cur_code)."
+  trailer APK_BEHIND 1
+  act_apk "$main"
 }
 
 act_rollback() {
@@ -465,7 +556,7 @@ act_rollback() {
   since=$(date '+%Y-%m-%d %H:%M:%S')
   systemctl start "$PROD_UNIT"
   if health "$PROD_UNIT" "$PROD_PORT" "$since"; then
-    ls -dt "$PROD_DIR".rolledback-* 2>/dev/null | tail -n +3 | xargs -r rm -rf
+    ls -dt "$PROD_DIR".rolledback-* 2>/dev/null | tail -n +3 | xargs -r rm -rf || true
     say "✅ Geri alındı; web sitesi ve mobil API önceki sürümle çalışıyor."
   else
     say "⚠️ Önceki sürüm sağlıklı açılmadı; geri alınan sürüm geri yükleniyor."
@@ -548,6 +639,8 @@ run_action() {
     pending) act_pending ;;
     publish) act_publish "${1:-}" "${2:-}" ;;
     apk) act_apk "${1:-}" ;;
+    verify) act_verify "${1:-}" ;;
+    apkwatch) act_apkwatch ;;
     rollback) act_rollback ;;
     status) act_status ;;
     stage) act_stage "${1:-origin/main}" ;;
@@ -568,7 +661,7 @@ spool() {
     a2=$(grep -m1 -E '^arg2=' "$req" | cut -d= -f2 || true)
     rm -f "$req"
     out="$SPOOL/results/$id.out"
-    case "$action" in pending|publish|apk|rollback|status) ;; *) printf 'Eylem reddedildi.\n' > "$out"; code=2 ;; esac
+    case "$action" in pending|publish|apk|verify|apkwatch|rollback|status) ;; *) printf 'Eylem reddedildi.\n' > "$out"; code=2 ;; esac
     [[ "$a1" =~ ^[0-9a-f]{0,40}$ ]] && [[ "$a2" =~ ^(force)?$ ]] || { printf 'Parametre reddedildi.\n' > "$out"; code=2; }
     if [ -z "${code:-}" ]; then
       STAMP=$(date +%Y%m%d-%H%M%S)
@@ -596,11 +689,11 @@ main() {
   exec 9>"$BASE/.lock"
   flock -w 7200 9 || die "Başka bir yayın işlemi sürüyor."
   if [ "${1:-}" = --spool ]; then spool; return; fi
-  [ $# -ge 1 ] || { sed -n '2,13p' "$0"; exit 2; }
+  [ $# -ge 1 ] || { sed -n '2,15p' "$0"; exit 2; }
   local code=0
   run_action "$@" 2>&1 | tee -a "$LOGDIR/$STAMP-$1.log" || code=${PIPESTATUS[0]}
   write_public_status "$1" "$code" >/dev/null 2>&1 || true
   return "$code"
 }
 
-main "$@"
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi

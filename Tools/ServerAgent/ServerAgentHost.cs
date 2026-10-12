@@ -49,6 +49,8 @@ internal sealed class ServerAgentHost(ServerAgentOptions options)
                 {
                     work.Add(RunRelayAsync(commands, cancellationToken));
                 }
+
+                work.Add(RunApkWatchAsync(commands, cancellationToken));
             }
             else if (options.PollingEnabled)
             {
@@ -117,6 +119,46 @@ internal sealed class ServerAgentHost(ServerAgentOptions options)
             {
                 relayState = "hata: " + exception.GetBaseException().Message;
                 Log.Write("RELAY", "7/24 röle sinyali gönderilemedi: " + exception.GetBaseException().Message);
+            }
+        }
+        while (await Tick(timer, cancellationToken));
+    }
+
+    private static async Task RunApkWatchAsync(ServerCommands commands, CancellationToken cancellationToken)
+    {
+        if (!Directory.Exists(Path.Combine(ReleaseClient.Default.Root, "requests")))
+        {
+            Log.Write("RELEASE", "Yayın sistemi kurulu değil; otomatik APK kontrolü kapalı.");
+            return;
+        }
+
+        using PeriodicTimer timer = new(TimeSpan.FromMinutes(15));
+        try
+        {
+            await Task.Delay(TimeSpan.FromMinutes(2), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        do
+        {
+            try
+            {
+                string? state = await commands.WatchApkOnceAsync(cancellationToken);
+                if (state is not (null or "current"))
+                {
+                    Log.Write("RELEASE", "Otomatik APK kontrolü: " + state);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                Log.Write("RELEASE", "Otomatik APK kontrolü başarısız: " + exception.GetBaseException().Message);
             }
         }
         while (await Tick(timer, cancellationToken));

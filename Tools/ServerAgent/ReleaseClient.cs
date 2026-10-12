@@ -38,7 +38,7 @@ internal sealed partial class ReleaseClient(string root)
 {
     public static ReleaseClient Default { get; } = new(ServerPaths.ReleaseSpool);
 
-    private static readonly HashSet<string> Actions = new(StringComparer.Ordinal) { "pending", "publish", "apk", "rollback", "status" };
+    private static readonly HashSet<string> Actions = new(StringComparer.Ordinal) { "pending", "publish", "apk", "verify", "apkwatch", "rollback", "status" };
 
     public string Root => root;
 

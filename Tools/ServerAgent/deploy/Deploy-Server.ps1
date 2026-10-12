@@ -25,10 +25,10 @@ function Install-CursorAgent {
     if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
     New-Item -ItemType Directory -Force -Path (Join-Path $stage 'app'), (Join-Path $stage 'deploy') | Out-Null
     $bridge = Join-Path $repo 'Tools\CursorTelegramBridge'
-    foreach ($file in 'server-bridge.js', 'server-inbox.js', 'bridge.js', 'erp-tools.js', 'jarvis-memory.js', 'pii-mask.js', 'package.json', 'package-lock.json') {
+    foreach ($file in 'server-bridge.js', 'server-inbox.js', 'done-check.js', 'bridge.js', 'erp-tools.js', 'jarvis-memory.js', 'pii-mask.js', 'package.json', 'package-lock.json') {
         Copy-Item (Join-Path $bridge $file) (Join-Path $stage 'app')
     }
-    foreach ($file in 'cursor-inbox.sh', 'install-cursoragent.sh', 'arsangaz-cursoragent.service', 'inbox-sync.sh', 'set-agent-value.sh') {
+    foreach ($file in 'cursor-inbox.sh', 'install-cursoragent.sh', 'arsangaz-cursoragent.service', 'inbox-sync.sh', 'set-agent-value.sh', 'test-cursor-queue.sh') {
         Copy-Item (Join-Path $PSScriptRoot $file) (Join-Path $stage 'deploy')
     }
 
@@ -41,9 +41,10 @@ function Install-CursorAgent {
 
     $new = '/tmp/arsangaz-cursoragent-new'
     Invoke-Remote (@(
-        "set -e",
+        "set -eo pipefail",
         "rm -rf $new && mkdir -p $new && tar -xzf /tmp/arsangaz-cursoragent.tar.gz -C $new && rm -f /tmp/arsangaz-cursoragent.tar.gz",
         "sed -i 's/\r$//' $new/deploy/*",
+        "bash $new/deploy/test-cursor-queue.sh $new/deploy | tail -n 1",
         "cd $new/app && npm ci --omit=dev --no-audit --no-fund --loglevel=error",
         "sudo bash $new/deploy/install-cursoragent.sh",
         "sudo install -m 0755 -o root -g root $new/deploy/inbox-sync.sh /opt/arsangaz/bin/inbox-sync.sh",
@@ -59,7 +60,7 @@ function Install-CursorAgent {
 
 # Telefon onaylı yayın: /usr/local/sbin/arsangaz-release, test örneği, istek klasörü izleyicisi (install-release.sh).
 function Install-Release {
-    $files = 'arsangaz-release.sh', 'install-release.sh', 'arsangaz-mobileapi-staging.service', 'arsangaz-release.path', 'arsangaz-release-runner.service'
+    $files = 'arsangaz-release.sh', 'test-release.sh', 'install-release.sh', 'arsangaz-mobileapi-staging.service', 'arsangaz-release.path', 'arsangaz-release-runner.service'
     $stage = Join-Path $out 'release'
     if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $stage | Out-Null
@@ -71,10 +72,11 @@ function Install-Release {
     if ($LASTEXITCODE -ne 0) { throw 'release yuklenemedi.' }
     Remove-Item $archive
     Invoke-Remote (@(
-        "set -e",
+        "set -eo pipefail",
         "rm -rf /tmp/arsangaz-release-new && mkdir -p /tmp/arsangaz-release-new",
         "tar -xzf /tmp/arsangaz-release.tar.gz -C /tmp/arsangaz-release-new && rm -f /tmp/arsangaz-release.tar.gz",
         "sed -i 's/\r$//' /tmp/arsangaz-release-new/*",
+        "bash /tmp/arsangaz-release-new/test-release.sh | tail -n 3",
         "sudo bash /tmp/arsangaz-release-new/install-release.sh",
         "rm -rf /tmp/arsangaz-release-new"
     ) -join ' && ')

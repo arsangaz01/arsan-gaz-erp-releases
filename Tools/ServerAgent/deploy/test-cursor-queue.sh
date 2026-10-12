@@ -42,6 +42,24 @@ check "b1 not listed for server" "$($SRV list | grep -c ' b1')" "0"
 check "server cannot write results for b1" "$(printf '{}' | base64 -w0 | $SRV put b1 completion 2>/dev/null; echo $?)" "5"
 check "server cannot read b1" "$($SRV get b1 > /dev/null 2>&1; echo $?)" "5"
 
+# PC took a request but nothing on the PC ever started it (IDE watcher and bridge.js dead): after 20 minutes the
+# server may claim it; any sign of life (progress / IDE start) keeps it with the PC.
+request e1; $PC mark e1 > /dev/null
+touch -d '-21 min' "$INBOX/e1.pc-forwarded"
+check "stale PC hand-over listed for the server" "$($SRV list | grep -c '^REQ e1 ')" "1"
+check "server claims stale PC hand-over" "$($SRV claim e1)" "CLAIMED"
+check "PC poll no longer offers e1" "$($PC poll pc | grep -c ' e1$')" "0"
+request e2; $PC mark e2 > /dev/null
+touch -d '-21 min' "$INBOX/e2.pc-forwarded"
+printf '{"stage":"working"}' | base64 -w0 | $PC put e2 progress
+check "PC hand-over with progress stays with the PC" "$($SRV claim e2)" "TAKEN"
+request e3; $PC mark e3 > /dev/null
+touch -d '-21 min' "$INBOX/e3.pc-forwarded"
+printf '{"id":"e3"}' | base64 -w0 | $PC put e3 ide-started
+check "PC hand-over started in the IDE stays with the PC" "$($SRV list | grep -c ' e3')" "0"
+request e4; $PC mark e4 > /dev/null
+check "fresh PC hand-over stays with the PC" "$($SRV claim e4)" "TAKEN"
+
 # Results, release, done requests.
 check "server writes a1 completion" "$(printf '{"id":"a1","taskId":"a1","status":"completed","report":"tamam"}' | base64 -w0 | $SRV put a1 completion; echo $?)" "0"
 check "invalid JSON rejected" "$(printf 'x' | base64 -w0 | $SRV put a1 progress 2>/dev/null; echo $?)" "4"
