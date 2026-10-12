@@ -12,7 +12,8 @@ Altyapı/kod aynı, veri ve erişim ayrı; geliştirme yine Cursor + Telegram + 
 - Ayrı APK (farklı paket adı/uygulama adı, öntanımlı sunucu ortağın adresi) → aynı telefonda ikisi birlikte kurulabilir
 - Ayrı Telegram botu + ayrı sunucu ajanı örneği (ortağın telefonu/sohbeti); ERP masaüstü ve bizim müşteri verisi bu sisteme bağlanmaz
 - Ayrı gece yedeği (Drive'da ayrı klasör)
-- Bekleyen kararlar: sistem/uygulama adı, alan adı, Telegram'da kim yönetecek, kod ortak mı (güncellemeler ikisine de) yoksa ayrı kopya mı, başlangıç verisi boş mu
+- Karar: ortağın sistemi başka bir Telegram hesabından yönetilebilir (ayrı bot + o hesabın sohbet kimliği yetkili)
+- Bekleyen kararlar: sistem/uygulama adı, alan adı, Telegram hesabı kimin (sohbet kimliği gerekecek), kod ortak mı (güncellemeler ikisine de) yoksa ayrı kopya mı, başlangıç verisi boş mu
 
 ### 1. Veri taşıma (tek seferlik)
 - Eski sistem: firmadaki bir cihazda çalışan sanal sunucu. Program adı, sürümü ve veritabanı türü bilinmiyor.
