@@ -253,6 +253,12 @@ internal sealed class ServerCommands(
         else if (!somethingToPublish || code.Length == 0)
         {
             text.Append("Yayınlanacak bir şey yok.");
+            if (CommitId.IsMatch(target))
+            {
+                ReleaseResult live = await release.RunAsync("verify", target, string.Empty, TimeSpan.FromMinutes(3), cancellationToken);
+                text.AppendLine().AppendLine().AppendLine("Canlı durum (main " + code + "):")
+                    .Append(live.Finished && live.Text.Length > 0 ? live.Text : "❓ doğrulanamadı " + live.Text);
+            }
         }
         else if (result.Value("CI") == "success")
         {

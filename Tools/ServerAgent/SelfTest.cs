@@ -176,6 +176,17 @@ internal static class SelfTest
                && snapshot.Count(note => note.StartsWith("⚠️ Otomatik APK kontrolü", StringComparison.Ordinal)) == 1,
             "apk watch notifies once per event");
 
+        fake.Reset((action, _) => action switch
+        {
+            "pending" => (0, "📦 bekleyen değişiklik yok\n@@TARGET=" + Main40 + "\n@@PENDING=0\n@@MOBILEAPI=0\n@@CI=success\n"),
+            "verify" => (0, VerifiedOutput),
+            _ => (2, "?\n")
+        });
+        string idle = await commands.HandleAsync(96, "/yayin", ChatId, CancellationToken.None);
+        expect(idle.Contains("Yayınlanacak bir şey yok", StringComparison.Ordinal) && idle.Contains("Canlı durum", StringComparison.Ordinal)
+               && idle.Contains("✅ Telefon APK", StringComparison.Ordinal) && !idle.Contains("@@", StringComparison.Ordinal),
+            "/yayin without pending work shows the live checklist");
+
         await stop.CancelAsync();
         await runner.ContinueWith(_ => { });
     }
