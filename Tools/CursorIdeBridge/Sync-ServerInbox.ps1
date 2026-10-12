@@ -52,6 +52,10 @@ function ConvertTo-LocalPath([string]$ServerPath) {
 }
 
 function Import-Request([string]$Id, [bool]$ServerNotifies) {
+    # Claim first (under the lock shared with the server Cursor agent) so a request is never processed on both sides.
+    $mark = Invoke-Server "mark $Id"
+    if ($mark -contains 'TAKEN') { Write-Log "Request is handled by the server Cursor agent: $Id"; return }
+
     $requestPath = Join-Path $Inbox "$Id.request.json"
     if (-not (Test-Path -LiteralPath $requestPath)) {
         $json = $Utf8.GetString([Convert]::FromBase64String((Invoke-Server "get $Id" | Select-Object -Last 1)))
@@ -79,7 +83,6 @@ function Import-Request([string]$Id, [bool]$ServerNotifies) {
     }
 
     [IO.File]::WriteAllText((Join-Path $StateDir "$Id.owner"), $(if ($ServerNotifies) { 'server' } else { 'pc' }), $Utf8)
-    Invoke-Server "mark $Id" | Out-Null
 }
 
 function Send-File([string]$Id, [string]$Kind, [string]$Path) {
@@ -126,10 +129,12 @@ function Invoke-SyncPass {
     foreach ($line in $lines) {
         if ($line -notmatch '^(NEW|OPEN) ([A-Za-z0-9_-]{1,80})$') { continue }
         try {
-            if ($Matches[1] -eq 'NEW') { Import-Request $Matches[2] $serverNotifies }
-            else { Sync-Open $Matches[2] }
+            $id = $Matches[2]
+            # An OPEN request without an owner file was marked but its copy failed; copy it again.
+            if ($Matches[1] -eq 'NEW' -or -not (Test-Path -LiteralPath (Join-Path $StateDir "$id.owner"))) { Import-Request $id $serverNotifies }
+            else { Sync-Open $id }
         }
-        catch { Write-Log "Sync failed for $($Matches[2]): $($_.Exception.Message)" }
+        catch { Write-Log "Sync failed for ${id}: $($_.Exception.Message)" }
     }
 }
 

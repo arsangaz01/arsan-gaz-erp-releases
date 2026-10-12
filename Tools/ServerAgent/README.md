@@ -8,6 +8,7 @@ Sunucu: Ubuntu 24.04 arm64 (`arsangaz@144.24.189.205`, Tailscale 100.95.174.106)
 | `arsangaz-mobileapi-prod` | Telefon API'si, web panel, `/indir` (127.0.0.1:5077) |
 | `cloudflared` | `arsantuptakip.com` adlı tüneli (`/etc/cloudflared/config.yml`) |
 | `arsangaz-serveragent` | Telegram giden kutusu, tahsilat hatırlatmaları, (token gelince) Telegram dinleme + 7/24 röle |
+| `arsangaz-cursoragent` | Bilgisayar kapalıyken Cursor kuyruğunu işleyen sunucu Cursor ajanı (aşağıda) |
 
 PC tarafı: `%LOCALAPPDATA%\ArsanGazERP\MobileApi\tunnel-disabled.txt` PC'deki tüneli kapalı tutar;
 "ArsanGazERP ServerInboxSync" görevi (`Tools\CursorIdeBridge\Sync-ServerInbox.ps1`) sunucudaki Cursor kuyruğunu PC ile eşitler.
@@ -24,6 +25,21 @@ PC tarafı: `%LOCALAPPDATA%\ArsanGazERP\MobileApi\tunnel-disabled.txt` PC'deki t
 .\Tools\ServerAgent\Set-ServerAgentValue.ps1 -Key CLOUD_RELAY_TOKEN
 .\Tools\ServerAgent\Switch-TelegramListener.ps1 -To Server   # iki token da girildikten sonra
 ```
+
+## Sunucu Cursor ajanı (`arsangaz-cursoragent`)
+`Tools/CursorTelegramBridge/server-bridge.js` (Cursor SDK yerel mod, bridge.js ile aynı kurallar) `/opt/arsangaz-cursoragent/app`
+altında, `cursoragent` kullanıcısıyla çalışır. Bu kullanıcının sudo'su, prod veri klasörüne, `/etc/arsangaz/*.env` dosyalarına ve
+veritabanına erişimi yoktur; kuyruğa yalnızca `cursor-inbox.sh` ile (`sudo -u arsangaz`, sudoers'ta tek komut) erişir.
+- Karar: PC eşitleme sinyali (`pc-sync-status.json`) 90 sn'den eskiyse veya istek 10 dk sahipsiz kaldıysa sunucu isteği alır.
+  `cursor-inbox.sh claim` ile `inbox-sync.sh mark` aynı kilidi (`CopilotInbox/.claim.lock`) kullanır; istek tek tarafa gider.
+  Sunucunun aldığı istek `<id>.server-claim` ile işaretlenir; PC onu artık görmez.
+- Depo: `/home/cursoragent/arsan-gaz-erp` (GitHub deploy key `~/.ssh/github_deploy`, ilk klonu servis kendisi yapar). Ajan
+  yalnızca `cursor/server-*` dallarına push edebilir (pre-push kancası); main ve releases'e push yok.
+- Anahtar: `Set-ServerAgentValue.ps1 -Key CURSOR_API_KEY -FromClipboard` → `/etc/arsangaz/cursoragent.env` (0600 cursoragent).
+- Kurulum/güncelleme: `deploy\Deploy-Server.ps1 -Component cursoragent`. Test: `Test-ServerCursorAgent.ps1` (gerçek kuyrukta
+  `servertest-` isteği; PC'ye verilmez). Kuyruk betik testi: `bash deploy/test-cursor-queue.sh` (geçici klasörde).
+- Durum: `/var/lib/arsangaz-cursoragent/status.json` (Telegram `/durum`), günlük: `journalctl -u arsangaz-cursoragent`.
+- Kapatma: `sudo systemctl disable --now arsangaz-cursoragent` (istekler yine kuyrukta PC'yi bekler).
 
 ## Geri alma
 - Tünel PC'ye: PC'de `tunnel-disabled.txt` dosyasını silin (MobileApi 30 sn içinde tüneli açar), sonra sunucuda

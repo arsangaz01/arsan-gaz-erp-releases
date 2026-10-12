@@ -25,6 +25,9 @@ case "${1:-}" in
       [ -e "$request" ] || continue
       id=$(basename "$request" .request.json)
       is_done "$id" && continue
+      # Claimed by the server Cursor agent (cursor-inbox.sh) while the PC was off; the server reports it.
+      [ -e "$INBOX/$id.server-claim" ] && continue
+      [[ "$id" == servertest-* ]] && continue
       if [ -e "$INBOX/$id.pc-forwarded" ]; then echo "OPEN $id"; else echo "NEW $id"; fi
     done
     ;;
@@ -41,8 +44,13 @@ case "${1:-}" in
     esac
     ;;
   mark)
+    # Same lock as cursor-inbox.sh claim: prints MARKED when the PC owns the request, TAKEN when the server does.
     valid_id "${2:-}"
+    exec 9>"$INBOX/.claim.lock"
+    flock -w 10 9 || { echo "lock busy" >&2; exit 6; }
+    if [ -e "$INBOX/$2.server-claim" ]; then echo "TAKEN"; exit 0; fi
     date -u +%Y-%m-%dT%H:%M:%SZ > "$INBOX/$2.pc-forwarded"
+    echo "MARKED"
     ;;
   notified)
     valid_id "${2:-}"

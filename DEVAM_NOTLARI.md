@@ -2,7 +2,12 @@
 
 ## Sunucuya taşıma — yapılacaklar listesi (12 Ekim 2026)
 Durum: site, veritabanı (PostgreSQL), Telegram dinleme Oracle sunucusunda; PC'de AutoSync çalışıyor.
-- [ ] Cursor ajanını sunucuya kurmak (Cursor API anahtarı gerekiyor) — sırada.
+- [~] Cursor ajanını sunucuya kurmak — kuruldu, kullanıcı adımı bekliyor (12 Ekim 04:10). `arsangaz-cursoragent`
+  servisi (kullanıcı `cursoragent`, sudo/DB/gizli dosya erişimi yok) çalışıyor ve "CURSOR_API_KEY eksik" diye bekliyor.
+  Bilgisayar kapalıyken (eşitleme sinyali > 90 sn) veya istek 10 dk sahipsiz kalınca kuyruktaki isteği kilitle sahiplenir;
+  PC ile çift işleme yok (sunucuda 40 eşzamanlı yarış testi). Kalan: (1) Cursor API anahtarını
+  `Set-ServerAgentValue.ps1 -Key CURSOR_API_KEY -FromClipboard` ile girmek, (2) sunucu deploy key'ini GitHub'da özel depoya
+  "Allow write access" ile eklemek, (3) `Tools\ServerAgent\Test-ServerCursorAgent.ps1` ile uçtan uca test.
 - [ ] Gmail anahtarını sunucuya güvenli girmek (kampanya e-postaları sunucudan gitsin) — kullanıcı sonra yapacak.
 - [ ] WhatsApp/Meta anahtarını sunucuya güvenli girmek (kampanya WhatsApp'ları sunucudan gitsin) — kullanıcı sonra yapacak.
 - [ ] Sunucu ajanında eksik komutlar: prospect tarama, /gorev, /ekip, /ara, satır içi butonlar, LLM sohbeti.

@@ -20,8 +20,8 @@ const IDE_SESSION_STALE_MS = 90_000;
 // A monitored shell does not guarantee the IDE chat gets a turn; unstarted claims fall back to this bridge.
 const IDE_CLAIM_START_GRACE_MS = 180_000;
 
-const projectRoot = findProjectRoot(__dirname);
-const dataRoot = resolveDataRoot(projectRoot);
+const projectRoot = process.env.CURSOR_BRIDGE_PROJECT_ROOT || findProjectRoot(__dirname);
+const dataRoot = process.env.CURSOR_BRIDGE_DATA_ROOT || resolveDataRoot(projectRoot);
 const inboxDirectory = path.join(dataRoot, "CopilotInbox");
 const logPath = path.join(dataRoot, "Logs", "cursor-bridge.log");
 const statePath = path.join(dataRoot, "cursor-bridge-state.json");
@@ -52,7 +52,7 @@ function findProjectRoot(start) {
 
 function resolveDataRoot(root) {
   const localRoot = path.join(process.env.LOCALAPPDATA ?? "", "ArsanGazERP", "AgentWatcherData");
-  if (process.env.LOCALAPPDATA && (fsSync.existsSync(localRoot) || !root)) return localRoot;
+  if (!root || (process.env.LOCALAPPDATA && fsSync.existsSync(localRoot))) return localRoot;
   return path.join(root, "Tools", "AgentWatcherData");
 }
 

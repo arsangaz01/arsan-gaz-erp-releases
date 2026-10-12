@@ -63,6 +63,39 @@ internal sealed class ServerCommands(TelegramCopilotInbox copilotInbox, Func<int
         return false;
     }
 
+    public static (bool Ready, string Text) CursorAgentState()
+    {
+        try
+        {
+            if (!File.Exists(ServerPaths.CursorAgentStatusFile))
+            {
+                return (false, "kurulu değil");
+            }
+
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(ServerPaths.CursorAgentStatusFile));
+            JsonElement root = document.RootElement;
+            if (!root.TryGetProperty("updatedUtc", out JsonElement value)
+                || !DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTimeOffset updated)
+                || DateTimeOffset.UtcNow - updated > TimeSpan.FromSeconds(90))
+            {
+                return (false, "çalışmıyor");
+            }
+
+            if (root.TryGetProperty("current", out JsonElement current) && current.ValueKind == JsonValueKind.Object)
+            {
+                return (true, "bir isteği işliyor");
+            }
+
+            bool ready = root.TryGetProperty("ready", out JsonElement readyValue) && readyValue.ValueKind == JsonValueKind.True;
+            string? reason = root.TryGetProperty("reason", out JsonElement reasonValue) ? reasonValue.GetString() : null;
+            return ready ? (true, "hazır (bilgisayar kapalıyken istekleri işler)") : (false, "bekliyor: " + (reason ?? "bilinmiyor"));
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            return (false, "durum okunamadı");
+        }
+    }
+
     public async Task<string> HandleAsync(long updateId, string text, long chatId, CancellationToken cancellationToken)
     {
         string trimmed = text.Trim();
@@ -154,8 +187,13 @@ internal sealed class ServerCommands(TelegramCopilotInbox copilotInbox, Func<int
             return "Bu istek zaten kuyrukta; ikinci kopya oluşturulmadı.";
         }
 
-        return IsPcOnline(out _)
-            ? "İstek bilgisayardaki Cursor ajanına iletiliyor. Tamamlanınca rapor buraya gelecek."
+        if (IsPcOnline(out _))
+        {
+            return "İstek bilgisayardaki Cursor ajanına iletiliyor. Tamamlanınca rapor buraya gelecek.";
+        }
+
+        return CursorAgentState().Ready
+            ? "💤 Bilgisayar kapalı; istek sunucudaki Cursor ajanına verildi. Tamamlanınca rapor buraya gelecek."
             : "💤 Bilgisayar kapalı; istek kuyruğa alındı. Bilgisayar açılınca Cursor işleyecek ve rapor buraya gelecek.";
     }
 
@@ -171,6 +209,7 @@ internal sealed class ServerCommands(TelegramCopilotInbox copilotInbox, Func<int
         text.AppendLine("ERP veritabanı: " + DatabaseStatus());
         text.AppendLine("Mobil sunucu: " + (ServiceActive("arsangaz-mobileapi-prod") ? "çalışıyor" : "kapalı"));
         text.AppendLine("Genel adres tüneli: " + (ServiceActive("cloudflared") ? "çalışıyor" : "kapalı"));
+        text.AppendLine("Sunucu Cursor ajanı: " + CursorAgentState().Text);
         text.AppendLine($"Cursor kuyruğunda bekleyen: {PendingCursorRequests()}");
         text.Append($"Telegram giden kutusu: {pendingOutbox()}");
         return text.ToString();

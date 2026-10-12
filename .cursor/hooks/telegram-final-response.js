@@ -91,6 +91,8 @@ function log(message) {
 }
 
 function main(raw) {
+  // The server Cursor agent (Linux) has no AgentWatcher data folder; its answers reach Telegram through the queue.
+  if (!process.env.LOCALAPPDATA) return;
   const input = JSON.parse(raw.replace(/^\uFEFF/, "").trim() || "{}");
   const decoded = repairMojibake(String(input.text ?? input.response ?? input.message ?? "").trim());
   const text = decoded.text;

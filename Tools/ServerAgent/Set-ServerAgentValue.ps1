@@ -12,11 +12,13 @@
     CLOUD_RELAY_TOKEN: the Cloudflare Worker AGENT_API_TOKEN. If it is unknown, set a new one with
     "npx wrangler secret put AGENT_API_TOKEN" in CloudAgentWorker, then enter the same value here and in the PC
     AgentWatcher settings.
+    CURSOR_API_KEY: a Cursor user API key (Cursor Dashboard -> API Keys) for the server Cursor agent. Stored in
+    /etc/arsangaz/cursoragent.env (0600 cursoragent), not in serveragent.env; restarts arsangaz-cursoragent.
 #>
 [CmdletBinding(DefaultParameterSetName = 'Set')]
 param(
     [Parameter(ParameterSetName = 'Set', Mandatory = $true)]
-    [ValidateSet('TELEGRAM_BOT_TOKEN', 'CLOUD_RELAY_TOKEN', 'TELEGRAM_CHAT_ID', 'CLOUD_RELAY_URL')]
+    [ValidateSet('TELEGRAM_BOT_TOKEN', 'CLOUD_RELAY_TOKEN', 'TELEGRAM_CHAT_ID', 'CLOUD_RELAY_URL', 'CURSOR_API_KEY')]
     [string]$Key,
     [Parameter(ParameterSetName = 'Status', Mandatory = $true)]
     [switch]$Status,
@@ -49,6 +51,9 @@ try {
     if ($Key -eq 'TELEGRAM_BOT_TOKEN' -and $plain -notmatch '^\d{8,12}:[A-Za-z0-9_-]{35}$') {
         throw "Bot token bicimi hatali ($($plain.Length) karakter; 46 olmali). Hicbir sey degistirilmedi."
     }
+    if ($Key -eq 'CURSOR_API_KEY' -and $plain -notmatch '^(crsr|key)_[A-Za-z0-9_-]{20,250}$') {
+        throw "Cursor anahtari bicimi hatali ($($plain.Length) karakter; 'crsr_' ile baslamali). Hicbir sey degistirilmedi."
+    }
     $output = $plain | & ssh @ssh "sudo /opt/arsangaz/bin/set-agent-value.sh $Key" 2>&1
     $code = $LASTEXITCODE
 }
@@ -59,6 +64,13 @@ finally {
 
 if ($code -ne 0) { throw "Sunucu degeri kabul etmedi: $($output | Select-Object -Last 1)" }
 Write-Output ($output | Select-Object -Last 1)
+
+if ($Key -eq 'CURSOR_API_KEY') {
+    if (-not $NoRestart) {
+        & ssh @ssh 'if systemctl is-enabled --quiet arsangaz-cursoragent; then sudo systemctl restart arsangaz-cursoragent && sleep 10 && systemctl is-active arsangaz-cursoragent && sudo journalctl -u arsangaz-cursoragent --since "-15s" --no-pager -o cat | tail -n 6; else echo "arsangaz-cursoragent etkin degil"; fi'
+    }
+    return
+}
 
 if (-not $NoRestart) {
     & ssh @ssh 'sudo systemctl restart arsangaz-serveragent && sleep 8 && systemctl is-active arsangaz-serveragent && sudo journalctl -u arsangaz-serveragent --since "-20s" --no-pager -o cat | tail -n 6'

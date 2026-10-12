@@ -19,6 +19,12 @@ internal static class ServerPaths
     // Written by Tools/CursorIdeBridge/Sync-ServerInbox.ps1 on the office PC on every sync pass.
     public static string PcSyncStatusFile => Path.Combine(CopilotInbox, "pc-sync-status.json");
 
+    // Written by the server Cursor agent (Tools/CursorTelegramBridge/server-bridge.js, user cursoragent).
+    public static string CursorAgentStatusFile =>
+        Environment.GetEnvironmentVariable("CURSOR_AGENT_STATUS_FILE") is { Length: > 0 } path
+            ? path
+            : "/var/lib/arsangaz-cursoragent/status.json";
+
     public static void Ensure()
     {
         Directory.CreateDirectory(DataRoot);

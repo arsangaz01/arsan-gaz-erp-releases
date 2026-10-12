@@ -16,6 +16,9 @@ internal static class SelfTest
         FakeTelegram telegram = new();
         using TelegramBotService bot = new("123:selftest", ChatId, telegram, Path.Combine(ServerPaths.StateRoot, "offset.txt"));
         ServerPaths.Ensure();
+        string cursorAgentStatus = Path.Combine(ServerPaths.StateRoot, "cursoragent-status.json");
+        File.Delete(cursorAgentStatus);
+        Environment.SetEnvironmentVariable("CURSOR_AGENT_STATUS_FILE", cursorAgentStatus);
         TelegramCopilotInbox inbox = new(ServerPaths.CopilotInbox, ServerPaths.TelegramOutbox);
         OutboxSender sender = new(bot, ChatId, inbox);
         ServerCommands commands = new(inbox, () => sender.Pending);
@@ -50,6 +53,15 @@ internal static class SelfTest
         Expect(telegram.Texts.Contains("Cursor raporu"), "Cursor completion forwarded to Telegram");
         await sender.RunOnceAsync(CancellationToken.None);
         Expect(telegram.Texts.Count(text => text == "Cursor raporu") == 1, "completion forwarded exactly once");
+
+        Expect(ServerCommands.CursorAgentState() is (false, "kurulu değil"), "missing server Cursor agent reported");
+        await File.WriteAllTextAsync(cursorAgentStatus, JsonSerializer.Serialize(new { ready = false, reason = "CURSOR_API_KEY eksik", updatedUtc = DateTime.UtcNow.ToString("o") }));
+        Expect(ServerCommands.CursorAgentState() is (false, "bekliyor: CURSOR_API_KEY eksik"), "waiting server Cursor agent shows its reason");
+        await File.WriteAllTextAsync(cursorAgentStatus, JsonSerializer.Serialize(new { ready = true, updatedUtc = DateTime.UtcNow.AddMinutes(-5).ToString("o") }));
+        Expect(!ServerCommands.CursorAgentState().Ready, "stale server Cursor agent status is not ready");
+        await File.WriteAllTextAsync(cursorAgentStatus, JsonSerializer.Serialize(new { ready = true, updatedUtc = DateTime.UtcNow.ToString("o") }));
+        Expect((await commands.HandleAsync(81, "sunucu testi", ChatId, CancellationToken.None)).Contains("sunucudaki Cursor ajanına", StringComparison.Ordinal),
+            "offline PC + ready server agent reply says the server handles it");
 
         Expect((await commands.HandleAsync(78, "/yardim", ChatId, CancellationToken.None)).Contains("/ozet", StringComparison.Ordinal), "/yardim lists commands");
         Expect((await commands.HandleAsync(79, "/gorev analiz", ChatId, CancellationToken.None)).Contains("AgentWatcher", StringComparison.Ordinal), "PC-only command explained");

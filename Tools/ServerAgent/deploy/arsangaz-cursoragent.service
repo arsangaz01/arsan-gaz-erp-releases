@@ -1,0 +1,37 @@
+# ArsanGazERP sunucu Cursor ajanı: bilgisayar kapalıyken (veya istek uzun süre sahipsiz kalınca) Cursor kuyruğundaki
+# istekleri özel deponun sunucu klonunda Cursor SDK ile işler. Kullanıcı cursoragent: sudo yok, prod veri ve gizli
+# dosyalara erişimi yok; kuyruğa yalnızca cursor-inbox.sh üzerinden (sudo -u arsangaz) erişir.
+# CURSOR_API_KEY: /etc/arsangaz/cursoragent.env (0600 cursoragent), Set-ServerAgentValue.ps1 -Key CURSOR_API_KEY ile yazılır.
+[Unit]
+Description=ArsanGazERP sunucu Cursor ajani (bilgisayar kapaliyken Telegram isteklerini isler)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cursoragent
+Group=cursoragent
+WorkingDirectory=/home/cursoragent
+EnvironmentFile=-/etc/arsangaz/cursoragent.env
+Environment=HOME=/home/cursoragent
+Environment=CURSOR_AGENT_WORKSPACE=/home/cursoragent/arsan-gaz-erp
+Environment=CURSOR_AGENT_STATE_DIR=/var/lib/arsangaz-cursoragent
+Environment=CURSOR_AGENT_INBOX_HELPER=/opt/arsangaz-cursoragent/bin/cursor-inbox.sh
+Environment=CURSOR_AGENT_WAIT_MINUTES=10
+Environment=CURSOR_BRIDGE_PROJECT_ROOT=/home/cursoragent/arsan-gaz-erp
+Environment=CURSOR_BRIDGE_DATA_ROOT=/var/lib/arsangaz-cursoragent
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=DOTNET_NOLOGO=1
+ExecStart=/usr/bin/node /opt/arsangaz-cursoragent/app/server-bridge.js
+Restart=always
+RestartSec=15
+# No NoNewPrivileges: the queue helper runs through sudo -u arsangaz.
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
