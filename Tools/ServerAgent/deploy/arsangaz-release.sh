@@ -55,8 +55,10 @@ STAMP=$(date +%Y%m%d-%H%M%S)
 
 say() { printf '%s\n' "$*"; }
 trailer() { printf '@@%s=%s\n' "$1" "$2"; }
-die() { say "❌ $*"; exit "${2:-1}"; }
+die() { say "❌ $1"; exit "${2:-1}"; }
 git_r() { git -C "$REPO" -c core.hooksPath=/dev/null -c advice.detachedHead=false "$@"; }
+# Network operations: same as git_r with a time limit (timeout cannot run shell functions).
+git_net() { timeout 120 git -C "$REPO" -c core.hooksPath=/dev/null "$@"; }
 short() { printf '%s' "${1:0:7}"; }
 need_root() { [ "$(id -u)" = 0 ] || die "root olarak çalışmalı (sudo)." 2; }
 
@@ -80,12 +82,12 @@ fetch() {
     return 0
   fi
   [ -f "$KEYDIR/github_release" ] || die "Yayın anahtarı yok; install-release.sh çalıştırılmamış." 4
-  if ! out=$(timeout 120 git_r fetch -q --prune origin '+refs/heads/main:refs/remotes/origin/main' \
+  if ! out=$(git_net fetch -q --prune origin '+refs/heads/main:refs/remotes/origin/main' \
       "+refs/heads/$WORK_BRANCH:refs/remotes/origin/$WORK_BRANCH" 2>&1); then
     # The work branch may not exist yet; retry with main alone before giving up.
-    if ! out=$(timeout 120 git_r fetch -q --prune origin '+refs/heads/main:refs/remotes/origin/main' 2>&1); then
+    if ! out=$(git_net fetch -q --prune origin '+refs/heads/main:refs/remotes/origin/main' 2>&1); then
       if grep -qiE 'denied|publickey|not found|could not read' <<<"$out"; then
-        die "GitHub'a bağlanılamadı: yayın anahtarı (arsangaz-release) GitHub'a henüz eklenmemiş olabilir. ($(tail -n1 <<<"$out"))" 4
+        die "GitHub'a bağlanılamadı: yayın anahtarı (arsangaz-release) GitHub'a henüz eklenmemiş veya yazma izni verilmemiş olabilir." 4
       fi
       die "GitHub'dan güncelleme alınamadı: $(tail -n1 <<<"$out")" 4
     fi
@@ -346,7 +348,7 @@ act_publish() {
       say "🧪 TEST MODU: main GitHub'a push edilmedi (yerel birleştirme ile devam)."
     else
       local out
-      out=$(timeout 120 git_r push -q origin "$newmain:refs/heads/main" 2>&1) \
+      out=$(git_net push -q origin "$newmain:refs/heads/main" 2>&1) \
         || die "main GitHub'a gönderilemedi (yayın anahtarının yazma izni var mı?): $(tail -n1 <<<"$out")" 4
       say "⬆️ main GitHub'a gönderildi: $(short "$newmain")"
     fi
