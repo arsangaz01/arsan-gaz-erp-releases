@@ -132,7 +132,7 @@ public sealed class ScanPage : ContentPage
         }
 
         _reader.IsDetecting = false;
-        string previousCounter = _counter.Text;
+        string previousCounter = _counter.Text ?? string.Empty;
         try
         {
             List<FileResult> files = [];
@@ -199,7 +199,7 @@ public sealed class ScanPage : ContentPage
         {
             if (!_result.Task.IsCompleted)
             {
-                if (_counter.Text.Contains("okunuyor", StringComparison.Ordinal))
+                if (_counter.Text?.Contains("okunuyor", StringComparison.Ordinal) == true)
                 {
                     _counter.Text = previousCounter;
                 }
