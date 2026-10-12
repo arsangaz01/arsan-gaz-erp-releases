@@ -41,6 +41,7 @@ APK_CERT_SHA256=80ae16deb437fd9e1c7b26b3b38563977078c97a98a17f6983b7d5f19dd90153
 GH_REPO=arsangaz01/arsan-gaz-erp-kaynak
 CI_WORKFLOW=ci.yml
 MOBILEAPI_PATHS=(Tools/MobileApi Data Models Services Tools/ErpMcpServer global.json Directory.Build.props)
+NO_DOCS=(':(exclude,glob)**/*.md')
 DESKTOP_EXCLUDE='^(Tools/(MobileApp|MobileApi|ServerAgent|CursorTelegramBridge|PgHarness)/|CloudAgentWorker/|docs/|\.github/|.*\.md$)'
 
 GITHUB_ACTIONS_TOKEN=""
@@ -95,10 +96,10 @@ rev() { git_r rev-parse -q --verify "$1^{commit}" 2>/dev/null || true; }
 
 changed_files() { git_r diff --name-only "$1" "$2" -- 2>/dev/null || true; }
 
-touches_mobileapi() { ! git_r diff --quiet "$1" "$2" -- "${MOBILEAPI_PATHS[@]}"; }
-touches_mobileapp() { ! git_r diff --quiet "$1" "$2" -- Tools/MobileApp; }
+touches_mobileapi() { ! git_r diff --quiet "$1" "$2" -- "${MOBILEAPI_PATHS[@]}" "${NO_DOCS[@]}"; }
+touches_mobileapp() { ! git_r diff --quiet "$1" "$2" -- Tools/MobileApp "${NO_DOCS[@]}"; }
 touches_desktop() { changed_files "$1" "$2" | grep -vE "$DESKTOP_EXCLUDE" | grep -q .; }
-touches_server_agents() { ! git_r diff --quiet "$1" "$2" -- Tools/ServerAgent Tools/CursorTelegramBridge; }
+touches_server_agents() { ! git_r diff --quiet "$1" "$2" -- Tools/ServerAgent Tools/CursorTelegramBridge "${NO_DOCS[@]}"; }
 
 deployed_sha() { cat "$1/.release-sha" 2>/dev/null || true; }
 
