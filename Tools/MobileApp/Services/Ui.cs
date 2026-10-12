@@ -2,13 +2,24 @@ namespace ArsanGazMobile.Services;
 
 public static class Ui
 {
-    public static readonly Color Accent = Color.FromArgb("#C2410C");
-    public static readonly Color AccentDark = Color.FromArgb("#9A3412");
+    public static readonly Color Accent = Color.FromArgb("#0284C7");
+    public static readonly Color AccentDark = Color.FromArgb("#1E3A8A");
     public static readonly Color Muted = Color.FromArgb("#6B7280");
     public static readonly Color SurfaceLight = Colors.White;
     public static readonly Color SurfaceDark = Color.FromArgb("#262626");
-    public static readonly Color PageLight = Color.FromArgb("#F5F5F4");
+    public static readonly Color PageLight = Color.FromArgb("#F3F4F6");
     public static readonly Color PageDark = Color.FromArgb("#171717");
+
+    private static readonly Color SecondaryLight = Color.FromArgb("#EFF6FF");
+    private static readonly Color SecondaryDark = Color.FromArgb("#1E293B");
+    private static readonly Color SecondaryPressedLight = Color.FromArgb("#BFDBFE");
+    private static readonly Color SecondaryPressedDark = Color.FromArgb("#334155");
+    private static readonly Color CompactLight = Color.FromArgb("#E0F2FE");
+    private static readonly Color CompactPressedLight = Color.FromArgb("#BAE6FD");
+    private static readonly Color IconIdleLight = Color.FromArgb("#F3F4F6");
+    private static readonly Color IconIdleDark = Color.FromArgb("#3F3F46");
+    private static readonly Color IconPressedLight = Color.FromArgb("#D1D5DB");
+    private static readonly Color IconPressedDark = Color.FromArgb("#52525B");
 
     public static void ApplyPageChrome(ContentPage page)
     {
@@ -44,7 +55,7 @@ public static class Ui
         };
         card.SetAppThemeColor(VisualElement.BackgroundColorProperty, SurfaceLight, SurfaceDark);
         card.SetAppTheme<Brush>(Border.StrokeProperty,
-            new SolidColorBrush(Color.FromArgb("#E7E5E4")), new SolidColorBrush(Color.FromArgb("#3F3F46")));
+            new SolidColorBrush(Color.FromArgb("#E5E7EB")), new SolidColorBrush(Color.FromArgb("#3F3F46")));
         return card;
     }
 
@@ -96,8 +107,16 @@ public static class Ui
             FontFamily = "OpenSansSemibold"
         };
         button.Clicked += onClick;
-        button.Pressed += (_, _) => button.BackgroundColor = AccentDark;
-        button.Released += (_, _) => button.BackgroundColor = Accent;
+        button.Pressed += (_, _) =>
+        {
+            button.BackgroundColor = AccentDark;
+            button.Scale = 0.97;
+        };
+        button.Released += (_, _) =>
+        {
+            button.BackgroundColor = Accent;
+            button.Scale = 1;
+        };
         return button;
     }
 
@@ -107,7 +126,7 @@ public static class Ui
         {
             Text = text,
             BackgroundColor = Colors.Transparent,
-            TextColor = Accent,
+            TextColor = AccentDark,
             BorderColor = Accent,
             BorderWidth = 1.5,
             CornerRadius = 12,
@@ -116,8 +135,18 @@ public static class Ui
             FontSize = 14,
             FontFamily = "OpenSansSemibold"
         };
-        button.SetAppThemeColor(Button.BackgroundColorProperty, Color.FromArgb("#FFF7ED"), Color.FromArgb("#292524"));
+        button.SetAppThemeColor(Button.BackgroundColorProperty, SecondaryLight, SecondaryDark);
         button.Clicked += onClick;
+        button.Pressed += (_, _) =>
+        {
+            button.SetAppThemeColor(Button.BackgroundColorProperty, SecondaryPressedLight, SecondaryPressedDark);
+            button.Scale = 0.97;
+        };
+        button.Released += (_, _) =>
+        {
+            button.SetAppThemeColor(Button.BackgroundColorProperty, SecondaryLight, SecondaryDark);
+            button.Scale = 1;
+        };
         return button;
     }
 
@@ -131,11 +160,21 @@ public static class Ui
             CornerRadius = 10,
             MinimumHeightRequest = 40,
             BorderWidth = 0,
-            BackgroundColor = Color.FromArgb("#FFEDD5"),
+            BackgroundColor = CompactLight,
             TextColor = AccentDark,
             FontFamily = "OpenSansSemibold"
         };
         button.Clicked += onClick;
+        button.Pressed += (_, _) =>
+        {
+            button.BackgroundColor = CompactPressedLight;
+            button.Scale = 0.97;
+        };
+        button.Released += (_, _) =>
+        {
+            button.BackgroundColor = CompactLight;
+            button.Scale = 1;
+        };
         return button;
     }
 
@@ -160,11 +199,38 @@ public static class Ui
         }
         else
         {
-            button.SetAppThemeColor(Button.BackgroundColorProperty, Color.FromArgb("#F5F5F4"), Color.FromArgb("#3F3F46"));
-            button.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#44403C"), Colors.White);
+            button.SetAppThemeColor(Button.BackgroundColorProperty, IconIdleLight, IconIdleDark);
+            button.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#374151"), Colors.White);
         }
 
         button.Clicked += onClick;
+        if (accent)
+        {
+            button.Pressed += (_, _) =>
+            {
+                button.BackgroundColor = AccentDark;
+                button.Scale = 0.94;
+            };
+            button.Released += (_, _) =>
+            {
+                button.BackgroundColor = Accent;
+                button.Scale = 1;
+            };
+        }
+        else
+        {
+            button.Pressed += (_, _) =>
+            {
+                button.SetAppThemeColor(Button.BackgroundColorProperty, IconPressedLight, IconPressedDark);
+                button.Scale = 0.94;
+            };
+            button.Released += (_, _) =>
+            {
+                button.SetAppThemeColor(Button.BackgroundColorProperty, IconIdleLight, IconIdleDark);
+                button.Scale = 1;
+            };
+        }
+
         return button;
     }
 

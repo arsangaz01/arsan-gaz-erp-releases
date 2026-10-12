@@ -9,7 +9,7 @@ public sealed class ChatMessage
     public required string Text { get; init; }
     public bool IsUser { get; init; }
     public LayoutOptions Alignment => IsUser ? LayoutOptions.End : LayoutOptions.Start;
-    public Color Background => IsUser ? Color.FromArgb("#FFEDD5") : Color.FromArgb("#FFFFFF");
+    public Color Background => IsUser ? Color.FromArgb("#E0F2FE") : Color.FromArgb("#FFFFFF");
 }
 
 public sealed class ChatPage : ContentPage
