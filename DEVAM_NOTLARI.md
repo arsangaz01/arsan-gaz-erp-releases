@@ -20,6 +20,20 @@ Altyapı/kod aynı, veri ve erişim ayrı; geliştirme yine Cursor + Telegram + 
   (ortak botu yalnız ortak verisine dokunur, bizim bot yalnız bizimkine).
 - Bekleyen kararlar: sistem/uygulama adı, kod ortak mı (güncellemeler ikisine de) yoksa ayrı kopya mı, başlangıç verisi boş mu
 
+#### ArsanTüpTakip — durum (12 Ekim 19:59, kullanıcı: "bu şekilde not al, sonra devam edeceğiz")
+Kararlar: ad ArsanTüpTakip; kod ve güncellemeler tamamen ayrı (ortak hiçbir şey yok); iki sistemin de en yetkili
+kullanıcısı bizim kullanıcı; boş başlar, veri GEÇİŞ ile eski sanal sunucudan gelir; girişler/bağlantılar sonra.
+Yapıldı (commit a4c6cb5, CI "ArsanTupTakip" api + mobil-derleme yeşil):
+- Kod `Tools/ArsanTupTakip/` (src, tests, mobile, deploy, README.md), CI `.github/workflows/arsantuptakip.yml`
+- Sunucu: `arsantuptakip-api` yalnız 127.0.0.1:5080/tuptakip; /opt/arsantuptakip, /var/lib/arsantuptakip, /etc/arsantuptakip/api.env
+- DB `arsantuptakip` + rol `arsantuptakip_app` (arsangaz'a bağlanamaz), 8 boş tablo; gece 04:20 yedek → Drive `ArsanTupTakip-Yedek`
+- Mevcut sistem değişmedi (servisler, cloudflared ayarı, arsantuptakip.com yanıtları aynı)
+Sıradaki (kullanıcı "devam" deyince):
+- [ ] Dışa açma: cloudflared'e /tuptakip yolu veya alt alan adı (mevcut tüneli taşıdığı için dikkatli; önce/sonra kontrol)
+- [ ] TUPTAKIP_PUBLIC_URL + mobil sunucu adresi; ilk yönetici hesabı (komut README.md'de, şifre ekrana yazılmaz)
+- [ ] APK imza anahtarı + yayın (paket ayrı, mevcut uygulamayla yan yana)
+- [ ] Ayrı Telegram botu (kullanıcının kendi hesabı), eski sanal sunucudan veri geçişi, Honeywell el terminali
+
 ### 1. Veri taşıma (tek seferlik)
 - Eski sistem: firmadaki bir cihazda çalışan sanal sunucu. Program adı, sürümü ve veritabanı türü bilinmiyor.
 - Erişim yolu (kullanıcı seçecek): Tailscale (önerilen; geçiş bitince kaldırılır), AnyDesk/TeamViewer ya da USB ile yedek.
