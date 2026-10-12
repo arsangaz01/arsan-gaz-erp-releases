@@ -38,8 +38,17 @@ if ($Status) {
 }
 
 if ($FromClipboard) {
+    $prefix = switch ($Key) { 'CURSOR_API_KEY' { '^(crsr|key)_' } 'TELEGRAM_BOT_TOKEN' { '^\d{8,12}:' } default { '.' } }
+    $clip = [string](Get-Clipboard -Raw)
+    for ($try = 0; $clip.Trim() -notmatch $prefix -and $try -lt 5; $try++) {
+        Write-Host "Panoda $Key yok (muhtemelen komutun kendisi kopyalandi)." -ForegroundColor Yellow
+        Read-Host 'Anahtari simdi kopyalayin, sonra buraya donup Enter tusuna basin' | Out-Null
+        $clip = [string](Get-Clipboard -Raw)
+    }
+    if ($clip.Trim() -notmatch $prefix) { throw "Panoda gecerli bir $Key bulunamadi; hicbir sey degistirilmedi." }
     $secure = New-Object System.Security.SecureString
-    foreach ($ch in [string](Get-Clipboard -Raw)) { $secure.AppendChar($ch) }
+    foreach ($ch in $clip.ToCharArray()) { $secure.AppendChar($ch) }
+    $clip = $null
     Set-Clipboard -Value ' '
 } else {
     $secure = Read-Host -Prompt "$Key (yazdiginiz gorunmez)" -AsSecureString
