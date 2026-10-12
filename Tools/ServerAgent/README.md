@@ -56,6 +56,7 @@ veritabanına erişimi yoktur; kuyruğa yalnızca `cursor-inbox.sh` ile (`sudo -
    `/api/ozet` 401, başlangıç günlüğü) başarısızsa otomatik eski sürüme döner. Masaüstü ERP/AgentWatcher: PC açılınca AutoSync.
    Mobil uygulama değiştiyse CI main'de imzalı APK üretir; sunucu indirip imzayı ve sürüm numarasını kontrol edip `/indir`'e koyar.
 5. `/geri_al` → `/geri_al_onay`: MobileApi'yi son yedeğe döndürür. `/yayin_durum`: sürümler ve yedekler. `/apk`: APK'yı yeniden dener.
+6. Onay kodu dalın o anki ucuna bağlıdır; `/yayin`'dan sonra dal değişirse eski kod reddedilir, `/yayin` ile yeniden bakın.
 
 Parçalar: `/usr/local/sbin/arsangaz-release` (`deploy/arsangaz-release.sh`, root). ServerAgent bunu doğrudan çalıştıramaz; beyaz
 listedeki isteği `/var/lib/arsangaz-data/prod/ArsanGazERP/Release/requests` klasörüne yazar, `arsangaz-release.path` root'ta
