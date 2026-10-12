@@ -1,0 +1,431 @@
+#!/bin/bash
+# ArsanTüpTakip yayın betiği (/usr/local/sbin/arsantuptakip-release, root). @TuptakipArsanbot bunu sudo ile çağırır.
+# ArsanGazERP'nin arsangaz-release düzeninden tamamen ayrıdır: kendi deposu, GitHub anahtarı, derleme kullanıcısı ve durum
+# klasörü vardır; ERP servislerine, arsangaz-release'e ve /etc/arsangaz'a dokunmaz.
+#   status          API sağlığı, veritabanı, tablo kayıt sayıları, son yedek, yayındaki commit (salt okunur)
+#   sync            GitHub'daki main'i ajanın okuduğu yerel aynaya alır
+#   pending         ajanın commit paketini içeri alır; yayınlanacak hedefi, değişen dosyaları ve kapsam kontrolünü yazar
+#   publish <sha>   hedefi sunucuda derler + test eder; ajan dalıysa main'e birleştirip GitHub'a gönderir; /opt/arsantuptakip'e
+#                   kurar, sağlık kontrolü geçmezse önceki kuruluma otomatik döner
+#   previous        geri alınabilecek önceki kurulumu yazar
+#   rollback        önceki kuruluma döner (şimdiki kurulum "önceki" olur)
+# Çıktının "@@ANAHTAR=değer" satırları bot içindir.
+set -euo pipefail
+umask 022
+
+ACTION=${1:-}
+ARG=${2:-}
+STAMP=$(date +%Y%m%d-%H%M%S)
+
+REPO_URL=git@github.com:arsangaz01/arsan-gaz-erp-kaynak.git
+AGENT_BRANCH=cursor/arsantuptakip-agent
+SCOPE=Tools/ArsanTupTakip
+BASE=/var/lib/arsantuptakip-release
+BUNDLE=/var/lib/arsantuptakip-queue/outgoing/agent-branch.bundle
+KEYDIR=/etc/arsantuptakip/release
+APP_PARENT=/opt/arsantuptakip
+UNIT=arsantuptakip-api
+PORT=5080
+SDK=/opt/dotnet-sdk
+BUILD_USER=tuptakipbuild
+QUEUE_GROUP=tuptakipq
+BACKUP_STATUS=/var/lib/arsantuptakip-backup/status.json
+BACKUP_DIR=/var/backups/arsantuptakip
+DB=arsantuptakip
+SANDBOX=""
+# test-release.sh: ARSANTUPTAKIP_RELEASE_SANDBOX=1 with its own paths; no root, no systemd, no GitHub, fake build.
+if [ "${ARSANTUPTAKIP_RELEASE_SANDBOX:-}" = 1 ]; then
+  SANDBOX=1
+  REPO_URL=$SANDBOX_ORIGIN
+  BASE=$SANDBOX_BASE
+  BUNDLE=$SANDBOX_BUNDLE
+  APP_PARENT=$SANDBOX_APP_PARENT
+fi
+REPO=$BASE/repo
+MIRROR=$BASE/mirror.git
+BUILD=$BASE/build
+STATE=$BASE/state
+LOGDIR=$BASE/logs
+APP_DIR=$APP_PARENT/api
+PREV_DIR=$APP_PARENT/api.prev
+
+say() { printf '%s\n' "$*"; }
+trailer() { printf '@@%s=%s\n' "$1" "$2"; }
+die() { say "❌ $1"; exit "${2:-1}"; }
+short() { printf '%s' "${1:0:7}"; }
+sha_or() { if [ -n "$1" ]; then short "$1"; else printf '%s' "$2"; fi; }
+git_r() { git -C "$REPO" -c core.hooksPath=/dev/null -c advice.detachedHead=false "$@"; }
+git_net() { timeout 180 git -C "$REPO" -c core.hooksPath=/dev/null "$@"; }
+rev() { git_r rev-parse -q --verify "$1^{commit}" 2>/dev/null || true; }
+deployed_sha() { cat "$1/.release-sha" 2>/dev/null || true; }
+
+if [ -z "$SANDBOX" ]; then
+  [ "$(id -u)" = 0 ] || die "root olarak çalışmalı (sudo)." 2
+  export GIT_SSH_COMMAND="ssh -i $KEYDIR/github_release -o IdentitiesOnly=yes -o UserKnownHostsFile=$KEYDIR/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes"
+fi
+
+# Mutating actions run as a transient systemd unit: they leave the bot's cgroup and sandbox, so a bot restart cannot
+# interrupt a release and /opt is writable.
+case "$ACTION" in
+  sync|pending|publish|rollback)
+    if [ -z "$SANDBOX" ] && [ -z "${ARSANTUPTAKIP_RELEASE_DETACHED:-}" ]; then
+      exec systemd-run --quiet --wait --pipe --collect --unit "arsantuptakip-release-$STAMP-$$" \
+        -p Description="ArsanTupTakip yayin ($ACTION)" -E ARSANTUPTAKIP_RELEASE_DETACHED=1 -E LANG=C.UTF-8 \
+        /usr/local/sbin/arsantuptakip-release "$ACTION" ${ARG:+"$ARG"}
+    fi ;;
+esac
+
+lock() {
+  install -d -m 0711 "$BASE"
+  exec 9>"$BASE/lock"
+  flock -w 5 9 || die "Başka bir yayın işlemi sürüyor; biraz sonra tekrar deneyin." 9
+}
+
+svc() {
+  if [ -n "$SANDBOX" ]; then printf '%s %s\n' "$1" "$UNIT" >> "$BASE/systemctl.log"; return 0; fi
+  systemctl "$1" "$UNIT"
+}
+
+# ---------------------------------------------------------------- git
+ensure_repo() {
+  install -d -m 0711 "$BASE"
+  install -d -m 0700 "$STATE" "$LOGDIR"
+  if [ ! -d "$REPO/.git" ]; then
+    install -d -m 0700 "$REPO"
+    git init -q -b main "$REPO"
+    git_r remote add origin "$REPO_URL"
+    git_r config user.name "ArsanTupTakip Yayin (sunucu)"
+    git_r config user.email "release@arsantuptakip.local"
+  fi
+  if [ ! -f "$MIRROR/HEAD" ]; then
+    git init -q --bare -b main "$MIRROR"
+  fi
+}
+
+fetch() {
+  ensure_repo
+  local out
+  if [ -z "$SANDBOX" ] && [ ! -f "$KEYDIR/github_release" ]; then die "Yayın anahtarı yok; install-bot.sh çalıştırılmamış." 4; fi
+  if ! out=$(git_net fetch -q --prune origin '+refs/heads/main:refs/remotes/origin/main' 2>&1); then
+    if grep -qiE 'denied|publickey|not found|could not read' <<<"$out"; then
+      die "GitHub'a bağlanılamadı: ArsanTüpTakip yayın anahtarı GitHub'a deploy key (yazma izinli) olarak eklenmemiş olabilir." 4
+    fi
+    die "GitHub'dan güncelleme alınamadı: $(tail -n1 <<<"$out")" 4
+  fi
+}
+
+# The agent's clone reads only this mirror (no GitHub key on the agent side).
+update_mirror() {
+  git_r push -q --force "$MIRROR" "refs/remotes/origin/main:refs/heads/main" >/dev/null 2>&1 || die "Yerel ayna güncellenemedi." 5
+  if [ -z "$SANDBOX" ]; then
+    chown -R root:"$QUEUE_GROUP" "$MIRROR"
+    chmod -R u=rwX,g=rX,o= "$MIRROR"
+  fi
+}
+
+# Imports the agent's commits (git bundle written by dev-agent.js) as refs/remotes/agent/branch.
+import_bundle() {
+  git_r update-ref -d refs/remotes/agent/branch 2>/dev/null || true
+  [ -f "$BUNDLE" ] || return 0
+  local size; size=$(stat -c %s "$BUNDLE")
+  if [ "$size" -gt $((200 * 1024 * 1024)) ]; then say "⚠️ Ajan paketi çok büyük ($size bayt); içeri alınmadı."; return 0; fi
+  if ! git_r bundle verify -q "$BUNDLE" >/dev/null 2>&1; then
+    say "⚠️ Ajan paketi doğrulanamadı (main çok ilerlemiş olabilir); ajana yeni bir istek gönderildiğinde yenilenir."
+    return 0
+  fi
+  git_r fetch -q "$BUNDLE" "+refs/heads/$AGENT_BRANCH:refs/remotes/agent/branch" 2>/dev/null \
+    || say "⚠️ Ajan paketi içeri alınamadı."
+}
+
+# Paths changed by the agent branch since it left main that are outside Tools/ArsanTupTakip/.
+out_of_scope() {
+  local main=$1 br=$2 mb
+  mb=$(git_r merge-base "$main" "$br")
+  git_r diff --name-only "$mb" "$br" | grep -v "^$SCOPE/" || true
+}
+
+app_changed() { ! git_r diff --quiet "$1" "$2" -- "$SCOPE/src" "$SCOPE/global.json" "$SCOPE/Directory.Build.props" 2>/dev/null; }
+
+# ---------------------------------------------------------------- build + deploy
+build_and_test() {
+  local sha=$1 out=$2 log
+  log="$LOGDIR/build-$STAMP.log"
+  rm -rf "$BUILD"
+  install -d -m 0750 "$BUILD" "$BUILD/src" "$BUILD/out"
+  git_r archive "$sha" "$SCOPE" | tar -x -C "$BUILD/src"
+  if [ -n "$SANDBOX" ]; then
+    [ ! -e "$BUILD/src/$SCOPE/SANDBOX_BUILD_FAIL" ] || { say "Derleme hatası (benzetim)."; return 1; }
+    cp -a "$BUILD/src/$SCOPE/." "$BUILD/out/"
+  else
+    id "$BUILD_USER" >/dev/null 2>&1 || die "$BUILD_USER kullanıcısı yok; install-bot.sh çalıştırılmamış." 5
+    [ -x "$SDK/dotnet" ] || die ".NET SDK ($SDK) yok." 5
+    # Persistent home: the NuGet cache survives between releases.
+    install -d -m 0750 -o "$BUILD_USER" -g "$BUILD_USER" "$BASE/buildhome"
+    chown -R "$BUILD_USER:$BUILD_USER" "$BUILD"
+    local dir="$BUILD/src/$SCOPE"
+    local run=(timeout 1500 runuser -u "$BUILD_USER" -- env -i HOME="$BASE/buildhome" PATH="$SDK:/usr/bin:/bin" DOTNET_ROOT="$SDK"
+      DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 DOTNET_CLI_USE_MSBUILD_SERVER=0
+      NUGET_PACKAGES="$BASE/buildhome/.nuget/packages")
+    say "🔨 Derleniyor ($(short "$sha"))..."
+    if ! "${run[@]}" "$SDK/dotnet" build "$dir/ArsanTupTakip.slnx" -c Release -nologo -clp:ErrorsOnly \
+        -p:UseSharedCompilation=false -nodeReuse:false > "$log" 2>&1 9>&-; then
+      say "Derleme hatası (son satırlar):"; grep -E 'error' "$log" | tail -n 8 | sed -E "s#$BUILD/src/##"
+      return 1
+    fi
+    say "🧪 Testler çalışıyor..."
+    if ! "${run[@]}" "$SDK/dotnet" run --project "$dir/tests/ArsanTupTakip.Tests/ArsanTupTakip.Tests.csproj" -c Release --no-build \
+        >> "$log" 2>&1 9>&-; then
+      say "Test hatası (son satırlar):"; tail -n 12 "$log" | sed -E "s#$BUILD/src/##"
+      return 1
+    fi
+    if [ -x /usr/bin/node ] && ! /usr/bin/node --check "$dir/src/ArsanTupTakip.Api/WebPanel/panel.js" >> "$log" 2>&1; then
+      say "panel.js sözdizimi hatalı."; return 1
+    fi
+    if ! "${run[@]}" "$SDK/dotnet" publish "$dir/src/ArsanTupTakip.Api/ArsanTupTakip.Api.csproj" -c Release --no-build \
+        -o "$BUILD/out" -nologo -clp:ErrorsOnly -p:UseSharedCompilation=false -nodeReuse:false >> "$log" 2>&1 9>&-; then
+      say "Yayın paketi hazırlanamadı:"; tail -n 8 "$log" | sed -E "s#$BUILD/src/##"
+      return 1
+    fi
+    [ -f "$BUILD/out/ArsanTupTakip.Api.dll" ] || { say "Derleme çıktısı eksik."; return 1; }
+    say "✅ Derleme ve testler başarılı."
+  fi
+  rm -rf "$out"; mkdir -p "$out"
+  cp -a "$BUILD/out/." "$out/"
+  printf '%s\n' "$sha" > "$out/.release-sha"
+  [ -n "$SANDBOX" ] || { chown -R root:root "$out"; chmod -R u=rwX,go=rX "$out"; }
+}
+
+health() {
+  local since=$1 i
+  if [ -n "$SANDBOX" ]; then [ ! -e "$APP_DIR/SANDBOX_HEALTH_FAIL" ]; return; fi
+  for i in $(seq 1 30); do
+    sleep 2
+    systemctl is-active --quiet "$UNIT" || continue
+    curl -fsS --max-time 5 "http://127.0.0.1:$PORT/tuptakip/api/merhaba" 2>/dev/null | grep -q '"ArsanTupTakip.Api"' || continue
+    [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/tuptakip/panel")" = 200 ] || continue
+    if journalctl -u "$UNIT" --since "$since" --no-pager -o cat 2>/dev/null | grep -qE 'Unhandled exception|şeması hazırlanamadı'; then
+      say "   Başlangıç günlüğünde hata var:"; journalctl -u "$UNIT" --since "$since" --no-pager -o cat | grep -E 'Unhandled|hazırlanamadı' | tail -n 3 | sed 's/^/   /'
+      return 1
+    fi
+    return 0
+  done
+  say "   60 sn içinde sağlıklı yanıt gelmedi."
+  return 1
+}
+
+# Puts $1 in place (current -> api.prev), restarts and health-checks; on failure the previous build comes back.
+# Returns 0 ok, 2 rolled back, 3 rollback failed too.
+swap_in() {
+  local new=$1 incoming since
+  incoming="$APP_PARENT/.incoming-$STAMP"
+  rm -rf "$incoming"; cp -a "$new" "$incoming"
+  since=$(date '+%Y-%m-%d %H:%M:%S')
+  local had_prev=0
+  if [ -d "$APP_DIR" ]; then rm -rf "$PREV_DIR"; mv "$APP_DIR" "$PREV_DIR"; had_prev=1; fi
+  mv "$incoming" "$APP_DIR"
+  svc restart
+  if health "$since"; then return 0; fi
+  say "↩️ Yeni kurulum sağlık kontrolünden geçemedi; önceki kuruluma dönülüyor."
+  svc stop || true
+  rm -rf "$APP_PARENT/api.failed-"*; mv "$APP_DIR" "$APP_PARENT/api.failed-$STAMP"
+  if [ $had_prev = 0 ]; then say "   Önceki kurulum yok; geri dönülemedi."; return 3; fi
+  mv "$PREV_DIR" "$APP_DIR"
+  since=$(date '+%Y-%m-%d %H:%M:%S')
+  svc start
+  if health "$since"; then say "   Önceki kurulum ($(short "$(deployed_sha "$APP_DIR")")) yeniden çalışıyor."; return 2; fi
+  say "   ⚠️ Önceki kurulum da sağlıklı açılmadı!"
+  return 3
+}
+
+# ---------------------------------------------------------------- actions
+act_status() {
+  local active merhaba deployed prev
+  if [ -n "$SANDBOX" ]; then active=sandbox; merhaba='{}'; else
+    active=$(systemctl is-active "$UNIT" 2>/dev/null || true)
+    merhaba=$(curl -s --max-time 5 "http://127.0.0.1:$PORT/tuptakip/api/merhaba" 2>/dev/null || true)
+  fi
+  if [ "$active" = active ] && grep -q '"ArsanTupTakip.Api"' <<<"$merhaba"; then
+    say "🟢 API: çalışıyor (127.0.0.1:$PORT/tuptakip, sürüm $(sed -nE 's/.*"version":"([^"]*)".*/\1/p' <<<"$merhaba"))"
+  else
+    say "🔴 API: sağlıksız (servis: ${active:-?}, /api/merhaba yanıt vermedi)"
+  fi
+  deployed=$(deployed_sha "$APP_DIR"); prev=$(deployed_sha "$PREV_DIR")
+  say "📦 Yayındaki commit: $(sha_or "$deployed" "bilinmiyor (elle kurulum)")$( [ -d "$PREV_DIR" ] && printf ' · önceki kurulum: %s' "$(sha_or "$prev" "elle kurulum")")"
+  if [ -d "$REPO/.git" ]; then
+    local main br ahead=0
+    main=$(rev refs/remotes/origin/main); br=$(rev refs/remotes/agent/branch)
+    if [ -n "$br" ] && [ -n "$main" ] && ! git_r merge-base --is-ancestor "$br" "$main"; then ahead=$(git_r rev-list --count "$main..$br"); fi
+    say "🌿 main (son bakılan): $(sha_or "$main" bilinmiyor); ajanın yayın bekleyen commit'i: $ahead"
+  fi
+  if [ -z "$SANDBOX" ]; then
+    if runuser -u postgres -- psql -X -At -d "$DB" -c 'SELECT 1' >/dev/null 2>&1; then
+      local tables t count lines=()
+      tables=$(runuser -u postgres -- psql -X -At -d "$DB" -c "SELECT table_name FROM information_schema.tables WHERE table_schema='tuptakip' AND table_type='BASE TABLE' ORDER BY 1" 2>/dev/null || true)
+      for t in $tables; do
+        [[ "$t" =~ ^[A-Za-z0-9_]+$ ]] || continue
+        count=$(runuser -u postgres -- psql -X -At -d "$DB" -c "SELECT count(*) FROM tuptakip.\"$t\"" 2>/dev/null || echo "?")
+        lines+=("$t $count")
+      done
+      say "🗄 Veritabanı: erişilebilir ($DB, ${#lines[@]} tablo)"
+      for t in "${lines[@]}"; do say "   • $t"; done
+    else
+      say "🔴 Veritabanı: erişilemiyor ($DB)"
+    fi
+    if [ -f "$BACKUP_STATUS" ]; then
+      python3 - "$BACKUP_STATUS" <<'PY' || say "💾 Son yedek: durum dosyası okunamadı"
+import json, sys, datetime
+s = json.load(open(sys.argv[1], encoding="utf-8"))
+utc = datetime.datetime.fromisoformat(s["utc"].replace("Z", "+00:00"))
+local = utc.astimezone(datetime.timezone(datetime.timedelta(hours=3)))
+icon = "💾" if s.get("ok") else "⚠️"
+print(f"{icon} Son yedek: {local:%d.%m.%Y %H:%M} ({'başarılı' if s.get('ok') else 'HATALI'}) — {s.get('message', '')}")
+PY
+    else
+      say "💾 Son yedek: henüz yok"
+    fi
+    local newest; newest=$(ls -t "$BACKUP_DIR"/arsantuptakip-*.dump 2>/dev/null | head -n1 || true)
+    [ -n "$newest" ] && say "   Sunucudaki en yeni döküm: $(basename "$newest")"
+  fi
+  return 0
+}
+
+act_sync() {
+  lock; fetch; update_mirror
+  say "🔄 Ayna güncel: main $(short "$(rev refs/remotes/origin/main)")"
+}
+
+act_pending() {
+  lock; fetch; update_mirror; import_bundle
+  local main br target deployed outside
+  main=$(rev refs/remotes/origin/main); br=$(rev refs/remotes/agent/branch)
+  [ -n "$main" ] || die "origin/main okunamadı."
+  deployed=$(deployed_sha "$APP_DIR")
+  if [ -n "$br" ] && ! git_r merge-base --is-ancestor "$br" "$main"; then
+    target=$br
+    local ahead; ahead=$(git_r rev-list --count "$main..$br")
+    say "📦 Ajanın yayın bekleyen $ahead commit'i var (main: $(short "$main")):"
+    git_r log --no-merges --format='• %h %s' -n 15 "$main..$br"
+    [ "$ahead" -gt 15 ] && say "• ..."
+    say ""; say "Değişen dosyalar:"
+    git_r diff --stat=80 "$(git_r merge-base "$main" "$br")" "$br" | tail -n 12 | sed 's/^/ /'
+    outside=$(out_of_scope "$main" "$br")
+    if [ -n "$outside" ]; then
+      say ""; say "⛔ Ajan dalı Tools/ArsanTupTakip dışındaki dosyalara dokunuyor; yayınlanamaz:"
+      head -n 10 <<<"$outside" | sed 's/^/   /'
+      trailer BLOCKED 1
+    fi
+    if git_r merge-base --is-ancestor "$main" "$br"; then
+      say "Birleştirme: hızlı ileri (main doğrudan bu commit'e alınır)."
+    elif git_r merge-tree --write-tree "$main" "$br" >/dev/null 2>&1; then
+      say "Birleştirme: main ilerlemiş; çakışmasız birleştirme commit'i oluşturulacak."
+    else
+      say "⚠️ main ile ÇAKIŞMA var; yayın yapılamaz. Ajandan dalı main ile uyumlu hale getirmesini isteyin."
+      trailer CONFLICT 1
+    fi
+  else
+    target=$main
+    say "📦 Ajanın yayın bekleyen commit'i yok. main: $(short "$main") $(git_r log -1 --format=%s "$main")"
+    if [ -n "$deployed" ] && [ -n "$(rev "$deployed")" ] && ! app_changed "$deployed" "$main"; then
+      say "🌐 Yayındaki kurulum ($(short "$deployed")) main ile güncel; yayınlanacak yeni değişiklik yok."
+      trailer NOTHING 1
+    fi
+  fi
+  if [ -z "$deployed" ]; then
+    say "Sunucudaki kurulum: commit'i bilinmiyor (elle kurulum); yayında yeniden derlenip kurulur."
+  else
+    say "Sunucudaki kurulum: $(short "$deployed")."
+  fi
+  say "Yayın: sunucuda derleme + testler → (ajan dalıysa) main'e birleştirme ve GitHub'a gönderme → kurulum → sağlık kontrolü (başarısızsa otomatik geri dönüş)."
+  trailer TARGET "$target"
+}
+
+act_publish() {
+  local want=$1 main br target newmain rc=0 outside
+  [[ "$want" =~ ^[0-9a-f]{40}$ ]] || die "Geçersiz commit kimliği." 2
+  lock; fetch; import_bundle
+  main=$(rev refs/remotes/origin/main); br=$(rev refs/remotes/agent/branch)
+  if [ -n "$br" ] && [ "$br" = "$want" ] && ! git_r merge-base --is-ancestor "$br" "$main"; then target=agent
+  elif [ "$main" = "$want" ]; then target=main
+  else die "Onaylanan commit ($(short "$want")) artık yayın hedefi değil; dal veya main değişmiş olabilir. /yayin ile yeniden bakın." 6
+  fi
+
+  newmain=$main
+  if [ "$target" = agent ]; then
+    outside=$(out_of_scope "$main" "$br")
+    [ -z "$outside" ] || die "Ajan dalı Tools/ArsanTupTakip dışındaki dosyalara dokunuyor ($(head -n 3 <<<"$outside" | tr '\n' ' ')); yayın durduruldu." 3
+    if git_r merge-base --is-ancestor "$main" "$br"; then
+      newmain=$br
+    else
+      git_r checkout -q --detach "$main"
+      if ! git_r merge -q --no-ff -m "ArsanTupTakip yayin: $AGENT_BRANCH main ile birlestirildi (Telegram onayi)" "$br" >/dev/null 2>&1; then
+        git_r merge --abort || true
+        die "Birleştirme çakıştı; hiçbir şey gönderilmedi." 3
+      fi
+      newmain=$(git_r rev-parse HEAD)
+    fi
+  fi
+
+  # The exact tree that becomes main is what gets built, tested and deployed.
+  build_and_test "$newmain" "$BUILD/release" || die "Derleme/test başarısız; main'e birleştirilmedi ve kurulmadı. Önceki kurulum çalışmaya devam ediyor." 1
+
+  if [ "$target" = agent ]; then
+    local out
+    out=$(git_net push -q --atomic origin "$newmain:refs/heads/main" "+$br:refs/heads/$AGENT_BRANCH" 2>&1) \
+      || die "main GitHub'a gönderilemedi (yayın anahtarının yazma izni var mı?): $(tail -n1 <<<"$out")" 4
+    git_r update-ref refs/remotes/origin/main "$newmain"
+    say "⬆️ main GitHub'a gönderildi: $(short "$main") → $(short "$newmain")"
+    update_mirror
+    rm -f "$BUNDLE"
+  fi
+
+  swap_in "$BUILD/release" || rc=$?
+  case $rc in
+    0) say "🌐 ArsanTüpTakip API yayında: $(short "$newmain") (önceki kurulum yedekte; /geri_al ile dönülebilir)." ;;
+    2) say "⚠️ Yeni sürüm sağlık kontrolünden geçemedi; otomatik olarak önceki kuruluma dönüldü."
+       [ "$target" = agent ] && say "   Not: değişiklik main'de; düzeltme için ajana yeni istek gönderin." ;;
+    *) say "🚨 API sağlıklı değil ve geri dönüş başarısız! Sunucuya bakılmalı." ;;
+  esac
+  printf '%s %s %s\n' "$STAMP" "$newmain" "$rc" >> "$STATE/history"
+  trailer MAIN "$newmain"
+  return $rc
+}
+
+act_previous() {
+  local current prev
+  current=$(deployed_sha "$APP_DIR"); prev=$(deployed_sha "$PREV_DIR")
+  [ -d "$PREV_DIR" ] || die "Önceki kurulum yok." 6
+  say "Şu anki kurulum: $(sha_or "$current" "elle kurulum")"
+  say "Dönülecek önceki kurulum: $(sha_or "$prev" "elle kurulum (commit bilinmiyor)")"
+  trailer PREVIOUS "${prev:-manual}"
+}
+
+act_rollback() {
+  lock
+  [ -d "$PREV_DIR" ] || die "Önceki kurulum yok." 6
+  local since tmp="$APP_PARENT/.rollback-$STAMP"
+  since=$(date '+%Y-%m-%d %H:%M:%S')
+  mv "$APP_DIR" "$tmp"; mv "$PREV_DIR" "$APP_DIR"; mv "$tmp" "$PREV_DIR"
+  svc restart
+  if health "$since"; then
+    say "↩️ Önceki kuruluma dönüldü: $(short "$(deployed_sha "$APP_DIR")") çalışıyor (geri alınan kurulum yedekte)."
+    printf '%s rollback %s 0\n' "$STAMP" "$(deployed_sha "$APP_DIR")" >> "$STATE/history" 2>/dev/null || true
+    return 0
+  fi
+  say "⚠️ Önceki kurulum sağlıklı açılmadı; yeniden şimdiki kuruluma dönülüyor."
+  mv "$APP_DIR" "$tmp"; mv "$PREV_DIR" "$APP_DIR"; mv "$tmp" "$PREV_DIR"
+  since=$(date '+%Y-%m-%d %H:%M:%S')
+  svc restart
+  health "$since" && { say "   Şimdiki kurulum yeniden çalışıyor."; return 2; }
+  say "🚨 API sağlıklı değil! Sunucuya bakılmalı."
+  return 3
+}
+
+case "$ACTION" in
+  status) act_status ;;
+  sync) act_sync ;;
+  pending) act_pending ;;
+  publish) act_publish "$ARG" ;;
+  previous) act_previous ;;
+  rollback) act_rollback ;;
+  *) die "Kullanım: arsantuptakip-release status|sync|pending|publish <sha>|previous|rollback" 2 ;;
+esac

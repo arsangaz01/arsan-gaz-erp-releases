@@ -3,7 +3,7 @@
 name: ArsanTupTakip
 on:
   push:
-    branches: [main, 'cursor/server-*']
+    branches: [main, 'cursor/server-*', 'cursor/arsantuptakip-*']
     paths:
       - 'Tools/ArsanTupTakip/**'
       - '.github/workflows/arsantuptakip.yml'
@@ -37,7 +37,13 @@ jobs:
       - name: Panel betiği sözdizimi
         run: node --check src/ArsanTupTakip.Api/WebPanel/panel.js
       - name: Sunucu betikleri sözdizimi
-        run: for f in deploy/*.sh deploy/arsantuptakip-backup; do bash -n "$f"; done
+        run: for f in deploy/*.sh deploy/arsantuptakip-backup deploy/arsantuptakip-release; do bash -n "$f"; done
+      - name: Telegram botu ve ajan testleri
+        run: |
+          for f in bot/*.js; do node --check "$f"; done
+          node --test bot/commands.test.js bot/queue.test.js bot/agent-rules.test.js
+      - name: Yayın betiği benzetim testi
+        run: bash deploy/test-release.sh
 
   mobile:
     name: mobil-derleme

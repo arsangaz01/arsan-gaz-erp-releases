@@ -1,0 +1,33 @@
+# @TuptakipArsanbot: ArsanTüpTakip'in Telegram botu (ArsanGaz ERP botundan ve servislerinden bağımsız). Bu botun tek
+# getUpdates dinleyicisidir; yalnızca TUPTAKIP_TELEGRAM_CHAT_ID sohbetini kabul eder. Belirteç ve sohbet kimliği:
+# /etc/arsantuptakip/telegram.env (root:root 600, systemd okur). Yayın işleri sudo /usr/local/sbin/arsantuptakip-release ile.
+[Unit]
+Description=ArsanTupTakip Telegram botu (@TuptakipArsanbot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tuptakipbot
+Group=tuptakipbot
+SupplementaryGroups=tuptakipq
+WorkingDirectory=/var/lib/arsantuptakip-bot
+EnvironmentFile=/etc/arsantuptakip/telegram.env
+Environment=HOME=/var/lib/arsantuptakip-bot
+Environment=TUPTAKIP_QUEUE_DIR=/var/lib/arsantuptakip-queue
+Environment=TUPTAKIP_BOT_STATE_DIR=/var/lib/arsantuptakip-bot
+ExecStart=/usr/bin/node /opt/arsantuptakip-bot/app/telegram-bot.js
+Restart=always
+RestartSec=10
+# No NoNewPrivileges: release actions go through sudo; the script validates its arguments and runs mutating actions
+# as a separate transient unit.
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+UMask=0007
+
+[Install]
+WantedBy=multi-user.target

@@ -1,5 +1,6 @@
 bin/
 obj/
 publish/
+bot/node_modules/
 *.user
 .vs/

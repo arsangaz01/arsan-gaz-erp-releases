@@ -1,7 +1,7 @@
 # ArsanTüpTakip
 
 ArsanGaz ERP'den tamamen bağımsız tüp takip sistemi. Ortak veritabanı, servis, güncelleme kanalı veya
-Telegram botu yoktur. Kod ERP'den kopyalanıp ayrıştırılmıştır; CRM, sohbet, kampanya ve ERP köprüleri çıkarılmıştır.
+Telegram botu yoktur (kendi botu: @TuptakipArsanbot, aşağıda). Kod ERP'den kopyalanıp ayrıştırılmıştır; CRM, sohbet, kampanya ve ERP köprüleri çıkarılmıştır.
 
 Şu an yalnızca **altyapı** kuruludur: sistem boştur, dışarıya açık değildir ve hiç kullanıcı hesabı yoktur.
 
@@ -12,9 +12,11 @@ Telegram botu yoktur. Kod ERP'den kopyalanıp ayrıştırılmıştır; CRM, sohb
 | `src/ArsanTupTakip.Api` | .NET 10 API + web paneli (`/tuptakip/panel`) |
 | `tests/ArsanTupTakip.Tests` | Konsol test çalıştırıcısı (`dotnet run --project tests/ArsanTupTakip.Tests`) |
 | `mobile/ArsanTupTakip.Mobile` | MAUI Android uygulaması (`com.arsantuptakip.mobil`, sunucu adresi henüz boş) |
-| `deploy/` | systemd servisi, yedek betiği/zamanlayıcısı, kurulum ve doğrulama betikleri |
+| `bot/` | @TuptakipArsanbot (`telegram-bot.js`) ve sunucu Cursor ajanı (`dev-agent.js`), Node.js |
+| `deploy/` | systemd servisleri, yedek betiği/zamanlayıcısı, yayın betiği, kurulum ve doğrulama betikleri |
 
-CI: `.github/workflows/arsantuptakip.yml` (API derleme + testler, mobil Debug derleme; APK yayınlanmaz).
+CI: `.github/workflows/arsantuptakip.yml` (API derleme + testler, bot testleri, yayın betiği benzetim testi,
+mobil Debug derleme; APK yayınlanmaz).
 
 ## Sunucu düzeni (Oracle sunucusu)
 
@@ -48,6 +50,50 @@ Doğrulama (salt okunur; mevcut sistemin ve yalıtımın durumunu yazar):
 sudo bash deploy/verify-server.sh
 ```
 
+## Telegram botu ve geliştirme ajanı (@TuptakipArsanbot)
+
+ArsanGaz ERP botundan ayrı ikinci bot. Yalnızca kullanıcının kendi sohbetini kabul eder; diğer sohbetler yok sayılır.
+ERP'nin servislerine, botuna, `arsangaz-release` düzenine ve `/etc/arsangaz` dosyalarına dokunmaz.
+
+| Komut | İş |
+| --- | --- |
+| `/durum` | API sağlığı, veritabanı + tablo kayıt sayıları, son yedek, yayındaki commit, ajan durumu |
+| `/yayin` | Yayın bekleyen değişiklikleri gösterir, 15 dk geçerli 6 haneli onay kodu verir |
+| `/yayin_onay <kod>` | Sunucuda derleme + testler → (ajan dalıysa) main'e birleştirme ve GitHub'a gönderme → `/opt/arsantuptakip/api` kurulumu → sağlık kontrolü; geçmezse önceki kuruluma otomatik döner |
+| `/geri_al` → `/geri_al <kod>` | Bir önceki kuruluma döner (şimdiki kurulum yedek olur) |
+| `/iptal`, `/yeni`, `/yardim` | Süren isteği durdurur / yeni Cursor konuşması / komut listesi |
+
+Komut olmayan her mesaj (metin, fotoğraf, belge, video; video karelere çevrilir) bir geliştirme isteğidir:
+
+1. `arsantuptakip-bot` (kullanıcı `tuptakipbot`) isteği ve ekleri `/var/lib/arsantuptakip-queue/requests/<id>/` altına yazar.
+2. `arsantuptakip-agent` (kullanıcı `tuptakipagent`, sudo ve GitHub anahtarı yok) isteği kendi klonunda
+   (`/home/tuptakipagent/arsan-gaz-erp`, dal `cursor/arsantuptakip-agent`, model composer-2.5) Cursor SDK ile işler.
+   Talimatı: yalnızca `Tools/ArsanTupTakip/**` değiştirilir, derleme + testler geçmeden commit edilmez, push yapılmaz.
+   İlerleme ve son rapor bot üzerinden Telegram'a gelir.
+3. Ajanın commit'leri `outgoing/agent-branch.bundle` paketine konur. `/yayin` paketi root'taki yayın deposuna alır;
+   `Tools/ArsanTupTakip` dışına dokunan commit'ler reddedilir. main'e birleştirme yalnızca `/yayin_onay` ile ve sunucudaki
+   derleme + testler geçince yapılır.
+
+Sunucu düzeni:
+
+- Yayın betiği: `/usr/local/sbin/arsantuptakip-release status|sync|pending|publish <sha>|previous|rollback` (root).
+  Bot yalnızca bu betiği sudo ile çalıştırabilir (`/etc/sudoers.d/arsantuptakip-bot`); değiştiren eylemler ayrı bir
+  geçici systemd birimi olarak çalışır. Durum/depo: `/var/lib/arsantuptakip-release` (ajanın okuduğu ayna: `mirror.git`).
+  Derleme kullanıcısı `tuptakipbuild`. Kurulum `api` + `api.prev`; yayınlanan commit `api/.release-sha` dosyasında.
+- GitHub: `/etc/arsantuptakip/release/github_release` (yalnızca root), depoya yazma izinli deploy key olarak eklidir.
+- Ayarlar (root:root 600, yalnızca systemd okur): `/etc/arsantuptakip/telegram.env` (`TUPTAKIP_TELEGRAM_BOT_TOKEN`,
+  `TUPTAKIP_TELEGRAM_CHAT_ID`), `/etc/arsantuptakip/agent.env` (`CURSOR_API_KEY`). Kurulum betiği sohbet kimliğini ve
+  Cursor anahtarını mevcut sistemden yalnızca bir kez, yazdırmadan kopyalar.
+- Bot/ajan kodu `/opt/arsantuptakip-bot/app`; `/yayin` bunları güncellemez. Güncellemek için Windows'tan:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File Tools\ArsanTupTakip\deploy\Deploy-ArsanTupTakipBot.ps1
+```
+
+Testler: `node --test bot/*.test.js` ve `bash deploy/test-release.sh` (yayın betiği benzetimi; root/systemd/GitHub gerekmez).
+`/durum` Telegram'a göndermeden denenebilir:
+`sudo -u tuptakipbot env TUPTAKIP_BOT_STATE_DIR=/tmp/sim node /opt/arsantuptakip-bot/app/telegram-bot.js --simulate /durum`.
+
 ## İlk yönetici hesabı (daha sonra)
 
 Hesap henüz yok; panel girişi "henüz yapılandırılmadı" der. Oluşturmak için sunucuda:
@@ -77,4 +123,4 @@ Yönetici panelde **Cihazlar → Eşleştirme kodu oluştur** ile 6 haneli kod a
 4. APK imzalama anahtarı oluşturup Release APK'yı `/var/lib/arsantuptakip/ArsanTupTakip-Mobil.apk`
    (+ `.meta.json`) olarak yayınlamak.
 5. Ortağın eski sanal sunucusundaki verileri geçiş planına göre `arsantuptakip` veritabanına aktarmak.
-6. İstenirse ayrı bir Telegram botu ve Honeywell el terminali desteği.
+6. İstenirse Honeywell el terminali desteği. (Ayrı Telegram botu kuruldu: yukarıdaki bölüm.)

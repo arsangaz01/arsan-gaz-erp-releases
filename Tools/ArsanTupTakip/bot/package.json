@@ -1,0 +1,14 @@
+{
+  "name": "arsantuptakip-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "@TuptakipArsanbot ve ArsanTupTakip sunucu Cursor ajani",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test commands.test.js queue.test.js agent-rules.test.js"
+  },
+  "dependencies": {
+    "@cursor/sdk": "1.0.37"
+  }
+}

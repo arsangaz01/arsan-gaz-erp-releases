@@ -28,11 +28,15 @@ Yapıldı (commit a4c6cb5, CI "ArsanTupTakip" api + mobil-derleme yeşil):
 - Sunucu: `arsantuptakip-api` yalnız 127.0.0.1:5080/tuptakip; /opt/arsantuptakip, /var/lib/arsantuptakip, /etc/arsantuptakip/api.env
 - DB `arsantuptakip` + rol `arsantuptakip_app` (arsangaz'a bağlanamaz), 8 boş tablo; gece 04:20 yedek → Drive `ArsanTupTakip-Yedek`
 - Mevcut sistem değişmedi (servisler, cloudflared ayarı, arsantuptakip.com yanıtları aynı)
+- 12 Ekim 20:35: ayrı bot @TuptakipArsanbot + sunucu Cursor ajanı kuruldu (`Tools/ArsanTupTakip/bot`, servisler
+  `arsantuptakip-bot`/`arsantuptakip-agent`, dal `cursor/arsantuptakip-agent`, yayın `/yayin` → `/yayin_onay <kod>`,
+  `/geri_al`; ayrıntı README). Henüz hiç `/yayin_onay` yapılmadı: `/opt/arsantuptakip/api` hâlâ elle kurulan sürüm.
 Sıradaki (kullanıcı "devam" deyince):
 - [ ] Dışa açma: cloudflared'e /tuptakip yolu veya alt alan adı (mevcut tüneli taşıdığı için dikkatli; önce/sonra kontrol)
 - [ ] TUPTAKIP_PUBLIC_URL + mobil sunucu adresi; ilk yönetici hesabı (komut README.md'de, şifre ekrana yazılmaz)
 - [ ] APK imza anahtarı + yayın (paket ayrı, mevcut uygulamayla yan yana)
-- [ ] Ayrı Telegram botu (kullanıcının kendi hesabı), eski sanal sunucudan veri geçişi, Honeywell el terminali
+- [x] Ayrı Telegram botu (kullanıcının kendi hesabı)
+- [ ] Eski sanal sunucudan veri geçişi, Honeywell el terminali
 
 ### 1. Veri taşıma (tek seferlik)
 - Eski sistem: firmadaki bir cihazda çalışan sanal sunucu. Program adı, sürümü ve veritabanı türü bilinmiyor.

@@ -1,0 +1,39 @@
+# ArsanTüpTakip sunucu Cursor ajanı: @TuptakipArsanbot'un geliştirme isteklerini kendi klonunda (dal
+# cursor/arsantuptakip-agent) Cursor SDK ile işler. Kullanıcı tuptakipagent: sudo yok, GitHub anahtarı yok, prod veriye ve
+# gizli dosyalara erişimi yok. Depoyu yalnızca arsantuptakip-release'in yerel aynasından okur; commit'leri paket olarak
+# kuyruğa bırakır. CURSOR_API_KEY: /etc/arsantuptakip/agent.env (root:root 600, systemd okur).
+[Unit]
+Description=ArsanTupTakip sunucu Cursor ajani (@TuptakipArsanbot gelistirme istekleri)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tuptakipagent
+Group=tuptakipagent
+SupplementaryGroups=tuptakipq
+WorkingDirectory=/home/tuptakipagent
+EnvironmentFile=/etc/arsantuptakip/agent.env
+Environment=HOME=/home/tuptakipagent
+Environment=TUPTAKIP_AGENT_WORKSPACE=/home/tuptakipagent/arsan-gaz-erp
+Environment=TUPTAKIP_AGENT_STATE_DIR=/var/lib/arsantuptakip-agent
+Environment=TUPTAKIP_QUEUE_DIR=/var/lib/arsantuptakip-queue
+Environment=TUPTAKIP_AGENT_MIRROR=/var/lib/arsantuptakip-release/mirror.git
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=DOTNET_NOLOGO=1
+Environment=PATH=/opt/dotnet-sdk:/usr/local/bin:/usr/bin:/bin
+Environment=DOTNET_ROOT=/opt/dotnet-sdk
+Environment=NUGET_PACKAGES=/home/tuptakipagent/.nuget/packages
+ExecStart=/usr/bin/node /opt/arsantuptakip-bot/app/dev-agent.js
+Restart=always
+RestartSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+UMask=0007
+
+[Install]
+WantedBy=multi-user.target
