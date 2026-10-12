@@ -168,6 +168,7 @@ ArsanGazERP.AgentWatcher.Tests.TelegramPriorityTests.Run();
 ArsanGazERP.AgentWatcher.Tests.ReorderPredictionTests.Run();
 ArsanGazERP.AgentWatcher.Tests.CylinderTrackingTests.Run();
 ArsanGazERP.AgentWatcher.Tests.CylinderTripTrackingTests.Run();
+ArsanGazERP.AgentWatcher.Tests.VehicleTrackingTests.Run();
 ArsanGazERP.AgentWatcher.Tests.CursorJobMonitorTests.Run();
 await ArsanGazERP.AgentWatcher.Tests.TelegramWorkflowNoticeTests.RunAsync();
 await WorkflowApprovalTests.RunAsync();

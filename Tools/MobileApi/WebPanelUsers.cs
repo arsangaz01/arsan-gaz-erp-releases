@@ -21,14 +21,15 @@ internal static class PanelRoles
     internal const string Register = "tup-kayit";
     internal const string Edit = "tup-duzenle";
     internal const string AddCustomer = "musteri-ekle";
+    internal const string Vehicles = "arac-yonetimi";
     internal const string ManageUsers = "kullanici-yonetimi";
 
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
 
     internal static IReadOnlyList<string> Permissions(string? role) => role switch
     {
-        Admin => [View, Export, Move, Register, Edit, AddCustomer, ManageUsers],
-        Operator => [View, Export, Move, Register, Edit, AddCustomer],
+        Admin => [View, Export, Move, Register, Edit, AddCustomer, Vehicles, ManageUsers],
+        Operator => [View, Export, Move, Register, Edit, AddCustomer, Vehicles],
         Viewer => [View, Export],
         _ => []
     };
@@ -37,8 +38,8 @@ internal static class PanelRoles
 
     internal static string Description(string role) => role switch
     {
-        Admin => "Her şey: tüp ve müşteri işlemleri, kullanıcı yönetimi, denetim kaydı.",
-        Operator => "Görüntüleme, tüp hareketi, yeni tüp, tüp düzenleme, yeni müşteri, Excel'e aktarma.",
+        Admin => "Her şey: tüp, müşteri, araç ve sefer işlemleri, kullanıcı yönetimi, denetim kaydı.",
+        Operator => "Görüntüleme, tüp hareketi, yeni tüp, tüp düzenleme, yeni müşteri, araç kaydı, sefer başlatma/yükleme, Excel'e aktarma.",
         Viewer => "Yalnızca görüntüleme ve Excel'e aktarma; kayıt değiştiremez.",
         _ => string.Empty
     };

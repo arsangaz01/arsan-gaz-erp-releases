@@ -174,6 +174,7 @@ function openTab(tab) {
   if (tab === "tupler") loadCylinders();
   if (tab === "hareketler") loadMovements();
   if (tab === "seferler") loadTrips();
+  if (tab === "araclar") loadVehicles();
   if (tab === "musteriler") loadCustomers();
   if (tab === "yonetim") loadAdmin();
 }
@@ -590,7 +591,9 @@ async function loadTrips() {
   }
 }
 
-async function openTrip(id) {
+let currentTrip = null;
+
+async function openTrip(id, keepMessage = false) {
   let data;
   try {
     data = await api("/panel/api/sefer/" + id);
@@ -599,6 +602,20 @@ async function openTrip(id) {
     return;
   }
   const t = data.trip;
+  const sameTrip = currentTrip && currentTrip.id === t.id;
+  currentTrip = t;
+  if (!keepMessage) hide($("t-msg"));
+  $("t-load-card").classList.toggle("hidden", !(t.active && can("hareket")));
+  const plates = t.vehicles.map((v) => v.plate);
+  const loadPlate = sameTrip ? $("t-load-plate").value : "";
+  $("t-load-plate").replaceChildren(...t.vehicles.filter((v) => v.onTrip).map((v) => el("option", { value: v.plate }, v.plate)));
+  if (loadPlate && plates.includes(loadPlate)) $("t-load-plate").value = loadPlate;
+  if (!sameTrip) $("t-load-codes").value = "";
+  updateLoadCount();
+  const groupPlate = sameTrip ? $("t-group-plate").value : "";
+  $("t-group-plate").replaceChildren(el("option", { value: "" }, "Tüm araçlar"), ...plates.map((p) => el("option", { value: p }, p)));
+  $("t-group-plate").value = plates.includes(groupPlate) ? groupPlate : "";
+  loadTripGroups();
   $("t-title").textContent = `${t.title} · #${t.id}`;
   const alarms = [];
   if (t.missing) alarms.push(`⚠ ${t.missing} tüp okutulmadı (müşteriye teslim veya depoya dönüş yok): ${gasText(t.missingByGas)}`);
@@ -636,6 +653,279 @@ async function openTrip(id) {
 }
 
 $("t-close").addEventListener("click", () => $("trip-dialog").close());
+
+// Gas type groups: a clickable header per type with its count; the body lists the barcodes and details.
+function renderGroups(container, groups, empty) {
+  if (!groups.length) {
+    container.replaceChildren(el("div", { class: "muted" }, empty));
+    return;
+  }
+  container.replaceChildren(...groups.map((g) => {
+    const body = el("div", { class: "gas-body hidden" });
+    const head = el("div", { class: "gas-head", role: "button", tabindex: "0" },
+      el("span", { class: "gas-count" }, String(g.count)),
+      el("span", { class: "gas-name" }, g.gasType),
+      el("span", { class: g.alarm ? "alarm" : "muted" }, g.summary),
+      el("span", { class: "muted" }, "▾"));
+    const toggle = () => {
+      if (!body.childElementCount) body.append(groupTable(g));
+      body.classList.toggle("hidden");
+    };
+    head.addEventListener("click", toggle);
+    head.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+    return el("div", { class: "gas-group" + (g.alarm ? " alarm-group" : "") }, head, body);
+  }));
+}
+
+function groupTable(g) {
+  const head = el("tr", {}, ...["Barkod / seri no", "Kapasite", "Dolu/Boş", "Durum", "Müşteri / plaka", "Yükleme", "Son hareket", "Test"].map((h) => el("th", {}, h)));
+  const rows = g.cylinders.map((c) => el("tr", { class: "click" + (c.alarm ? " alarm-row" : ""), onclick: () => openDetail(c.cylinderId) },
+    el("td", {}, el("b", {}, c.barcode), c.barcode !== c.serialNumber ? el("div", { class: "muted" }, c.serialNumber) : null),
+    el("td", {}, c.capacity),
+    el("td", {}, c.fullness),
+    el("td", { class: c.alarm ? "alarm" : "" }, c.state, el("div", { class: "muted" }, c.statusName)),
+    el("td", {}, c.customer || c.plate || "-"),
+    el("td", {}, c.loaded || "-"),
+    el("td", {}, c.lastMovement || "-"),
+    el("td", { class: c.testOverdue ? "bad-text" : "" }, c.testDue || "-")));
+  return el("div", { class: "table-wrap" }, el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)));
+}
+
+async function loadTripGroups() {
+  if (!currentTrip) return;
+  const plate = $("t-group-plate").value;
+  try {
+    const load = await api(`/panel/api/sefer/${currentTrip.id}/yuk` + (plate ? "?plaka=" + encodeURIComponent(plate) : ""));
+    renderGroups($("t-groups"), load.groups, plate ? `${plate} aracına bu seferde tüp yüklenmemiş.` : "Bu sefere henüz tüp yüklenmemiş.");
+  } catch (error) {
+    show($("t-msg"), error.message);
+  }
+}
+
+$("t-group-plate").addEventListener("change", loadTripGroups);
+
+function scannedCodes() {
+  return [...new Set($("t-load-codes").value.split(/[\r\n,;\t]+/).map((c) => c.trim()).filter(Boolean))];
+}
+
+function updateLoadCount() {
+  const n = scannedCodes().length;
+  $("t-load-count").textContent = n ? `${n} kod okutuldu` : "";
+}
+
+$("t-load-codes").addEventListener("input", updateLoadCount);
+
+$("t-load-save").addEventListener("click", async () => {
+  const plate = $("t-load-plate").value;
+  const codes = scannedCodes();
+  if (!plate) { show($("t-msg"), "Yükleme için seferde olan bir araç seçin."); return; }
+  if (!codes.length) { show($("t-msg"), "En az bir barkod okutun veya yazın."); return; }
+  $("t-load-save").disabled = true;
+  try {
+    const result = await api(`/panel/api/sefer/${currentTrip.id}/yukle`, { method: "POST", body: { plate, codes } });
+    $("t-load-codes").value = "";
+    show($("t-msg"), result.message, result.skipped ? "warn" : "ok");
+    $("t-group-plate").value = plate;
+    await openTrip(currentTrip.id, true);
+    loadTrips();
+  } catch (error) {
+    show($("t-msg"), error.message);
+  } finally {
+    $("t-load-save").disabled = false;
+  }
+});
+
+$("t-close-trip").addEventListener("click", async () => {
+  if (!currentTrip || !window.confirm(`${currentTrip.title} kapatılsın mı? Teslim veya dönüş okutulmamış tüpler eksik olarak raporlanır.`)) return;
+  try {
+    const result = await api(`/panel/api/sefer/${currentTrip.id}/kapat`, { method: "POST" });
+    await openTrip(currentTrip.id, true);
+    show($("t-msg"), result.message, result.hasAlerts ? "warn" : "ok");
+    loadTrips();
+  } catch (error) {
+    show($("t-msg"), error.message);
+  }
+});
+
+// ---- Trip start ------------------------------------------------------------------------------------
+
+$("s-baslat").addEventListener("click", async () => {
+  hide($("ts-msg"));
+  $("ts-note").value = "";
+  $("ts-vehicles").replaceChildren(el("div", { class: "muted" }, "Araçlar yükleniyor…"));
+  $("trip-start-dialog").showModal();
+  try {
+    const vehicles = await api("/panel/api/araclar");
+    if (!vehicles.length) {
+      $("ts-vehicles").replaceChildren(el("div", { class: "muted" }, "Kayıtlı aktif araç yok. Önce \"Araç İşlemleri\" sekmesinden araç ekleyin."));
+      return;
+    }
+    $("ts-vehicles").replaceChildren(...vehicles.map((v) => {
+      const box = el("input", { type: "checkbox", value: v.plate });
+      if (v.activeTripId) box.disabled = true;
+      return el("label", { class: v.activeTripId ? "busy" : "" }, box,
+        el("span", {}, el("b", {}, v.plate), " ", vehicleCaption(v),
+          v.activeTripId ? el("div", { class: "muted" }, `Şu an seferde: ${v.activeTripTitle}`) : v.cylindersOnBoard ? el("div", { class: "muted" }, `Üzerinde ${v.cylindersOnBoard} tüp`) : null));
+    }));
+  } catch (error) {
+    show($("ts-msg"), error.message);
+  }
+});
+
+$("ts-close").addEventListener("click", () => $("trip-start-dialog").close());
+
+$("ts-save").addEventListener("click", async () => {
+  const plates = [...$("ts-vehicles").querySelectorAll("input:checked")].map((b) => b.value);
+  if (!plates.length) { show($("ts-msg"), "En az bir araç seçin."); return; }
+  $("ts-save").disabled = true;
+  try {
+    const result = await api("/panel/api/sefer/baslat", { method: "POST", body: { plates, note: $("ts-note").value.trim() || null } });
+    $("trip-start-dialog").close();
+    await loadTrips();
+    await openTrip(result.id);
+    show($("t-msg"), result.message + " Şimdi tüpleri okutup \"Araca yükle\"ye basın.", "ok");
+    $("t-load-codes").focus();
+  } catch (error) {
+    show($("ts-msg"), error.message);
+  } finally {
+    $("ts-save").disabled = false;
+  }
+});
+
+// ---- Vehicles tab ------------------------------------------------------------------------------------
+
+let currentVehicle = null;
+let editingVehicle = null;
+
+function vehicleCaption(v) {
+  return [v.name, v.vehicleType, v.driverName ? "şoför " + v.driverName : null].filter(Boolean).join(" · ");
+}
+
+$("v-yenile").addEventListener("click", loadVehicles);
+$("v-pasif").addEventListener("change", loadVehicles);
+
+async function loadVehicles() {
+  try {
+    const rows = await api("/panel/api/araclar" + ($("v-pasif").checked ? "?pasif=true" : ""));
+    $("v-count").textContent = `${rows.length} araç`;
+    const head = el("tr", {}, ...["Plaka", "Ad / tür", "Şoför", "Kapasite", "Araçtaki tüp", "Sefer", "Durum"].map((h) => el("th", {}, h)));
+    const body = rows.map((v) => el("tr", { class: "click" + (v.isActive ? "" : " off"), onclick: () => openVehicle(v.id) },
+      el("td", {}, el("b", {}, v.plate)),
+      el("td", {}, [v.name, v.vehicleType].filter(Boolean).join(" · ") || "-"),
+      el("td", {}, v.driverName || "-"),
+      el("td", {}, v.cylinderCapacity ? `${v.cylinderCapacity} tüp` : "-"),
+      el("td", { class: v.cylinderCapacity && v.cylindersOnBoard > v.cylinderCapacity ? "alarm" : "" }, String(v.cylindersOnBoard)),
+      el("td", {}, v.activeTripId ? el("span", { class: "badge trip-active" }, v.activeTripTitle) : "-"),
+      el("td", {}, el("span", { class: "dot" + (v.isActive ? " on" : "") }), v.isActive ? "Aktif" : "Pasif")));
+    $("vehicle-table").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 7, class: "muted" }, "Kayıtlı araç yok. \"+ Araç ekle\" ile ekleyin."))])));
+  } catch (error) {
+    show($("global-msg"), error.message);
+  }
+}
+
+async function openVehicle(id, message) {
+  let data;
+  try {
+    data = await api("/panel/api/arac/" + id);
+  } catch (error) {
+    show($("global-msg"), error.message);
+    return;
+  }
+  const v = data.vehicle;
+  currentVehicle = v;
+  if (message) show($("vd-msg"), message, "ok"); else hide($("vd-msg"));
+  $("vd-title").textContent = `🚚 ${v.plate}` + (v.name ? ` · ${v.name}` : "");
+  $("vd-alarm").textContent = data.capacityWarning || "";
+  $("vd-alarm").classList.toggle("hidden", !data.capacityWarning);
+  const info = [
+    ["Plaka", v.plate], ["Araç adı", v.name || "-"], ["Tür", v.vehicleType || "-"], ["Şoför", v.driverName || "-"],
+    ["Kapasite", v.cylinderCapacity ? `${v.cylinderCapacity} tüp` : "-"], ["Araçtaki tüp", v.cylindersOnBoard],
+    ["Aktif sefer", v.activeTripTitle || "Yok"], ["Durum", v.isActive ? "Aktif" : "Pasif"], ["Kayıt", v.created], ["Not", v.note || "-"]
+  ];
+  $("vd-info").replaceChildren(...info.map(([k, value]) => el("div", {}, el("span", {}, k), String(value))));
+  $("vd-toggle").textContent = v.isActive ? "Pasife al" : "Aktif et";
+  $("vd-toggle").className = v.isActive ? "danger" : "secondary small";
+  $("vd-toggle").classList.toggle("hidden", !can("arac-yonetimi"));
+  renderGroups($("vd-groups"), data.onBoard, "Bu araçta şu an tüp yok.");
+  const head = el("tr", {}, ...["Sefer", "Başlangıç", "Araç dönüşü", "Yüklenen", "Teslim", "Depoya dönen", "Eksik"].map((h) => el("th", {}, h)));
+  const body = data.trips.map((t) => el("tr", { class: "click" + (t.missing ? " alarm-row" : ""), onclick: () => openTrip(t.tripId) },
+    el("td", {}, el("b", {}, t.title), " ", t.active ? el("span", { class: "badge trip-active" }, "Açık") : el("span", { class: "badge trip-closed" }, "Kapandı")),
+    el("td", {}, t.started),
+    el("td", {}, t.vehicleReturned || (t.active ? "Seferde" : t.closed || "-")),
+    el("td", {}, String(t.loaded)), el("td", {}, String(t.delivered)), el("td", {}, String(t.returned)),
+    el("td", { class: t.missing ? "alarm" : "" }, String(t.missing))));
+  $("vd-trips").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 7, class: "muted" }, "Bu araç henüz sefere çıkmamış."))])));
+  if (!$("vehicle-dialog").open) $("vehicle-dialog").showModal();
+}
+
+$("vd-close").addEventListener("click", () => $("vehicle-dialog").close());
+$("vd-edit").addEventListener("click", () => openVehicleForm(currentVehicle));
+$("v-yeni").addEventListener("click", () => openVehicleForm(null));
+$("vf-close").addEventListener("click", () => $("vehicle-form-dialog").close());
+
+function vehicleBody(active) {
+  const capacity = $("vf-capacity").value.trim();
+  return {
+    plate: $("vf-plate").value.trim(), name: $("vf-name").value.trim() || null, vehicleType: $("vf-type").value.trim() || null,
+    driverName: $("vf-driver").value.trim() || null, cylinderCapacity: capacity ? Number(capacity) : null,
+    note: $("vf-note").value.trim() || null, isActive: active
+  };
+}
+
+$("vd-toggle").addEventListener("click", async () => {
+  const v = currentVehicle;
+  if (!v) return;
+  if (v.isActive && !window.confirm(`${v.plate} pasife alınsın mı? Yeni seferlerde seçilemez; geçmişi silinmez, tekrar aktif edilebilir.`)) return;
+  try {
+    const result = await api("/panel/api/arac/" + v.id, {
+      method: "POST",
+      body: { plate: v.plate, name: v.name, vehicleType: v.vehicleType, driverName: v.driverName, cylinderCapacity: v.cylinderCapacity, note: v.note, isActive: !v.isActive }
+    });
+    await openVehicle(v.id, result.message);
+    loadVehicles();
+  } catch (error) {
+    show($("vd-msg"), error.message);
+  }
+});
+
+function openVehicleForm(v) {
+  editingVehicle = v;
+  $("vehicle-form").reset();
+  hide($("vf-msg"));
+  $("vf-title").textContent = v ? `Aracı düzenle: ${v.plate}` : "Yeni araç";
+  $("vf-plate").value = v ? v.plate : "";
+  $("vf-plate").disabled = !!v;
+  $("vf-name").value = v?.name || "";
+  $("vf-type").value = v?.vehicleType || "";
+  $("vf-driver").value = v?.driverName || "";
+  $("vf-capacity").value = v?.cylinderCapacity || "";
+  $("vf-note").value = v?.note || "";
+  $("vf-active").value = String(v ? v.isActive : true);
+  $("vf-active-wrap").classList.toggle("hidden", !v);
+  $("vehicle-form-dialog").showModal();
+  (v ? $("vf-name") : $("vf-plate")).focus();
+}
+
+$("vehicle-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const capacity = $("vf-capacity").value.trim();
+  if (capacity && !/^\d+$/.test(capacity)) { show($("vf-msg"), "Kapasite tüp adedi olarak tam sayı olmalıdır."); return; }
+  const active = editingVehicle ? $("vf-active").value === "true" : true;
+  if (editingVehicle && editingVehicle.isActive && !active && !window.confirm(`${editingVehicle.plate} pasife alınsın mı?`)) return;
+  $("vf-save").disabled = true;
+  try {
+    const result = await api("/panel/api/arac" + (editingVehicle ? "/" + editingVehicle.id : ""), { method: "POST", body: vehicleBody(active) });
+    $("vehicle-form-dialog").close();
+    await loadVehicles();
+    if (editingVehicle) await openVehicle(editingVehicle.id, result.message);
+    else show($("v-msg"), result.message, "ok");
+    await loadOptions();
+  } catch (error) {
+    show($("vf-msg"), error.message);
+  } finally {
+    $("vf-save").disabled = false;
+  }
+});
 
 // ---- Customers tab -------------------------------------------------------------------------------
 

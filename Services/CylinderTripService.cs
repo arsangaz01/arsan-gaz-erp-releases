@@ -49,6 +49,8 @@ public sealed record TripCylinderView(
 
 public sealed record TripUnexpectedReturn(int CylinderId, string SerialNumber, string GasType, string? Plate, DateTime At);
 
+public sealed record TripLoadView(int TripId, string Title, bool Active, string? Plate, int Total, int OnVehicle, int Missing, IReadOnlyList<GasTypeGroup> Groups);
+
 public sealed record TripDetail(TripListItem Trip, IReadOnlyList<TripCylinderView> Cylinders, IReadOnlyList<TripUnexpectedReturn> UnexpectedReturns);
 
 public sealed class CylinderTripService
@@ -119,14 +121,50 @@ public sealed class CylinderTripService
         return new TripDetail(TripView(trip), cylinders, unexpected);
     }
 
-    private static HashSet<string> ReturnedPlates(CylinderTrip trip) =>
+    // Load list of a trip (optionally one vehicle) grouped by gas type, with the cylinder details behind each group.
+    public async Task<TripLoadView?> TripLoadAsync(int tripId, string? plate)
+    {
+        string? normalized = CylinderTracking.NormalizePlate(plate);
+        await using ArsanGazDbContext db = new();
+        CylinderTrip? trip = await db.CylinderTrips.AsNoTracking().Include(x => x.Vehicles).Include(x => x.Cylinders)
+            .FirstOrDefaultAsync(x => x.Id == tripId);
+        if (trip is null)
+        {
+            return null;
+        }
+
+        HashSet<string> returnedPlates = ReturnedPlates(trip);
+        List<CylinderTripCylinder> rows = trip.Cylinders
+            .Where(x => normalized is null || string.Equals(x.VehiclePlate, normalized, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        List<int> ids = rows.Select(x => x.CylinderId).Distinct().ToList();
+        Dictionary<int, Cylinder> cylinders = await db.Cylinders.AsNoTracking().Include(x => x.CurrentCustomer)
+            .Where(x => ids.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id);
+
+        List<LoadCylinderItem> items = rows.Select(row =>
+        {
+            bool missing = IsMissing(row, returnedPlates);
+            string state = VehicleTracking.TripState(row.DeliveredAt, row.ReturnedAt, missing);
+            return cylinders.TryGetValue(row.CylinderId, out Cylinder? cylinder)
+                ? VehicleService.Item(cylinder, row.LoadedAt, state, missing) with { Plate = row.VehiclePlate, GasType = row.GasType is { Length: > 0 } ? row.GasType : cylinder.GasType }
+                : new LoadCylinderItem(row.CylinderId, row.SerialNumber, row.SerialNumber, row.GasType, "-", null, "-", "-", null, row.VehiclePlate,
+                    null, null, row.LoadedAt, state, missing);
+        }).ToList();
+
+        int onVehicle = rows.Count(x => IsOpen(x) && !IsMissing(x, returnedPlates));
+        return new TripLoadView(trip.Id, trip.Title, trip.Status == CylinderTripStatus.Active, normalized, items.Count, onVehicle,
+            items.Count(x => x.Alarm), VehicleTracking.GroupByGas(items));
+    }
+
+    internal static HashSet<string> ReturnedPlates(CylinderTrip trip) =>
         trip.Status == CylinderTripStatus.Closed
             ? trip.Cylinders.Select(x => x.VehiclePlate).Concat(trip.Vehicles.Select(x => x.Plate)).ToHashSet(StringComparer.OrdinalIgnoreCase)
             : trip.Vehicles.Where(x => x.ReturnedAt is not null).Select(x => x.Plate).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static bool IsOpen(CylinderTripCylinder row) => row.DeliveredAt is null && row.ReturnedAt is null;
 
-    private static bool IsMissing(CylinderTripCylinder row, HashSet<string> returnedPlates) => IsOpen(row) && returnedPlates.Contains(row.VehiclePlate);
+    internal static bool IsMissing(CylinderTripCylinder row, HashSet<string> returnedPlates) => IsOpen(row) && returnedPlates.Contains(row.VehiclePlate);
 
     private static TripListItem TripView(CylinderTrip trip)
     {
@@ -160,6 +198,12 @@ public sealed class CylinderTripService
     public async Task<CylinderTrip> StartTripAsync(IEnumerable<string?>? plates, string? note, string? createdBy)
     {
         await using ArsanGazDbContext db = new();
+        List<string> normalized = NormalizePlates(plates).ToList();
+        foreach (string plate in normalized)
+        {
+            await VehicleService.EnsureUsableAsync(db, plate);
+        }
+
         DateTime now = DateTime.Now;
         CylinderTrip trip = new()
         {
@@ -172,7 +216,7 @@ public sealed class CylinderTripService
         db.CylinderTrips.Add(trip);
         await db.SaveChangesAsync();
 
-        foreach (string plate in NormalizePlates(plates))
+        foreach (string plate in normalized)
         {
             await AddVehicleInternalAsync(db, trip.Id, plate);
         }
@@ -457,6 +501,7 @@ public sealed class CylinderTripService
             return;
         }
 
+        await VehicleService.EnsureUsableAsync(db, plate);
         db.CylinderTripVehicles.Add(new CylinderTripVehicle { TripId = tripId, Plate = plate, AddedAt = DateTime.Now });
         await db.SaveChangesAsync();
     }

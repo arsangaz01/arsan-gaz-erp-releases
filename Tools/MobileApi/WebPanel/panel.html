@@ -115,6 +115,18 @@ tr.alarm-row td { background:#fef2f2; }
 .badge.trip-closed { background:#f3f4f6; border-color:#d1d5db; color:#374151; }
 .badge.trip-alarm { background:#fee2e2; border-color:#fca5a5; color:#b91c1c; }
 .trip-vehicles { display:flex; flex-wrap:wrap; gap:6px; }
+.gas-group { border:1px solid var(--line); border-radius:12px; margin-bottom:8px; overflow:hidden; }
+.gas-head { display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; background:#f9fafb; transition:background-color .07s ease; }
+.gas-head:hover { background:var(--sea-light); }
+.gas-head:active { background:#bae6fd; }
+.gas-head .gas-name { font-weight:600; flex:1; }
+.gas-head .gas-count { font-size:22px; font-weight:700; color:var(--accent); min-width:44px; text-align:right; }
+.gas-group.alarm-group { border-color:#fca5a5; }
+.gas-group.alarm-group .gas-head { background:#fef2f2; }
+.gas-body { padding:0 8px 8px; }
+.vehicle-pick { display:flex; flex-direction:column; gap:6px; max-height:45vh; overflow:auto; margin-top:6px; }
+.vehicle-pick label { display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:10px; padding:8px 10px; cursor:pointer; font-size:14px; color:var(--text); }
+.vehicle-pick label.busy { opacity:.6; }
 .panel-deploy-footer { text-align:center; padding:8px 18px 18px; font-size:11px; color:#9ca3af; }
 @media (max-width:640px) { main { padding:10px; } header { padding:10px 12px; } .hide-sm { display:none; } }
 </style>
@@ -141,6 +153,7 @@ tr.alarm-row td { background:#fef2f2; }
       <button data-tab="tupler">Tüpler</button>
       <button data-tab="hareketler">Hareketler</button>
       <button data-tab="seferler">Seferler</button>
+      <button data-tab="araclar">Araç İşlemleri</button>
       <button data-tab="musteriler">Müşteriler</button>
       <button data-tab="yeni" data-perm="tup-kayit">Yeni tüp</button>
       <button data-tab="yonetim" data-perm="kullanici-yonetimi">Yönetim</button>
@@ -206,6 +219,7 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="card">
         <div class="toolbar">
           <h2>Seferde olan araçlar</h2>
+          <button class="primary small" id="s-baslat" type="button" data-perm="hareket">🚚 Sefer başlat</button>
           <button class="secondary small" id="s-yenile" type="button">Yenile</button>
         </div>
         <div id="s-alarm" class="alarm-box hidden"></div>
@@ -218,7 +232,22 @@ tr.alarm-row td { background:#fef2f2; }
         </div>
         <div class="muted" id="s-count"></div>
         <div class="table-wrap"><table id="trips"></table></div>
-        <div class="hint">Seferler mobil uygulamadaki "Sefer" sekmesinden açılır: araçlar atanır, yüklenen tüpler okutulur, araç dönünce tüpler tekrar okutulur. Araç döndüğü (veya sefer kapandığı) hâlde müşteriye teslim ya da depoya dönüş okutması olmayan tüpler kırmızı ile "eksik" gösterilir. Seferde yüklenmediği hâlde dönüşte okutulan tüpler de ayrıntıda kırmızı listelenir.</div>
+        <div class="hint">"Sefer başlat" ile kayıtlı araçlardan seçerek sefer açılır (mobil uygulamadaki "Sefer" sekmesinden de açılabilir). Sefere tıklayınca araca yükleme (barkod okuyucu veya elle) yapılır ve yük gaz türüne göre listelenir; bir gaz türüne tıklayınca o türdeki tüplerin barkodları ve ayrıntıları açılır. Araç dönünce tüpler mobil uygulamadan tekrar okutulur. Araç döndüğü (veya sefer kapandığı) hâlde müşteriye teslim ya da depoya dönüş okutması olmayan tüpler kırmızı ile "eksik" gösterilir. Seferde yüklenmediği hâlde dönüşte okutulan tüpler de ayrıntıda kırmızı listelenir.</div>
+      </div>
+    </section>
+
+    <section data-page="araclar" class="hidden">
+      <div class="card">
+        <div class="toolbar">
+          <h2>Araçlar</h2>
+          <label class="check"><input type="checkbox" id="v-pasif"> Pasifleri göster</label>
+          <button class="primary small" id="v-yeni" type="button" data-perm="arac-yonetimi">+ Araç ekle</button>
+          <button class="secondary small" id="v-yenile" type="button">Yenile</button>
+        </div>
+        <div id="v-msg" class="msg hidden"></div>
+        <div class="muted" id="v-count"></div>
+        <div class="table-wrap"><table id="vehicle-table"></table></div>
+        <div class="hint">Araçlar silinmez, pasife alınır; pasif araç yeni seferde seçilemez ama geçmiş seferleri ve hareketleri korunur. Plaka kayıttan sonra değiştirilemez (seferler ve tüp hareketleri plakaya bağlıdır). Bir araca tıklayınca üzerindeki tüpler gaz türüne göre, aktif seferi ve sefer geçmişi açılır.</div>
       </div>
     </section>
 
@@ -323,12 +352,78 @@ tr.alarm-row td { background:#fef2f2; }
   <div class="dlg-head"><h3 id="t-title">Sefer</h3><button class="secondary" id="t-close" type="button">Kapat</button></div>
   <div class="dlg-body">
     <div id="t-alarm" class="alarm-box hidden"></div>
+    <div id="t-msg" class="msg hidden"></div>
     <div class="card"><h2>Bilgiler</h2><div class="kv" id="t-info"></div></div>
+    <div class="card hidden" id="t-load-card" data-perm="hareket">
+      <h2>Araca yükle (tüp okut)</h2>
+      <div class="form-grid">
+        <label>Araç<select id="t-load-plate"></select></label>
+        <label style="grid-column:1/-1">Barkod / seri no (barkod okuyucu ile okutun veya her satıra bir kod yazın)<textarea id="t-load-codes" rows="4" placeholder="Okutulan kodlar alt alta gelir"></textarea></label>
+      </div>
+      <div class="actions">
+        <button class="primary" id="t-load-save" type="button">Araca yükle</button>
+        <span class="muted" id="t-load-count"></span>
+        <span class="spacer" style="flex:1"></span>
+        <button class="danger" id="t-close-trip" type="button">Seferi kapat</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <h2>Yük listesi (gaz türüne göre)</h2>
+        <label class="field">Araç<select id="t-group-plate"><option value="">Tüm araçlar</option></select></label>
+      </div>
+      <div id="t-groups"></div>
+      <div class="hint">Bir gaz türüne tıklayınca o türdeki tüplerin barkodları ve ayrıntıları açılır; tüpe tıklayınca hareket geçmişi görünür.</div>
+    </div>
     <div class="card"><h2>Araçlar</h2><div class="table-wrap"><table id="t-vehicles"></table></div></div>
     <div class="card"><h2>Yüklenen tüpler</h2><div class="table-wrap"><table id="t-cylinders"></table></div></div>
     <div class="card hidden" id="t-unexpected-card"><h2>Yüklenmediği hâlde dönüşte okutulan tüpler</h2><div class="table-wrap"><table id="t-unexpected"></table></div></div>
   </div>
 </dialog>
+
+<dialog id="trip-start-dialog" class="narrow">
+  <div class="dlg-head"><h3>Sefer başlat</h3><button class="secondary" id="ts-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <div class="field">Sefere çıkacak araçlar (kayıtlı aktif araçlar)</div>
+    <div id="ts-vehicles" class="vehicle-pick"></div>
+    <label class="field" style="margin-top:10px">Not (isteğe bağlı)<input id="ts-note" maxlength="120"></label>
+    <div class="actions"><button class="primary" id="ts-save" type="button">Seferi başlat</button></div>
+    <div id="ts-msg" class="msg hidden"></div>
+    <div class="hint">Listede olmayan araç için önce "Araç İşlemleri" sekmesinden araç ekleyin. Sefer başladıktan sonra açılan pencerede tüpleri araca yükleyin.</div>
+  </div>
+</dialog>
+
+<dialog id="vehicle-dialog">
+  <div class="dlg-head"><h3 id="vd-title">Araç</h3><button class="secondary" id="vd-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <div id="vd-msg" class="msg hidden"></div>
+    <div id="vd-alarm" class="alarm-box hidden"></div>
+    <div class="card">
+      <div class="toolbar"><h2>Bilgiler</h2><button class="secondary small" id="vd-edit" type="button" data-perm="arac-yonetimi">Düzenle</button><button class="danger" id="vd-toggle" type="button" data-perm="arac-yonetimi">Pasife al</button></div>
+      <div class="kv" id="vd-info"></div>
+    </div>
+    <div class="card"><h2>Araçtaki tüpler (gaz türüne göre)</h2><div id="vd-groups"></div></div>
+    <div class="card"><h2>Sefer geçmişi (son 30)</h2><div class="table-wrap"><table id="vd-trips"></table></div></div>
+  </div>
+</dialog>
+
+<dialog id="vehicle-form-dialog" class="narrow">
+  <div class="dlg-head"><h3 id="vf-title">Yeni araç</h3><button class="secondary" id="vf-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <form id="vehicle-form" class="form-grid">
+      <label>Plaka *<input id="vf-plate" required maxlength="20" placeholder="01 ABC 123" autocomplete="off"></label>
+      <label>Araç adı<input id="vf-name" maxlength="100" placeholder="ör. Beyaz kamyonet" autocomplete="off"></label>
+      <label>Tür<input id="vf-type" maxlength="100" list="vehicle-types" placeholder="Kamyonet, kamyon…" autocomplete="off"></label>
+      <label>Şoför<input id="vf-driver" maxlength="100" autocomplete="off"></label>
+      <label>Kapasite (tüp)<input id="vf-capacity" inputmode="numeric" maxlength="5" autocomplete="off"></label>
+      <label id="vf-active-wrap">Kayıt durumu<select id="vf-active"><option value="true">Aktif</option><option value="false">Pasif (kullanım dışı)</option></select></label>
+      <label style="grid-column:1/-1">Not<input id="vf-note" maxlength="500" autocomplete="off"></label>
+      <div class="actions" style="grid-column:1/-1"><button class="primary" type="submit" id="vf-save">Kaydet</button></div>
+    </form>
+    <div id="vf-msg" class="msg hidden"></div>
+  </div>
+</dialog>
+<datalist id="vehicle-types"><option value="Kamyonet"><option value="Kamyon"><option value="Panelvan"><option value="Pikap"><option value="Binek"></datalist>
 
 <dialog id="password-dialog" style="width:min(420px,96vw)">
   <div class="dlg-head"><h3>Şifre değiştir</h3><button class="secondary" id="password-close" type="button">Kapat</button></div>

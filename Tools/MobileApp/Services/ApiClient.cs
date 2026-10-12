@@ -88,6 +88,75 @@ public sealed record TripStartResponse(int Id, string Title, DateTime StartedAt,
 public sealed record TripLoadResponse(string Message, int Added, int Skipped, List<string> Messages);
 
 public sealed record TripCloseResponse(string Message, int TripId, TripReconcileResponse Reconcile);
+
+public sealed record VehicleItem(
+    int Id,
+    string Plate,
+    string? Name,
+    string? VehicleType,
+    string? DriverName,
+    int? CylinderCapacity,
+    string? Note,
+    bool IsActive,
+    int CylindersOnBoard,
+    int? ActiveTripId,
+    string? ActiveTripTitle,
+    string Created)
+{
+    public string Caption => string.Join(" · ", new[] { Name, VehicleType, DriverName is null ? null : "şoför " + DriverName }.Where(x => !string.IsNullOrEmpty(x)));
+
+    public string Title => "🚚 " + Plate + (IsActive ? string.Empty : " (pasif)");
+
+    public string Subtitle => string.Join(" · ", new[]
+    {
+        Caption.Length == 0 ? null : Caption,
+        $"araçta {CylindersOnBoard} tüp" + (CylinderCapacity is int max ? $" / {max}" : string.Empty),
+        ActiveTripTitle is null ? null : "seferde: " + ActiveTripTitle
+    }.Where(x => !string.IsNullOrEmpty(x)));
+}
+
+public sealed record LoadCylinder(
+    int CylinderId,
+    string SerialNumber,
+    string Barcode,
+    string GasType,
+    string Capacity,
+    string Fullness,
+    string StatusName,
+    string? Customer,
+    string? Plate,
+    string? LastMovement,
+    string? TestDue,
+    bool TestOverdue,
+    string? Loaded,
+    string State,
+    bool Alarm)
+{
+    public string Title => (Alarm ? "⚠ " : string.Empty) + Barcode + (Barcode == SerialNumber ? string.Empty : $" (seri {SerialNumber})");
+
+    public string Subtitle => string.Join(Environment.NewLine, new[]
+    {
+        $"{GasType} · {Capacity} · {Fullness}",
+        State + (State == StatusName ? string.Empty : $" · {StatusName}"),
+        Customer is null ? null : "Müşteri: " + Customer,
+        Plate is null ? null : "Araç: " + Plate,
+        Loaded is null ? null : "Yükleme: " + Loaded,
+        LastMovement is null ? null : "Son hareket: " + LastMovement,
+        TestDue is null ? null : "Test tarihi: " + TestDue + (TestOverdue ? " (geçmiş!)" : string.Empty)
+    }.Where(x => !string.IsNullOrEmpty(x)));
+}
+
+public sealed record GasGroup(string GasType, int Count, int Full, int Empty, int Alarm, string Summary, List<LoadCylinder> Cylinders);
+
+public sealed record VehicleTrip(int TripId, string Title, bool Active, string Started, string? Closed, string? VehicleReturned, int Loaded, int Delivered, int Returned, int Missing);
+
+public sealed record VehicleDetailResponse(VehicleItem Vehicle, List<GasGroup> OnBoard, string? CapacityWarning, List<VehicleTrip> Trips);
+
+public sealed record TripLoadView(int TripId, string Title, bool Active, string? Plate, int Total, int OnVehicle, int Missing, List<GasGroup> Groups);
+
+public sealed record VehicleSaved(string Message, int Id, string Plate);
+
+public sealed record VehicleForm(string? Plate, string? Name, string? VehicleType, string? DriverName, int? CylinderCapacity, string? Note, bool? IsActive);
 public sealed record ChatTurn(string Role, string Content);
 public sealed record AgentReply(string Agent, string Role, string Text, bool Ok);
 
@@ -450,6 +519,17 @@ public sealed class ApiClient
 
     public Task<TripCloseResponse> CloseTripAsync(int tripId) =>
         PostAsync<TripCloseResponse>("/api/sefer/kapat", new { tripId });
+
+    public Task<TripLoadView> TripLoadAsync(int tripId, string? plate) =>
+        GetAsync<TripLoadView>("/api/sefer/" + tripId + "/yuk" + (string.IsNullOrEmpty(plate) ? string.Empty : "?plaka=" + Uri.EscapeDataString(plate)));
+
+    public Task<List<VehicleItem>> VehiclesAsync(bool includeInactive) =>
+        GetAsync<List<VehicleItem>>("/api/arac-kayit" + (includeInactive ? "?pasif=true" : string.Empty));
+
+    public Task<VehicleDetailResponse> VehicleDetailAsync(int id) => GetAsync<VehicleDetailResponse>("/api/arac-kayit/" + id);
+
+    public Task<VehicleSaved> SaveVehicleAsync(int? id, VehicleForm form) =>
+        PostAsync<VehicleSaved>("/api/arac-kayit" + (id is int value ? "/" + value : string.Empty), form);
 
     public Task<string> AddCrmNoteAsync(int id, string text) =>
         PostMessageAsync($"/api/crm/{id}/not", new { text });

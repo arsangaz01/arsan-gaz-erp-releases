@@ -14,6 +14,7 @@ internal sealed record PanelMoveRequest(CylinderStatus Status, int? CustomerId, 
 internal sealed record PanelEditRequest(string? GasType, decimal Capacity, string? CapacityUnit, DateTime? TestDueDate, bool IsActive);
 internal sealed record PanelUserCreateRequest(string? KullaniciAdi, string? AdSoyad, string? Rol, string? Sifre, bool SifreDegistirsin = true);
 internal sealed record PanelUserUpdateRequest(string? AdSoyad, string? Rol, bool Aktif);
+internal sealed record PanelTripLoadRequest(string? Plate, List<string?>? Codes);
 internal sealed record PanelUserPasswordRequest(string? Sifre, bool SifreDegistirsin = true);
 
 // Endpoint metadata read by the /panel/api filter.
@@ -367,6 +368,74 @@ internal static class WebPanelEndpoints
                 })
             });
         });
+
+        api.MapGet("/sefer/{id:int}/yuk", async (int id, string? plaka) => await VehicleEndpoints.TripLoadAsync(id, plaka));
+
+        api.MapPost("/sefer/baslat", async (TripStartRequest request, HttpContext context) =>
+        {
+            try
+            {
+                CylinderTrip trip = await new CylinderTripService().StartTripAsync(request.Plates, request.Note, $"Web panel ({context.Items["panelUser"]})");
+                WebPanelAudit.Write((string)context.Items["panelUser"]!, "Sefer başlatıldı", trip.Title, string.Join(", ", request.Plates ?? []), WebPanelAuth.ClientIp(context));
+                return Results.Ok(new { trip.Id, trip.Title, message = $"{trip.Title} başlatıldı." });
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(PanelRoles.Move);
+
+        api.MapPost("/sefer/{id:int}/yukle", async (int id, PanelTripLoadRequest request, HttpContext context) =>
+        {
+            try
+            {
+                TripLoadResult result = await new CylinderTripService().LoadCylindersAsync(id, request.Plate, request.Codes ?? [], $"Web panel ({context.Items["panelUser"]})");
+                string message = $"{result.Added} tüp {request.Plate} aracına yüklendi." + (result.Skipped > 0 ? $" {result.Skipped} atlandı:\n" + string.Join("\n", result.Messages) : string.Empty);
+                return Results.Ok(new { message, result.Added, result.Skipped, result.Messages });
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(PanelRoles.Move);
+
+        api.MapPost("/sefer/{id:int}/kapat", async (int id, HttpContext context) =>
+        {
+            try
+            {
+                TripCloseResult result = await new CylinderTripService().CloseTripAsync(id);
+                WebPanelAudit.Write((string)context.Items["panelUser"]!, "Sefer kapatıldı", $"Sefer #{id}", result.Reconcile.HasAlerts ? result.Reconcile.AlertText : null, WebPanelAuth.ClientIp(context));
+                return Results.Ok(new { message = result.Message, hasAlerts = result.Reconcile.HasAlerts });
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(PanelRoles.Move);
+
+        api.MapGet("/araclar", async (bool? pasif) => Results.Ok((await new VehicleService().ListAsync(pasif == true)).Select(VehicleEndpoints.VehicleRow)));
+
+        api.MapGet("/arac/{id:int}", async (int id) =>
+        {
+            VehicleDetail? detail = await new VehicleService().DetailAsync(id);
+            return detail is null ? Results.NotFound(new { error = "Araç bulunamadı." }) : Results.Ok(VehicleEndpoints.DetailDto(detail));
+        });
+
+        api.MapPost("/arac", async (VehicleSaveRequest request, HttpContext context) =>
+            await VehicleEndpoints.SaveAsync(async () =>
+            {
+                Vehicle vehicle = await new VehicleService().CreateAsync(request.Input);
+                WebPanelAudit.Write((string)context.Items["panelUser"]!, "Araç eklendi", vehicle.Plate, vehicle.Name, WebPanelAuth.ClientIp(context));
+                return vehicle;
+            }, v => $"{v.Plate} araç olarak kaydedildi.")).Requires(PanelRoles.Vehicles);
+
+        api.MapPost("/arac/{id:int}", async (int id, VehicleSaveRequest request, HttpContext context) =>
+            await VehicleEndpoints.SaveAsync(async () =>
+            {
+                Vehicle vehicle = await new VehicleService().UpdateAsync(id, request.Input);
+                WebPanelAudit.Write((string)context.Items["panelUser"]!, vehicle.IsActive ? "Araç güncellendi" : "Araç pasif", vehicle.Plate, null, WebPanelAuth.ClientIp(context));
+                return vehicle;
+            }, v => $"{v.Plate} güncellendi." + (v.IsActive ? string.Empty : " Araç pasif; yeni seferlerde seçilemez."))).Requires(PanelRoles.Vehicles);
 
         api.MapGet("/musteriler", async (string? q, int? take) => Results.Ok(await CustomerChoices.SearchAsync(q, take ?? 50)));
 

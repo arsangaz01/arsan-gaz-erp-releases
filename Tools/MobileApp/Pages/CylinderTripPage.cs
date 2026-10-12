@@ -11,7 +11,9 @@ public sealed class CylinderTripPage : ContentPage
     private readonly Picker _trip = new() { Title = "Aktif sefer" };
     private readonly Picker _vehicle = new() { Title = "Sefer aracı" };
     private readonly Picker _mode = new() { Title = "İşlem" };
-    private readonly Entry _plateEntry = new() { Placeholder = "Yeni plaka (01 ABC 123)" };
+    private readonly Picker _groupPlate = new() { Title = "Araç filtresi" };
+    private readonly ContentView _groups = new();
+    private readonly Label _groupsTotal = Ui.Note(string.Empty);
     private readonly Entry _customerSearch = new() { Placeholder = "Müşteri ara", ReturnType = ReturnType.Search, IsVisible = false };
     private readonly Button _customerSearchButton;
     private readonly Picker _customer = new() { Title = "Teslim müşterisi", IsVisible = false };
@@ -36,6 +38,7 @@ public sealed class CylinderTripPage : ContentPage
         _mode.SelectedIndex = 0;
         _mode.SelectedIndexChanged += (_, _) => ApplyMode();
         _trip.SelectedIndexChanged += (_, _) => RefreshVehicles();
+        _groupPlate.SelectedIndexChanged += async (_, _) => await RefreshGroupsAsync();
         _customerSearch.Completed += async (_, _) => await SearchCustomersAsync();
 
         _resultCard = Ui.Card(_result);
@@ -51,26 +54,27 @@ public sealed class CylinderTripPage : ContentPage
                 Spacing = 14,
                 Children =
                 {
-                    Ui.Note("Seferdeki araçları seçin, tüpleri araca yükleyin, müşteriye teslim ve depo dönüşünü okutun. Dönüşte yüklenenlerle eşleşmeyen kodlar kırmızı uyarı verir; teslim ve dönüş okutulmayan tüpler gaz türüne göre listelenir."),
+                    Ui.Note("\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteriye teslim ve depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir."),
+                    Ui.Primary("🚚 Sefer Başlat", async (_, _) => await StartTripAsync()),
                     Ui.Section(
                         "Seferdeki araçlar",
                         _overview,
                         Ui.ActionRow(
                             Ui.Secondary("Yenile", async (_, _) => await RefreshTripsAsync()),
-                            Ui.Secondary("Yeni sefer", async (_, _) => await StartTripAsync()))),
+                            Ui.Secondary("Sefere araç ekle", async (_, _) => await AddVehicleAsync()))),
                     Ui.Section(
                         "Sefer ve araç",
                         _trip,
-                        _vehicle,
-                        _plateEntry,
-                        Ui.Secondary("Aracı sefere ekle", async (_, _) => await AddVehicleAsync())),
+                        _vehicle),
                     Ui.Section(
                         "Okutma",
                         _mode,
                         _customerSearch,
                         _customerSearchButton,
                         _customer,
-                        Ui.Primary("📷 Okut", async (_, _) => await ScanAsync()),
+                        Ui.ActionRow(
+                            Ui.Primary("📷 Okut", async (_, _) => await ScanAsync()),
+                            Ui.Primary("📷 Toplu okut", async (_, _) => await ScanManyAsync())),
                         _code,
                         Ui.ActionRow(
                             Ui.Secondary("Kodu ekle", (_, _) => AddManual()),
@@ -79,6 +83,12 @@ public sealed class CylinderTripPage : ContentPage
                         Ui.Primary("Kaydet / kontrol et", async (_, _) => await SubmitAsync())),
                     _busy,
                     _resultCard,
+                    Ui.Section(
+                        "Yük listesi (gaz türüne göre)",
+                        _groupPlate,
+                        _groupsTotal,
+                        _groups,
+                        Ui.Secondary("Listeyi yenile", async (_, _) => await RefreshGroupsAsync())),
                     Ui.Secondary("Seferi kapat", async (_, _) => await CloseTripAsync())
                 }
             }
@@ -140,7 +150,13 @@ public sealed class CylinderTripPage : ContentPage
         }
     }
 
-    private async Task RefreshTripsAsync()
+    private async Task ScanManyAsync()
+    {
+        IReadOnlyList<string> codes = await ScanPage.ScanManyAsync(Navigation);
+        Add(codes);
+    }
+
+    private async Task RefreshTripsAsync(int? selectTripId = null)
     {
         _busy.IsVisible = true;
         try
@@ -149,13 +165,21 @@ public sealed class CylinderTripPage : ContentPage
             _trip.ItemsSource = _trips.Select(t => $"{t.Title} · {t.LoadedTotal} yüklü · {t.Vehicles.Count(v => v.OnTrip)} araç").ToList();
             if (_trips.Count == 0)
             {
-                _overview.Text = "Aktif sefer yok. \"Yeni sefer\" ile başlatın.";
+                _overview.Text = "Aktif sefer yok. \"Sefer Başlat\" ile başlatın.";
                 _trip.SelectedIndex = -1;
                 _vehicle.ItemsSource = null;
+                _groupPlate.ItemsSource = null;
+                _groupsTotal.Text = string.Empty;
+                _groups.Content = Ui.Note("Aktif sefer yok.");
                 return;
             }
 
-            if (_trip.SelectedIndex < 0)
+            int wanted = selectTripId is int id ? _trips.FindIndex(t => t.Id == id) : -1;
+            if (wanted >= 0)
+            {
+                _trip.SelectedIndex = wanted;
+            }
+            else if (_trip.SelectedIndex < 0)
             {
                 _trip.SelectedIndex = 0;
             }
@@ -208,37 +232,79 @@ public sealed class CylinderTripPage : ContentPage
             return;
         }
 
+        string? previous = SelectedPlate;
         List<string> plates = SelectedTrip.Vehicles.Select(v => v.Plate).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         _vehicle.ItemsSource = plates;
-        if (plates.Count > 0 && (_vehicle.SelectedIndex < 0 || _vehicle.SelectedIndex >= plates.Count))
+        int keep = previous is null ? -1 : plates.FindIndex(p => string.Equals(p, previous, StringComparison.OrdinalIgnoreCase));
+        if (keep >= 0)
+        {
+            _vehicle.SelectedIndex = keep;
+        }
+        else if (plates.Count > 0)
         {
             _vehicle.SelectedIndex = 0;
+        }
+
+        string? groupPlate = _groupPlate.SelectedIndex > 0 ? _groupPlate.SelectedItem as string : null;
+        List<string> filter = ["Tüm araçlar", .. plates];
+        _groupPlate.ItemsSource = filter;
+        int groupIndex = groupPlate is null ? 0 : Math.Max(0, filter.IndexOf(groupPlate));
+        if (_groupPlate.SelectedIndex == groupIndex)
+        {
+            _ = RefreshGroupsAsync();
+        }
+        else
+        {
+            _groupPlate.SelectedIndex = groupIndex;
+        }
+    }
+
+    private async Task RefreshGroupsAsync()
+    {
+        if (SelectedTrip is not ActiveTripSummary trip)
+        {
+            return;
+        }
+
+        string? plate = _groupPlate.SelectedIndex > 0 ? _groupPlate.SelectedItem as string : null;
+        try
+        {
+            TripLoadView load = await ApiClient.Instance.TripLoadAsync(trip.Id, plate);
+            _groupsTotal.Text = load.Total == 0
+                ? string.Empty
+                : $"{(plate ?? "Tüm araçlar")}: {load.Total} tüp yüklendi · araçta {load.OnVehicle}" + (load.Missing > 0 ? $" · ⚠ {load.Missing} eksik" : string.Empty);
+            _groupsTotal.TextColor = load.Missing > 0 ? Colors.Red : Ui.Muted;
+            _groups.Content = CylinderGroupPage.GroupList(Navigation, load.Groups,
+                plate is null ? "Bu sefere henüz tüp yüklenmedi. \"Yükleme\" seçiliyken tüpleri okutup kaydedin." : $"{plate} aracına henüz tüp yüklenmedi.",
+                plate ?? trip.Title);
+        }
+        catch (Exception exception)
+        {
+            _groupsTotal.Text = "Yük listesi alınamadı: " + exception.Message;
+            _groupsTotal.TextColor = Colors.Red;
         }
     }
 
     private async Task StartTripAsync()
     {
-        string? note = await DisplayPromptAsync("Yeni sefer", "Not (isteğe bağlı):", maxLength: 120);
-        if (note is null)
+        (TripStartResponse Trip, string? FirstPlate)? started = await TripStartPage.OpenAsync(Navigation);
+        if (started is null)
         {
             return;
         }
 
-        _busy.IsVisible = true;
-        try
+        (TripStartResponse trip, string? firstPlate) = started.Value;
+
+        _mode.SelectedIndex = 0;
+        _scanned.Clear();
+        RefreshScanned();
+        await RefreshTripsAsync(trip.Id);
+        if (firstPlate is not null && _vehicle.ItemsSource is List<string> plates && plates.IndexOf(firstPlate) is int index and >= 0)
         {
-            TripStartResponse response = await ApiClient.Instance.StartTripAsync(note, null);
-            await DisplayAlertAsync("Sefer", response.Message, "Tamam");
-            await RefreshTripsAsync();
+            _vehicle.SelectedIndex = index;
         }
-        catch (Exception exception)
-        {
-            await DisplayAlertAsync("Sefer", exception.Message, "Tamam");
-        }
-        finally
-        {
-            _busy.IsVisible = false;
-        }
+
+        await DisplayAlertAsync("Sefer", trip.Message + "\n\nŞimdi \"📷 Okut\" veya \"📷 Toplu okut\" ile araca yüklenen tüpleri okutup \"Kaydet\"e basın.", "Tamam");
     }
 
     private async Task AddVehicleAsync()
@@ -249,20 +315,32 @@ public sealed class CylinderTripPage : ContentPage
             return;
         }
 
-        string plate = (_plateEntry.Text ?? string.Empty).Trim();
-        if (plate.Length == 0)
-        {
-            await DisplayAlertAsync("Sefer", "Plaka girin.", "Tamam");
-            return;
-        }
-
         _busy.IsVisible = true;
         try
         {
-            string message = await ApiClient.Instance.AddTripVehicleAsync(SelectedTrip.Id, plate);
-            _plateEntry.Text = string.Empty;
+            HashSet<string> onTrip = SelectedTrip.Vehicles.Select(v => v.Plate).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            List<VehicleItem> vehicles = (await ApiClient.Instance.VehiclesAsync(includeInactive: false))
+                .Where(v => !onTrip.Contains(v.Plate) && v.ActiveTripId is null)
+                .ToList();
+            _busy.IsVisible = false;
+            if (vehicles.Count == 0)
+            {
+                await DisplayAlertAsync("Sefer", "Eklenebilecek boşta araç yok. Yeni araç için \"Araç\" sekmesini kullanın.", "Tamam");
+                return;
+            }
+
+            string? choice = await DisplayActionSheetAsync("Sefere eklenecek araç", "Vazgeç", null,
+                vehicles.Select(v => v.Plate + (v.Caption.Length == 0 ? string.Empty : " · " + v.Caption)).ToArray());
+            VehicleItem? picked = vehicles.FirstOrDefault(v => choice is not null && choice.StartsWith(v.Plate, StringComparison.Ordinal));
+            if (picked is null)
+            {
+                return;
+            }
+
+            _busy.IsVisible = true;
+            string message = await ApiClient.Instance.AddTripVehicleAsync(SelectedTrip.Id, picked.Plate);
             await DisplayAlertAsync("Sefer", message, "Tamam");
-            await RefreshTripsAsync();
+            await RefreshTripsAsync(SelectedTrip.Id);
         }
         catch (Exception exception)
         {
@@ -307,6 +385,7 @@ public sealed class CylinderTripPage : ContentPage
             return;
         }
 
+        int tripId = SelectedTrip.Id;
         string? plate = SelectedPlate;
         int mode = _mode.SelectedIndex;
         if (mode is 0 or 2 && string.IsNullOrWhiteSpace(plate))
@@ -325,7 +404,7 @@ public sealed class CylinderTripPage : ContentPage
             {
                 case 0:
                     TripLoadResponse load = await ApiClient.Instance.LoadTripCylindersAsync(SelectedTrip.Id, plate!, _scanned);
-                    message = load.Message;
+                    message = load.Message + (load.Messages.Count > 0 ? Environment.NewLine + string.Join(Environment.NewLine, load.Messages) : string.Empty);
                     break;
                 case 1:
                     if (SelectedCustomer is null)
@@ -360,7 +439,7 @@ public sealed class CylinderTripPage : ContentPage
 
             _scanned.Clear();
             RefreshScanned();
-            await RefreshTripsAsync();
+            await RefreshTripsAsync(tripId);
         }
         catch (Exception exception)
         {

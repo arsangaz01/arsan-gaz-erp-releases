@@ -14,6 +14,7 @@ public sealed class ArsanGazDbContext : DbContext
  public DbSet<CylinderTrip> CylinderTrips => Set<CylinderTrip>();
  public DbSet<CylinderTripVehicle> CylinderTripVehicles => Set<CylinderTripVehicle>();
  public DbSet<CylinderTripCylinder> CylinderTripCylinders => Set<CylinderTripCylinder>();
+ public DbSet<Vehicle> Vehicles => Set<Vehicle>();
  public DbSet<Quote> Quotes => Set<Quote>();
  public DbSet<QuoteLine> QuoteLines => Set<QuoteLine>();
  public DbSet<Invoice> Invoices => Set<Invoice>();
@@ -49,6 +50,7 @@ public sealed class ArsanGazDbContext : DbContext
   b.Entity<Cylinder>().HasIndex(x=>x.Status);
   b.Entity<CylinderAudit>().HasIndex(x=>new { x.CustomerId, x.AuditedAt });
   b.Entity<CylinderTrip>().HasIndex(x=>x.Status);
+  b.Entity<Vehicle>().HasIndex(x=>x.Plate).IsUnique();
   b.Entity<CylinderTripVehicle>().HasIndex(x=>new { x.TripId, x.Plate });
   b.Entity<CylinderTripCylinder>().HasIndex(x=>new { x.TripId, x.CylinderId });
   b.Entity<CylinderTripCylinder>().HasOne(x=>x.Cylinder).WithMany().HasForeignKey(x=>x.CylinderId).OnDelete(DeleteBehavior.Restrict);

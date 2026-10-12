@@ -60,6 +60,25 @@ CREATE TABLE IF NOT EXISTS CylinderTripCylinders (
  CONSTRAINT FK_CylinderTripCylinders_Cylinder FOREIGN KEY (CylinderId) REFERENCES Cylinders(Id) ON DELETE RESTRICT
 );
 CREATE INDEX IF NOT EXISTS IX_CylinderTripCylinders_TripId_CylinderId ON CylinderTripCylinders(TripId, CylinderId);
+CREATE TABLE IF NOT EXISTS Vehicles (
+ Id INTEGER NOT NULL CONSTRAINT PK_Vehicles PRIMARY KEY AUTOINCREMENT,
+ Plate TEXT NOT NULL,
+ Name TEXT NULL,
+ VehicleType TEXT NULL,
+ DriverName TEXT NULL,
+ CylinderCapacity INTEGER NULL,
+ Note TEXT NULL,
+ IsActive INTEGER NOT NULL DEFAULT 1,
+ CreatedAt TEXT NOT NULL,
+ UpdatedAt TEXT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_Vehicles_Plate ON Vehicles(Plate);
+INSERT OR IGNORE INTO Vehicles (Plate, IsActive, CreatedAt)
+SELECT DISTINCT p.Plate, 1, datetime('now', 'localtime') FROM (
+ SELECT TRIM(VehiclePlate) AS Plate FROM Cylinders WHERE VehiclePlate IS NOT NULL
+ UNION SELECT TRIM(Plate) FROM CylinderTripVehicles
+ UNION SELECT TRIM(VehiclePlate) FROM CylinderTripCylinders
+) p WHERE p.Plate <> '';
 """;
 
     public static async Task EnsureAsync(CancellationToken cancellationToken = default)

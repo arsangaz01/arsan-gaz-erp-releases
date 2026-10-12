@@ -320,7 +320,9 @@ public sealed class CrudService
   await using var db=new ArsanGazDbContext();
   List<string?> current=await db.Cylinders.AsNoTracking().Where(x=>x.VehiclePlate!=null).Select(x=>x.VehiclePlate).Distinct().ToListAsync();
   List<string?> history=await db.CylinderMovements.AsNoTracking().Where(x=>x.VehiclePlate!=null).OrderByDescending(x=>x.MovementDate).Select(x=>x.VehiclePlate).Take(500).ToListAsync();
-  return current.Concat(history).OfType<string>().Distinct().OrderBy(x=>x).Take(50).ToList();
+  List<Vehicle> registered=await db.Vehicles.AsNoTracking().ToListAsync();
+  HashSet<string> inactive=registered.Where(x=>!x.IsActive).Select(x=>x.Plate).ToHashSet(StringComparer.OrdinalIgnoreCase);
+  return registered.Where(x=>x.IsActive).Select(x=>(string?)x.Plate).Concat(current).Concat(history).OfType<string>().Where(x=>!inactive.Contains(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x=>x).Take(100).ToList();
  }
  public async Task<List<Invoice>> OverdueInvoicesAsync(){await using var db=new ArsanGazDbContext();return await db.Invoices.AsNoTracking().Include(x=>x.Customer).Where(x=>x.DueDate<DateTime.Today&&x.PaidAmount<x.TotalAmount).OrderBy(x=>x.DueDate).ToListAsync();}
  public async Task<List<ErpTask>> TasksAsync(){await using var db=new ArsanGazDbContext();return await db.Tasks.AsNoTracking().OrderBy(x=>x.DueDate).ThenBy(x=>x.Title).ToListAsync();}
