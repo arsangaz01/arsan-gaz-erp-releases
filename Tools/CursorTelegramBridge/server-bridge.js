@@ -10,7 +10,8 @@ const fsSync = require("node:fs");
 const path = require("node:path");
 const { execFile } = require("node:child_process");
 const { Agent, Cursor, AgentNotFoundError, AuthenticationError } = require("@cursor/sdk");
-const { buildPrompt, describeToolCall } = require("./bridge");
+const { buildPrompt, describeToolCall, sendWithImages } = require("./bridge");
+const { framesForAttachments } = require("./video-frames");
 const { maskPii } = require("./pii-mask");
 const { doneCheck, formatDoneCheck } = require("./done-check");
 const { createInboxClient, isPcOnline, pickClaimable, DEFAULT_WAIT_MINUTES } = require("./server-inbox");
@@ -236,18 +237,24 @@ function validateRequest(id, request) {
   };
 }
 
+// An attachment that cannot be copied becomes a note for the agent instead of failing the whole request.
 async function fetchAttachments(id, attachments) {
-  if (attachments.length === 0) return [];
+  const result = { paths: [], notes: [] };
+  if (attachments.length === 0) return result;
   const directory = path.join(stateDir, "attachments", id);
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
-  const paths = [];
   for (const [index, attachment] of attachments.entries()) {
     const name = `${index + 1}-${path.basename(String(attachment.fileName || attachment.localPath || "ek")).replace(/[^\p{L}\p{N}._-]/gu, "_")}`;
     const target = path.join(directory, name);
-    await fs.writeFile(target, await inbox.getFile(id, String(attachment.localPath)), { mode: 0o600 });
-    paths.push(target);
+    try {
+      await fs.writeFile(target, await inbox.getFile(id, String(attachment.localPath)), { mode: 0o600 });
+      result.paths.push(target);
+    } catch (error) {
+      log(`Ek alınamadı (${id}, ${name}): ${error.message}`);
+      result.notes.push(`Ek ${attachment.fileName || name} sunucuda okunamadı (${error.message}); kullanıcıya bunu söyle.`);
+    }
   }
-  return paths;
+  return result;
 }
 
 async function openAgent(channel) {
@@ -299,15 +306,18 @@ async function processRequest(id, reason) {
     }
     const request = validateRequest(id, JSON.parse((await inbox.getRequest(id)).replace(/^\uFEFF/, "")));
     text = request.text;
-    const attachmentPaths = await fetchAttachments(id, request.attachments);
+    const attachments = await fetchAttachments(id, request.attachments);
+    const video = await framesForAttachments(attachments.paths);
+    if (video.note) log(`Video kareleri hazırlandı (${id}): ${video.images.length} görsel`);
+    const attachmentNote = [...attachments.notes, video.note].filter(Boolean).join("\n\n");
     const workspaceNote = await refreshWorkspace();
     if (workspaceNote) log(`Depo notu (${id}): ${workspaceNote}`);
     const startHead = await git(["rev-parse", "HEAD"]).catch(() => null);
 
     agent = await openAgent(request.channel);
     const prompt = [...SERVER_RULES, ...(workspaceNote ? [`Not: ${workspaceNote}.`] : []), "", await releaseStatusText(), "",
-      buildPrompt(request.text, request.context, attachmentPaths, request.channel)].join("\n");
-    const run = await agent.send(prompt);
+      buildPrompt(request.text, request.context, attachments.paths, request.channel, "", attachmentNote)].join("\n");
+    const run = await sendWithImages(agent, prompt, video.images, log);
     submitted = true;
     await inbox.put(id, "ack", { status: "submitted", error: null, updatedUtc: nowIso() });
     await inbox.put(id, "progress", { id, stage: "submitted", steps: [], updatedUtc: nowIso() });

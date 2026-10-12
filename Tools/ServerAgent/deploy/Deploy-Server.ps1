@@ -25,7 +25,7 @@ function Install-CursorAgent {
     if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
     New-Item -ItemType Directory -Force -Path (Join-Path $stage 'app'), (Join-Path $stage 'deploy') | Out-Null
     $bridge = Join-Path $repo 'Tools\CursorTelegramBridge'
-    foreach ($file in 'server-bridge.js', 'server-inbox.js', 'done-check.js', 'bridge.js', 'erp-tools.js', 'jarvis-memory.js', 'pii-mask.js', 'package.json', 'package-lock.json') {
+    foreach ($file in 'server-bridge.js', 'server-inbox.js', 'done-check.js', 'bridge.js', 'erp-tools.js', 'jarvis-memory.js', 'pii-mask.js', 'video-frames.js', 'package.json', 'package-lock.json') {
         Copy-Item (Join-Path $bridge $file) (Join-Path $stage 'app')
     }
     foreach ($file in 'cursor-inbox.sh', 'install-cursoragent.sh', 'arsangaz-cursoragent.service', 'inbox-sync.sh', 'set-agent-value.sh', 'test-cursor-queue.sh') {

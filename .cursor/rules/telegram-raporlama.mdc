@@ -34,6 +34,8 @@ AgentWatcher çalışıyorsa mesaj birkaç saniye içinde iletilir.
  `Complete-Request.ps1 -Id <id> -ReportPath <dosya>` çalıştır (rapor Telegram'a gider). `TAKEN` yazarsa isteği yedek köprü
  (bridge.js) devralmıştır; dokunma. Sohbet 3 dakika içinde `Start-Request` çalıştırmazsa veya izleyici kapanırsa köprü işi
  otomatik devralır; bu sayede istek hiçbir zaman sahipsiz kalmaz. `mobile-` ile başlayan istekler telefondaki uygulamadan gelir.
+ Video eklerinde (ekran kaydı vb.) videoyu doğrudan okuyamazsın: `Start-Request` çıktısındaki `VIDEO_FRAMES` altında listelenen
+ kare PNG'lerini (`SHEET` = zaman damgalı 4x2 kare tablosu, `FRAME` = büyük kare) Read aracıyla oku ve hatayı onlara göre değerlendir.
 - `AGENT_LOOP_WAKE_ide_report {"name":...,"path":...}` → ERP ajan sohbetindeki araştırma raporunu incele.
   Önerileri tek tek değerlendir: ERP'ye uygun, kanıtlı ve düşük riskli olanları kodla, derle ve testleri çalıştır;
   zayıf, spekülatif veya kapsam dışı olanları gerekçesiyle ele. Değerlendirmeyi Telegram'a gönder. Yayınlamak için
