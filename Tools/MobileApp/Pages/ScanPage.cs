@@ -191,7 +191,10 @@ public sealed class ScanPage : ContentPage
             _counter.IsVisible = _continuous;
             await HandleFoundAsync(found.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), files.Count, emptyImages);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
         {
             await DisplayAlertAsync("Görüntü", exception.Message, "Tamam");
         }
