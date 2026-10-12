@@ -329,6 +329,45 @@ internal static class WebPanelEndpoints
             return Results.File(bytes, "text/csv; charset=utf-8", $"tup-hareketleri-{DateTime.Now:yyyyMMdd-HHmm}.csv");
         }).Requires(PanelRoles.Export);
 
+        api.MapGet("/seferler", async (string? durum) =>
+        {
+            bool? active = durum switch { "aktif" => true, "kapali" => false, _ => null };
+            return Results.Ok((await new CylinderTripService().TripsAsync(active)).Select(TripRow));
+        });
+
+        api.MapGet("/sefer/{id:int}", async (int id) =>
+        {
+            TripDetail? detail = await new CylinderTripService().TripDetailAsync(id);
+            if (detail is null)
+            {
+                return Results.NotFound(new { error = "Sefer bulunamadı." });
+            }
+
+            return Results.Ok(new
+            {
+                trip = TripRow(detail.Trip),
+                cylinders = detail.Cylinders.Select(c => new
+                {
+                    c.CylinderId,
+                    c.SerialNumber,
+                    c.GasType,
+                    c.Plate,
+                    Loaded = c.LoadedAt.ToString("dd.MM.yyyy HH:mm", Turkish),
+                    Delivered = c.DeliveredAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
+                    Returned = c.ReturnedAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
+                    c.Missing
+                }),
+                unexpected = detail.UnexpectedReturns.Select(u => new
+                {
+                    u.CylinderId,
+                    u.SerialNumber,
+                    u.GasType,
+                    u.Plate,
+                    At = u.At.ToString("dd.MM.yyyy HH:mm", Turkish)
+                })
+            });
+        });
+
         api.MapGet("/musteriler", async (string? q, int? take) => Results.Ok(await CustomerChoices.SearchAsync(q, take ?? 50)));
 
         api.MapGet("/secenekler", async () => Results.Ok(new
@@ -402,6 +441,34 @@ internal static class WebPanelEndpoints
     }
 
     private static WebPanelUser Account(HttpContext context) => (WebPanelUser)context.Items["panelAccount"]!;
+
+    private static object TripRow(TripListItem t) => new
+    {
+        t.Id,
+        t.Title,
+        t.Active,
+        Started = t.StartedAt.ToString("dd.MM.yyyy HH:mm", Turkish),
+        Closed = t.ClosedAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
+        t.Note,
+        t.CreatedBy,
+        Vehicles = t.Vehicles.Select(v => new
+        {
+            v.Plate,
+            v.OnTrip,
+            Returned = v.ReturnedAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
+            v.Loaded,
+            v.Delivered,
+            ReturnedCount = v.Returned,
+            v.OnVehicle,
+            v.Missing
+        }),
+        t.Loaded,
+        t.Delivered,
+        t.Returned,
+        t.OnVehicle,
+        t.Missing,
+        MissingByGas = t.MissingByGas.Select(g => new { g.GasType, g.Count })
+    };
 
     private static string LocalText(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy HH:mm", Turkish);
 

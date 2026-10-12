@@ -23,6 +23,18 @@ Durum: site, veritabanı (PostgreSQL), Telegram dinleme Oracle sunucusunda; PC'd
 - [ ] Öneri: `RELEASES_REPO_TOKEN` depo düzeyinde secret; sunucu ajanı kendi dalında iş akışını değiştirip okuyabilir.
   Yalnızca `v*` etiketlerine izinli bir ortama (environment) taşınmalı (APK anahtarı zaten `android-signing` ortamında, yalnızca main).
 
+## Sefer takibi + yayın düzeltmeleri (12 Ekim 2026, akşam)
+- Sunucu ajanı Sefer özelliğini ekledi (0311907, mobil 1.7.6/24). Yayında 3 sorun vardı: (1) `arsangaz-release apk`
+  GitHub yanıtını python'a argüman olarak veriyordu → "Argument list too long", APK /indir'e konmadı; artık stdin (`py_json`).
+  (2) Sefer tabloları PostgreSQL'de hiç oluşmadı: EF tabloları yalnızca boş şemada oluşur → `Data/PostgresSchema.cs` `Erp`
+  ek SQL'i (CREATE ... IF NOT EXISTS). Yeni EF tablosu/kolonu eklerken buraya da eklenmeli. (3) Yükleme/teslim/dönüşte
+  sefer satırı tüp hareketinden önce yazılıyordu; hareket reddedilirse yanlış "yüklendi/teslim" kalıyordu → sıra düzeltildi.
+  Ayrıca `CylinderTripTracking` dönüşte okutulanları eksik sayıyordu (kendi testi kırmızıydı; CI AgentWatcher.Tests'i çalıştırmıyor).
+- Web panelinde "Seferler" sekmesi: seferdeki araçlar, yüklenen/teslim/dönen/araçta, eksikler kırmızı + gaz türüne göre,
+  yüklenmediği hâlde dönüşte okutulanlar (`/panel/api/seferler`, `/panel/api/sefer/{id}`).
+- `arsangaz-release` her işlemden sonra gizli bilgi içermeyen `/var/lib/arsangaz-release/public/status.json` yazar;
+  sunucu Cursor ajanı bunu her isteğe "canlı yayın durumu" olarak ekler (yanlış "yayınlanmadı" cevaplarını önlemek için).
+
 ## Bekleyen kararlar (kullanıcıdan)
 1. **Commit + push onayı**: kampanya, Gmail göndericisi, mobil 1.6.1 ve hata düzeltmeleri. Henüz commit yok.
    Worker yapılandırma dosyaları commit'e girmeyecek.

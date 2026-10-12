@@ -86,30 +86,19 @@ public static class CylinderTripTracking
             returnIds.Add(id);
         }
 
-        List<string> missing = [];
-        foreach (TripCylinderSnapshot row in rows)
-        {
-            if (row.DeliveredAt is not null || row.ReturnedAt is not null)
-            {
-                continue;
-            }
+        // A cylinder scanned in this return counts as returned even if the snapshot was taken before the scan was saved.
+        List<TripCylinderSnapshot> open = rows
+            .Where(x => x.DeliveredAt is null && x.ReturnedAt is null && !returnIds.Contains(x.CylinderId))
+            .ToList();
+        List<string> missing = open.Select(x => x.SerialNumber).ToList();
 
-            missing.Add(row.SerialNumber);
-        }
-
-        List<TripGasShortage> byGas = rows
-            .Where(x => x.DeliveredAt is null && x.ReturnedAt is null)
+        List<TripGasShortage> byGas = open
             .GroupBy(x => string.IsNullOrWhiteSpace(x.GasType) ? "Belirsiz" : x.GasType.Trim(), StringComparer.OrdinalIgnoreCase)
             .Select(g => new TripGasShortage(g.Key, g.Count()))
             .OrderByDescending(x => x.Count)
             .ThenBy(x => x.GasType, StringComparer.Create(System.Globalization.CultureInfo.GetCultureInfo("tr-TR"), true))
             .ToList();
 
-        List<string> notAccounted = rows
-            .Where(x => x.DeliveredAt is null && x.ReturnedAt is null && !returnIds.Contains(x.CylinderId))
-            .Select(x => x.SerialNumber)
-            .ToList();
-
-        return new TripReconcileResult(missing, byGas, unexpected, notAccounted);
+        return new TripReconcileResult(missing, byGas, unexpected, missing);
     }
 }

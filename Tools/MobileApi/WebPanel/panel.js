@@ -173,6 +173,7 @@ function openTab(tab) {
   if (tab === "ozet") loadSummary();
   if (tab === "tupler") loadCylinders();
   if (tab === "hareketler") loadMovements();
+  if (tab === "seferler") loadTrips();
   if (tab === "musteriler") loadCustomers();
   if (tab === "yonetim") loadAdmin();
 }
@@ -536,6 +537,105 @@ $("c-yeni").addEventListener("click", () => openCustomerDialog($("c-q").value.tr
   await loadCustomers();
   show($("global-msg"), message, "ok");
 }));
+
+// ---- Trips tab -----------------------------------------------------------------------------------
+
+function gasText(list) { return list.map((g) => `${g.gasType} ×${g.count}`).join(", "); }
+
+function tripStatus(t) {
+  if (t.missing > 0) return el("span", { class: "badge trip-alarm" }, `${t.missing} eksik`);
+  return t.active ? el("span", { class: "badge trip-active" }, "Seferde") : el("span", { class: "badge trip-closed" }, "Kapandı");
+}
+
+$("s-yenile").addEventListener("click", loadTrips);
+$("s-durum").addEventListener("change", loadTrips);
+
+async function loadTrips() {
+  try {
+    const [active, rows] = await Promise.all([
+      api("/panel/api/seferler?durum=aktif"),
+      api("/panel/api/seferler" + ($("s-durum").value ? "?durum=" + $("s-durum").value : ""))
+    ]);
+    const cards = [];
+    for (const t of active) {
+      for (const v of t.vehicles) {
+        const sub = v.onTrip
+          ? `${t.title} · araçta ${v.onVehicle}, teslim ${v.delivered}, dönen ${v.returnedCount}`
+          : `Döndü ${v.returned || ""} · teslim ${v.delivered}, dönen ${v.returnedCount}` + (v.missing ? ` · ${v.missing} eksik` : "");
+        cards.push(stat(v.loaded, (v.onTrip ? "🚚 " : "🏁 ") + v.plate, sub, () => openTrip(t.id), false));
+        if (v.missing) cards[cards.length - 1].classList.add("alarm-stat");
+      }
+    }
+    $("s-active").replaceChildren(...(cards.length ? cards : [el("div", { class: "muted" }, "Şu an aktif sefer yok.")]));
+
+    const alarms = active.filter((t) => t.missing > 0).map((t) => `${t.title}: ${t.missing} tüp okutulmadı (${gasText(t.missingByGas)})`);
+    if (alarms.length) { $("s-alarm").textContent = "⚠ Dönen araçlarda eksik okutma var:\n" + alarms.join("\n"); $("s-alarm").classList.remove("hidden"); }
+    else $("s-alarm").classList.add("hidden");
+
+    $("s-count").textContent = `${rows.length} sefer` + (rows.length >= 100 ? " (son 100)" : "");
+    const head = el("tr", {}, ...["Sefer", "Başlangıç / bitiş", "Araçlar", "Yüklenen", "Teslim", "Depoya dönen", "Araçta", "Durum", "Eksik (gaz türü)"].map((h) => el("th", {}, h)));
+    const body = rows.map((t) => el("tr", { class: "click" + (t.missing ? " alarm-row" : ""), onclick: () => openTrip(t.id) },
+      el("td", {}, el("b", {}, t.title), t.note ? el("div", { class: "muted" }, t.note) : null),
+      el("td", {}, t.started, el("div", { class: "muted" }, t.closed ? "Kapandı " + t.closed : "Açık")),
+      el("td", {}, el("div", { class: "trip-vehicles" }, ...t.vehicles.map((v) => el("span", { class: "badge" + (v.missing ? " trip-alarm" : v.onTrip ? " trip-active" : "") }, v.plate)))),
+      el("td", {}, String(t.loaded)),
+      el("td", {}, String(t.delivered)),
+      el("td", {}, String(t.returned)),
+      el("td", {}, String(t.onVehicle)),
+      el("td", {}, tripStatus(t)),
+      el("td", { class: t.missing ? "alarm" : "muted" }, t.missing ? gasText(t.missingByGas) : "-")));
+    $("trips").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 9, class: "muted" }, "Kayıtlı sefer yok."))])));
+  } catch (error) {
+    show($("global-msg"), error.message);
+  }
+}
+
+async function openTrip(id) {
+  let data;
+  try {
+    data = await api("/panel/api/sefer/" + id);
+  } catch (error) {
+    show($("global-msg"), error.message);
+    return;
+  }
+  const t = data.trip;
+  $("t-title").textContent = `${t.title} · #${t.id}`;
+  const alarms = [];
+  if (t.missing) alarms.push(`⚠ ${t.missing} tüp okutulmadı (müşteriye teslim veya depoya dönüş yok): ${gasText(t.missingByGas)}`);
+  if (data.unexpected.length) alarms.push(`⚠ ${data.unexpected.length} tüp bu sefere yüklenmediği hâlde dönüşte okutuldu.`);
+  $("t-alarm").textContent = alarms.join("\n");
+  $("t-alarm").classList.toggle("hidden", alarms.length === 0);
+  const info = [
+    ["Durum", t.active ? "Seferde (açık)" : "Kapandı"], ["Başlangıç", t.started], ["Bitiş", t.closed || "-"],
+    ["Açan", t.createdBy || "-"], ["Not", t.note || "-"],
+    ["Yüklenen", t.loaded], ["Müşteriye teslim", t.delivered], ["Depoya dönen", t.returned], ["Araçta (yolda)", t.onVehicle], ["Eksik", t.missing]
+  ];
+  $("t-info").replaceChildren(...info.map(([k, v]) => el("div", {}, el("span", {}, k), String(v))));
+
+  const vHead = el("tr", {}, ...["Plaka", "Durum", "Yüklenen", "Teslim", "Depoya dönen", "Araçta", "Eksik"].map((h) => el("th", {}, h)));
+  const vBody = t.vehicles.map((v) => el("tr", { class: v.missing ? "alarm-row" : "" },
+    el("td", {}, el("b", {}, v.plate)),
+    el("td", {}, v.onTrip ? "Seferde" : "Döndü " + (v.returned || "")),
+    el("td", {}, String(v.loaded)), el("td", {}, String(v.delivered)), el("td", {}, String(v.returnedCount)),
+    el("td", {}, String(v.onVehicle)), el("td", { class: v.missing ? "alarm" : "" }, String(v.missing))));
+  $("t-vehicles").replaceChildren(el("thead", {}, vHead), el("tbody", {}, ...(vBody.length ? vBody : [el("tr", {}, el("td", { colspan: 7, class: "muted" }, "Araç atanmamış."))])));
+
+  const cHead = el("tr", {}, ...["Seri no", "Gaz", "Plaka", "Yükleme", "Durum"].map((h) => el("th", {}, h)));
+  const cBody = data.cylinders.map((c) => el("tr", { class: "click" + (c.missing ? " alarm-row" : ""), onclick: () => openDetail(c.cylinderId) },
+    el("td", {}, el("b", {}, c.serialNumber)), el("td", {}, c.gasType), el("td", {}, c.plate), el("td", {}, c.loaded),
+    el("td", { class: c.missing ? "alarm" : "" },
+      c.delivered ? "Müşteriye teslim " + c.delivered : c.returned ? "Depoya döndü " + c.returned : c.missing ? "⚠ Eksik: okutulmadı" : "Araçta")));
+  $("t-cylinders").replaceChildren(el("thead", {}, cHead), el("tbody", {}, ...(cBody.length ? cBody : [el("tr", {}, el("td", { colspan: 5, class: "muted" }, "Bu sefere tüp yüklenmemiş."))])));
+
+  $("t-unexpected-card").classList.toggle("hidden", data.unexpected.length === 0);
+  const uHead = el("tr", {}, ...["Seri no", "Gaz", "Plaka", "Okutma"].map((h) => el("th", {}, h)));
+  const uBody = data.unexpected.map((u) => el("tr", { class: "click alarm-row", onclick: () => openDetail(u.cylinderId) },
+    el("td", { class: "alarm" }, u.serialNumber), el("td", {}, u.gasType), el("td", {}, u.plate || "-"), el("td", {}, u.at)));
+  $("t-unexpected").replaceChildren(el("thead", {}, uHead), el("tbody", {}, ...uBody));
+  if (!$("trip-dialog").open) $("trip-dialog").showModal();
+}
+
+$("t-close").addEventListener("click", () => $("trip-dialog").close());
 
 // ---- Customers tab -------------------------------------------------------------------------------
 

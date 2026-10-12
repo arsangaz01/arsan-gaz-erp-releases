@@ -24,6 +24,33 @@ public sealed record TripLoadResult(int Added, int Skipped, IReadOnlyList<string
 
 public sealed record TripCloseResult(int TripId, TripReconcileResult Reconcile, string Message);
 
+// Web panel views. Missing = neither delivered nor returned although its vehicle came back (or the trip was closed);
+// OnVehicle = the same while the vehicle is still out, which is not an error yet.
+public sealed record TripVehicleView(string Plate, bool OnTrip, DateTime? ReturnedAt, int Loaded, int Delivered, int Returned, int OnVehicle, int Missing);
+
+public sealed record TripListItem(
+    int Id,
+    string Title,
+    bool Active,
+    DateTime StartedAt,
+    DateTime? ClosedAt,
+    string? Note,
+    string? CreatedBy,
+    IReadOnlyList<TripVehicleView> Vehicles,
+    int Loaded,
+    int Delivered,
+    int Returned,
+    int OnVehicle,
+    int Missing,
+    IReadOnlyList<TripGasShortage> MissingByGas);
+
+public sealed record TripCylinderView(
+    int CylinderId, string SerialNumber, string GasType, string Plate, DateTime LoadedAt, DateTime? DeliveredAt, DateTime? ReturnedAt, bool Missing);
+
+public sealed record TripUnexpectedReturn(int CylinderId, string SerialNumber, string GasType, string? Plate, DateTime At);
+
+public sealed record TripDetail(TripListItem Trip, IReadOnlyList<TripCylinderView> Cylinders, IReadOnlyList<TripUnexpectedReturn> UnexpectedReturns);
+
 public sealed class CylinderTripService
 {
     private readonly CrudService _crud = new();
@@ -39,6 +66,95 @@ public sealed class CylinderTripService
             .ToListAsync();
 
         return trips.Select(TripSummary).ToList();
+    }
+
+    public async Task<List<TripListItem>> TripsAsync(bool? active, int take = 100)
+    {
+        await using ArsanGazDbContext db = new();
+        IQueryable<CylinderTrip> query = db.CylinderTrips.AsNoTracking().Include(x => x.Vehicles).Include(x => x.Cylinders);
+        if (active is bool wanted)
+        {
+            CylinderTripStatus status = wanted ? CylinderTripStatus.Active : CylinderTripStatus.Closed;
+            query = query.Where(x => x.Status == status);
+        }
+
+        List<CylinderTrip> trips = await query.OrderByDescending(x => x.StartedAt).ThenByDescending(x => x.Id).Take(take).ToListAsync();
+        return trips.Select(TripView).ToList();
+    }
+
+    public async Task<TripDetail?> TripDetailAsync(int tripId)
+    {
+        await using ArsanGazDbContext db = new();
+        CylinderTrip? trip = await db.CylinderTrips.AsNoTracking().Include(x => x.Vehicles).Include(x => x.Cylinders)
+            .FirstOrDefaultAsync(x => x.Id == tripId);
+        if (trip is null)
+        {
+            return null;
+        }
+
+        HashSet<string> returnedPlates = ReturnedPlates(trip);
+        List<TripCylinderView> cylinders = trip.Cylinders
+            .OrderBy(x => x.VehiclePlate, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.GasType, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.SerialNumber, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new TripCylinderView(x.CylinderId, x.SerialNumber, x.GasType, x.VehiclePlate, x.LoadedAt, x.DeliveredAt, x.ReturnedAt,
+                IsMissing(x, returnedPlates)))
+            .ToList();
+
+        // Return scans of cylinders that were never loaded on this trip are only kept as movements ("Sefer #id · plate · depo dönüşü").
+        string prefix = $"Sefer #{tripId} · ";
+        HashSet<int> loadedIds = trip.Cylinders.Select(x => x.CylinderId).ToHashSet();
+        List<CylinderMovement> returns = await db.CylinderMovements.AsNoTracking().Include(x => x.Cylinder)
+            .Where(x => x.MovementType == "Sefer dönüşü" && x.Description != null && x.Description.StartsWith(prefix))
+            .OrderBy(x => x.MovementDate)
+            .ToListAsync();
+        List<TripUnexpectedReturn> unexpected = returns
+            .Where(x => !loadedIds.Contains(x.CylinderId))
+            .GroupBy(x => x.CylinderId)
+            .Select(g => g.First())
+            .Select(x => new TripUnexpectedReturn(x.CylinderId, x.Cylinder.SerialNumber, x.Cylinder.GasType,
+                x.Description!.Substring(prefix.Length).Split(" · ")[0], x.MovementDate))
+            .ToList();
+
+        return new TripDetail(TripView(trip), cylinders, unexpected);
+    }
+
+    private static HashSet<string> ReturnedPlates(CylinderTrip trip) =>
+        trip.Status == CylinderTripStatus.Closed
+            ? trip.Cylinders.Select(x => x.VehiclePlate).Concat(trip.Vehicles.Select(x => x.Plate)).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : trip.Vehicles.Where(x => x.ReturnedAt is not null).Select(x => x.Plate).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsOpen(CylinderTripCylinder row) => row.DeliveredAt is null && row.ReturnedAt is null;
+
+    private static bool IsMissing(CylinderTripCylinder row, HashSet<string> returnedPlates) => IsOpen(row) && returnedPlates.Contains(row.VehiclePlate);
+
+    private static TripListItem TripView(CylinderTrip trip)
+    {
+        HashSet<string> returnedPlates = ReturnedPlates(trip);
+        List<string> plates = trip.Vehicles.Select(x => x.Plate)
+            .Concat(trip.Cylinders.Select(x => x.VehiclePlate))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x, StringComparer.Create(System.Globalization.CultureInfo.GetCultureInfo("tr-TR"), true))
+            .ToList();
+        List<TripVehicleView> vehicles = plates.Select(plate =>
+        {
+            List<CylinderTripCylinder> rows = trip.Cylinders.Where(x => string.Equals(x.VehiclePlate, plate, StringComparison.OrdinalIgnoreCase)).ToList();
+            CylinderTripVehicle? vehicle = trip.Vehicles.FirstOrDefault(x => string.Equals(x.Plate, plate, StringComparison.OrdinalIgnoreCase));
+            int missing = rows.Count(x => IsMissing(x, returnedPlates));
+            return new TripVehicleView(plate, !returnedPlates.Contains(plate), vehicle?.ReturnedAt, rows.Count,
+                rows.Count(x => x.DeliveredAt is not null), rows.Count(x => x.ReturnedAt is not null),
+                rows.Count(IsOpen) - missing, missing);
+        }).ToList();
+
+        List<TripGasShortage> missingByGas = trip.Cylinders.Where(x => IsMissing(x, returnedPlates))
+            .GroupBy(x => string.IsNullOrWhiteSpace(x.GasType) ? "Belirsiz" : x.GasType.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(g => new TripGasShortage(g.Key, g.Count()))
+            .OrderByDescending(x => x.Count)
+            .ToList();
+
+        return new TripListItem(trip.Id, trip.Title, trip.Status == CylinderTripStatus.Active, trip.StartedAt, trip.ClosedAt, trip.Note, trip.CreatedBy,
+            vehicles, trip.Cylinders.Count, trip.Cylinders.Count(x => x.DeliveredAt is not null), trip.Cylinders.Count(x => x.ReturnedAt is not null),
+            vehicles.Sum(x => x.OnVehicle), vehicles.Sum(x => x.Missing), missingByGas);
     }
 
     public async Task<CylinderTrip> StartTripAsync(IEnumerable<string?>? plates, string? note, string? createdBy)
@@ -89,8 +205,7 @@ public sealed class CylinderTripService
         int added = 0;
         int skipped = 0;
         List<string> messages = [];
-        List<string> movedCodes = [];
-        DateTime now = DateTime.Now;
+        List<(string Code, Cylinder Cylinder)> candidates = [];
         foreach (string code in clean)
         {
             Cylinder? cylinder = await _crud.FindCylinderByCodeAsync(code);
@@ -101,9 +216,33 @@ public sealed class CylinderTripService
                 continue;
             }
 
-            if (already.Contains(cylinder.Id))
+            if (!already.Add(cylinder.Id))
             {
                 messages.Add($"{cylinder.SerialNumber}: zaten sefer listesinde.");
+                skipped++;
+                continue;
+            }
+
+            candidates.Add((code, cylinder));
+        }
+
+        if (candidates.Count == 0)
+        {
+            return new TripLoadResult(added, skipped, messages);
+        }
+
+        // The cylinder must really be moved onto the vehicle before it counts as loaded; a refused move (e.g. it is
+        // registered to a customer) would otherwise leave a trip row that later shows up as missing.
+        string movementNote = $"Sefer #{tripId} · {normalized} · yükleme" + (string.IsNullOrWhiteSpace(performedBy) ? string.Empty : $" · {performedBy}");
+        List<CylinderBulkResult> moved = await _crud.MoveCylindersAsync(
+            candidates.Select(x => x.Code), CylinderStatus.Vehicle, null, movementNote, "Sefer yüklemesi", normalized, isFull: null);
+        Dictionary<string, CylinderBulkResult> byCode = moved.ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
+        DateTime now = DateTime.Now;
+        foreach ((string code, Cylinder cylinder) in candidates)
+        {
+            if (byCode.GetValueOrDefault(code) is not { Ok: true })
+            {
+                messages.Add($"{cylinder.SerialNumber}: araca alınamadı ({byCode.GetValueOrDefault(code)?.Message ?? "bilinmeyen hata"}).");
                 skipped++;
                 continue;
             }
@@ -117,22 +256,18 @@ public sealed class CylinderTripService
                 GasType = cylinder.GasType,
                 LoadedAt = now
             });
-            already.Add(cylinder.Id);
-            movedCodes.Add(code);
             added++;
         }
 
         if (added > 0)
         {
             await db.SaveChangesAsync();
-            string movementNote = $"Sefer #{tripId} · {normalized} · yükleme" + (string.IsNullOrWhiteSpace(performedBy) ? string.Empty : $" · {performedBy}");
-            await _crud.MoveCylindersAsync(movedCodes, CylinderStatus.Vehicle, null, movementNote, "Sefer yüklemesi", normalized, isFull: null);
         }
 
         return new TripLoadResult(added, skipped, messages);
     }
 
-    public async Task DeliverCylindersAsync(int tripId, IEnumerable<string?> codes, int? customerId, string? note, string? performedBy)
+    public async Task<List<CylinderBulkResult>> DeliverCylindersAsync(int tripId, IEnumerable<string?> codes, int? customerId, string? note, string? performedBy)
     {
         if (customerId is null)
         {
@@ -147,21 +282,11 @@ public sealed class CylinderTripService
 
         await using ArsanGazDbContext db = new();
         await EnsureActiveTripAsync(db, tripId);
-        Dictionary<string, int> codeToId = await CodeMapAsync(clean);
-        List<CylinderTripCylinder> rows = await db.CylinderTripCylinders
-            .Where(x => x.TripId == tripId && codeToId.Values.Contains(x.CylinderId))
-            .ToListAsync();
-
-        DateTime now = DateTime.Now;
-        foreach (CylinderTripCylinder row in rows)
-        {
-            row.DeliveredAt ??= now;
-        }
-
-        await db.SaveChangesAsync();
         string movementNote = $"Sefer #{tripId} · teslim" + (string.IsNullOrWhiteSpace(note) ? string.Empty : " · " + note.Trim())
             + (string.IsNullOrWhiteSpace(performedBy) ? string.Empty : $" · {performedBy}");
-        await _crud.MoveCylindersAsync(clean, CylinderStatus.Customer, customerId, movementNote, "Sefer teslimi", vehiclePlate: null, isFull: null);
+        List<CylinderBulkResult> moved = await _crud.MoveCylindersAsync(clean, CylinderStatus.Customer, customerId, movementNote, "Sefer teslimi", vehiclePlate: null, isFull: null);
+        await MarkTripRowsAsync(db, tripId, null, moved, row => row.DeliveredAt ??= DateTime.Now);
+        return moved;
     }
 
     public async Task<TripReconcileResult> ReturnCylindersAsync(int tripId, string? plate, IEnumerable<string?> codes, string? note, string? performedBy)
@@ -170,36 +295,46 @@ public sealed class CylinderTripService
         IReadOnlyList<string> clean = CylinderTracking.CleanCodes(codes);
 
         await using ArsanGazDbContext db = new();
-        CylinderTrip trip = await EnsureActiveTripAsync(db, tripId);
+        await EnsureActiveTripAsync(db, tripId);
         await EnsureVehicleOnTripAsync(db, tripId, normalized);
-
-        Dictionary<string, int> codeToId = await CodeMapAsync(clean);
-        List<CylinderTripCylinder> rows = await db.CylinderTripCylinders
-            .Where(x => x.TripId == tripId && x.VehiclePlate == normalized)
-            .ToListAsync();
-
-        DateTime now = DateTime.Now;
-        foreach (CylinderTripCylinder row in rows.Where(x => codeToId.Values.Contains(x.CylinderId)))
-        {
-            row.ReturnedAt ??= now;
-        }
-
-        CylinderTripVehicle? vehicle = trip.Vehicles.FirstOrDefault(x => x.Plate == normalized);
-        if (vehicle is not null && vehicle.ReturnedAt is null && clean.Count > 0)
-        {
-            vehicle.ReturnedAt = now;
-        }
-
-        await db.SaveChangesAsync();
 
         if (clean.Count > 0)
         {
             string movementNote = $"Sefer #{tripId} · {normalized} · depo dönüşü" + (string.IsNullOrWhiteSpace(note) ? string.Empty : " · " + note.Trim())
                 + (string.IsNullOrWhiteSpace(performedBy) ? string.Empty : $" · {performedBy}");
-            await _crud.MoveCylindersAsync(clean, CylinderStatus.Warehouse, null, movementNote, "Sefer dönüşü", vehiclePlate: null, isFull: null);
+            List<CylinderBulkResult> moved = await _crud.MoveCylindersAsync(clean, CylinderStatus.Warehouse, null, movementNote, "Sefer dönüşü", vehiclePlate: null, isFull: null);
+            await MarkTripRowsAsync(db, tripId, normalized, moved, row => row.ReturnedAt ??= DateTime.Now);
+
+            CylinderTripVehicle? vehicle = await db.CylinderTripVehicles.FirstOrDefaultAsync(x => x.TripId == tripId && x.Plate == normalized);
+            if (vehicle is not null && vehicle.ReturnedAt is null)
+            {
+                vehicle.ReturnedAt = DateTime.Now;
+                await db.SaveChangesAsync();
+            }
         }
 
         return await ReconcileTripAsync(tripId, normalized, clean);
+    }
+
+    // Only cylinders whose movement was actually saved are marked delivered/returned on the trip.
+    private async Task MarkTripRowsAsync(ArsanGazDbContext db, int tripId, string? plate, IEnumerable<CylinderBulkResult> moved, Action<CylinderTripCylinder> mark)
+    {
+        List<string> okCodes = moved.Where(x => x.Ok).Select(x => x.Code).ToList();
+        if (okCodes.Count == 0)
+        {
+            return;
+        }
+
+        HashSet<int> ids = (await CodeMapAsync(okCodes)).Values.ToHashSet();
+        List<CylinderTripCylinder> rows = await db.CylinderTripCylinders
+            .Where(x => x.TripId == tripId && ids.Contains(x.CylinderId) && (plate == null || x.VehiclePlate == plate))
+            .ToListAsync();
+        foreach (CylinderTripCylinder row in rows)
+        {
+            mark(row);
+        }
+
+        await db.SaveChangesAsync();
     }
 
     public async Task<TripReconcileResult> ReconcileTripAsync(int tripId, string? plate = null, IEnumerable<string>? returnScanCodes = null)

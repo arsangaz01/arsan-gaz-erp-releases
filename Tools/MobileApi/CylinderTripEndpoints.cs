@@ -67,9 +67,11 @@ internal static class CylinderTripEndpoints
         {
             try
             {
-                await new CylinderTripService().DeliverCylindersAsync(
+                List<CylinderBulkResult> results = await new CylinderTripService().DeliverCylindersAsync(
                     request.TripId, request.Codes ?? [], request.CustomerId, request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
-                return Results.Ok(new { message = "Teslim kaydedildi." });
+                int ok = results.Count(r => r.Ok);
+                string failures = string.Join("\n", results.Where(r => !r.Ok).Select(r => $"{r.Code}: {r.Message}"));
+                return Results.Ok(new { message = $"{ok}/{results.Count} tüp teslim kaydedildi." + (failures.Length > 0 ? "\n" + failures : string.Empty) });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {

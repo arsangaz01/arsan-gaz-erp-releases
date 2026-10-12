@@ -36,6 +36,8 @@ STAGING_DATA=/var/lib/arsangaz-data/staging
 STAGING_ENV=/etc/arsangaz/mobileapi-staging.env
 APK_DIR=/var/lib/arsangaz-data/prod/ArsanGazERP/MobileApi
 APK_ARTIFACT=arsangaz-mobile-apk
+# World-readable, secret-free summary for the server Cursor agent ($BASE is 0711, so only this path is reachable).
+PUBLIC_STATUS=$BASE/public/status.json
 # SHA-256 of the signing certificate of the APK installed on the phones (PC debug.keystore, verified 2026-10-12).
 APK_CERT_SHA256=80ae16deb437fd9e1c7b26b3b38563977078c97a98a17f6983b7d5f19dd90153
 GH_REPO=arsangaz01/arsan-gaz-erp-kaynak
@@ -105,6 +107,10 @@ touches_server_agents() { ! git_r diff --quiet "$1" "$2" -- Tools/ServerAgent To
 
 deployed_sha() { cat "$1/.release-sha" 2>/dev/null || true; }
 
+# Runs inline Python with the JSON on stdin. API responses must never go through argv: a single argument is limited
+# to 128 KiB (MAX_ARG_STRLEN), which 30 workflow runs exceed ("Argument list too long").
+py_json() { local data=$1; shift; printf '%s' "$data" | python3 -c "$@"; }
+
 # ---------------------------------------------------------------- GitHub API (Actions read, optional write)
 gh_api() {
   local method=$1 path=$2; shift 2
@@ -120,9 +126,9 @@ ci_status() {
   if ! json=$(gh_api GET "/actions/workflows/$CI_WORKFLOW/runs?head_sha=$sha&per_page=10" 2>/dev/null); then
     echo "unknown GitHub API'ye ulaşılamadı veya anahtar yetkisiz"; return
   fi
-  python3 - "$json" <<'PY'
+  py_json "$json" '
 import json, sys
-runs = json.loads(sys.argv[1]).get("workflow_runs", [])
+runs = json.load(sys.stdin).get("workflow_runs", [])
 if not runs:
     print("none bu commit için CI çalışması yok"); sys.exit()
 done = [r for r in runs if r["status"] == "completed"]
@@ -131,22 +137,22 @@ if any(r["conclusion"] == "success" for r in done):
 if any(r["status"] != "completed" for r in runs):
     print("pending sürüyor"); sys.exit()
 print("failure " + (done[0].get("conclusion") or "başarısız") + " — " + done[0]["html_url"])
-PY
+'
 }
 
 ci_jobs() {
   local sha=$1 runs id jobs
   [ -n "$GITHUB_ACTIONS_TOKEN" ] || return 0
   runs=$(gh_api GET "/actions/workflows/$CI_WORKFLOW/runs?head_sha=$sha&per_page=1" 2>/dev/null) || return 0
-  id=$(python3 -c 'import json,sys; r=json.loads(sys.argv[1]).get("workflow_runs",[]); print(r[0]["id"] if r else "")' "$runs")
+  id=$(py_json "$runs" 'import json,sys; r=json.load(sys.stdin).get("workflow_runs",[]); print(r[0]["id"] if r else "")')
   [ -n "$id" ] || return 0
   jobs=$(gh_api GET "/actions/runs/$id/jobs?per_page=30" 2>/dev/null) || return 0
-  python3 - "$jobs" <<'PY'
+  py_json "$jobs" '
 import json, sys
 icons = {"success": "✅", "failure": "❌", "skipped": "⏭", "cancelled": "⛔", None: "⏳"}
-jobs = [j for j in json.loads(sys.argv[1]).get("jobs", []) if j["name"] != "changes"]
-print("   " + ", ".join(f'{j["name"]} {icons.get(j["conclusion"], j["conclusion"])}' for j in jobs))
-PY
+jobs = [j for j in json.load(sys.stdin).get("jobs", []) if j["name"] != "changes"]
+print("   " + ", ".join(j["name"] + " " + str(icons.get(j["conclusion"], j["conclusion"])) for j in jobs))
+'
 }
 
 # ---------------------------------------------------------------- build + deploy
@@ -390,12 +396,11 @@ act_apk() {
   fi
   local runs pick
   runs=$(gh_api GET "/actions/workflows/$CI_WORKFLOW/runs?branch=main&per_page=30") || { say "GitHub API okunamadı."; trailer APK_STATE waiting; return 0; }
-  pick=$(python3 - "$runs" <<'PY'
+  pick=$(py_json "$runs" '
 import json, sys
-for r in json.loads(sys.argv[1]).get("workflow_runs", []):
+for r in json.load(sys.stdin).get("workflow_runs", []):
     print(r["id"], r["head_sha"], r["status"], r.get("conclusion") or "-")
-PY
-)
+')
   local id head status conclusion waiting=0 found=""
   while read -r id head status conclusion; do
     [ -n "$id" ] || continue
@@ -405,7 +410,7 @@ PY
     [ "$conclusion" = success ] || continue
     local arts url
     arts=$(gh_api GET "/actions/runs/$id/artifacts") || continue
-    url=$(python3 -c 'import json,sys; a=[x for x in json.loads(sys.argv[1]).get("artifacts",[]) if x["name"]==sys.argv[2] and not x["expired"]]; print(a[0]["archive_download_url"] if a else "")' "$arts" "$APK_ARTIFACT")
+    url=$(py_json "$arts" 'import json,sys; a=[x for x in json.load(sys.stdin).get("artifacts",[]) if x["name"]==sys.argv[1] and not x["expired"]]; print(a[0]["archive_download_url"] if a else "")' "$APK_ARTIFACT")
     [ -n "$url" ] && { found="$id $url"; break; }
   done <<<"$pick"
   if [ -z "$found" ]; then
@@ -499,6 +504,44 @@ act_selftest_rollback() {
   say "❌ Geri dönüş testi başarısız (kod $rc, sürüm $after)."; return 1
 }
 
+known_commit() { [ -n "$1" ] && git_r cat-file -e "$1^{commit}" 2>/dev/null; }
+
+# What is live (MobileApi, APK) and what still waits, after every action. Uses the last fetched origin refs.
+write_public_status() {
+  local action=$1 code=$2 main br deployed apk_sha ahead=0 api_pending=0 apk_pending=0
+  [ -d "$REPO/.git" ] || return 0
+  main=$(rev origin/main); br=$(rev "origin/$WORK_BRANCH")
+  deployed=$(deployed_sha "$PROD_DIR"); apk_sha=$(cat "$STATE/apk-sha" 2>/dev/null || true)
+  if [ -n "$main" ]; then
+    if [ -n "$br" ] && ! git_r merge-base --is-ancestor "$br" "$main"; then ahead=$(git_r rev-list --count "$main..$br"); fi
+    if ! known_commit "$deployed" || touches_mobileapi "$deployed" "$main"; then api_pending=1; fi
+    if ! known_commit "$apk_sha" || touches_mobileapp "$apk_sha" "$main"; then apk_pending=1; fi
+  fi
+  install -d -m 0755 "$(dirname "$PUBLIC_STATUS")"
+  ACTION="$action" CODE="$code" MAIN="$main" MAIN_SUBJECT="$(git_r log -1 --format=%s "$main" 2>/dev/null || true)" \
+  AHEAD="$ahead" PROD="$deployed" PROD_ACTIVE="$(systemctl is-active "$PROD_UNIT" 2>/dev/null || true)" API_PENDING="$api_pending" \
+  APK_SHA="$apk_sha" APK_PENDING="$apk_pending" APK_META="$APK_DIR/ArsanGazERP-Mobil.apk.meta.json" WORK_BRANCH="$WORK_BRANCH" \
+  python3 -c '
+import json, os, datetime
+e = os.environ
+try:
+    meta = json.load(open(e["APK_META"]))
+except Exception:
+    meta = {}
+print(json.dumps({
+    "updatedAt": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+    "lastAction": e["ACTION"], "lastExitCode": int(e["CODE"] or 0),
+    "main": {"sha": e["MAIN"], "subject": e["MAIN_SUBJECT"]},
+    "workBranch": {"name": e["WORK_BRANCH"], "commitsWaitingForYayin": int(e["AHEAD"])},
+    "mobileApi": {"deployedSha": e["PROD"], "service": e["PROD_ACTIVE"], "mainNotYetDeployed": e["API_PENDING"] == "1"},
+    "apk": {"versionName": meta.get("versionName"), "versionCode": meta.get("versionCode"), "builtFromSha": e["APK_SHA"],
+            "mainNotYetPublished": e["APK_PENDING"] == "1"},
+}, ensure_ascii=False, indent=1))
+' > "$PUBLIC_STATUS.tmp"
+  chmod 0644 "$PUBLIC_STATUS.tmp"
+  mv -f "$PUBLIC_STATUS.tmp" "$PUBLIC_STATUS"
+}
+
 run_action() {
   local action=$1; shift
   case "$action" in
@@ -534,6 +577,7 @@ spool() {
       code=$?
       set -e
       { echo "=== $(date -Is) $id ($action $a1 $a2) çıkış $code"; cat "$out"; } >> "$LOGDIR/spool.log"
+      write_public_status "$action" "$code" >/dev/null 2>&1 || true
     fi
     chown arsangaz:arsangaz "$out"; chmod 600 "$out"
     printf '%s\n' "$code" > "$SPOOL/results/$id.done.tmp"
@@ -553,8 +597,10 @@ main() {
   flock -w 7200 9 || die "Başka bir yayın işlemi sürüyor."
   if [ "${1:-}" = --spool ]; then spool; return; fi
   [ $# -ge 1 ] || { sed -n '2,13p' "$0"; exit 2; }
-  run_action "$@" 2>&1 | tee -a "$LOGDIR/$STAMP-$1.log"
-  return "${PIPESTATUS[0]}"
+  local code=0
+  run_action "$@" 2>&1 | tee -a "$LOGDIR/$STAMP-$1.log" || code=${PIPESTATUS[0]}
+  write_public_status "$1" "$code" >/dev/null 2>&1 || true
+  return "$code"
 }
 
 main "$@"

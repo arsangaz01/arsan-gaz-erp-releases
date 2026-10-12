@@ -106,6 +106,15 @@ dialog.narrow { width:min(520px,96vw); }
 .pw-row { display:flex; gap:6px; }
 .pw-row input { flex:1; }
 .badge.crm { background:#eff6ff; border-color:#bfdbfe; color:#1e40af; }
+.alarm { color:#b91c1c; font-weight:600; }
+.msg.alarm, .alarm-box { background:#fef2f2; color:#b91c1c; border:1px solid #fca5a5; border-radius:8px; padding:10px 12px; margin:8px 0; white-space:pre-line; }
+.stat.alarm-stat { border-color:#fca5a5; background:#fef2f2; }
+.stat.alarm-stat .n { color:#b91c1c; }
+tr.alarm-row td { background:#fef2f2; }
+.badge.trip-active { background:#e0f2fe; border-color:#7dd3fc; color:#0369a1; }
+.badge.trip-closed { background:#f3f4f6; border-color:#d1d5db; color:#374151; }
+.badge.trip-alarm { background:#fee2e2; border-color:#fca5a5; color:#b91c1c; }
+.trip-vehicles { display:flex; flex-wrap:wrap; gap:6px; }
 .panel-deploy-footer { text-align:center; padding:8px 18px 18px; font-size:11px; color:#9ca3af; }
 @media (max-width:640px) { main { padding:10px; } header { padding:10px 12px; } .hide-sm { display:none; } }
 </style>
@@ -131,6 +140,7 @@ dialog.narrow { width:min(520px,96vw); }
       <button data-tab="ozet" class="active">Özet</button>
       <button data-tab="tupler">Tüpler</button>
       <button data-tab="hareketler">Hareketler</button>
+      <button data-tab="seferler">Seferler</button>
       <button data-tab="musteriler">Müşteriler</button>
       <button data-tab="yeni" data-perm="tup-kayit">Yeni tüp</button>
       <button data-tab="yonetim" data-perm="kullanici-yonetimi">Yönetim</button>
@@ -189,6 +199,26 @@ dialog.narrow { width:min(520px,96vw); }
       <div class="card">
         <div class="muted" id="mov-count"></div>
         <div class="table-wrap"><table id="movements"></table></div>
+      </div>
+    </section>
+
+    <section data-page="seferler" class="hidden">
+      <div class="card">
+        <div class="toolbar">
+          <h2>Seferde olan araçlar</h2>
+          <button class="secondary small" id="s-yenile" type="button">Yenile</button>
+        </div>
+        <div id="s-alarm" class="alarm-box hidden"></div>
+        <div id="s-active" class="grid"></div>
+      </div>
+      <div class="card">
+        <div class="toolbar">
+          <h2>Seferler</h2>
+          <label class="field">Göster<select id="s-durum"><option value="">Tümü</option><option value="aktif">Aktif</option><option value="kapali">Kapanmış</option></select></label>
+        </div>
+        <div class="muted" id="s-count"></div>
+        <div class="table-wrap"><table id="trips"></table></div>
+        <div class="hint">Seferler mobil uygulamadaki "Sefer" sekmesinden açılır: araçlar atanır, yüklenen tüpler okutulur, araç dönünce tüpler tekrar okutulur. Araç döndüğü (veya sefer kapandığı) hâlde müşteriye teslim ya da depoya dönüş okutması olmayan tüpler kırmızı ile "eksik" gösterilir. Seferde yüklenmediği hâlde dönüşte okutulan tüpler de ayrıntıda kırmızı listelenir.</div>
       </div>
     </section>
 
@@ -288,6 +318,17 @@ dialog.narrow { width:min(520px,96vw); }
   </div>
 </dialog>
 <datalist id="plate-list"></datalist>
+
+<dialog id="trip-dialog">
+  <div class="dlg-head"><h3 id="t-title">Sefer</h3><button class="secondary" id="t-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <div id="t-alarm" class="alarm-box hidden"></div>
+    <div class="card"><h2>Bilgiler</h2><div class="kv" id="t-info"></div></div>
+    <div class="card"><h2>Araçlar</h2><div class="table-wrap"><table id="t-vehicles"></table></div></div>
+    <div class="card"><h2>Yüklenen tüpler</h2><div class="table-wrap"><table id="t-cylinders"></table></div></div>
+    <div class="card hidden" id="t-unexpected-card"><h2>Yüklenmediği hâlde dönüşte okutulan tüpler</h2><div class="table-wrap"><table id="t-unexpected"></table></div></div>
+  </div>
+</dialog>
 
 <dialog id="password-dialog" style="width:min(420px,96vw)">
   <div class="dlg-head"><h3>Şifre değiştir</h3><button class="secondary" id="password-close" type="button">Kapat</button></div>

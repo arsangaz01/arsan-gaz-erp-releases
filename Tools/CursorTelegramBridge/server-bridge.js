@@ -22,6 +22,8 @@ const workBranch = env.CURSOR_AGENT_BRANCH || "cursor/server-agent";
 const waitMinutes = Number(env.CURSOR_AGENT_WAIT_MINUTES ?? DEFAULT_WAIT_MINUTES);
 const model = env.CURSOR_BRIDGE_MODEL || "composer-2.5";
 const autoReview = env.CURSOR_AGENT_AUTO_REVIEW !== "0";
+// Written by arsangaz-release after every release action (no secrets).
+const releaseStatusPath = env.CURSOR_AGENT_RELEASE_STATUS || "/var/lib/arsangaz-release/public/status.json";
 const inbox = createInboxClient({
   helper: env.CURSOR_AGENT_INBOX_HELPER || "/opt/arsangaz-cursoragent/bin/cursor-inbox.sh",
   useSudo: env.CURSOR_AGENT_NO_SUDO !== "1",
@@ -52,14 +54,46 @@ const SERVER_RULES = [
   "- Telegram köprüsü: (cd Tools/CursorTelegramBridge && npm ci --no-audit --no-fund) && node --test Tools/CursorTelegramBridge/*.test.js",
   "- Mobil uygulama (Tools/MobileApp) sunucuda derlenemez; GitHub CI derler. Mobil uygulamayı değiştirirsen Tools/MobileApp/ArsanGazMobile.csproj",
   "  içinde ApplicationVersion'u 1 artır ve ApplicationDisplayVersion'u yükselt; yoksa telefonlar güncellemeyi almaz.",
+  "- Yeni EF tablosu/kolonu eklersen PostgreSQL için Data/PostgresSchema.cs içindeki Erp/Crm ek SQL'ine de CREATE TABLE/INDEX IF NOT EXISTS",
+  "  (veya ALTER TABLE ... ADD COLUMN IF NOT EXISTS) ekle: prod PostgreSQL'de EF tabloları yalnızca şema boşken oluşturulur, sonradan eklenenler oluşmaz.",
+  "Tüp takibine (mobil uygulama) yeni bir özellik eklerken kullanıcı web sitesinden/panelden söz ediyorsa veya özellik ofisten izlenecek",
+  "bir veri üretiyorsa web panelini de güncelle (Tools/MobileApi/WebPanel/panel.html + panel.js, /panel/api uçları WebPanelEndpoints.cs).",
   "Derleme veya test başarısızsa düzelt; düzeltemiyorsan commit etme ve nedenini yaz.",
   `Başarılıysa yalnızca kaynak dosyalarını (bin/, obj/, bin-linux/ hariç; git add <dosyalar>) ${workBranch} dalına commit edip`,
   `'git push origin ${workBranch}' ile gönder. main, cursor/telegram-cursor-agent-bridge ve releases'e asla push etme.`,
   "Yayınlama senin işin değil: prod'a deploy, servis yeniden başlatma, silme, ödeme, müşterilere e-posta/WhatsApp gibi geri alınamaz işleri yapma.",
   "Son mesajında Türkçe ve kısa olarak yaz: ne değişti, hangi bileşenler etkilendi (web sitesi/MobileApi, masaüstü ERP, AgentWatcher, mobil uygulama),",
-  "hangi derleme/testler geçti, commit kodu; ve şunu ekle: 'Yayınlamak için Telegram'da /yayin yazın; CI sonucu ve onay komutu gelir.'",
+  "hangi derleme/testler geçti, commit kodu; ve açıkça şunu ekle: 'Bu değişiklik henüz yayında DEĞİL. Yayınlamak için Telegram'da /yayin yazın;",
+  "CI sonucu ve onay komutu gelir. Mobil uygulama değiştiyse yayından sonra imzalı APK /indir'e konur ve telefon güncelleme önerir.'",
   "Masaüstü ERP/AgentWatcher değişiklikleri onaydan sonra bilgisayar açılınca AutoSync ile otomatik uygulanır; web sitesi/MobileApi hemen yayınlanır.",
+  "Kullanıcı 'neden mobilde/sitede yok', 'yayınlandı mı' gibi sorarsa önce aşağıdaki canlı yayın durumuna bak; tahmin etme. Yayındaki bir şey için",
+  "'prod'a alınmadıysa' deme. Yayında olmayan parça varsa hangisi olduğunu ve nedenini (son yayın işlemi ve çıkış kodu) söyle;",
+  "APK eksikse /apk, MobileApi eksikse /yayin komutunu öner. Durum dosyası yoksa /yayin_durum yazmasını öner.",
 ];
+
+const shortSha = (sha) => (typeof sha === "string" && sha ? sha.slice(0, 7) : "bilinmiyor");
+
+// Live release state for the prompt, so the agent can tell what is already on the site and the phones.
+function describeReleaseStatus(status, now = new Date()) {
+  if (!status || typeof status !== "object") {
+    return "Canlı yayın durumu: okunamadı (arsangaz-release henüz durum dosyası yazmamış).";
+  }
+  const ageMinutes = Math.round((now - Date.parse(status.updatedAt)) / 60_000);
+  const api = status.mobileApi ?? {};
+  const apk = status.apk ?? {};
+  const waiting = status.workBranch?.commitsWaitingForYayin ?? 0;
+  return [
+    `Canlı yayın durumu (arsangaz-release, ${Number.isFinite(ageMinutes) ? `${ageMinutes} dk önce` : "zamanı bilinmiyor"}; son işlem: ${status.lastAction ?? "?"}, çıkış kodu ${status.lastExitCode ?? "?"}):`,
+    `- main: ${shortSha(status.main?.sha)} ${status.main?.subject ?? ""}`.trimEnd(),
+    `- ${status.workBranch?.name ?? workBranch}: ${waiting > 0 ? `${waiting} commit /yayin onayı bekliyor` : "yayın bekleyen commit yok"}`,
+    `- Web sitesi/MobileApi (prod): ${shortSha(api.deployedSha)} (${api.service ?? "?"})${api.mainNotYetDeployed ? " — main'deki MobileApi değişiklikleri henüz yayında DEĞİL" : " — main ile güncel"}`,
+    `- Telefon APK (/indir): ${apk.versionName ?? "?"} (build ${apk.versionCode ?? "?"})${apk.mainNotYetPublished ? " — main'deki mobil uygulama değişiklikleri henüz APK olarak yayında DEĞİL" : " — main ile güncel"}`,
+  ].join("\n");
+}
+
+async function releaseStatusText() {
+  return describeReleaseStatus(await readJson(releaseStatusPath));
+}
 
 let stopping = false;
 let processing = false;
@@ -264,7 +298,7 @@ async function processRequest(id, reason) {
     if (workspaceNote) log(`Depo notu (${id}): ${workspaceNote}`);
 
     agent = await openAgent(request.channel);
-    const prompt = [...SERVER_RULES, ...(workspaceNote ? [`Not: ${workspaceNote}.`] : []), "",
+    const prompt = [...SERVER_RULES, ...(workspaceNote ? [`Not: ${workspaceNote}.`] : []), "", await releaseStatusText(), "",
       buildPrompt(request.text, request.context, attachmentPaths, request.channel)].join("\n");
     const run = await agent.send(prompt);
     submitted = true;
@@ -407,4 +441,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { validateRequest, PRE_PUSH_HOOK, SERVER_RULES };
+module.exports = { validateRequest, PRE_PUSH_HOOK, SERVER_RULES, describeReleaseStatus };
