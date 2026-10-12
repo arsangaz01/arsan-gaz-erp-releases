@@ -80,8 +80,12 @@ if ($To -eq 'Server') {
         Start-Process -FilePath $watcherExe -ArgumentList '--background' -WorkingDirectory $watcherDir | Out-Null
     }
 
-    Start-Sleep -Seconds 20
-    $status = Get-ServerStatus
+    # status.json is rewritten every 30 seconds.
+    for ($i = 0; $i -lt 8; $i++) {
+        Start-Sleep -Seconds 10
+        $status = Get-ServerStatus
+        if ($status.pollingConnected) { break }
+    }
     Write-Output "Sunucu: dinleme=$($status.polling) bagli=$($status.pollingConnected) role=$($status.relay)"
     if (-not $status.pollingConnected) { Write-Warning 'Sunucu dinlemesi henuz bagli gorunmuyor; journalctl -u arsangaz-serveragent kontrol edin. Geri almak icin: -To Pc' }
 }
