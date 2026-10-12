@@ -16,6 +16,10 @@ internal static class ServerPaths
 
     public static string StatusFile => Path.Combine(StateRoot, "status.json");
 
+    // Request spool of the root release runner (Tools/ServerAgent/deploy/arsangaz-release.sh, arsangaz-release.path).
+    public static string ReleaseSpool { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ArsanGazERP", "Release");
+
     // Written by Tools/CursorIdeBridge/Sync-ServerInbox.ps1 on the office PC on every sync pass.
     public static string PcSyncStatusFile => Path.Combine(CopilotInbox, "pc-sync-status.json");
 

@@ -1,0 +1,10 @@
+# ServerAgent (/yayin, /yayin_onay, /geri_al) istek klasörüne yazınca yayın betiğini root olarak başlatır.
+[Unit]
+Description=ArsanGazERP yayin istekleri (ServerAgent -> arsangaz-release)
+
+[Path]
+PathExistsGlob=/var/lib/arsangaz-data/prod/ArsanGazERP/Release/requests/*.req
+Unit=arsangaz-release-runner.service
+
+[Install]
+WantedBy=multi-user.target

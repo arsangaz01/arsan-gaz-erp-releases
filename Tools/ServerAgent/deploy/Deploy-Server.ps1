@@ -3,7 +3,7 @@
 # -Component cursoragent installs the server Cursor agent (Tools/CursorTelegramBridge/server-bridge.js) to
 # /opt/arsangaz-cursoragent/app, the cursoragent user/sudoers/service (install-cursoragent.sh) and the queue scripts.
 param(
-    [ValidateSet('all', 'mobileapi', 'serveragent', 'cursoragent')][string]$Component = 'all',
+    [ValidateSet('all', 'mobileapi', 'serveragent', 'cursoragent', 'release')][string]$Component = 'all',
     [string]$ServerHost = 'arsangaz@144.24.189.205',
     [switch]$SkipPublish
 )
@@ -13,7 +13,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $key = Join-Path $env:USERPROFILE '.ssh\arsangaz_hetzner'
 $out = Join-Path $repo 'publish\linux'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$components = if ($Component -eq 'all') { @('mobileapi', 'serveragent', 'cursoragent') } else { @($Component) }
+$components = if ($Component -eq 'all') { @('release', 'mobileapi', 'serveragent', 'cursoragent') } else { @($Component) }
 
 function Invoke-Remote([string]$Command) {
     ssh -i $key -o BatchMode=yes $ServerHost $Command
@@ -57,8 +57,32 @@ function Install-CursorAgent {
     Write-Host 'cursoragent kuruldu (servis: arsangaz-cursoragent).'
 }
 
+# Telefon onaylı yayın: /usr/local/sbin/arsangaz-release, test örneği, istek klasörü izleyicisi (install-release.sh).
+function Install-Release {
+    $files = 'arsangaz-release.sh', 'install-release.sh', 'arsangaz-mobileapi-staging.service', 'arsangaz-release.path', 'arsangaz-release-runner.service'
+    $stage = Join-Path $out 'release'
+    if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $stage | Out-Null
+    foreach ($file in $files) { Copy-Item (Join-Path $PSScriptRoot $file) $stage }
+    $archive = Join-Path $env:TEMP "arsangaz-release-$stamp.tar.gz"
+    tar -czf $archive -C $stage .
+    if ($LASTEXITCODE -ne 0) { throw 'release arsivlenemedi.' }
+    scp -i $key -q $archive "${ServerHost}:/tmp/arsangaz-release.tar.gz"
+    if ($LASTEXITCODE -ne 0) { throw 'release yuklenemedi.' }
+    Remove-Item $archive
+    Invoke-Remote (@(
+        "set -e",
+        "rm -rf /tmp/arsangaz-release-new && mkdir -p /tmp/arsangaz-release-new",
+        "tar -xzf /tmp/arsangaz-release.tar.gz -C /tmp/arsangaz-release-new && rm -f /tmp/arsangaz-release.tar.gz",
+        "sed -i 's/\r$//' /tmp/arsangaz-release-new/*",
+        "sudo bash /tmp/arsangaz-release-new/install-release.sh",
+        "rm -rf /tmp/arsangaz-release-new"
+    ) -join ' && ')
+}
+
 foreach ($name in $components) {
     if ($name -eq 'cursoragent') { Install-CursorAgent; continue }
+    if ($name -eq 'release') { Install-Release; continue }
     $target = Join-Path $out $name
     if (-not $SkipPublish) {
         if (Test-Path $target) { Remove-Item $target -Recurse -Force }
@@ -69,6 +93,11 @@ foreach ($name in $components) {
             dotnet publish (Join-Path $repo 'Tools\ServerAgent\ArsanGazERP.ServerAgent.csproj') -c Release -r linux-arm64 --self-contained false -o $target -nologo -v q
         }
         if ($LASTEXITCODE -ne 0) { throw "$name derlenemedi." }
+        # arsangaz-release compares this commit with main to decide whether MobileApi needs a new build.
+        if ($name -eq 'mobileapi') {
+            $dirty = git -C $repo status --porcelain -- Tools/MobileApi Data Models Services Tools/ErpMcpServer global.json Directory.Build.props
+            if (-not $dirty) { [IO.File]::WriteAllText((Join-Path $target '.release-sha'), (git -C $repo rev-parse HEAD) + "`n") }
+        }
     }
 
     $archive = Join-Path $env:TEMP "arsangaz-$name-$stamp.tar.gz"

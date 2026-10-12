@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ArsanGazERP.AgentWatcher;
 using ArsanGazERP.ErpMcpServer;
 using ArsanGazERP.Services;
@@ -10,10 +11,22 @@ namespace ArsanGazERP.ServerAgent;
 
 // Server-side Telegram commands. ERP questions are answered here from PostgreSQL; anything that needs Cursor or the
 // office PC is written to the shared CopilotInbox, which the PC pulls (Sync-ServerInbox.ps1) when it is on.
-internal sealed class ServerCommands(TelegramCopilotInbox copilotInbox, Func<int> pendingOutbox)
+internal sealed class ServerCommands(
+    TelegramCopilotInbox copilotInbox,
+    Func<int> pendingOutbox,
+    ReleaseClient? releaseClient = null,
+    Func<string, bool>? notify = null,
+    TimeSpan? apkPollInterval = null)
 {
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
     private static readonly DateTime StartedUtc = DateTime.UtcNow;
+    private static readonly Regex CommitId = new("^[0-9a-f]{7,40}$", RegexOptions.CultureInvariant);
+    private readonly ReleaseClient release = releaseClient ?? ReleaseClient.Default;
+    private readonly Func<string, bool> notify = notify ?? TelegramOutbox.TryQueue;
+    private readonly TimeSpan apkPollInterval = apkPollInterval ?? TimeSpan.FromMinutes(3);
+    private int releaseRunning;
+
+    public Task? BackgroundRelease { get; private set; }
 
     private static readonly HashSet<string> PcOnlyCommands = new(StringComparer.Ordinal)
     {
@@ -36,6 +49,11 @@ internal sealed class ServerCommands(TelegramCopilotInbox copilotInbox, Func<int
         "/takipler [gün] — CRM takipleri\n" +
         "/tahsilat — bekleyen tahsilat hatırlatmaları\n" +
         "/emir <istek> veya düz mesaj — Cursor'a iletilir (bilgisayar kapalıysa kuyruğa alınır)\n" +
+        "/yayin — Cursor'un hazırladığı değişiklikler, CI sonucu ve onay komutu\n" +
+        "/yayin_onay <kod> [zorla] — onaylanan değişikliği main'e alır, web/MobileApi'yi yayınlar\n" +
+        "/apk — mobil uygulamanın imzalı APK'sını GitHub'dan alıp /indir'e koyar\n" +
+        "/geri_al — web/MobileApi'yi önceki sürüme döndürme (onaylı)\n" +
+        "/yayin_durum — sunucudaki sürümler ve yedekler\n" +
         "/gorev, /ekip, /ara gibi AgentWatcher komutları bilgisayar gerektirir.";
 
     public static bool IsPcOnline(out DateTimeOffset? lastSeen)
@@ -143,6 +161,18 @@ internal sealed class ServerCommands(TelegramCopilotInbox copilotInbox, Func<int
                     : await QueueForCursorAsync(updateId, chatId, argument, null, cancellationToken);
             case "/yeni":
                 return "Sunucu modunda Cursor konuşma bağlamı tutulmuyor; her istek zaten yeni konuşma olarak iletilir.";
+            case "/yayin":
+                return await PendingReleaseAsync(cancellationToken);
+            case "/yayin_onay":
+                return StartPublish(argument);
+            case "/apk":
+                return StartBackground("📱 APK kontrol ediliyor; sonuç buraya gelecek.", token => FollowApkAsync(string.Empty, token));
+            case "/geri_al":
+                return await RollbackPreviewAsync(cancellationToken);
+            case "/geri_al_onay":
+                return StartBackground("↩️ Geri alma başladı; sonuç 1-2 dakika içinde buraya gelecek.", RollbackAsync);
+            case "/yayin_durum":
+                return (await release.RunAsync("status", string.Empty, string.Empty, TimeSpan.FromMinutes(2), cancellationToken)).Text;
             default:
                 return PcOnlyCommands.Contains(command)
                     ? $"{command} komutu bilgisayardaki AgentWatcher'ı gerektirir; sunucu modunda çalışmaz. " +
@@ -195,6 +225,142 @@ internal sealed class ServerCommands(TelegramCopilotInbox copilotInbox, Func<int
         return CursorAgentState().Ready
             ? "💤 Bilgisayar kapalı; istek sunucudaki Cursor ajanına verildi. Tamamlanınca rapor buraya gelecek."
             : "💤 Bilgisayar kapalı; istek kuyruğa alındı. Bilgisayar açılınca Cursor işleyecek ve rapor buraya gelecek.";
+    }
+
+    private async Task<string> PendingReleaseAsync(CancellationToken cancellationToken)
+    {
+        if (Volatile.Read(ref releaseRunning) == 1)
+        {
+            return "⏳ Bir yayın işlemi sürüyor; bitince sonuç buraya gelecek.";
+        }
+
+        ReleaseResult result = await release.RunAsync("pending", string.Empty, string.Empty, TimeSpan.FromMinutes(3), cancellationToken);
+        if (!result.Succeeded)
+        {
+            return result.Finished ? "❌ " + result.Text.TrimStart('❌', ' ') : "⏳ " + result.Text + " Birkaç dakika sonra /yayin yazın.";
+        }
+
+        string target = result.Value("TARGET");
+        string code = target.Length >= 7 ? target[..7] : target;
+        bool somethingToPublish = result.Value("PENDING") == "1" || result.Value("MOBILEAPI") == "1";
+        StringBuilder text = new(result.Text);
+        text.AppendLine().AppendLine();
+        if (result.Value("CONFLICT") == "1")
+        {
+            text.Append("Çakışma çözülmeden yayın yapılamaz.");
+        }
+        else if (!somethingToPublish || code.Length == 0)
+        {
+            text.Append("Yayınlanacak bir şey yok.");
+        }
+        else if (result.Value("CI") == "success")
+        {
+            text.Append($"Yayınlamak için: /yayin_onay {code}");
+        }
+        else
+        {
+            text.Append(result.Value("CI") == "pending"
+                ? "CI hâlâ sürüyor; birkaç dakika sonra /yayin ile tekrar bakın."
+                : $"CI başarılı görünmüyor. Yine de yayınlamak için: /yayin_onay {code} zorla");
+        }
+
+        return text.ToString();
+    }
+
+    private string StartPublish(string argument)
+    {
+        string[] parts = argument.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length is 0 or > 2 || !CommitId.IsMatch(parts[0]) || (parts.Length == 2 && parts[1] != "zorla"))
+        {
+            return "Kullanım: /yayin_onay <kod> [zorla]. Kodu /yayin mesajından alın.";
+        }
+
+        string commit = parts[0];
+        string force = parts.Length == 2 ? "force" : string.Empty;
+        return StartBackground(
+            $"🚀 Yayın başladı ({commit}). Birleştirme, derleme, test örneği ve prod kontrolü 5-15 dakika sürer; sonuç buraya gelecek.",
+            token => PublishAsync(commit, force, token));
+    }
+
+    private string StartBackground(string startedText, Func<CancellationToken, Task> work)
+    {
+        if (Interlocked.CompareExchange(ref releaseRunning, 1, 0) != 0)
+        {
+            return "⏳ Bir yayın işlemi zaten sürüyor; bitince sonuç buraya gelecek.";
+        }
+
+        BackgroundRelease = Task.Run(async () =>
+        {
+            try
+            {
+                await work(CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                Log.Write("RELEASE", "Yayın işi hata verdi: " + exception);
+                notify("❌ Yayın işi beklenmedik şekilde durdu: " + exception.GetBaseException().Message);
+            }
+            finally
+            {
+                Volatile.Write(ref releaseRunning, 0);
+            }
+        });
+        return startedText;
+    }
+
+    private async Task PublishAsync(string commit, string force, CancellationToken cancellationToken)
+    {
+        ReleaseResult result = await release.RunAsync("publish", commit, force, TimeSpan.FromHours(2), cancellationToken);
+        string header = result.Succeeded ? "✅ Yayın tamamlandı" : result.Finished ? "❌ Yayın tamamlanamadı" : "⏳ Yayın sürüyor";
+        notify($"{header} ({commit})\n\n{result.Text}");
+        if (result.Succeeded && result.Value("APK") == "needed")
+        {
+            await FollowApkAsync(result.Value("MAIN"), cancellationToken);
+        }
+    }
+
+    // The signed APK is built by GitHub Actions after main is pushed; poll until it is published or clearly stuck.
+    private async Task FollowApkAsync(string mainCommit, CancellationToken cancellationToken)
+    {
+        string argument = CommitId.IsMatch(mainCommit) && mainCommit.Length == 40 ? mainCommit : string.Empty;
+        DateTime deadline = DateTime.UtcNow + TimeSpan.FromMinutes(90);
+        bool announcedWaiting = false;
+        while (true)
+        {
+            ReleaseResult result = await release.RunAsync("apk", argument, string.Empty, TimeSpan.FromMinutes(15), cancellationToken);
+            string state = result.Value("APK_STATE");
+            if (result.Finished && state != "waiting")
+            {
+                notify(result.Text);
+                return;
+            }
+
+            if (DateTime.UtcNow > deadline)
+            {
+                notify("📱 APK 90 dakika içinde hazır olmadı. GitHub Actions'taki CI çalışmasını kontrol edin; sonra /apk yazın.\n" + result.Text);
+                return;
+            }
+
+            if (!announcedWaiting && result.Finished)
+            {
+                notify(result.Text + " Hazır olunca bildireceğim.");
+                announcedWaiting = true;
+            }
+
+            await Task.Delay(apkPollInterval, cancellationToken);
+        }
+    }
+
+    private async Task<string> RollbackPreviewAsync(CancellationToken cancellationToken)
+    {
+        ReleaseResult result = await release.RunAsync("status", string.Empty, string.Empty, TimeSpan.FromMinutes(2), cancellationToken);
+        return result.Text + "\n\nWeb sitesi/MobileApi en son yedeğe döndürülür. Onaylıyorsanız: /geri_al_onay";
+    }
+
+    private async Task RollbackAsync(CancellationToken cancellationToken)
+    {
+        ReleaseResult result = await release.RunAsync("rollback", string.Empty, string.Empty, TimeSpan.FromMinutes(20), cancellationToken);
+        notify((result.Succeeded ? "" : "❌ Geri alma tamamlanamadı\n") + result.Text);
     }
 
     private string Status()

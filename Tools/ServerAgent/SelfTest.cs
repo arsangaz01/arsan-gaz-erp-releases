@@ -67,8 +67,83 @@ internal static class SelfTest
         Expect((await commands.HandleAsync(79, "/gorev analiz", ChatId, CancellationToken.None)).Contains("AgentWatcher", StringComparison.Ordinal), "PC-only command explained");
         Expect((await commands.HandleAsync(80, "/emir", ChatId, CancellationToken.None)).StartsWith("Kullanım", StringComparison.Ordinal), "/emir without text shows usage");
 
+        await ReleaseCommandsAsync(inbox, Expect);
+
         Console.WriteLine(failures.Count == 0 ? "SELFTEST OK" : $"SELFTEST FAILED ({failures.Count})");
         return failures.Count == 0 ? 0 : 1;
+    }
+
+    // /yayin, /yayin_onay and the APK follow-up against a fake root runner on a temporary spool folder.
+    private static async Task ReleaseCommandsAsync(TelegramCopilotInbox inbox, Action<bool, string> expect)
+    {
+        string spool = Path.Combine(ServerPaths.StateRoot, "release-spool");
+        Directory.CreateDirectory(Path.Combine(spool, "requests"));
+        Directory.CreateDirectory(Path.Combine(spool, "results"));
+        List<string> notes = [];
+        List<string> requests = [];
+        using CancellationTokenSource stop = new();
+        Task runner = FakeReleaseRunnerAsync(spool, requests, stop.Token);
+        ServerCommands commands = new(inbox, () => 0, new ReleaseClient(spool), text =>
+        {
+            lock (notes) notes.Add(text);
+            return true;
+        }, TimeSpan.FromMilliseconds(100));
+
+        string pending = await commands.HandleAsync(90, "/yayin", ChatId, CancellationToken.None);
+        expect(pending.Contains("bekleyen 1 commit", StringComparison.Ordinal) && pending.Contains("/yayin_onay abc1234", StringComparison.Ordinal)
+               && !pending.Contains("@@", StringComparison.Ordinal), "/yayin shows pending work and the approval command");
+        expect((await commands.HandleAsync(91, "/yayin_onay", ChatId, CancellationToken.None)).StartsWith("Kullanım", StringComparison.Ordinal),
+            "/yayin_onay without a commit shows usage");
+        expect((await commands.HandleAsync(92, "/yayin_onay abc1234; rm -rf /", ChatId, CancellationToken.None)).StartsWith("Kullanım", StringComparison.Ordinal),
+            "/yayin_onay rejects anything but a commit id and 'zorla'");
+        expect((await commands.HandleAsync(93, "/yayin_onay abc1234", ChatId, CancellationToken.None)).Contains("başladı", StringComparison.Ordinal),
+            "/yayin_onay starts the release in the background");
+        expect((await commands.HandleAsync(94, "/yayin_onay abc1234", ChatId, CancellationToken.None)).Contains("zaten sürüyor", StringComparison.Ordinal),
+            "a second release is refused while one runs");
+        await commands.BackgroundRelease!.WaitAsync(TimeSpan.FromSeconds(30));
+        expect(notes.Any(note => note.StartsWith("✅ Yayın tamamlandı", StringComparison.Ordinal) && note.Contains("MobileApi yayında", StringComparison.Ordinal)),
+            "release result is sent to Telegram");
+        expect(notes.Any(note => note.Contains("Yeni APK yayında", StringComparison.Ordinal)), "APK is followed until it is published");
+        lock (requests)
+        {
+            expect(requests.SequenceEqual(["pending:", "publish:abc1234", "apk:" + new string('f', 40), "apk:" + new string('f', 40)]),
+                "runner received exactly the expected whitelisted requests");
+        }
+
+        await stop.CancelAsync();
+        await runner.ContinueWith(_ => { });
+    }
+
+    private static async Task FakeReleaseRunnerAsync(string spool, List<string> seen, CancellationToken cancellationToken)
+    {
+        int apkCalls = 0;
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            foreach (string request in Directory.GetFiles(Path.Combine(spool, "requests"), "*.req"))
+            {
+                Dictionary<string, string> fields = File.ReadAllLines(request)
+                    .Select(line => line.Split('=', 2)).Where(pair => pair.Length == 2).ToDictionary(pair => pair[0], pair => pair[1]);
+                string id = Path.GetFileNameWithoutExtension(request);
+                File.Delete(request);
+                lock (seen) seen.Add(fields["action"] + ":" + fields["arg1"]);
+                string output = fields["action"] switch
+                {
+                    "pending" => "📦 bekleyen 1 commit\n@@TARGET=abc1234" + new string('0', 33) + "\n@@PENDING=1\n@@MOBILEAPI=1\n@@CI=success\n",
+                    "publish" => "🌐 MobileApi yayında\n@@APK=needed\n@@MAIN=" + new string('f', 40) + "\n",
+                    "apk" => ++apkCalls == 1 ? "📱 APK derlemesi sürüyor.\n@@APK_STATE=waiting\n" : "📱 Yeni APK yayında: 1.7.5\n@@APK_STATE=published\n",
+                    _ => "?\n"
+                };
+                if (fields["action"] == "publish")
+                {
+                    await Task.Delay(500, cancellationToken);
+                }
+
+                await File.WriteAllTextAsync(Path.Combine(spool, "results", id + ".out"), output, cancellationToken);
+                await File.WriteAllTextAsync(Path.Combine(spool, "results", id + ".done"), "0\n", cancellationToken);
+            }
+
+            await Task.Delay(50, cancellationToken).ContinueWith(_ => { });
+        }
     }
 
     private static string WriteOutbox(string id, long chatId, string report, DateTime nextAttemptUtc, DateTime? createdUtc = null)

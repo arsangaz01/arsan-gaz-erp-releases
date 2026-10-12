@@ -1,0 +1,29 @@
+# YAYIN TESTİ: arsangaz-release her yayından önce yeni MobileApi'yi burada dener (127.0.0.1:5078). Prod veritabanına
+# değil, prod'un salt-okunur kopyası olan arsangaz_staging veritabanına bağlanır; veri klasörü her testte boşaltılır.
+# Yalnızca test sırasında çalışır; etkinleştirilmez (enable edilmez).
+[Unit]
+Description=ArsanGazERP MobileApi (yayin testi, prod verisinin kopyasi)
+After=network-online.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=arsangaz
+Group=arsangaz
+WorkingDirectory=/opt/arsangaz/mobileapi-staging
+EnvironmentFile=/etc/arsangaz/mobileapi-staging.env
+Environment=ARSANGAZ_ENV=staging
+Environment=ARSANGAZ_DATA_DIR=/var/lib/arsangaz-data/staging
+Environment=ARSANGAZ_DB_PROVIDER=postgres
+Environment=ARSANGAZ_MOBILEAPI_PORT=5078
+Environment=HOME=/var/lib/arsangaz-data/staging
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=DOTNET_NOLOGO=1
+ExecStart=/usr/bin/dotnet /opt/arsangaz/mobileapi-staging/ArsanGazERP.MobileApi.dll
+Restart=no
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/arsangaz-data/staging
+UMask=0077

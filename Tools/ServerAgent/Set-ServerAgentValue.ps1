@@ -14,11 +14,13 @@
     AgentWatcher settings.
     CURSOR_API_KEY: a Cursor user API key (Cursor Dashboard -> API Keys) for the server Cursor agent. Stored in
     /etc/arsangaz/cursoragent.env (0600 cursoragent), not in serveragent.env; restarts arsangaz-cursoragent.
+    GITHUB_ACTIONS_TOKEN: fine-grained GitHub token (only arsan-gaz-erp-kaynak, Actions: Read and write) that the
+    release script uses for CI status and the signed APK. Stored in /etc/arsangaz/release.env (0600 root).
 #>
 [CmdletBinding(DefaultParameterSetName = 'Set')]
 param(
     [Parameter(ParameterSetName = 'Set', Mandatory = $true)]
-    [ValidateSet('TELEGRAM_BOT_TOKEN', 'CLOUD_RELAY_TOKEN', 'TELEGRAM_CHAT_ID', 'CLOUD_RELAY_URL', 'CURSOR_API_KEY')]
+    [ValidateSet('TELEGRAM_BOT_TOKEN', 'CLOUD_RELAY_TOKEN', 'TELEGRAM_CHAT_ID', 'CLOUD_RELAY_URL', 'CURSOR_API_KEY', 'GITHUB_ACTIONS_TOKEN')]
     [string]$Key,
     [Parameter(ParameterSetName = 'Status', Mandatory = $true)]
     [switch]$Status,
@@ -38,7 +40,7 @@ if ($Status) {
 }
 
 if ($FromClipboard) {
-    $prefix = switch ($Key) { 'CURSOR_API_KEY' { '^(crsr|key)_' } 'TELEGRAM_BOT_TOKEN' { '^\d{8,12}:' } default { '.' } }
+    $prefix = switch ($Key) { 'CURSOR_API_KEY' { '^(crsr|key)_' } 'TELEGRAM_BOT_TOKEN' { '^\d{8,12}:' } 'GITHUB_ACTIONS_TOKEN' { '^(github_pat_|ghp_)' } default { '.' } }
     $clip = [string](Get-Clipboard -Raw)
     for ($try = 0; $clip.Trim() -notmatch $prefix -and $try -lt 5; $try++) {
         Write-Host "Panoda $Key yok (muhtemelen komutun kendisi kopyalandi)." -ForegroundColor Yellow
@@ -73,6 +75,11 @@ finally {
 
 if ($code -ne 0) { throw "Sunucu degeri kabul etmedi: $($output | Select-Object -Last 1)" }
 Write-Output ($output | Select-Object -Last 1)
+
+if ($Key -eq 'GITHUB_ACTIONS_TOKEN') {
+    & ssh @ssh 'sudo /usr/local/sbin/arsangaz-release pending | grep -E "^CI|^@@CI"'
+    return
+}
 
 if ($Key -eq 'CURSOR_API_KEY') {
     if (-not $NoRestart) {

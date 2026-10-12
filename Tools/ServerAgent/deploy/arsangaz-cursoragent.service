@@ -22,6 +22,10 @@ Environment=CURSOR_BRIDGE_PROJECT_ROOT=/home/cursoragent/arsan-gaz-erp
 Environment=CURSOR_BRIDGE_DATA_ROOT=/var/lib/arsangaz-cursoragent
 Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
 Environment=DOTNET_NOLOGO=1
+# SDK matching global.json (install-release.sh); /usr/bin/dotnet's SDK is too old for the repository.
+Environment=PATH=/opt/dotnet-sdk:/usr/local/bin:/usr/bin:/bin
+Environment=DOTNET_ROOT=/opt/dotnet-sdk
+Environment=NUGET_PACKAGES=/home/cursoragent/.nuget/packages
 ExecStart=/usr/bin/node /opt/arsangaz-cursoragent/app/server-bridge.js
 Restart=always
 RestartSec=15

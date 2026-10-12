@@ -4,7 +4,11 @@ namespace ArsanGazERP.MobileApi;
 
 internal static class MobileApiPaths
 {
-    public const int Port = 5077;
+    // ARSANGAZ_MOBILEAPI_PORT lets the server's release test instance (arsangaz-mobileapi-staging) run beside production.
+    public static int Port { get; } =
+        int.TryParse(Environment.GetEnvironmentVariable("ARSANGAZ_MOBILEAPI_PORT"), out int port) && port is > 1024 and < 65536
+            ? port
+            : 5077;
 
     public static string Root { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ArsanGazERP", "MobileApi");

@@ -5,9 +5,17 @@
 set -euo pipefail
 ENV_FILE=/etc/arsangaz/serveragent.env
 CURSOR_ENV_FILE=/etc/arsangaz/cursoragent.env
-KEYS="TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID CLOUD_RELAY_URL CLOUD_RELAY_TOKEN SERVERAGENT_TELEGRAM_POLLING SERVERAGENT_CAMPAIGNS CURSOR_API_KEY"
+# GITHUB_ACTIONS_TOKEN is read only by root's release script (arsangaz-release), never by the agents.
+RELEASE_ENV_FILE=/etc/arsangaz/release.env
+KEYS="TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID CLOUD_RELAY_URL CLOUD_RELAY_TOKEN SERVERAGENT_TELEGRAM_POLLING SERVERAGENT_CAMPAIGNS CURSOR_API_KEY GITHUB_ACTIONS_TOKEN"
 
-file_for() { if [ "$1" = CURSOR_API_KEY ]; then echo "$CURSOR_ENV_FILE"; else echo "$ENV_FILE"; fi; }
+file_for() {
+  case "$1" in
+    CURSOR_API_KEY) echo "$CURSOR_ENV_FILE" ;;
+    GITHUB_ACTIONS_TOKEN) echo "$RELEASE_ENV_FILE" ;;
+    *) echo "$ENV_FILE" ;;
+  esac
+}
 
 if [ "${1:-}" = "--status" ]; then
   for key in $KEYS; do
@@ -32,6 +40,7 @@ case "$key" in
   CLOUD_RELAY_TOKEN) [[ "$value" =~ ^[A-Za-z0-9._~+/=-]{16,512}$ ]] || { echo "relay token invalid" >&2; exit 4; } ;;
   # SDK-minted user keys are crsr_ + 64 hex; older dashboard keys used key_.
   CURSOR_API_KEY) [[ "$value" =~ ^(crsr|key)_[A-Za-z0-9_-]{20,250}$ ]] || { echo "cursor key format invalid (crsr_... bekleniyor)" >&2; exit 4; } ;;
+  GITHUB_ACTIONS_TOKEN) [[ "$value" =~ ^(github_pat_|ghp_)[A-Za-z0-9_]{20,255}$ ]] || { echo "github token format invalid (github_pat_... bekleniyor)" >&2; exit 4; } ;;
   SERVERAGENT_*) [[ "$value" =~ ^[01]$ ]] || { echo "flag must be 0 or 1" >&2; exit 4; } ;;
 esac
 

@@ -44,10 +44,21 @@ const SERVER_RULES = [
   "ERP verisi sorularında kullanıcıya Telegram'daki /ozet, /musteri, /tup gibi sunucu komutlarını öner.",
   ".cursor/rules içindeki Windows/PowerShell, Send-Telegram.ps1 ve ERP'yi kapatıp yayınlama talimatları bu sunucuda geçerli değil;",
   "son mesajın otomatik olarak Telegram'a gider.",
-  `Kod değişikliğini yalnızca ${workBranch} (veya cursor/server-<konu>) dalına commit edip 'git push origin <dal>' ile gönderebilirsin;`,
-  "main, cursor/telegram-cursor-agent-bridge ve releases'e asla push etme. Bilgisayar açılınca kullanıcı inceleyip birleştirir.",
-  "Prod'a deploy, servis yeniden başlatma, silme, ödeme, müşterilere e-posta/WhatsApp gibi geri alınamaz işleri yapma;",
-  "bunlar gerekiyorsa ne yapacağını yaz ve 'Onaylıyor musun? Evet/Hayır yazın' diye sor.",
+  "Kod değiştirdiysen commit'ten önce sunucuda derle ve test et (dotnet = /opt/dotnet-sdk, SDK global.json ile uyumlu):",
+  "- MobileApi/web sitesi: dotnet build Tools/MobileApi/ArsanGazERP.MobileApi.csproj -p:ArsanLinux=true -c Release",
+  "- ServerAgent: dotnet build Tools/ServerAgent/ArsanGazERP.ServerAgent.csproj -c Release && dotnet Tools/ServerAgent/bin/Release/net10.0/ArsanGazERP.ServerAgent.dll --self-test",
+  "- Masaüstü ERP ve AgentWatcher (burada yalnızca derleme kontrolü, çalıştırılamaz): dotnet build ArsanGazERP.csproj -c Release -p:EnableWindowsTargeting=true",
+  "  ve dotnet build Tools/AgentWatcher/ArsanGazERP.AgentWatcher.csproj -c Release -p:EnableWindowsTargeting=true",
+  "- Telegram köprüsü: (cd Tools/CursorTelegramBridge && npm ci --no-audit --no-fund) && node --test Tools/CursorTelegramBridge/*.test.js",
+  "- Mobil uygulama (Tools/MobileApp) sunucuda derlenemez; GitHub CI derler. Mobil uygulamayı değiştirirsen Tools/MobileApp/ArsanGazMobile.csproj",
+  "  içinde ApplicationVersion'u 1 artır ve ApplicationDisplayVersion'u yükselt; yoksa telefonlar güncellemeyi almaz.",
+  "Derleme veya test başarısızsa düzelt; düzeltemiyorsan commit etme ve nedenini yaz.",
+  `Başarılıysa yalnızca kaynak dosyalarını (bin/, obj/, bin-linux/ hariç; git add <dosyalar>) ${workBranch} dalına commit edip`,
+  `'git push origin ${workBranch}' ile gönder. main, cursor/telegram-cursor-agent-bridge ve releases'e asla push etme.`,
+  "Yayınlama senin işin değil: prod'a deploy, servis yeniden başlatma, silme, ödeme, müşterilere e-posta/WhatsApp gibi geri alınamaz işleri yapma.",
+  "Son mesajında Türkçe ve kısa olarak yaz: ne değişti, hangi bileşenler etkilendi (web sitesi/MobileApi, masaüstü ERP, AgentWatcher, mobil uygulama),",
+  "hangi derleme/testler geçti, commit kodu; ve şunu ekle: 'Yayınlamak için Telegram'da /yayin yazın; CI sonucu ve onay komutu gelir.'",
+  "Masaüstü ERP/AgentWatcher değişiklikleri onaydan sonra bilgisayar açılınca AutoSync ile otomatik uygulanır; web sitesi/MobileApi hemen yayınlanır.",
 ];
 
 let stopping = false;
@@ -128,7 +139,8 @@ async function ensureWorkspace() {
 async function refreshWorkspace() {
   try {
     await git(["fetch", "--quiet", "origin", "--prune"]);
-    if ((await git(["status", "--porcelain"])) !== "") return "çalışma klasöründe kaydedilmemiş değişiklik var; güncellenmedi";
+    // Untracked build output (bin/obj of the compile checks) must not block the update.
+    if ((await git(["status", "--porcelain", "--untracked-files=no"])) !== "") return "çalışma klasöründe kaydedilmemiş değişiklik var; güncellenmedi";
     await git(["merge-base", "--is-ancestor", "HEAD", "origin/main"]).then(
       () => git(["merge", "--quiet", "--ff-only", "origin/main"]),
       () => undefined);

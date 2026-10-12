@@ -1,0 +1,202 @@
+# Telefon iş akışının derleme kontrolü. cursor/server-* (sunucu Cursor ajanı) ve main push'larında yalnızca değişen
+# bileşenleri derler/test eder. Sunucudaki arsangaz-release /yayin'da bu çalışmanın sonucunu GitHub API'den okur.
+# İmzalı APK yalnızca main'de ve android-signing ortamında (yalnızca main'e izinli) üretilir; dallar anahtarı göremez.
+name: CI
+on:
+  push:
+    branches: [main, 'cursor/server-*']
+    paths-ignore: ['**/*.md', 'docs/**', 'CloudAgentWorker/**']
+  workflow_dispatch:
+    inputs:
+      android_release:
+        description: 'main üzerinde imzalı APK üret'
+        type: boolean
+        default: false
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  actions: read
+env:
+  DOTNET_NOLOGO: '1'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  # SHA-256 of the certificate the installed app is signed with (PC debug.keystore); a different key cannot update phones.
+  APK_CERT_SHA256: 80ae16deb437fd9e1c7b26b3b38563977078c97a98a17f6983b7d5f19dd90153
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      desktop: ${{ steps.f.outputs.desktop }}
+      server: ${{ steps.f.outputs.server }}
+      bridge: ${{ steps.f.outputs.bridge }}
+      mobile: ${{ steps.f.outputs.mobile }}
+      apk: ${{ steps.f.outputs.apk }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: f
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          FORCE_APK: ${{ inputs.android_release }}
+        run: |
+          set -euo pipefail
+          out() { echo "$1=$2" >> "$GITHUB_OUTPUT"; echo "$1=$2"; }
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            files=ALL
+          elif [ "$GITHUB_REF" = refs/heads/main ]; then
+            if [ -n "${BEFORE:-}" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then files=$(git diff --name-only "$BEFORE" HEAD); else files=ALL; fi
+          else
+            base=$(git merge-base origin/main HEAD)
+            files=$(git diff --name-only "$base" HEAD)
+          fi
+          if [ "$files" = ALL ] || grep -qx '.github/workflows/ci.yml' <<<"$files"; then
+            desktop=true; server=true; bridge=true; mobile=true
+          else
+            has() { grep -qE "$1" <<<"$files" && echo true || echo false; }
+            mobile=$(has '^Tools/MobileApp/')
+            bridge=$(has '^Tools/CursorTelegramBridge/')
+            server=$(has '^(Tools/(MobileApi|ServerAgent|ErpMcpServer|AgentWatcher/Telegram)|Data/|Models/|Services/|global\.json|Directory\.Build\.props)')
+            desktop=$(grep -vE '^(Tools/(MobileApp|MobileApi|ServerAgent|CursorTelegramBridge|PgHarness)/|CloudAgentWorker/|docs/|\.github/|.*\.md$)' <<<"$files" | grep -q . && echo true || echo false)
+          fi
+          apk=false
+          if [ "$GITHUB_REF" = refs/heads/main ] && { [ "$mobile" = true ] || [ "${FORCE_APK:-false}" = true ]; }; then apk=true; fi
+          # A fast-forwarded main commit was already built on its cursor/server-* branch: do not pay for it twice.
+          if [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ]; then
+            ok=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --status success --json databaseId --jq length || echo 0)
+            if [ "${ok:-0}" -gt 0 ]; then echo "Bu commit daha önce başarıyla derlendi; tekrar edilmiyor."; desktop=false; server=false; bridge=false; fi
+          fi
+          [ "$apk" = true ] && mobile=false
+          out desktop $desktop; out server $server; out bridge $bridge; out mobile $mobile; out apk $apk
+
+  desktop:
+    name: masaustu
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: ERP + AgentWatcher (Release derleme)
+        shell: pwsh
+        run: |
+          dotnet build .\ArsanGazERP.csproj -c Release -nologo -clp:ErrorsOnly
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build .\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj -c Release -nologo -clp:ErrorsOnly
+          exit $LASTEXITCODE
+
+  server:
+    name: sunucu
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - run: dotnet build Tools/MobileApi/ArsanGazERP.MobileApi.csproj -p:ArsanLinux=true -c Release -nologo -clp:ErrorsOnly
+      - run: dotnet build Tools/ServerAgent/ArsanGazERP.ServerAgent.csproj -c Release -nologo -clp:ErrorsOnly
+      - name: ServerAgent --self-test
+        run: dotnet Tools/ServerAgent/bin/Release/net10.0/ArsanGazERP.ServerAgent.dll --self-test
+
+  bridge:
+    name: kopru
+    needs: changes
+    if: needs.changes.outputs.bridge == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --no-audit --no-fund
+        working-directory: Tools/CursorTelegramBridge
+      - run: node --test Tools/CursorTelegramBridge/*.test.js
+
+  mobile:
+    name: mobil
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: dotnet workload install maui-android
+      - name: Android derleme kontrolü
+        run: |
+          dotnet build Tools/MobileApp/ArsanGazMobile.csproj -t:InstallAndroidDependencies -f net10.0-android \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True -nologo -v q
+          dotnet build Tools/MobileApp/ArsanGazMobile.csproj -c Debug -f net10.0-android -p:RuntimeIdentifier=android-arm64 \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" -nologo -clp:ErrorsOnly
+
+  apk:
+    name: apk
+    needs: changes
+    if: needs.changes.outputs.apk == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: android-signing
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: dotnet workload install maui-android
+      - name: İmzalı APK
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$ANDROID_STORE_PASS" ] || [ -z "$ANDROID_KEY_ALIAS" ]; then
+            echo "::error::android-signing ortamında ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS eksik."; exit 1
+          fi
+          ks="$RUNNER_TEMP/arsangaz.keystore"
+          base64 -d <<<"$KEYSTORE_B64" > "$ks"
+          dotnet build Tools/MobileApp/ArsanGazMobile.csproj -t:InstallAndroidDependencies -f net10.0-android \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True -nologo -v q
+          dotnet publish Tools/MobileApp/ArsanGazMobile.csproj -c Release -f net10.0-android -r android-arm64 \
+            -p:AndroidPackageFormat=apk -p:RunAOTCompilation=false -p:AndroidSdkDirectory="$ANDROID_HOME" \
+            -p:AndroidKeyStore=true -p:AndroidSigningKeyStore="$ks" -p:AndroidSigningKeyAlias="$ANDROID_KEY_ALIAS" \
+            -p:AndroidSigningStorePass=env:ANDROID_STORE_PASS -p:AndroidSigningKeyPass=env:ANDROID_KEY_PASS \
+            -o "$RUNNER_TEMP/apk" -nologo -clp:ErrorsOnly
+          rm -f "$ks"
+          apk=$(ls "$RUNNER_TEMP"/apk/*-Signed.apk | head -n1)
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)
+          cert=$("$tools/apksigner" verify --print-certs "$apk" | grep -m1 'certificate SHA-256 digest' | awk '{print $NF}')
+          if [ "$cert" != "$APK_CERT_SHA256" ]; then echo "::error::APK sertifikası telefondaki uygulamanınkiyle aynı değil ($cert)."; exit 1; fi
+          badging=$("$tools/aapt" dump badging "$apk" | head -n1)
+          name=$(sed -E "s/.*versionName='([^']+)'.*/\1/" <<<"$badging")
+          code=$(sed -E "s/.*versionCode='([0-9]+)'.*/\1/" <<<"$badging")
+          mkdir -p out && cp "$apk" out/ArsanGazERP-Mobil.apk
+          printf '{"versionName":"%s","versionCode":%s,"certSha256":"%s","sha":"%s"}\n' "$name" "$code" "$cert" "$GITHUB_SHA" > out/apk-info.json
+          cat out/apk-info.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arsangaz-mobile-apk
+          path: out/
+          retention-days: 14
+          if-no-files-found: error
