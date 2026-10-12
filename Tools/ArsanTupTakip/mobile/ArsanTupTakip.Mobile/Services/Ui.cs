@@ -269,6 +269,13 @@ public static class Ui
         return shell;
     }
 
+    // Hides a control the signed-in user has no permission for.
+    public static T ShowIf<T>(this T view, bool visible) where T : VisualElement
+    {
+        view.IsVisible = visible;
+        return view;
+    }
+
     public static async Task RunAsync(Page page, ActivityIndicator? busy, Func<Task> action)
     {
         if (busy is not null)
@@ -279,6 +286,10 @@ public static class Ui
         try
         {
             await action();
+        }
+        catch (SessionExpiredException)
+        {
+            // The login screen is already open and shows the reason.
         }
         catch (ApiException exception)
         {

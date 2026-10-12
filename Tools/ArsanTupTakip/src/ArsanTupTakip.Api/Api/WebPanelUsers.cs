@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 
 namespace ArsanTupTakip.Api;
 
-// Roles of the browser panel and what each may do. The server checks these on every /panel/api call.
+// Roles are presets of the permissions in Perm; per-user overrides are applied on top (except for Yönetici).
 internal static class PanelRoles
 {
     internal const string Admin = "Yönetici";
@@ -15,32 +15,13 @@ internal static class PanelRoles
     internal const string Viewer = "İzleyici";
     internal static readonly string[] All = [Admin, Operator, Viewer];
 
-    internal const string View = "goruntule";
-    internal const string Export = "disa-aktar";
-    internal const string Move = "hareket";
-    internal const string Register = "tup-kayit";
-    internal const string Edit = "tup-duzenle";
-    internal const string AddCustomer = "musteri-ekle";
-    internal const string Vehicles = "arac-yonetimi";
-    internal const string ManageUsers = "kullanici-yonetimi";
-
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
-
-    internal static IReadOnlyList<string> Permissions(string? role) => role switch
-    {
-        Admin => [View, Export, Move, Register, Edit, AddCustomer, Vehicles, ManageUsers],
-        Operator => [View, Export, Move, Register, Edit, AddCustomer, Vehicles],
-        Viewer => [View, Export],
-        _ => []
-    };
-
-    internal static bool Has(string? role, string permission) => Permissions(role).Contains(permission);
 
     internal static string Description(string role) => role switch
     {
-        Admin => "Her şey: tüp, müşteri, araç ve sefer işlemleri, kullanıcı ve cihaz yönetimi, denetim kaydı.",
-        Operator => "Görüntüleme, tüp hareketi, yeni tüp, tüp düzenleme, yeni müşteri, araç kaydı, sefer başlatma/yükleme, Excel'e aktarma.",
-        Viewer => "Yalnızca görüntüleme ve Excel'e aktarma; kayıt değiştiremez.",
+        Admin => "Her şey, her zaman: tüm işlemler, kullanıcı/yetki ve cihaz yönetimi, denetim kaydı. Yöneticinin yetkileri kısıtlanamaz.",
+        Operator => "Varsayılan: tüp, hareket, sefer, araç ve müşteri işlemleri, raporlar, Excel; yönetim yok. Tek tek değiştirilebilir.",
+        Viewer => "Varsayılan: yalnızca görüntüleme, raporlar ve Excel; kayıt değiştiremez. Tek tek yetki eklenebilir.",
         _ => string.Empty
     };
 

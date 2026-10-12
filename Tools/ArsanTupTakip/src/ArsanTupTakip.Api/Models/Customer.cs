@@ -17,5 +17,6 @@ public sealed class Customer
  public bool IsActive { get; set; } = true;
  public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
  public DateTime? UpdatedAt { get; set; }
+ public uint Version { get; set; }
  public ICollection<Cylinder> Cylinders { get; set; } = new List<Cylinder>();
 }

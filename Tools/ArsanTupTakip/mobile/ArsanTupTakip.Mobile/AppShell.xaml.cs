@@ -3,32 +3,36 @@ using ArsanTupTakip.Mobile.Services;
 
 namespace ArsanTupTakip.Mobile;
 
+// Tabs follow the signed-in user's permissions; "Hesap" is always there.
 public partial class AppShell : Shell
 {
-    private readonly ShellContent _connection;
-    private readonly ShellContent _cylinder;
-
     public AppShell()
     {
         InitializeComponent();
-        _connection = new ShellContent
+        ApiClient api = ApiClient.Instance;
+        TabBar tabs = new();
+        if (api.CanAny([Perm.CylinderView, Perm.CylinderRegister, Perm.CylinderAudit, .. Perm.AnyMove]))
         {
-            Title = "Bağlantı",
-            ContentTemplate = new DataTemplate(typeof(ConnectionPage))
-        };
-        _cylinder = LazyTab("Tüp", () => new CylinderPage());
-        Items.Add(new TabBar
+            tabs.Items.Add(LazyTab("Tüp", () => new CylinderPage()));
+        }
+
+        if (api.Can(Perm.TripView))
         {
-            Items =
-            {
-                _connection,
-                _cylinder,
-                LazyTab("Sefer", () => new CylinderTripPage()),
-                LazyTab("Araç", () => new VehiclePage()),
-                LazyTab("Özet", () => new SummaryPage())
-            }
-        });
-        CurrentItem = _connection;
+            tabs.Items.Add(LazyTab("Sefer", () => new CylinderTripPage()));
+        }
+
+        if (api.Can(Perm.VehicleView))
+        {
+            tabs.Items.Add(LazyTab("Araç", () => new VehiclePage()));
+        }
+
+        if (api.CanAny(Perm.Summary, Perm.Reports, Perm.MovementHistory))
+        {
+            tabs.Items.Add(LazyTab("Özet", () => new SummaryPage()));
+        }
+
+        tabs.Items.Add(LazyTab("Hesap", () => new AccountPage()));
+        Items.Add(tabs);
     }
 
     private static ShellContent LazyTab(string title, Func<Page> create) =>
@@ -52,15 +56,6 @@ public partial class AppShell : Shell
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        try
-        {
-            await ServerUrlCoordinator.BootstrapAsync();
-        }
-        catch (ApiException)
-        {
-        }
-
-        bool ready = ApiClient.Instance.ServerUrl.Length > 0 && await ApiClient.Instance.IsPairedAsync();
-        CurrentItem = ready ? _cylinder : _connection;
+        await ServerUrlCoordinator.RefreshIfDueAsync();
     }
 }

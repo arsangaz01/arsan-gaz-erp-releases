@@ -4,18 +4,40 @@ using System.Text.Json;
 
 namespace ArsanTupTakip.Api;
 
-internal sealed record PairedDevice(string Id, string Name, string TokenHash, DateTime CreatedUtc, DateTime? LastSeenUtc);
+// One signed-in phone. Every login creates its own random token, so the same user may be signed in on several
+// phones at once; a new login never ends another one. UserCreatedAt + Stamp tie the token to the account state at
+// login: deactivation, role change and password change (SecurityStamp) end it, as does ExpiresUtc (absolute).
+internal sealed record MobileSession(
+    string Id,
+    string Name,
+    string TokenHash,
+    DateTime CreatedUtc,
+    DateTime ExpiresUtc,
+    DateTime? LastSeenUtc,
+    int UserId,
+    string UserName,
+    DateTime UserCreatedAt,
+    int Stamp,
+    string? Ip);
 
-// Phones allowed to call /api, stored in <data folder>/devices.json. Only SHA-256 hashes of the access tokens are kept.
+// Signed-in phones in <data folder>/devices.json. Only SHA-256 hashes of the access tokens are kept.
 internal sealed class DeviceStore
 {
+    internal static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(24);
+
     private readonly Lock _gate = new();
-    private List<PairedDevice> _devices;
+    private readonly Func<DateTime> _clock;
+    private List<MobileSession> _sessions;
     private DateTime _loadedWriteUtc;
 
-    public DeviceStore()
+    public DeviceStore() : this(() => DateTime.UtcNow)
     {
-        _devices = Load();
+    }
+
+    internal DeviceStore(Func<DateTime> clock)
+    {
+        _clock = clock;
+        _sessions = Load();
         _loadedWriteUtc = LastWriteUtc();
     }
 
@@ -29,55 +51,73 @@ internal sealed class DeviceStore
         DateTime current = LastWriteUtc();
         if (current != _loadedWriteUtc)
         {
-            _devices = Load();
+            _sessions = Load();
             _loadedWriteUtc = current;
         }
     }
 
-    public IReadOnlyList<PairedDevice> All()
+    public IReadOnlyList<MobileSession> All()
     {
         lock (_gate)
         {
             ReloadIfChanged();
-            return [.. _devices];
+            DateTime now = _clock();
+            return [.. _sessions.Where(s => s.ExpiresUtc > now)];
         }
     }
 
-    public string Add(string name)
+    // Returns the plain token (shown to the phone once) and the stored session.
+    public (string Token, MobileSession Session) Add(WebPanelUser user, string deviceName, string? ip)
     {
-        string token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        PairedDevice device = new(Guid.NewGuid().ToString("N"), name, Hash(token), DateTime.UtcNow, null);
+        string token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        string trimmed = (deviceName ?? string.Empty).Trim();
+        string name = trimmed.Length == 0 ? "Telefon" : trimmed[..Math.Min(trimmed.Length, 60)];
+        DateTime now = _clock();
+        MobileSession session = new(Guid.NewGuid().ToString("N"), name, Hash(token), now, now + SessionLifetime, now,
+            user.Id, user.UserName, user.CreatedAt, user.SecurityStamp, ip);
         lock (_gate)
         {
             ReloadIfChanged();
-            _devices.Add(device);
+            _sessions.RemoveAll(s => s.ExpiresUtc <= now);
+            _sessions.Add(session);
             Save();
         }
 
-        return token;
+        return (token, session);
     }
 
-    public PairedDevice? Validate(string token)
+    // The session behind a token, or null when unknown or expired. Account checks are done by the caller.
+    public MobileSession? Validate(string token)
     {
+        if (string.IsNullOrEmpty(token) || token.Length > 100)
+        {
+            return null;
+        }
+
         byte[] candidate = Convert.FromHexString(Hash(token));
         lock (_gate)
         {
             ReloadIfChanged();
-            PairedDevice? match = null;
-            foreach (PairedDevice device in _devices)
+            MobileSession? match = null;
+            foreach (MobileSession session in _sessions)
             {
-                if (CryptographicOperations.FixedTimeEquals(candidate, Convert.FromHexString(device.TokenHash)))
+                if (CryptographicOperations.FixedTimeEquals(candidate, Convert.FromHexString(session.TokenHash)))
                 {
-                    match = device;
+                    match = session;
                 }
             }
 
-            if (match is not null && (match.LastSeenUtc is null || DateTime.UtcNow - match.LastSeenUtc > TimeSpan.FromMinutes(10)))
+            DateTime now = _clock();
+            if (match is null || match.ExpiresUtc <= now)
             {
-                int index = _devices.IndexOf(match);
-                match = match with { LastSeenUtc = DateTime.UtcNow };
-                _devices[index] = match;
+                return null;
+            }
+
+            if (match.LastSeenUtc is null || now - match.LastSeenUtc > TimeSpan.FromMinutes(10))
+            {
+                int index = _sessions.IndexOf(match);
+                match = match with { LastSeenUtc = now };
+                _sessions[index] = match;
                 Save();
             }
 
@@ -85,35 +125,65 @@ internal sealed class DeviceStore
         }
     }
 
-    public PairedDevice? Remove(string id)
+    // After the user changed the password on this phone: keeps this session, the others end through the stamp.
+    public void Restamp(string id, int stamp)
     {
         lock (_gate)
         {
             ReloadIfChanged();
-            PairedDevice? device = _devices.FirstOrDefault(d => d.Id == id);
-            if (device is not null)
+            int index = _sessions.FindIndex(s => s.Id == id);
+            if (index >= 0)
             {
-                _devices.Remove(device);
+                _sessions[index] = _sessions[index] with { Stamp = stamp };
+                Save();
+            }
+        }
+    }
+
+    public MobileSession? Remove(string id)
+    {
+        lock (_gate)
+        {
+            ReloadIfChanged();
+            MobileSession? session = _sessions.FirstOrDefault(d => d.Id == id);
+            if (session is not null)
+            {
+                _sessions.Remove(session);
                 Save();
             }
 
-            return device;
+            return session;
+        }
+    }
+
+    public int RemoveForUser(int userId)
+    {
+        lock (_gate)
+        {
+            ReloadIfChanged();
+            int removed = _sessions.RemoveAll(s => s.UserId == userId);
+            if (removed > 0)
+            {
+                Save();
+            }
+
+            return removed;
         }
     }
 
     private static string Hash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
-    private static List<PairedDevice> Load()
+    private static List<MobileSession> Load()
     {
         try
         {
             return File.Exists(FilePath)
-                ? JsonSerializer.Deserialize<List<PairedDevice>>(File.ReadAllText(FilePath)) ?? []
+                ? JsonSerializer.Deserialize<List<MobileSession>>(File.ReadAllText(FilePath))?.Where(s => s.UserId > 0 && s.TokenHash.Length > 0).ToList() ?? []
                 : [];
         }
         catch (JsonException exception)
         {
-            AppLog.Write("Cihaz listesi okunamadı; eşleşmeler sıfırlandı: " + exception.Message);
+            AppLog.Write("Mobil oturum listesi okunamadı; oturumlar sıfırlandı: " + exception.Message);
             return [];
         }
     }
@@ -121,120 +191,60 @@ internal sealed class DeviceStore
     private void Save()
     {
         string temporary = FilePath + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(_devices, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(temporary, JsonSerializer.Serialize(_sessions, new JsonSerializerOptions { WriteIndented = true }));
         File.Move(temporary, FilePath, overwrite: true);
         _loadedWriteUtc = LastWriteUtc();
     }
 }
 
-internal sealed record PairingCode(string Code, DateTime ExpiresUtc);
-
-// A Yönetici creates a single-use 6-digit code in the panel (Yönetim > Cihazlar); the phone sends it to /api/pair.
-internal sealed class PairingService(DeviceStore devices)
-{
-    internal const int MaximumAttempts = 5;
-    internal static readonly TimeSpan CodeLifetime = TimeSpan.FromMinutes(10);
-
-    private readonly Lock _gate = new();
-    private string? _code;
-    private DateTime _expiresUtc;
-    private int _attempts;
-
-    internal const string RequestMessage =
-        "Eşleştirme kodunu yönetici web panelinde Yönetim > Cihazlar bölümünden oluşturur. Kodu yöneticinizden alıp buraya girin.";
-
-    public PairingCode CreateCode()
-    {
-        lock (_gate)
-        {
-            _code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
-            _expiresUtc = DateTime.UtcNow + CodeLifetime;
-            _attempts = 0;
-            return new PairingCode(_code, _expiresUtc);
-        }
-    }
-
-    public void CancelCode()
-    {
-        lock (_gate)
-        {
-            _code = null;
-        }
-    }
-
-    public DateTime? ActiveCodeExpiresUtc()
-    {
-        lock (_gate)
-        {
-            return _code is not null && DateTime.UtcNow <= _expiresUtc ? _expiresUtc : null;
-        }
-    }
-
-    public string? TryPair(string code, string deviceName)
-    {
-        lock (_gate)
-        {
-            if (_code is null || DateTime.UtcNow > _expiresUtc)
-            {
-                _code = null;
-                return null;
-            }
-
-            if (++_attempts > MaximumAttempts)
-            {
-                _code = null;
-                AppLog.Write("Eşleştirme kodu çok fazla hatalı denemeden sonra iptal edildi.");
-                return null;
-            }
-
-            string candidate = (code ?? string.Empty).Trim();
-            bool matches = candidate.Length == _code.Length && CryptographicOperations.FixedTimeEquals(
-                Encoding.ASCII.GetBytes(candidate),
-                Encoding.ASCII.GetBytes(_code));
-            if (!matches)
-            {
-                return null;
-            }
-
-            _code = null;
-        }
-
-        string trimmed = (deviceName ?? string.Empty).Trim();
-        string name = trimmed.Length == 0 ? "Telefon" : trimmed[..Math.Min(trimmed.Length, 60)];
-        string token = devices.Add(name);
-        AppLog.Write("Yeni cihaz eşleşti: " + name);
-        WebPanelAudit.Write("cihaz", "Cihaz eşleşti", name);
-        return token;
-    }
-}
-
+// Every /api call except the public ones needs a valid phone session of an active user whose account did not change
+// since login; the endpoint's permission metadata is then checked against the user's effective permissions.
 internal sealed class DeviceAuthMiddleware(RequestDelegate next, DeviceStore devices)
 {
+    internal static readonly string[] PublicPaths = ["/api/giris", "/api/merhaba", "/api/guncelleme"];
+
     public async Task InvokeAsync(HttpContext context)
     {
         PathString path = context.Request.Path;
-        if (!path.StartsWithSegments("/api")
-            || path.StartsWithSegments("/api/pair")
-            || path.StartsWithSegments("/api/merhaba")
-            || path.StartsWithSegments("/api/guncelleme"))
+        if (!path.StartsWithSegments("/api") || PublicPaths.Any(p => path.StartsWithSegments(p)))
         {
             await next(context);
             return;
         }
 
         string header = context.Request.Headers.Authorization.ToString();
-        PairedDevice? device = header.StartsWith("Bearer ", StringComparison.Ordinal)
+        MobileSession? session = header.StartsWith("Bearer ", StringComparison.Ordinal)
             ? devices.Validate(header["Bearer ".Length..].Trim())
             : null;
-        if (device is null)
+        WebPanelUser? user = session is null ? null : WebPanelUserStore.Find(session.UserId);
+        if (session is null || user is null || !user.IsActive || user.CreatedAt != session.UserCreatedAt || user.SecurityStamp != session.Stamp)
         {
-            await Task.Delay(400);
+            await Task.Delay(300);
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            await context.Response.WriteAsJsonAsync(new { error = "Cihaz eşleşmemiş veya erişim anahtarı geçersiz." });
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "Oturumunuz sona erdi (mobil giriş 24 saat geçerlidir) veya kapatıldı. Kullanıcı adı ve şifrenizle yeniden giriş yapın.",
+                loginRequired = true
+            });
             return;
         }
 
-        context.Items["device"] = device;
+        if (!Perm.Has(user, Perm.MobileLogin))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { error = "Mobil uygulamaya giriş yetkiniz kaldırıldı. Yöneticinize başvurun.", loginRequired = true });
+            return;
+        }
+
+        if (PermissionEndpointExtensions.Check(context, user) is IResult denied)
+        {
+            await denied.ExecuteAsync(context);
+            return;
+        }
+
+        context.Items["device"] = session;
+        context.Items["panelAccount"] = user;
+        context.Items["panelUser"] = user.UserName;
         await next(context);
     }
 }

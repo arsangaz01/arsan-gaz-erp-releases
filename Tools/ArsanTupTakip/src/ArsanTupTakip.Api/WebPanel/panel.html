@@ -129,7 +129,20 @@ tr.alarm-row td { background:#fef2f2; }
 .vehicle-pick label { display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:10px; padding:8px 10px; cursor:pointer; font-size:14px; color:var(--text); }
 .vehicle-pick label.busy { opacity:.6; }
 .panel-deploy-footer { text-align:center; padding:8px 18px 18px; font-size:11px; color:#9ca3af; }
-@media (max-width:640px) { main { padding:10px; } header { padding:10px 12px; } .hide-sm { display:none; } }
+.perm-groups { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:10px; margin-top:6px; }
+.perm-group { border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+.perm-group h4 { margin:0 0 6px; font-size:13px; color:var(--navy); display:flex; align-items:center; gap:8px; }
+.perm-group h4 button { margin-left:auto; }
+.perm-item { display:flex; gap:8px; align-items:flex-start; padding:6px; border-radius:8px; cursor:pointer; color:var(--text); font-size:14px; }
+.perm-item input { margin-top:3px; width:18px; height:18px; flex:none; }
+.perm-item small { display:block; color:var(--muted); font-size:12px; }
+.perm-item.diff-on { background:#ecfdf5; outline:1px solid #6ee7b7; }
+.perm-item.diff-off { background:#fef2f2; outline:1px solid #fca5a5; }
+.perm-item.locked { opacity:.6; cursor:default; }
+.perm-tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:99px; margin-left:4px; white-space:nowrap; }
+.perm-tag.on { background:#d1fae5; color:#065f46; }
+.perm-tag.off { background:#fee2e2; color:#991b1b; }
+@media (max-width:640px) { main { padding:10px; } header { padding:10px 12px; } .hide-sm { display:none; } .perm-groups { grid-template-columns:1fr; } .perm-item { padding:9px 6px; } dialog { width:100vw; max-height:100vh; border-radius:0; } .dlg-body { max-height:calc(100vh - 60px); } }
 </style>
 </head>
 <body>
@@ -150,14 +163,14 @@ tr.alarm-row td { background:#fef2f2; }
   <header>
     <h1>ArsanTüpTakip</h1>
     <nav>
-      <button data-tab="ozet" class="active">Özet</button>
-      <button data-tab="tupler">Tüpler</button>
-      <button data-tab="hareketler">Hareketler</button>
-      <button data-tab="seferler">Seferler</button>
-      <button data-tab="araclar">Araç İşlemleri</button>
-      <button data-tab="musteriler">Müşteriler</button>
+      <button data-tab="ozet" data-perm="ozet">Özet</button>
+      <button data-tab="tupler" data-perm="tup-goruntule">Tüpler</button>
+      <button data-tab="hareketler" data-perm="hareket-gecmisi">Hareketler</button>
+      <button data-tab="seferler" data-perm="sefer-goruntule">Seferler</button>
+      <button data-tab="araclar" data-perm="arac-goruntule">Araç İşlemleri</button>
+      <button data-tab="musteriler" data-perm="musteri-goruntule">Müşteriler</button>
       <button data-tab="yeni" data-perm="tup-kayit">Yeni tüp</button>
-      <button data-tab="yonetim" data-perm="kullanici-yonetimi">Yönetim</button>
+      <button data-tab="yonetim" data-perm="kullanici-yonetimi|cihaz-yonetimi|denetim-kaydi">Yönetim</button>
     </nav>
     <div class="spacer"></div>
     <span class="user" id="who"></span>
@@ -220,7 +233,7 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="card">
         <div class="toolbar">
           <h2>Seferde olan araçlar</h2>
-          <button class="primary small" id="s-baslat" type="button" data-perm="hareket">🚚 Sefer başlat</button>
+          <button class="primary small" id="s-baslat" type="button" data-perm="sefer-baslat">🚚 Sefer başlat</button>
           <button class="secondary small" id="s-yenile" type="button">Yenile</button>
         </div>
         <div id="s-alarm" class="alarm-box hidden"></div>
@@ -242,7 +255,7 @@ tr.alarm-row td { background:#fef2f2; }
         <div class="toolbar">
           <h2>Araçlar</h2>
           <label class="check"><input type="checkbox" id="v-pasif"> Pasifleri göster</label>
-          <button class="primary small" id="v-yeni" type="button" data-perm="arac-yonetimi">+ Araç ekle</button>
+          <button class="primary small" id="v-yeni" type="button" data-perm="arac-ekle">+ Araç ekle</button>
           <button class="secondary small" id="v-yenile" type="button">Yenile</button>
         </div>
         <div id="v-msg" class="msg hidden"></div>
@@ -289,29 +302,27 @@ tr.alarm-row td { background:#fef2f2; }
 
     <section data-page="yonetim" class="hidden">
       <div id="admin-msg" class="msg hidden"></div>
-      <div class="card">
+      <div class="card" data-perm="kullanici-yonetimi">
         <div class="toolbar">
           <h2>Kullanıcılar</h2>
           <button class="primary" id="u-new" type="button">+ Yeni kullanıcı</button>
         </div>
         <div class="table-wrap"><table id="users"></table></div>
-        <div class="hint">Kullanıcılar silinmez, pasife alınır; pasif hesap giriş yapamaz ve açık oturumları hemen kapanır. Son aktif yönetici pasife alınamaz, kendi hesabınızı pasife alamaz veya yetkisini düşüremezsiniz.</div>
+        <div class="hint">Her kullanıcı aynı kullanıcı adı ve şifreyle hem web paneline hem mobil uygulamaya girer. Yetki düzeyi (rol) hazır bir başlangıç setidir; "Düzenle" ile yetkileri tek tek işaretleyip kaldırabilirsiniz, rolden farklı olanlar "+ / −" ile gösterilir. Kullanıcılar silinmez, pasife alınır; pasif hesap giriş yapamaz ve açık oturumları hemen kapanır. Son aktif yönetici pasife alınamaz; Yönetici her zaman tüm yetkilere sahiptir. Panel oturumu 1 saat, mobil oturum 24 saat geçerlidir; süre dolunca yeniden giriş istenir.</div>
       </div>
-      <div class="card">
+      <div class="card" data-perm="cihaz-yonetimi">
         <div class="toolbar">
-          <h2>Cihazlar (mobil uygulama)</h2>
-          <button class="primary" id="dev-code" type="button">Eşleştirme kodu oluştur</button>
-          <button class="secondary small" id="dev-cancel" type="button">Kodu iptal et</button>
+          <h2>Mobil oturumlar (giriş yapmış telefonlar)</h2>
+          <button class="secondary small" id="dev-refresh" type="button">Yenile</button>
         </div>
-        <div id="dev-code-box" class="msg hidden"></div>
         <div class="table-wrap"><table id="devices"></table></div>
-        <div class="hint">Telefonda ArsanTüpTakip uygulamasını açın, Bağlantı ekranına bu koddan sonra gösterilen sunucu adresini ve 6 haneli kodu girin. Kod 10 dakika geçerlidir, tek kullanımlıktır ve 5 hatalı denemede iptal olur. Kaybolan veya artık kullanılmayan telefonu "Kaldır" ile hemen engelleyin.</div>
+        <div class="hint">Telefonlar ArsanTüpTakip uygulamasında panel ile aynı kullanıcı adı ve şifreyle giriş yapar. Her giriş 24 saat geçerlidir; aynı kullanıcı birden çok telefonda aynı anda açık kalabilir. Kaybolan telefonun oturumunu "Oturumu kapat" ile hemen sonlandırın.</div>
       </div>
-      <div class="card">
-        <h2>Yetki düzeyleri</h2>
+      <div class="card" data-perm="kullanici-yonetimi">
+        <h2>Yetki düzeyleri (roller)</h2>
         <div class="roles-grid" id="roles"></div>
       </div>
-      <div class="card">
+      <div class="card" data-perm="denetim-kaydi">
         <div class="toolbar">
           <h2>Denetim kaydı (son 200)</h2>
           <button class="secondary small" id="audit-refresh" type="button">Yenile</button>
@@ -330,7 +341,7 @@ tr.alarm-row td { background:#fef2f2; }
   <div class="dlg-body">
     <div id="d-msg" class="msg hidden"></div>
     <div class="card"><h2>Bilgiler</h2><div class="kv" id="d-info"></div></div>
-    <div class="card" data-perm="hareket">
+    <div class="card" data-perm="hareket-teslim|hareket-iade|hareket-arac|hareket-dolum|hareket-servis|hareket-hurda">
       <h2>Hareket kaydet</h2>
       <div class="form-grid">
         <label>Yeni durum<select id="m-status"></select></label>
@@ -338,19 +349,19 @@ tr.alarm-row td { background:#fef2f2; }
           <div class="pick-row"><select id="m-customer"></select><button class="secondary small" id="m-customer-yeni" type="button" data-perm="musteri-ekle" title="Listede yoksa yeni müşteri kaydı açın">+ Yeni</button></div>
         </div>
         <label id="m-plate-wrap">Plaka<input id="m-plate" list="plate-list" placeholder="01 ABC 123"></label>
-        <label>Dolu / boş<select id="m-full"><option value="">Otomatik</option><option value="true">Dolu</option><option value="false">Boş</option></select></label>
+        <label data-perm="hareket-dolu-bos">Dolu / boş<select id="m-full"><option value="">Otomatik</option><option value="true">Dolu</option><option value="false">Boş</option></select></label>
         <label>Not<input id="m-note" maxlength="300"></label>
       </div>
       <div class="actions"><button class="primary" id="m-save" type="button">Hareketi kaydet</button></div>
     </div>
-    <div class="card" data-perm="tup-duzenle">
+    <div class="card" data-perm="tup-duzenle|tup-pasif">
       <h2>Tüp bilgilerini düzenle</h2>
       <div class="form-grid">
         <label>Gaz türü<input id="e-gas" list="gas-list" maxlength="80"></label>
         <label>Kapasite<input id="e-cap" inputmode="decimal"></label>
         <label>Birim<select id="e-unit"><option>Litre</option><option>kg</option><option>m³</option></select></label>
         <label>Test tarihi<input type="date" id="e-test"></label>
-        <label>Kayıt durumu<select id="e-active"><option value="true">Aktif</option><option value="false">Pasif (kullanım dışı)</option></select></label>
+        <label data-perm="tup-pasif">Kayıt durumu<select id="e-active"><option value="true">Aktif</option><option value="false">Pasif (kullanım dışı)</option></select></label>
       </div>
       <div class="actions"><button class="secondary" id="e-save" type="button">Bilgileri kaydet</button></div>
     </div>
@@ -365,17 +376,17 @@ tr.alarm-row td { background:#fef2f2; }
     <div id="t-alarm" class="alarm-box hidden"></div>
     <div id="t-msg" class="msg hidden"></div>
     <div class="card"><h2>Bilgiler</h2><div class="kv" id="t-info"></div></div>
-    <div class="card hidden" id="t-load-card" data-perm="hareket">
+    <div class="card hidden" id="t-load-card" data-perm="sefer-yukle|sefer-kapat">
       <h2>Araca yükle (tüp okut)</h2>
       <div class="form-grid">
         <label>Araç<select id="t-load-plate"></select></label>
         <label style="grid-column:1/-1">Barkod / seri no (barkod okuyucu ile okutun veya her satıra bir kod yazın)<textarea id="t-load-codes" rows="4" placeholder="Okutulan kodlar alt alta gelir"></textarea></label>
       </div>
       <div class="actions">
-        <button class="primary" id="t-load-save" type="button">Araca yükle</button>
+        <button class="primary" id="t-load-save" type="button" data-perm="sefer-yukle">Araca yükle</button>
         <span class="muted" id="t-load-count"></span>
         <span class="spacer" style="flex:1"></span>
-        <button class="danger" id="t-close-trip" type="button">Seferi kapat</button>
+        <button class="danger" id="t-close-trip" type="button" data-perm="sefer-kapat">Seferi kapat</button>
       </div>
     </div>
     <div class="card">
@@ -410,7 +421,7 @@ tr.alarm-row td { background:#fef2f2; }
     <div id="vd-msg" class="msg hidden"></div>
     <div id="vd-alarm" class="alarm-box hidden"></div>
     <div class="card">
-      <div class="toolbar"><h2>Bilgiler</h2><button class="secondary small" id="vd-edit" type="button" data-perm="arac-yonetimi">Düzenle</button><button class="danger" id="vd-toggle" type="button" data-perm="arac-yonetimi">Pasife al</button></div>
+      <div class="toolbar"><h2>Bilgiler</h2><button class="secondary small" id="vd-edit" type="button" data-perm="arac-duzenle">Düzenle</button><button class="danger" id="vd-toggle" type="button" data-perm="arac-pasif">Pasife al</button></div>
       <div class="kv" id="vd-info"></div>
     </div>
     <div class="card"><h2>Araçtaki tüpler (gaz türüne göre)</h2><div id="vd-groups"></div></div>
@@ -427,7 +438,7 @@ tr.alarm-row td { background:#fef2f2; }
       <label>Tür<input id="vf-type" maxlength="100" list="vehicle-types" placeholder="Kamyonet, kamyon…" autocomplete="off"></label>
       <label>Şoför<input id="vf-driver" maxlength="100" autocomplete="off"></label>
       <label>Kapasite (tüp)<input id="vf-capacity" inputmode="numeric" maxlength="5" autocomplete="off"></label>
-      <label id="vf-active-wrap">Kayıt durumu<select id="vf-active"><option value="true">Aktif</option><option value="false">Pasif (kullanım dışı)</option></select></label>
+      <label id="vf-active-wrap" data-perm="arac-pasif">Kayıt durumu<select id="vf-active"><option value="true">Aktif</option><option value="false">Pasif (kullanım dışı)</option></select></label>
       <label style="grid-column:1/-1">Not<input id="vf-note" maxlength="500" autocomplete="off"></label>
       <div class="actions" style="grid-column:1/-1"><button class="primary" type="submit" id="vf-save">Kaydet</button></div>
     </form>
@@ -476,7 +487,7 @@ tr.alarm-row td { background:#fef2f2; }
   </div>
 </dialog>
 
-<dialog id="user-dialog" class="narrow">
+<dialog id="user-dialog">
   <div class="dlg-head"><h3 id="u-title">Yeni kullanıcı</h3><button class="secondary" id="u-close" type="button">Kapat</button></div>
   <div class="dlg-body">
     <form id="user-form" style="display:flex;flex-direction:column;gap:10px">
@@ -489,6 +500,11 @@ tr.alarm-row td { background:#fef2f2; }
       </div>
       <label class="check" id="u-must-wrap"><input type="checkbox" id="u-must" checked> İlk girişte kendi şifresini belirlesin</label>
       <label class="check hidden" id="u-active-wrap"><input type="checkbox" id="u-active"> Hesap aktif</label>
+      <div class="field" id="u-perm-wrap">
+        <div class="toolbar" style="margin:6px 0 0"><h2>Yetkiler (tıklayarak seçin)</h2><button class="secondary small" id="u-perm-reset" type="button">Rolün varsayılanına dön</button></div>
+        <div class="muted" id="u-perm-summary"></div>
+        <div id="u-perms" class="perm-groups"></div>
+      </div>
       <button class="primary" type="submit" id="u-save">Kaydet</button>
       <div id="u-msg" class="msg hidden"></div>
     </form>

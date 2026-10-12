@@ -8,7 +8,7 @@ namespace ArsanTupTakip.Api;
 // Customer picker data shared by the mobile app and the web panel.
 internal static class CustomerChoices
 {
-    public static async Task<List<object>> SearchAsync(string? query, int take = 50)
+    public static async Task<List<object>> SearchAsync(string? query, bool includePhone, int take = 50)
     {
         List<Customer> all = await new CrudService().CustomerChoicesAsync();
         await using TupTakipDbContext db = new();
@@ -19,7 +19,7 @@ internal static class CustomerChoices
             .ToDictionaryAsync(x => x.Key, x => x.Count);
         string term = (query ?? string.Empty).Trim();
         return all
-            .Where(c => term.Length == 0 || Contains(c.CompanyName, term) || Contains(c.Code, term) || Contains(c.City, term) || Contains(c.Phone, term))
+            .Where(c => term.Length == 0 || Contains(c.CompanyName, term) || Contains(c.Code, term) || Contains(c.City, term) || (includePhone && Contains(c.Phone, term)))
             .OrderByDescending(c => counts.GetValueOrDefault(c.Id) > 0)
             .Take(Math.Clamp(take, 1, 200))
             .Select(c => (object)new
@@ -28,7 +28,7 @@ internal static class CustomerChoices
                 c.Code,
                 Name = c.CompanyName,
                 c.City,
-                c.Phone,
+                Phone = includePhone ? c.Phone : null,
                 IsActive = true,
                 Cylinders = counts.GetValueOrDefault(c.Id)
             })

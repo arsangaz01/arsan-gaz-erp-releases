@@ -10,6 +10,8 @@ try
     ReorderPredictionTests.Run();
     VehicleTrackingTests.Run();
     ApiLogicTests.Run();
+    PermissionTests.Run();
+    ConcurrencyTests.Run();
     Console.WriteLine("Tüm ArsanTüpTakip testleri geçti.");
 }
 finally

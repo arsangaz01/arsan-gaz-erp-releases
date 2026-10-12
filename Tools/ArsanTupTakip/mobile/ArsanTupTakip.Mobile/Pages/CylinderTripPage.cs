@@ -5,7 +5,19 @@ namespace ArsanTupTakip.Mobile.Pages;
 // Sefer bazlı araç ve tüp takibi: yükleme, teslim, dönüş okutması ve tutarlılık kontrolü.
 public sealed class CylinderTripPage : ContentPage
 {
-    private static readonly string[] Modes = ["Yükleme", "Müşteriye teslim", "Depo dönüşü", "Kontrol"];
+    private const int LoadMode = 0;
+    private const int DeliverMode = 1;
+    private const int ReturnMode = 2;
+
+    private static readonly (string Label, int Kind, string Permission)[] AllModes =
+    [
+        ("Yükleme", LoadMode, Perm.TripLoad),
+        ("Müşteriye teslim", DeliverMode, Perm.TripDeliver),
+        ("Depo dönüşü", ReturnMode, Perm.TripReturn),
+        ("Kontrol", 3, Perm.TripView)
+    ];
+
+    private readonly (string Label, int Kind, string Permission)[] _modes = AllModes.Where(m => ApiClient.Instance.Can(m.Permission)).ToArray();
 
     private readonly Label _overview = new() { FontSize = 14, LineBreakMode = LineBreakMode.WordWrap };
     private readonly Picker _trip = new() { Title = "Aktif sefer" };
@@ -30,9 +42,9 @@ public sealed class CylinderTripPage : ContentPage
     {
         Title = "Sefer";
         Ui.ApplyPageChrome(this);
-        foreach (string mode in Modes)
+        foreach (var mode in _modes)
         {
-            _mode.Items.Add(mode);
+            _mode.Items.Add(mode.Label);
         }
 
         _mode.SelectedIndex = 0;
@@ -55,13 +67,13 @@ public sealed class CylinderTripPage : ContentPage
                 Children =
                 {
                     Ui.Note("\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteriye teslim ve depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir."),
-                    Ui.Primary("🚚 Sefer Başlat", async (_, _) => await StartTripAsync()),
+                    Ui.Primary("🚚 Sefer Başlat", async (_, _) => await StartTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripStart)),
                     Ui.Section(
                         "Seferdeki araçlar",
                         _overview,
                         Ui.ActionRow(
                             Ui.Secondary("Yenile", async (_, _) => await RefreshTripsAsync()),
-                            Ui.Secondary("Sefere araç ekle", async (_, _) => await AddVehicleAsync()))),
+                            Ui.Secondary("Sefere araç ekle", async (_, _) => await AddVehicleAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripStart)))),
                     Ui.Section(
                         "Sefer ve araç",
                         _trip,
@@ -89,7 +101,7 @@ public sealed class CylinderTripPage : ContentPage
                         _groupsTotal,
                         _groups,
                         Ui.Secondary("Listeyi yenile", async (_, _) => await RefreshGroupsAsync())),
-                    Ui.Secondary("Seferi kapat", async (_, _) => await CloseTripAsync())
+                    Ui.Secondary("Seferi kapat", async (_, _) => await CloseTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripClose))
                 }
             }
         };
@@ -105,9 +117,11 @@ public sealed class CylinderTripPage : ContentPage
 
     private CustomerItem? SelectedCustomer => _customer.SelectedIndex >= 0 && _customer.SelectedIndex < _customers.Count ? _customers[_customer.SelectedIndex] : null;
 
+    private int SelectedMode => _mode.SelectedIndex >= 0 && _mode.SelectedIndex < _modes.Length ? _modes[_mode.SelectedIndex].Kind : 3;
+
     private void ApplyMode()
     {
-        bool deliver = _mode.SelectedIndex == 1;
+        bool deliver = SelectedMode == DeliverMode;
         _customerSearch.IsVisible = deliver;
         _customerSearchButton.IsVisible = deliver;
         _customer.IsVisible = deliver;
@@ -396,8 +410,8 @@ public sealed class CylinderTripPage : ContentPage
 
         int tripId = SelectedTrip.Id;
         string? plate = SelectedPlate;
-        int mode = _mode.SelectedIndex;
-        if (mode is 0 or 2 && string.IsNullOrWhiteSpace(plate))
+        int mode = SelectedMode;
+        if (mode is LoadMode or ReturnMode && string.IsNullOrWhiteSpace(plate))
         {
             await DisplayAlertAsync("Sefer", "Yükleme ve dönüş için araç seçin.", "Tamam");
             return;
@@ -411,11 +425,11 @@ public sealed class CylinderTripPage : ContentPage
             string message;
             switch (mode)
             {
-                case 0:
+                case LoadMode:
                     TripLoadResponse load = await ApiClient.Instance.LoadTripCylindersAsync(SelectedTrip.Id, plate!, _scanned);
                     message = load.Message + (load.Messages.Count > 0 ? Environment.NewLine + string.Join(Environment.NewLine, load.Messages) : string.Empty);
                     break;
-                case 1:
+                case DeliverMode:
                     if (SelectedCustomer is null)
                     {
                         await DisplayAlertAsync("Sefer", "Teslim için müşteri seçin.", "Tamam");
@@ -430,7 +444,7 @@ public sealed class CylinderTripPage : ContentPage
 
                     message = await ApiClient.Instance.DeliverTripCylindersAsync(SelectedTrip.Id, SelectedCustomer.Id, _scanned, null);
                     break;
-                case 2:
+                case ReturnMode:
                     reconcile = await ApiClient.Instance.ReturnTripCylindersAsync(SelectedTrip.Id, plate!, _scanned, null);
                     message = reconcile.Message;
                     break;

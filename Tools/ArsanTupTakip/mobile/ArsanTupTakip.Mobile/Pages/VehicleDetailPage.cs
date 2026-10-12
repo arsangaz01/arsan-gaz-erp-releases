@@ -29,7 +29,9 @@ public sealed class VehicleDetailPage : ContentPage
                 Children =
                 {
                     Ui.Section("Araç bilgileri", _info, _warning,
-                        Ui.ActionRow(Ui.Secondary("Düzenle", async (_, _) => await EditAsync()), _toggle)),
+                        Ui.ActionRow(
+                            Ui.Secondary("Düzenle", async (_, _) => await EditAsync()).ShowIf(ApiClient.Instance.Can(Perm.VehicleEdit)),
+                            _toggle.ShowIf(ApiClient.Instance.Can(Perm.VehicleDeactivate)))),
                     Ui.Section("Araçtaki tüpler (gaz türüne göre)", _groups),
                     Ui.Section("Sefer geçmişi (son 30)", _trips),
                     _busy
@@ -116,7 +118,7 @@ public sealed class VehicleDetailPage : ContentPage
         await Ui.RunAsync(this, _busy, async () =>
         {
             VehicleSaved saved = await ApiClient.Instance.SaveVehicleAsync(v.Id,
-                new VehicleForm(v.Plate, v.Name, v.VehicleType, v.DriverName, v.CylinderCapacity, v.Note, !v.IsActive));
+                new VehicleForm(v.Plate, v.Name, v.VehicleType, v.DriverName, v.CylinderCapacity, v.Note, !v.IsActive, v.Version));
             await DisplayAlertAsync("Araç", saved.Message, "Tamam");
         });
         await LoadAsync();

@@ -17,7 +17,44 @@ public static class TupTakipDatabase
 
     // Columns added after the first release go here as idempotent SQL (CREATE ... IF NOT EXISTS / ALTER ... ADD COLUMN
     // IF NOT EXISTS); CreateTablesAsync only runs on an empty schema.
-    internal const string UpgradeSql = "";
+    internal const string UpgradeSql = """
+        CREATE TABLE IF NOT EXISTS tuptakip.user_permission_overrides (
+            user_id integer NOT NULL,
+            permission varchar(60) NOT NULL,
+            granted boolean NOT NULL,
+            updated_at timestamp without time zone NOT NULL DEFAULT now(),
+            updated_by varchar(60) NOT NULL DEFAULT '',
+            CONSTRAINT pk_user_permission_overrides PRIMARY KEY (user_id, permission)
+        );
+        CREATE TABLE IF NOT EXISTS tuptakip.request_keys (
+            user_id integer NOT NULL,
+            request_key varchar(200) NOT NULL,
+            created_at timestamp without time zone NOT NULL DEFAULT now(),
+            status_code integer NULL,
+            content_type varchar(100) NULL,
+            response text NULL,
+            CONSTRAINT pk_request_keys PRIMARY KEY (user_id, request_key)
+        );
+        DO $$
+        DECLARE item record;
+        BEGIN
+            FOR item IN SELECT * FROM (VALUES
+                ('ix_cylindertripvehicles_tripid_plate', 'cylindertripvehicles', 'tripid, plate'),
+                ('ix_cylindertripcylinders_tripid_cylinderid', 'cylindertripcylinders', 'tripid, cylinderid')) AS v(name, tbl, cols)
+            LOOP
+                IF EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'tuptakip' AND indexname = item.name
+                           AND indexdef NOT LIKE 'CREATE UNIQUE%') THEN
+                    BEGIN
+                        EXECUTE format('CREATE UNIQUE INDEX %I ON tuptakip.%I (%s)', item.name || '_u', item.tbl, item.cols);
+                        EXECUTE format('DROP INDEX tuptakip.%I', item.name);
+                        EXECUTE format('ALTER INDEX tuptakip.%I RENAME TO %I', item.name || '_u', item.name);
+                    EXCEPTION WHEN unique_violation THEN
+                        RAISE WARNING 'ArsanTupTakip: % tekil yapılamadı (yinelenen kayıt var)', item.name;
+                    END;
+                END IF;
+            END LOOP;
+        END $$;
+        """;
 
     static TupTakipDatabase()
     {
@@ -122,8 +159,13 @@ public sealed class TupTakipDbContext : DbContext
         b.Entity<CylinderAudit>().HasIndex(x => new { x.CustomerId, x.AuditedAt });
         b.Entity<CylinderTrip>().HasIndex(x => x.Status);
         b.Entity<Vehicle>().HasIndex(x => x.Plate).IsUnique();
-        b.Entity<CylinderTripVehicle>().HasIndex(x => new { x.TripId, x.Plate });
-        b.Entity<CylinderTripCylinder>().HasIndex(x => new { x.TripId, x.CylinderId });
+        b.Entity<CylinderTripVehicle>().HasIndex(x => new { x.TripId, x.Plate }).IsUnique();
+        b.Entity<CylinderTripCylinder>().HasIndex(x => new { x.TripId, x.CylinderId }).IsUnique();
+        // Optimistic concurrency: a save fails with DbUpdateConcurrencyException when another user changed the row.
+        b.Entity<Cylinder>().Property(x => x.Version).HasColumnName("xmin").HasColumnType("xid").IsRowVersion();
+        b.Entity<Customer>().Property(x => x.Version).HasColumnName("xmin").HasColumnType("xid").IsRowVersion();
+        b.Entity<Vehicle>().Property(x => x.Version).HasColumnName("xmin").HasColumnType("xid").IsRowVersion();
+        b.Entity<CylinderTrip>().Property(x => x.Version).HasColumnName("xmin").HasColumnType("xid").IsRowVersion();
         b.Entity<CylinderTripCylinder>().HasOne(x => x.Cylinder).WithMany().HasForeignKey(x => x.CylinderId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<CylinderTripVehicle>().HasOne(x => x.Trip).WithMany(x => x.Vehicles).HasForeignKey(x => x.TripId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<CylinderTripCylinder>().HasOne(x => x.Trip).WithMany(x => x.Cylinders).HasForeignKey(x => x.TripId).OnDelete(DeleteBehavior.Cascade);

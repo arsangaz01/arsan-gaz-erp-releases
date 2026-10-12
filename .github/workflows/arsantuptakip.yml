@@ -27,6 +27,19 @@ jobs:
     defaults:
       run:
         working-directory: Tools/ArsanTupTakip
+    # Throwaway database for the concurrency tests (parallel updates of the same cylinder/vehicle, request keys).
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tuptakip_test
+          POSTGRES_PASSWORD: tuptakip_test
+          POSTGRES_DB: tuptakip_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U tuptakip_test" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TUPTAKIP_TEST_PG_CONNECTION: Host=localhost;Port=5432;Username=tuptakip_test;Password=tuptakip_test;Database=tuptakip_test
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-dotnet@v6

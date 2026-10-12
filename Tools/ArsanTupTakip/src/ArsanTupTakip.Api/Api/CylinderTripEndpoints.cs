@@ -14,7 +14,7 @@ internal static class CylinderTripEndpoints
 {
     public static void Map(WebApplication app)
     {
-        app.MapGet("/api/sefer/aktif", async () => Results.Ok(await new CylinderTripService().ActiveTripsAsync()));
+        app.MapGet("/api/sefer/aktif", async () => Results.Ok(await new CylinderTripService().ActiveTripsAsync())).Requires(Perm.TripView);
 
         app.MapPost("/api/sefer/baslat", async (TripStartRequest request, HttpContext context) =>
         {
@@ -28,7 +28,7 @@ internal static class CylinderTripEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(Perm.TripStart);
 
         app.MapPost("/api/sefer/arac", async (TripVehicleRequest request, HttpContext context) =>
         {
@@ -41,7 +41,7 @@ internal static class CylinderTripEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(Perm.TripStart);
 
         app.MapPost("/api/sefer/yukle", async (TripLoadRequest request, HttpContext context) =>
         {
@@ -61,7 +61,7 @@ internal static class CylinderTripEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(Perm.TripLoad);
 
         app.MapPost("/api/sefer/teslim", async (TripDeliverRequest request, HttpContext context) =>
         {
@@ -77,7 +77,7 @@ internal static class CylinderTripEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(Perm.TripDeliver);
 
         app.MapPost("/api/sefer/donus", async (TripReturnRequest request, HttpContext context) =>
         {
@@ -91,7 +91,7 @@ internal static class CylinderTripEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(Perm.TripReturn);
 
         app.MapGet("/api/sefer/{tripId:int}/kontrol", async (int tripId, string? plaka) =>
         {
@@ -104,7 +104,7 @@ internal static class CylinderTripEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(Perm.TripView);
 
         app.MapPost("/api/sefer/kapat", async (TripCloseRequest request) =>
         {
@@ -122,7 +122,7 @@ internal static class CylinderTripEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(Perm.TripClose);
     }
 
     private static object TripReconcileDto(TripReconcileResult reconcile) => new

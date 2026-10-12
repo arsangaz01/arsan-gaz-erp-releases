@@ -131,10 +131,47 @@ sudo bash -c 'set -a; . /etc/arsantuptakip/api.env; set +a; read -rsp "Geçici �
 komut yeni yönetici oluşturmaz. Şifre unutulursa aynı biçimde `--sifre-sifirla <kullanici>` kullanılır.
 Diğer kullanıcılar (Yönetici / Operatör / İzleyici) panelden eklenir.
 
-## Mobil cihaz eşleştirme
+## Kullanıcılar ve yetkiler
 
-Yönetici panelde **Cihazlar → Eşleştirme kodu oluştur** ile 6 haneli kod alır (10 dakika, tek kullanımlık,
-5 deneme). Telefonda Bağlantı sekmesine sunucu adresi ve kod girilir. Cihazlar panelden kaldırılabilir.
+Yetki kataloğu `src/ArsanTupTakip.Api/Api/Permissions.cs` (`Perm.Catalog`) içindedir: giriş (panel / mobil), özet ve
+raporlar, tüpler (görüntüleme, kayıt, düzenleme, pasife alma, müşteride sayım), her tüp durumu için ayrı hareket yetkisi
+(teslim, iade, araç, dolum, servis, hurda) ile dolu/boş seçimi, toplu hareket, "başka müşterideki tüpü yine de kaydet",
+hareket geçmişi ve Excel, müşteriler, seferler (görüntüleme, başlatma, yükleme, teslim, dönüş, kapatma), araçlar
+(görüntüleme, ekleme, düzenleme, pasife alma) ve yönetim (kullanıcı, cihaz, denetim kaydı).
+
+- Roller hazır şablondur: **Yönetici** her şeye sahiptir ve kısıtlanamaz; **Operatör** ve **İzleyici** varsayılanları
+  kullanıcı bazında tek tek açılıp kapatılabilir. Yalnızca farklar `tuptakip.user_permission_overrides` tablosunda
+  tutulur (açılışta `UpgradeSql` ile oluşturulur).
+- Panelde **Yönetim → Kullanıcılar → Düzenle**: gruplu işaret listesi; rol varsayılanından eklenenler yeşil, kaldırılanlar
+  kırmızı görünür, "Rolün varsayılanına dön" farkları siler. Bir yetki işaretlenince ön koşulu da işaretlenir.
+- Yönetici olmayan bir kullanıcı yöneticisi kendinde olmayan yetkiyi veremez, Yönetici hesaplarına ve kendi yetkilerine
+  dokunamaz. Son aktif yönetici pasife alınamaz veya düşürülemez.
+- Her `/panel/api` ve `/api` uç noktası yetki bilgisi taşır; yetkisi tanımlanmamış uç nokta reddedilir. Panel ve mobil
+  uygulama yetkisi olmayan sekme ve düğmeleri gizler; asıl denetim sunucudadır (403 ve Türkçe mesaj).
+- Yalnızca yetki değişikliği açık oturumları kapatmaz (bir sonraki istekte geçerli olur); rol değişikliği, pasife alma ve
+  şifre değişikliği oturumları kapatır.
+
+## Mobil giriş ve oturum süreleri
+
+Telefonda web paneldeki kullanıcı adı ve şifreyle giriş yapılır (`POST /api/giris`); hatalı deneme kilidi panelle
+ortaktır (adres başına 5 deneme / 15 dk, saatte toplam 20). Eski 6 haneli eşleştirme kaldırıldı.
+
+- Mobil oturum girişten itibaren **24 saat**, panel oturumu girişten itibaren **1 saat** geçerlidir (kesin süre,
+  kullanım uzatmaz). Süre dolunca sunucu 401 döner; uygulama giriş ekranını açar, panel giriş sayfasına döner.
+- Her giriş ayrı rastgele anahtar alır; aynı kullanıcı birden çok telefonda/tarayıcıda aynı anda açık kalabilir, yeni
+  giriş diğerlerini kapatmaz. Yönetici **Yönetim → Mobil oturumlar** listesinden (kullanıcı, cihaz, bitiş) tek bir
+  telefon oturumunu kapatabilir.
+- İlk girişte şifre değiştirmesi gereken kullanıcı telefonda da önce şifresini değiştirir; şifre her iki tarafta ortaktır.
+
+## Eşzamanlı kullanım
+
+- Tüp, araç, müşteri ve sefer kayıtlarında PostgreSQL `xmin` satır sürümüyle iyimser eşzamanlılık: ekranda görülen
+  sürüm kaydedilirken gönderilir; arada başka biri değiştirdiyse hiçbir şey yazılmaz ve 409 ile "Bu kayıt başka bir
+  kullanıcı tarafından değiştirildi, yenileyip tekrar deneyin" döner (panel ve uygulama kaydı yeniler).
+- Yazma istekleri `Idempotency-Key` başlığı taşır (`tuptakip.request_keys`): bağlantı kopup aynı okutma tekrar
+  gönderilirse hareket ikinci kez işlenmez, ilk cevap döner. Bağlantısızken saklanan hareketler aynı anahtarla gönderilir.
+- Testler: `dotnet run --project tests/ArsanTupTakip.Tests`; PostgreSQL eşzamanlılık testleri `TUPTAKIP_TEST_PG_CONNECTION`
+  tanımlıysa çalışır (CI'da geçici postgres servisiyle).
 
 ## Sonraki adımlar
 

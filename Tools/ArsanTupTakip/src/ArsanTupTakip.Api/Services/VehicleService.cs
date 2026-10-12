@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using ArsanTupTakip.Api;
 using ArsanTupTakip.Database;
 using ArsanTupTakip.Models;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,8 @@ public sealed record VehicleListItem(
     int? ActiveTripId,
     string? ActiveTripTitle,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    uint Version = 0);
 
 public sealed record VehicleTripItem(int TripId, string Title, bool Active, DateTime StartedAt, DateTime? ClosedAt, DateTime? ReturnedAt,
     int Loaded, int Delivered, int Returned, int Missing);
@@ -125,7 +127,7 @@ public sealed class VehicleService
         return vehicle;
     }
 
-    public async Task<Vehicle> UpdateAsync(int id, VehicleInput input)
+    public async Task<Vehicle> UpdateAsync(int id, VehicleInput input, uint? expectedVersion = null)
     {
         if (VehicleTracking.InputError(input) is string error)
         {
@@ -134,6 +136,10 @@ public sealed class VehicleService
 
         await using TupTakipDbContext db = new();
         Vehicle vehicle = await db.Vehicles.FirstOrDefaultAsync(x => x.Id == id) ?? throw new InvalidOperationException("Araç bulunamadı.");
+        if (expectedVersion is uint seen && seen != vehicle.Version)
+        {
+            throw new RecordChangedException();
+        }
         if (!string.IsNullOrWhiteSpace(input.Plate) && CylinderTracking.NormalizePlate(input.Plate) != vehicle.Plate)
         {
             throw new ArgumentException("Kayıtlı aracın plakası değiştirilemez (seferler ve tüp hareketleri plakaya bağlı). Yeni plakayı ayrı araç olarak ekleyip eskisini pasife alın.");
@@ -160,7 +166,15 @@ public sealed class VehicleService
         }
 
         vehicle.UpdatedAt = DateTime.Now;
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new RecordChangedException();
+        }
+
         return vehicle;
     }
 
@@ -213,7 +227,7 @@ public sealed class VehicleService
     {
         (int Id, string Title)? trip = activeTrips.TryGetValue(x.Plate, out (int Id, string Title) found) ? found : null;
         return new VehicleListItem(x.Id, x.Plate, x.Name, x.VehicleType, x.DriverName, x.CylinderCapacity, x.Note, x.IsActive,
-            onBoard.GetValueOrDefault(x.Plate), trip?.Id, trip?.Title, x.CreatedAt, x.UpdatedAt);
+            onBoard.GetValueOrDefault(x.Plate), trip?.Id, trip?.Title, x.CreatedAt, x.UpdatedAt, x.Version);
     }
 
     private static async Task<Dictionary<string, int>> OnBoardCountsAsync(TupTakipDbContext db)

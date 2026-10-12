@@ -75,7 +75,7 @@ public sealed class VehicleEditPage : ContentPage
         await Ui.RunAsync(this, _busy, async () =>
         {
             VehicleSaved saved = await ApiClient.Instance.SaveVehicleAsync(_existing?.Id,
-                new VehicleForm(_existing?.Plate ?? Value(_plate), Value(_name), Value(_type), Value(_driver), capacity, Value(_note), _existing?.IsActive));
+                new VehicleForm(_existing?.Plate ?? Value(_plate), Value(_name), Value(_type), Value(_driver), capacity, Value(_note), _existing?.IsActive, _existing?.Version));
             await DisplayAlertAsync("Araç", saved.Message, "Tamam");
             await Navigation.PopAsync();
         });

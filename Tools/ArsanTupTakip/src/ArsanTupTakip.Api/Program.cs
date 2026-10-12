@@ -1,4 +1,4 @@
-using System.Text.Json;
+using ArsanTupTakip;
 using ArsanTupTakip.Api;
 using ArsanTupTakip.Database;
 
@@ -58,39 +58,7 @@ string pathBase = (Environment.GetEnvironmentVariable("TUPTAKIP_PATH_BASE") ?? "
 AppLog.Write($"ArsanTüpTakip sunucusu başlatılıyor (127.0.0.1:{port}, yol öneki '{pathBase}').");
 await TupTakipDatabase.EnsureSchemaAsync();
 
-WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
-{
-    Args = args,
-    ContentRootPath = AppContext.BaseDirectory
-});
-builder.Logging.ClearProviders();
-if (!OperatingSystem.IsWindows())
-{
-    builder.Logging.AddSimpleConsole(options => options.SingleLine = true).SetMinimumLevel(LogLevel.Warning);
-}
-
-builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
-builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 10 * 1024 * 1024);
-builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-    options.SerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
-});
-builder.Services.AddSingleton<DeviceStore>();
-builder.Services.AddSingleton<PairingService>();
-
-WebApplication app = builder.Build();
-if (pathBase.Length > 0)
-{
-    app.UsePathBase(pathBase);
-}
-
-app.UseRouting();
-app.UseMiddleware<DeviceAuthMiddleware>();
-MobileEndpoints.Map(app);
-CylinderTripEndpoints.Map(app);
-VehicleEndpoints.Map(app);
-WebPanelEndpoints.Map(app);
+WebApplication app = ApiHost.Build(args, $"http://127.0.0.1:{port}", pathBase);
 
 try
 {

@@ -1,0 +1,394 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using ArsanTupTakip.Api;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace ArsanTupTakip.Tests;
+
+// Permission catalog, role defaults, per-user overrides, escalation rules, session lifetimes, parallel logins and
+// the server-side checks over real HTTP. Needs the initial "yonetici" from ApiLogicTests.
+internal static class PermissionTests
+{
+    private const string Password = "Deneme-Sifre-2026";
+
+    internal static void Run()
+    {
+        PermissionOverrides.UseStore(new MemoryPermissionOverrideStore());
+        IdempotencyMiddleware.Store = new MemoryRequestKeyStore();
+        CatalogIsConsistent();
+        RoleDefaultsAndOverrides();
+        UserManagementRules();
+        SessionLifetimesAreAbsolute().GetAwaiter().GetResult();
+        ParallelLoginsStayIndependent().GetAwaiter().GetResult();
+        WrongPasswordsLockTheAddress().GetAwaiter().GetResult();
+        HttpChecks().GetAwaiter().GetResult();
+        Console.WriteLine("PASS: yetki kataloğu, rol varsayılanları, kullanıcıya özel yetkiler, son yönetici koruması, oturum süreleri (panel 1 saat, mobil 24 saat), eşzamanlı girişler ve sunucu tarafı yetki denetimi.");
+    }
+
+    private static void CatalogIsConsistent()
+    {
+        Check(Perm.All.Length == Perm.All.Distinct().Count(), "Yetki anahtarları benzersiz olmalı.");
+        Check(Perm.Catalog.SelectMany(g => g.Permissions).All(p => p.Label.Length > 0 && p.Description.Length > 0), "Her yetkinin Türkçe adı ve açıklaması olmalı.");
+        Check(Perm.Catalog.SelectMany(g => g.Permissions).SelectMany(p => p.Requires).All(Perm.ByKey.ContainsKey), "Ön koşul yetkileri katalogda olmalı.");
+        Check(PanelRoles.All.All(r => Perm.RoleDefaults(r).All(Perm.ByKey.ContainsKey)), "Rol varsayılanları katalogdaki yetkilerden oluşmalı.");
+        Check(Perm.MoveByStatus.Values.All(Perm.ByKey.ContainsKey) && Perm.MoveByStatus.Count == 6, "Her tüp durumu için hareket yetkisi olmalı.");
+        Check(Perm.All.Length >= 35, "Yetki kataloğu ayrıntılı olmalı.");
+        foreach (string role in PanelRoles.All)
+        {
+            HashSet<string> defaults = [.. Perm.RoleDefaults(role)];
+            Check(defaults.SetEquals(Perm.Effective(role, null)), $"{role} varsayılanları kendi ön koşullarını içermeli.");
+        }
+    }
+
+    private static void RoleDefaultsAndOverrides()
+    {
+        Check(Perm.Effective(PanelRoles.Admin, Perm.All.ToDictionary(k => k, _ => false)).SetEquals(Perm.All), "Yönetici her zaman tüm yetkilere sahip olmalı.");
+        HashSet<string> op = Perm.Effective(PanelRoles.Operator, null);
+        Check(op.Contains(Perm.MoveDeliver) && op.Contains(Perm.TripStart) && !op.Contains(Perm.ManageUsers) && !op.Contains(Perm.AuditLog), "Operatör varsayılanı: işlemler var, yönetim yok.");
+        HashSet<string> viewer = Perm.Effective(PanelRoles.Viewer, null);
+        Check(viewer.Contains(Perm.CylinderView) && Perm.AnyMove.All(m => !viewer.Contains(m)) && !viewer.Contains(Perm.VehicleAdd), "İzleyici varsayılanı yalnızca görüntüleme olmalı.");
+        Check(Perm.Effective("bilinmeyen", new Dictionary<string, bool> { [Perm.Summary] = true }).Count == 0, "Bilinmeyen rol hiçbir yetki almamalı.");
+        Check(PanelRoles.Normalize("yönetici") == PanelRoles.Admin && PanelRoles.Normalize("IZLEYICI") == PanelRoles.Viewer && PanelRoles.Normalize("x") is null, "Rol adları Türkçe karakterli/karaktersiz eşleşmeli.");
+
+        HashSet<string> granted = Perm.Effective(PanelRoles.Viewer, new Dictionary<string, bool> { [Perm.MoveDeliver] = true, ["uydurma"] = true });
+        Check(granted.Contains(Perm.MoveDeliver) && !granted.Contains("uydurma"), "İzleyiciye tek yetki eklenebilmeli; bilinmeyen anahtar yok sayılmalı.");
+        HashSet<string> revoked = Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.MoveScrap] = false, [Perm.CylinderView] = false });
+        Check(!revoked.Contains(Perm.MoveScrap) && !revoked.Contains(Perm.MoveDeliver) && !revoked.Contains(Perm.CylinderEdit) && revoked.Contains(Perm.CylinderRegister),
+            "Kaldırılan yetkiye bağlı yetkiler de kalkmalı, bağımsız olanlar kalmalı.");
+        HashSet<string> tripless = Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.TripView] = false });
+        Check(!tripless.Contains(Perm.TripStart) && !tripless.Contains(Perm.TripClose), "Sefer görüntüleme kalkınca sefer işlemleri de kalkmalı.");
+
+        HashSet<string> wanted = Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.MoveScrap] = false, [Perm.AuditLog] = true });
+        foreach (string role in new[] { PanelRoles.Operator, PanelRoles.Viewer })
+        {
+            Dictionary<string, bool> diff = Perm.Diff(role, wanted);
+            Check(Perm.Effective(role, diff).SetEquals(wanted), $"{role} için seçilen yetkiler farklar olarak saklanıp aynen geri gelmeli.");
+        }
+
+        Check(Perm.Diff(PanelRoles.Operator, Perm.RoleDefaults(PanelRoles.Operator)).Count == 0, "Rol varsayılanı seçiliyse fark saklanmamalı.");
+    }
+
+    private static void UserManagementRules()
+    {
+        WebPanelAuth auth = new();
+        WebPanelUser admin = WebPanelUserStore.FindByName("yonetici")!;
+        const string ip = "127.0.0.1";
+
+        List<string> managerPermissions = [.. Perm.Effective(PanelRoles.Operator, null).Where(p => p != Perm.MoveScrap), Perm.ManageUsers];
+        Check(auth.CreateUser(admin, ip, "sorumlu", "Depo Sorumlusu", "Operatör", Password, false, managerPermissions) is null, "Yönetici yetkileri seçerek kullanıcı açabilmeli.");
+        WebPanelUser manager = WebPanelUserStore.FindByName("sorumlu")!;
+        HashSet<string> managerEffective = Perm.Effective(manager);
+        Check(managerEffective.Contains(Perm.ManageUsers) && !managerEffective.Contains(Perm.MoveScrap), "Seçilen yetkiler kullanıcıya uygulanmalı.");
+
+        Check(auth.CreateUser(manager, ip, "yeniyonetici", null, "Yönetici", Password, false) is not null, "Yönetici olmayan, Yönetici hesabı açamamalı.");
+        Check(auth.CreateUser(manager, ip, "hurdaci", null, "Operatör", Password, false) is not null, "Kendinde olmayan yetkiyi (hurda) veren kullanıcı açılamamalı.");
+        Check(auth.CreateUser(manager, ip, "saha1", "Saha", "İzleyici", Password, false, [.. Perm.Effective(PanelRoles.Viewer, null), Perm.MoveDeliver]) is null,
+            "Kendinde olan yetkiyi verebilmeli.");
+        WebPanelUser field = WebPanelUserStore.FindByName("saha1")!;
+        Check(Perm.Has(field, Perm.MoveDeliver) && !Perm.Has(field, Perm.MoveReturn), "Verilen tek yetki işlenmeli.");
+        Check(auth.UpdateUser(manager, ip, manager.Id, manager.DisplayName, manager.Role, true, [.. managerEffective, Perm.MoveScrap]) is not null, "Kullanıcı kendi yetkilerini artıramamalı.");
+        Check(auth.UpdateUser(manager, ip, admin.Id, admin.DisplayName, "Operatör", true) is not null, "Yönetici olmayan, Yönetici hesabına dokunamamalı.");
+
+        PermissionOverrides.Replace(admin.Id, Perm.All.ToDictionary(k => k, _ => false), "test");
+        Check(Perm.Effective(WebPanelUserStore.Find(admin.Id)!).SetEquals(Perm.All), "Yöneticiye yazılmış kısıtlamalar etkisiz olmalı.");
+        PermissionOverrides.Replace(admin.Id, new Dictionary<string, bool>(), "test");
+
+        Check(auth.UpdateUser(admin, ip, admin.Id, admin.DisplayName, "Operatör", true) is not null, "Yönetici kendi yönetici yetkisini kaldıramamalı.");
+        Check(auth.CreateUser(admin, ip, "yonetici2", null, "Yönetici", Password, false) is null, "İkinci yönetici açılabilmeli.");
+        WebPanelUser second = WebPanelUserStore.FindByName("yonetici2")!;
+        Check(auth.UpdateUser(second, ip, admin.Id, admin.DisplayName, PanelRoles.Admin, false) is null, "Başka aktif yönetici varken yönetici pasife alınabilmeli.");
+        string? last = auth.UpdateUser(WebPanelUserStore.Find(admin.Id)!, ip, second.Id, second.DisplayName, PanelRoles.Admin, false);
+        Check(last is not null && last.Contains("Son aktif yönetici", StringComparison.Ordinal), "Son aktif yönetici pasife alınamamalı.");
+        Check(auth.UpdateUser(second, ip, admin.Id, admin.DisplayName, PanelRoles.Admin, true) is null, "Yönetici yeniden aktif edilebilmeli.");
+        Check(auth.UpdateUser(admin, ip, second.Id, second.DisplayName, PanelRoles.Admin, false) is null, "Fazladan yönetici pasife alınabilmeli.");
+        Check(WebPanelUserStore.IsConfigured && WebPanelUserStore.Find(admin.Id)!.IsActive, "İlk yönetici aktif kalmalı.");
+    }
+
+    private static async Task SessionLifetimesAreAbsolute()
+    {
+        DateTime now = new(2026, 10, 12, 9, 0, 0, DateTimeKind.Utc);
+        WebPanelAuth auth = new(() => now);
+        DefaultHttpContext login = Context("10.1.0.1");
+        Check(await auth.LoginAsync(login, "sorumlu", Password) is null, "Panel girişi yapılabilmeli.");
+        DefaultHttpContext request = WithCookie(login);
+        now = now.AddMinutes(59);
+        Check(auth.Current(request) is not null, "Panel oturumu 59. dakikada geçerli olmalı.");
+        now = now.AddMinutes(1).AddSeconds(1);
+        Check(auth.Current(request) is null, "Panel oturumu girişten 1 saat sonra kullanım olsa bile bitmeli.");
+
+        now = new DateTime(2026, 10, 12, 9, 0, 0, DateTimeKind.Utc);
+        DeviceStore devices = new(() => now);
+        var (token, session, _, error) = await auth.MobileLoginAsync(Context("10.1.0.2"), devices, "saha1", Password, "Test telefonu");
+        Check(error is null && token is not null && session is not null, "Mobil giriş panel şifresiyle yapılabilmeli.");
+        Check(session!.ExpiresUtc == now + TimeSpan.FromHours(24), "Mobil oturum girişten tam 24 saat geçerli olmalı.");
+        now = now.AddHours(23).AddMinutes(59);
+        Check(devices.Validate(token!) is not null, "Mobil oturum 23:59'da geçerli olmalı.");
+        now = now.AddMinutes(1).AddSeconds(1);
+        Check(devices.Validate(token!) is null, "Mobil oturum 24 saat dolunca geçersiz olmalı.");
+        Check(devices.All().All(s => s.Id != session.Id), "Süresi dolan mobil oturum listede görünmemeli.");
+    }
+
+    private static async Task ParallelLoginsStayIndependent()
+    {
+        WebPanelAuth auth = new();
+        DeviceStore devices = new();
+        DefaultHttpContext[] panels = [.. Enumerable.Range(0, 4).Select(i => Context("10.2.0." + i))];
+        string?[] panelErrors = await Task.WhenAll(panels.Select(c => auth.LoginAsync(c, "sorumlu", Password)));
+        var phones = await Task.WhenAll(Enumerable.Range(0, 6).Select(i =>
+            auth.MobileLoginAsync(Context("10.3.0." + i), devices, i % 2 == 0 ? "sorumlu" : "saha1", Password, "Telefon " + i)));
+
+        Check(panelErrors.All(e => e is null) && phones.All(p => p.Error is null), "Aynı anda yapılan girişlerin hepsi başarılı olmalı.");
+        List<string> cookies = [.. panels.Select(CookieValue)];
+        Check(cookies.Distinct().Count() == cookies.Count && phones.Select(p => p.Token).Distinct().Count() == phones.Length, "Her giriş ayrı bir oturum anahtarı almalı.");
+        Check(panels.All(c => auth.Current(WithCookie(c)) is not null), "Yeni girişler önceki tarayıcı oturumlarını kapatmamalı.");
+        Check(phones.All(p => devices.Validate(p.Token!) is { } s && s.UserName == p.User!.UserName), "Her telefon kendi kullanıcısının oturumunu almalı.");
+        Check(auth.ActiveSessionCount(WebPanelUserStore.FindByName("sorumlu")!.Id) == 4, "Aynı kullanıcının dört tarayıcı oturumu birlikte açık kalmalı.");
+
+        var later = await auth.MobileLoginAsync(Context("10.3.0.9"), devices, "sorumlu", Password, "Yedek telefon");
+        Check(later.Error is null && phones.All(p => devices.Validate(p.Token!) is not null), "Yeni telefon girişi diğer telefonları kapatmamalı.");
+        Check(devices.Remove(later.Session!.Id) is not null && devices.Validate(later.Token!) is null && devices.Validate(phones[0].Token!) is not null,
+            "Yönetici tek bir telefon oturumunu kapatabilmeli; diğerleri sürmeli.");
+    }
+
+    private static async Task WrongPasswordsLockTheAddress()
+    {
+        WebPanelAuth auth = new();
+        await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => auth.AuthenticateAsync("10.9.9.9", "saha1", "Yanlis-Sifre-1", "mobil")));
+        var (user, error) = await auth.AuthenticateAsync("10.9.9.9", "saha1", Password, "mobil");
+        Check(user is null && error is not null && error.Contains("dakika", StringComparison.Ordinal), "5 hatalı denemeden sonra adres (doğru şifreyle de) kilitlenmeli.");
+        Check((await auth.AuthenticateAsync("10.9.9.8", "saha1", Password, "mobil")).User is not null, "Kilit yalnızca o adresi etkilemeli.");
+    }
+
+    private static async Task HttpChecks()
+    {
+        WebApplication app = ApiHost.Build([], "http://127.0.0.1:0", "/tuptakip");
+        await app.StartAsync();
+        try
+        {
+            CheckEveryEndpointHasPermission(app);
+            using HttpClient http = new(new HttpClientHandler { UseCookies = false }) { BaseAddress = new Uri(app.Urls.First() + "/tuptakip/") };
+            WebPanelAuth auth = app.Services.GetRequiredService<WebPanelAuth>();
+            DeviceStore devices = app.Services.GetRequiredService<DeviceStore>();
+            WebPanelUser admin = WebPanelUserStore.FindByName("yonetici")!;
+
+            using (HttpResponseMessage wrong = await http.PostAsJsonAsync("api/giris", new { kullanici = "saha1", sifre = "Yanlis-Sifre-2", cihazAdi = "x" }))
+            {
+                Check(wrong.StatusCode == HttpStatusCode.Unauthorized && (await Json(wrong)).GetProperty("error").GetString() == "Kullanıcı adı veya şifre hatalı.", "Hatalı mobil giriş 401 ve Türkçe mesaj vermeli.");
+            }
+
+            (string token, JsonElement account) = await MobileLogin(http, "saha1");
+            string[] permissions = [.. account.GetProperty("permissions").EnumerateArray().Select(p => p.GetString()!)];
+            Check(permissions.Contains(Perm.MoveDeliver) && !permissions.Contains(Perm.MoveReturn) && account.GetProperty("role").GetString() == PanelRoles.Viewer,
+                "Mobil giriş etkin yetkileri döndürmeli.");
+            Check(account.GetProperty("expiresUtc").GetDateTime() > DateTime.UtcNow.AddHours(23.9), "Mobil oturum bitişi 24 saat sonrası olmalı.");
+
+            using (HttpResponseMessage me = await Send(http, HttpMethod.Get, "api/ben", token))
+            {
+                Check(me.StatusCode == HttpStatusCode.OK, "Geçerli anahtarla /api/ben açılmalı.");
+            }
+
+            using (HttpResponseMessage denied = await Send(http, HttpMethod.Post, "api/tup/hareket", token, new { code = "X1", status = 1 }))
+            {
+                Check(denied.StatusCode == HttpStatusCode.Forbidden && (await Json(denied)).GetProperty("error").GetString()!.Contains("yetkiniz yok", StringComparison.Ordinal),
+                    "Yetkisi olmayan hareket sunucuda reddedilmeli (depoya iade).");
+            }
+
+            using (HttpResponseMessage anonymous = await Send(http, HttpMethod.Get, "api/ozet", null))
+            {
+                Check(anonymous.StatusCode == HttpStatusCode.Unauthorized && (await Json(anonymous)).GetProperty("loginRequired").GetBoolean(), "Anahtarsız istek 401 ve giriş istemeli.");
+            }
+
+            string[] tokens = [.. (await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => MobileLogin(http, "sorumlu")))).Select(x => x.Token)];
+            Check(tokens.Distinct().Count() == 5, "Aynı anda yapılan 5 mobil giriş ayrı anahtar almalı.");
+            foreach (string each in tokens.Append(token))
+            {
+                using HttpResponseMessage ok = await Send(http, HttpMethod.Get, "api/ben", each);
+                Check(ok.StatusCode == HttpStatusCode.OK, "Eşzamanlı girişlerden sonra tüm oturumlar geçerli kalmalı.");
+            }
+
+            MobileSession revoked = devices.Validate(token)!;
+            Check(revoked.UserName == "saha1" && devices.All().Any(s => s.Id == revoked.Id), "Mobil oturum panel cihaz listesinde kullanıcısıyla görünmeli.");
+            devices.Remove(revoked.Id);
+            using (HttpResponseMessage closed = await Send(http, HttpMethod.Get, "api/ben", token))
+            {
+                Check(closed.StatusCode == HttpStatusCode.Unauthorized, "Yöneticinin kapattığı mobil oturum 401 almalı.");
+            }
+
+            Check(auth.CreateUser(admin, "127.0.0.1", "panelci", null, "Operatör", Password, false, [.. Perm.RoleDefaults(PanelRoles.Operator).Where(p => p != Perm.MobileLogin)]) is null,
+                "Mobil girişi kapalı kullanıcı açılabilmeli.");
+            using (HttpResponseMessage noMobile = await http.PostAsJsonAsync("api/giris", new { kullanici = "panelci", sifre = Password }))
+            {
+                Check(noMobile.StatusCode == HttpStatusCode.Unauthorized && (await Json(noMobile)).GetProperty("error").GetString()!.Contains("Mobil", StringComparison.Ordinal),
+                    "Mobil giriş yetkisi olmayan kullanıcı telefonda giriş yapamamalı.");
+            }
+
+            string cookie = await PanelLogin(http, "saha1");
+            using (HttpResponseMessage users = await Send(http, HttpMethod.Get, "panel/api/yonetim/kullanicilar", null, cookie: cookie))
+            {
+                Check(users.StatusCode == HttpStatusCode.Forbidden, "İzleyici kullanıcı listesini görememeli.");
+            }
+
+            using (HttpResponseMessage vehicle = await Send(http, HttpMethod.Post, "panel/api/arac", null, new { plate = "34 TST 01" }, cookie))
+            {
+                Check(vehicle.StatusCode == HttpStatusCode.Forbidden, "Araç ekleme yetkisi olmayan panelde araç ekleyememeli.");
+            }
+
+            WebPanelUser viewer = WebPanelUserStore.FindByName("saha1")!;
+            Check(auth.UpdateUser(admin, "127.0.0.1", viewer.Id, viewer.DisplayName, viewer.Role, true, [.. Perm.Effective(viewer), Perm.ManageUsers]) is null, "Yönetici tek yetki ekleyebilmeli.");
+            using (HttpResponseMessage users = await Send(http, HttpMethod.Get, "panel/api/yonetim/kullanicilar", null, cookie: cookie))
+            {
+                Check(users.StatusCode == HttpStatusCode.OK, "Eklenen yetki yeniden giriş gerekmeden geçerli olmalı.");
+            }
+
+            Check(auth.UpdateUser(admin, "127.0.0.1", viewer.Id, viewer.DisplayName, viewer.Role, true, [.. Perm.Effective(WebPanelUserStore.Find(viewer.Id)!).Where(p => p != Perm.ManageUsers)]) is null,
+                "Yönetici yetkiyi geri alabilmeli.");
+            using (HttpResponseMessage users = await Send(http, HttpMethod.Get, "panel/api/yonetim/kullanicilar", null, cookie: cookie))
+            {
+                Check(users.StatusCode == HttpStatusCode.Forbidden, "Kaldırılan yetki hemen etkisini göstermeli.");
+            }
+
+            using (HttpResponseMessage noCsrf = await Send(http, HttpMethod.Post, "panel/api/sifre", null, new { mevcut = "x" }, cookie, csrf: false))
+            {
+                Check(noCsrf.StatusCode == HttpStatusCode.Forbidden, "CSRF başlığı olmayan panel isteği reddedilmeli.");
+            }
+
+            Check(auth.CreateUser(admin, "127.0.0.1", "yeniperson", null, "Operatör", Password, true) is null, "Geçici şifreli kullanıcı açılabilmeli.");
+            (string fresh, JsonElement freshAccount) = await MobileLogin(http, "yeniperson");
+            Check(freshAccount.GetProperty("mustChangePassword").GetBoolean(), "Geçici şifreli girişte şifre değişikliği istenmeli.");
+            using (HttpResponseMessage blocked = await Send(http, HttpMethod.Get, "api/ozet", fresh))
+            {
+                Check(blocked.StatusCode == HttpStatusCode.Forbidden && (await Json(blocked)).GetProperty("mustChangePassword").GetBoolean(), "Şifre değişmeden işlem yapılamamalı.");
+            }
+
+            string key = Guid.NewGuid().ToString("N");
+            object change = new { mevcut = Password, yeni = "Yeni-Sifre-2027", tekrar = "Yeni-Sifre-2027" };
+            using (HttpResponseMessage changed = await Send(http, HttpMethod.Post, "api/sifre", fresh, change, key: key))
+            {
+                Check(changed.StatusCode == HttpStatusCode.OK, "Mobilde şifre değiştirilebilmeli.");
+            }
+
+            using (HttpResponseMessage replay = await Send(http, HttpMethod.Post, "api/sifre", fresh, change, key: key))
+            {
+                Check(replay.StatusCode == HttpStatusCode.OK && replay.Headers.Contains("Idempotent-Replay"), "Aynı istek anahtarıyla tekrar gönderilen istek yeniden işlenmeden ilk cevabı almalı.");
+            }
+
+            using (HttpResponseMessage me = await Send(http, HttpMethod.Get, "api/ben", fresh))
+            {
+                Check(me.StatusCode == HttpStatusCode.OK && !(await Json(me)).GetProperty("mustChangePassword").GetBoolean(), "Şifre değişince telefon oturumu sürmeli ve zorunluluk kalkmalı.");
+            }
+
+            Check(WebPanelUserStore.VerifyPassword(WebPanelUserStore.FindByName("yeniperson")!, "Yeni-Sifre-2027"), "Yeni şifre web panelde de geçerli olmalı.");
+        }
+        finally
+        {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    // Every /api and /panel/api endpoint must carry permission metadata; a forgotten one would be refused anyway.
+    private static void CheckEveryEndpointHasPermission(WebApplication app)
+    {
+        List<RouteEndpoint> endpoints = [.. ((IEndpointRouteBuilder)app).DataSources.SelectMany(s => s.Endpoints).OfType<RouteEndpoint>()];
+        List<string> missing = [];
+        int checkedCount = 0;
+        foreach (RouteEndpoint endpoint in endpoints)
+        {
+            string route = "/" + (endpoint.RoutePattern.RawText ?? string.Empty).TrimStart('/');
+            bool mobile = route.StartsWith("/api/", StringComparison.Ordinal) && !DeviceAuthMiddleware.PublicPaths.Contains(route);
+            if (!mobile && !route.StartsWith("/panel/api/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            checkedCount++;
+            RequiresPermission? required = endpoint.Metadata.GetMetadata<RequiresPermission>();
+            if (endpoint.Metadata.GetMetadata<SignedInOnly>() is null && (required is null || required.AnyOf.Length == 0 || !required.AnyOf.All(Perm.ByKey.ContainsKey)))
+            {
+                missing.Add(route);
+            }
+        }
+
+        Check(checkedCount > 50, $"Uç noktalar bulunamadı ({checkedCount}).");
+        Check(missing.Count == 0, "Yetki tanımı olmayan uç noktalar: " + string.Join(", ", missing));
+    }
+
+    private static async Task<(string Token, JsonElement Account)> MobileLogin(HttpClient http, string user)
+    {
+        using HttpResponseMessage response = await http.PostAsJsonAsync("api/giris", new { kullanici = user, sifre = Password, cihazAdi = "Test" });
+        Check(response.StatusCode == HttpStatusCode.OK, $"{user} mobil girişi başarılı olmalı ({(int)response.StatusCode}).");
+        JsonElement json = await Json(response);
+        return (json.GetProperty("token").GetString()!, json.GetProperty("account"));
+    }
+
+    private static async Task<string> PanelLogin(HttpClient http, string user)
+    {
+        using HttpResponseMessage response = await http.PostAsJsonAsync("panel/giris", new { kullanici = user, sifre = Password });
+        Check(response.StatusCode == HttpStatusCode.OK, $"{user} panel girişi başarılı olmalı.");
+        string setCookie = response.Headers.GetValues("Set-Cookie").First(c => c.StartsWith(WebPanelAuth.CookieName + "=", StringComparison.Ordinal));
+        return setCookie.Split(';')[0];
+    }
+
+    private static async Task<HttpResponseMessage> Send(HttpClient http, HttpMethod method, string path, string? token, object? body = null, string? cookie = null, bool csrf = true, string? key = null)
+    {
+        HttpRequestMessage request = new(method, path);
+        if (token is not null)
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
+        if (cookie is not null)
+        {
+            request.Headers.Add("Cookie", cookie);
+            if (csrf)
+            {
+                request.Headers.Add(WebPanelAuth.CsrfHeader, "1");
+            }
+        }
+
+        if (key is not null)
+        {
+            request.Headers.Add(IdempotencyMiddleware.Header, key);
+        }
+
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body);
+        }
+
+        return await http.SendAsync(request);
+    }
+
+    private static async Task<JsonElement> Json(HttpResponseMessage response) =>
+        JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
+
+    private static DefaultHttpContext Context(string ip)
+    {
+        DefaultHttpContext context = new();
+        context.Connection.RemoteIpAddress = IPAddress.Parse(ip);
+        context.Request.Host = new HostString("127.0.0.1");
+        return context;
+    }
+
+    private static string CookieValue(DefaultHttpContext login) =>
+        login.Response.Headers.SetCookie.ToString().Split(';')[0];
+
+    private static DefaultHttpContext WithCookie(DefaultHttpContext login)
+    {
+        DefaultHttpContext request = Context("10.1.0.1");
+        request.Request.Headers.Cookie = CookieValue(login);
+        return request;
+    }
+
+    private static void Check(bool condition, string message)
+    {
+        if (!condition)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+}

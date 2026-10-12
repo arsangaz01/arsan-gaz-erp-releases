@@ -18,6 +18,8 @@ public sealed class Cylinder
  public DateTime? TestDueDate { get; set; }
  public bool IsActive { get; set; } = true;
  public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+ // PostgreSQL xmin: changes on every update, used for optimistic concurrency (no real column).
+ public uint Version { get; set; }
  public ICollection<CylinderMovement> Movements { get; set; } = new List<CylinderMovement>();
 }
 public enum CylinderStatus { Warehouse=1, Vehicle=2, Customer=3, Filling=4, Service=5, Scrap=6 }

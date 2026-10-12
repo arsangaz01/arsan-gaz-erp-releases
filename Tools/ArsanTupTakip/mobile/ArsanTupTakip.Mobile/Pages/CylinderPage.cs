@@ -8,7 +8,7 @@ public sealed class CylinderPage : ContentPage
     internal const int CustomerStatus = 3;
     internal const int VehicleStatus = 2;
 
-    private static readonly (string Label, int Status)[] Actions =
+    private static readonly (string Label, int Status)[] AllActions =
     [
         ("Müşteriye teslim", CustomerStatus),
         ("Depoya iade", 1),
@@ -50,6 +50,10 @@ public sealed class CylinderPage : ContentPage
     private List<CustomerItem> _customers = [];
     private CylinderInfo? _current;
     private bool _platesLoaded;
+
+    // Only the movements the signed-in user may record (the server checks the same permissions).
+    private readonly (string Label, int Status)[] Actions =
+        AllActions.Where(a => ApiClient.Instance.Can(Perm.MoveByStatus[a.Status])).ToArray();
 
     public CylinderPage()
     {
@@ -94,10 +98,11 @@ public sealed class CylinderPage : ContentPage
                 _customerSearch,
                 Ui.ActionRow(
                     Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
-                    Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync())),
+                    Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync()).ShowIf(ApiClient.Instance.Can(Perm.CustomerAdd))),
                 _customer
             }
         };
+        _fullness.IsVisible = ApiClient.Instance.Can(Perm.MoveFullness);
         _vehiclePanel = new VerticalStackLayout
         {
             Spacing = 6,
@@ -119,7 +124,7 @@ public sealed class CylinderPage : ContentPage
             _code,
             Ui.ActionRow(
                 Ui.Secondary("Sorgula", async (_, _) => await LookupAsync(_code.Text, quick: false)),
-                Ui.Secondary("➕ Yeni tüp", async (_, _) => await RegisterNewAsync())),
+                Ui.Secondary("➕ Yeni tüp", async (_, _) => await RegisterNewAsync()).ShowIf(ApiClient.Instance.Can(Perm.CylinderRegister))),
             _detail);
         _batchPanel = Ui.Section(
             "Toplu okutma",
@@ -157,9 +162,10 @@ public sealed class CylinderPage : ContentPage
                 {
                     _pendingPanel,
                     Ui.ActionRow(
-                        Ui.Secondary("📊 Tüp durumu", async (_, _) => await Navigation.PushAsync(new CylinderStatusPage())),
-                        Ui.Secondary("📋 Müşteride sayım", async (_, _) => await Navigation.PushAsync(new CylinderAuditPage()))),
-                    Ui.Card(modeRow),
+                        Ui.Secondary("📊 Tüp durumu", async (_, _) => await Navigation.PushAsync(new CylinderStatusPage())).ShowIf(ApiClient.Instance.Can(Perm.Summary)),
+                        Ui.Secondary("📋 Müşteride sayım", async (_, _) => await Navigation.PushAsync(new CylinderAuditPage())).ShowIf(ApiClient.Instance.Can(Perm.CylinderAudit))),
+                    Ui.Card(modeRow).ShowIf(ApiClient.Instance.Can(Perm.MoveBulk) && Actions.Length > 0),
+                    Ui.Note("Hesabınızda tüp hareketi kaydetme yetkisi yok; tüpleri yalnızca sorgulayabilirsiniz.").ShowIf(Actions.Length == 0),
                     _singlePanel,
                     _batchPanel,
                     _busy,
@@ -280,8 +286,8 @@ public sealed class CylinderPage : ContentPage
         (int sent, string? error, string? warning) = await OfflineMoves.FlushAsync();
         if (warning is not null)
         {
-            await DisplayAlertAsync("Bekleyen hareketlerde müşteri değişikliği",
-                "Bağlantısızken kaydedilen bu tüpler sistemde başka bir müşteride görünüyordu; teslim yine de işlendi, önceki müşterinin kaydını kontrol edin:\n\n" + warning, "Tamam");
+            await DisplayAlertAsync("Bekleyen hareketlerde uyarı",
+                "Bağlantısızken kaydedilen hareketlerin bazılarında uyarı var (başka müşteride görünen veya kaydedilemeyen tüpler); kontrol edin:\n\n" + warning, "Tamam");
         }
 
         if (error is not null)
@@ -368,12 +374,12 @@ public sealed class CylinderPage : ContentPage
                 return;
             }
 
-            _movePanel.IsVisible = true;
+            _movePanel.IsVisible = Actions.Length > 0;
         });
 
         if (unknown)
         {
-            if (await DisplayAlertAsync("Kayıtlı olmayan tüp", $"'{value}' sistemde kayıtlı değil. Yeni tüp olarak kaydedilsin mi?", "Yeni tüp kaydet", "Vazgeç")
+            if (ApiClient.Instance.Can(Perm.CylinderRegister) && await DisplayAlertAsync("Kayıtlı olmayan tüp", $"'{value}' sistemde kayıtlı değil. Yeni tüp olarak kaydedilsin mi?", "Yeni tüp kaydet", "Vazgeç")
                 && await CylinderRegisterPage.RegisterAsync(Navigation, value) is string saved)
             {
                 _code.Text = saved;
@@ -383,7 +389,7 @@ public sealed class CylinderPage : ContentPage
             return;
         }
 
-        if (quick && _current is not null)
+        if (quick && _current is not null && Actions.Length > 0)
         {
             await QuickMoveAsync();
         }
@@ -492,6 +498,8 @@ public sealed class CylinderPage : ContentPage
         }
 
         CylinderInfo current = _current!;
+        // One key per attempt: if the answer is lost, the queued copy is sent with the same key and is not recorded twice.
+        string key = ApiClient.NewRequestKey();
         await Ui.RunAsync(this, _busy, async () =>
         {
             try
@@ -499,24 +507,38 @@ public sealed class CylinderPage : ContentPage
                 string message;
                 try
                 {
-                    message = await ApiClient.Instance.MoveCylinderAsync(current.Barcode, status, customer?.Id, _note.Text, plate, isFull);
+                    message = await ApiClient.Instance.MoveCylinderAsync(current.Barcode, status, customer?.Id, _note.Text, plate, isFull,
+                        version: current.Version, requestKey: key);
                 }
                 catch (ApiException conflict) when (conflict.IsCustomerConflict)
                 {
+                    if (!ApiClient.Instance.Can(Perm.MoveOverride))
+                    {
+                        await DisplayAlertAsync("Tüp başka müşteride", conflict.Message + "\n\nBu tüpü yine de kaydetme yetkiniz yok; yöneticinize başvurun.", "Tamam");
+                        return;
+                    }
+
                     if (!await DisplayAlertAsync("Tüp başka müşteride", conflict.Message, "Yine de kaydet", "Vazgeç"))
                     {
                         return;
                     }
 
-                    message = await ApiClient.Instance.MoveCylinderAsync(current.Barcode, status, customer?.Id, _note.Text, plate, isFull, confirmCustomerChange: true);
+                    key = ApiClient.NewRequestKey();
+                    message = await ApiClient.Instance.MoveCylinderAsync(current.Barcode, status, customer?.Id, _note.Text, plate, isFull,
+                        confirmCustomerChange: true, version: current.Version, requestKey: key);
                 }
 
                 await DisplayAlertAsync("Kaydedildi", message, "Tamam");
                 await LookupAsync(current.Barcode, quick: false);
             }
+            catch (ApiException stale) when (stale.IsStale)
+            {
+                await DisplayAlertAsync("Kayıt değişti", stale.Message + "\n\nTüp bilgisi yenileniyor.", "Tamam");
+                await LookupAsync(current.Barcode, quick: false);
+            }
             catch (ServerUnreachableException)
             {
-                OfflineMoves.Add(new PendingMove(current.Barcode, status, customer?.Id, _note.Text, label, DateTime.Now, plate, isFull));
+                OfflineMoves.Add(new PendingMove(current.Barcode, status, customer?.Id, _note.Text, label, DateTime.Now, plate, isFull, key));
                 _movePanel.IsVisible = false;
                 _detail.Text = $"📶 Bağlantı yok: {current.SerialNumber} → {label} telefonda saklandı. Bağlantı gelince otomatik gönderilecek.";
             }
@@ -528,12 +550,13 @@ public sealed class CylinderPage : ContentPage
         {
             List<string> codes = [.. _batch];
             List<string> kept = [];
+            string key = ApiClient.NewRequestKey();
             try
             {
                 CylinderBulkResponse response;
                 try
                 {
-                    response = await ApiClient.Instance.MoveCylindersAsync(codes, status, customer?.Id, _note.Text, plate, isFull);
+                    response = await ApiClient.Instance.MoveCylindersAsync(codes, status, customer?.Id, _note.Text, plate, isFull, requestKey: key);
                 }
                 catch (ApiException conflict) when (conflict.IsCustomerConflict)
                 {
@@ -546,7 +569,9 @@ public sealed class CylinderPage : ContentPage
 
                     const string all = "Yine de hepsini kaydet";
                     const string skip = "Bunları çıkar, kalanları kaydet";
-                    string? choice = await DisplayActionSheetAsync($"{clashing.Count} çakışan tüp", "Vazgeç", null, all, skip);
+                    string? choice = ApiClient.Instance.Can(Perm.MoveOverride)
+                        ? await DisplayActionSheetAsync($"{clashing.Count} çakışan tüp", "Vazgeç", null, all, skip)
+                        : await DisplayActionSheetAsync($"{clashing.Count} çakışan tüp (yine de kaydetme yetkiniz yok)", "Vazgeç", null, skip);
                     if (choice == skip)
                     {
                         kept = codes.Where(code => clashing.Contains(code, StringComparer.OrdinalIgnoreCase)).ToList();
@@ -562,7 +587,8 @@ public sealed class CylinderPage : ContentPage
                         return;
                     }
 
-                    response = await ApiClient.Instance.MoveCylindersAsync(codes, status, customer?.Id, _note.Text, plate, isFull, confirmCustomerChange: choice == all);
+                    key = ApiClient.NewRequestKey();
+                    response = await ApiClient.Instance.MoveCylindersAsync(codes, status, customer?.Id, _note.Text, plate, isFull, confirmCustomerChange: choice == all, requestKey: key);
                 }
 
                 List<string> failed = response.Results.Where(r => !r.Ok).Select(r => $"{r.Code}: {r.Message}").ToList();
@@ -578,11 +604,8 @@ public sealed class CylinderPage : ContentPage
             }
             catch (ServerUnreachableException)
             {
-                foreach (string code in codes)
-                {
-                    OfflineMoves.Add(new PendingMove(code, status, customer?.Id, _note.Text, label, DateTime.Now, plate, isFull));
-                }
-
+                // Queued as one bulk request with the same key, so a bulk request that did reach the server is not repeated.
+                OfflineMoves.Add(new PendingMove(codes[0], status, customer?.Id, _note.Text, $"{label} · {codes.Count} tüp", DateTime.Now, plate, isFull, key, codes));
                 _batch.Clear();
                 _batch.AddRange(kept);
                 await DisplayAlertAsync("Bağlantı yok", $"{codes.Count} tüp hareketi telefonda saklandı. Bağlantı gelince otomatik gönderilecek.", "Tamam");

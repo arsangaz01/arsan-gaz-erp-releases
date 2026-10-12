@@ -1,4 +1,5 @@
 using System.Globalization;
+using ArsanTupTakip.Api;
 using ArsanTupTakip.Database;
 using ArsanTupTakip.Models;
 using Microsoft.EntityFrameworkCore;
@@ -223,7 +224,8 @@ public sealed class CrudService
         return CylinderTracking.CustomerConflict(c.SerialNumber, (int)c.Status, c.CurrentCustomerId, c.CurrentCustomer?.CompanyName, c.LastMovementAt, c.IsFull, (int)target, customerId, targetName, DateTime.Today);
     }
 
-    public async Task<string?> MoveCylinderAsync(int cylinderId, CylinderStatus target, int? customerId, string note, string movementType = "Durum Değişikliği", string? vehiclePlate = null, bool? isFull = null, bool confirmedCustomerChange = false)
+    // expectedVersion: the Version the user saw; a different current value means someone else changed the cylinder.
+    public async Task<string?> MoveCylinderAsync(int cylinderId, CylinderStatus target, int? customerId, string note, string movementType = "Durum Değişikliği", string? vehiclePlate = null, bool? isFull = null, bool confirmedCustomerChange = false, uint? expectedVersion = null)
     {
         if (!Enum.IsDefined(target))
         {
@@ -244,6 +246,11 @@ public sealed class CrudService
 
         Cylinder c = await db.Cylinders.Include(x => x.CurrentCustomer).FirstOrDefaultAsync(x => x.Id == cylinderId)
             ?? throw new InvalidOperationException("Tüp bulunamadı.");
+        if (expectedVersion is uint seen && seen != c.Version)
+        {
+            throw new RecordChangedException();
+        }
+
         CylinderCustomerConflict? conflict = CylinderTracking.CustomerConflict(c.SerialNumber, (int)c.Status, c.CurrentCustomerId, c.CurrentCustomer?.CompanyName,
             c.LastMovementAt, c.IsFull, (int)target, movementCustomerId, targetName, DateTime.Today);
         if (conflict != null && !confirmedCustomerChange)
@@ -275,7 +282,15 @@ public sealed class CrudService
             VehiclePlate = plate,
             IsFull = c.IsFull
         });
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new RecordChangedException();
+        }
+
         return conflict is null ? null : $"⚠ Tüp önceden {conflict.CurrentCustomer} müşterisindeydi; {conflict.TargetCustomer} müşterisine aktarıldı.";
     }
 
@@ -340,7 +355,7 @@ public sealed class CrudService
                 string? warning = await MoveCylinderAsync(cylinder.Id, target, customerId, note, movementType, vehiclePlate, isFull, confirmedCustomerChange);
                 results.Add(new(code, true, $"{cylinder.SerialNumber}: {CylinderTracking.StatusName((int)cylinder.Status)} → {CylinderTracking.StatusName((int)target)}" + (warning is null ? "" : " " + warning)));
             }
-            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or RecordChangedException)
             {
                 results.Add(new(code, false, exception.Message));
             }

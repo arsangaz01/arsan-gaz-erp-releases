@@ -2,7 +2,7 @@ using System.Text;
 
 namespace ArsanTupTakip.Api;
 
-// Data folder of the server: panel users, paired devices, audit log, APK. TUPTAKIP_DATA_DIR overrides the default.
+// Data folder of the server: panel users, mobile sessions, audit log, APK. TUPTAKIP_DATA_DIR overrides the default.
 internal static class AppPaths
 {
     public static string Root { get; } = CreateRoot();

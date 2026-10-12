@@ -3,8 +3,9 @@ using ArsanTupTakip.Services;
 
 namespace ArsanTupTakip.Api;
 
-internal sealed record PairRequest(string Code, string? DeviceName);
-internal sealed record MoveRequest(string Code, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null, bool ConfirmCustomerChange = false);
+internal sealed record MobileLoginRequest(string? Kullanici, string? Sifre, string? CihazAdi);
+internal sealed record MobilePasswordRequest(string? Mevcut, string? Yeni, string? Tekrar);
+internal sealed record MoveRequest(string Code, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null, bool ConfirmCustomerChange = false, uint? Version = null);
 internal sealed record BulkMoveRequest(List<string?>? Codes, CylinderStatus Status, int? CustomerId, string? Note, string? Plate = null, bool? IsFull = null, bool ConfirmCustomerChange = false);
 internal sealed record AuditRequest(int CustomerId, List<string?>? Codes, string? Note);
 internal sealed record NewCylinderRequest(string? SerialNumber, string? Barcode, string? GasType, decimal Capacity, string? CapacityUnit, bool? IsFull, DateTime? TestDueDate, int? CustomerId = null);
@@ -40,9 +41,44 @@ internal static class MobileEndpoints
                 update.ApkReady,
                 update.ApkSizeBytes,
                 downloadUrl = update.DownloadPath,
-                note = "APK bu sunucunun /indir adresinden indirilir; kurulumdan sonra eşleşme anahtarı korunur."
+                note = "APK bu sunucunun /indir adresinden indirilir; kurulumdan sonra oturum korunur (24 saat)."
             });
         });
+
+        app.MapPost("/api/giris", async (MobileLoginRequest request, HttpContext context, WebPanelAuth auth, DeviceStore devices) =>
+        {
+            (string? token, MobileSession? session, WebPanelUser? user, string? error) =
+                await auth.MobileLoginAsync(context, devices, request.Kullanici, request.Sifre, request.CihazAdi);
+            return token is null || session is null || user is null
+                ? Results.Json(new { error }, statusCode: StatusCodes.Status401Unauthorized)
+                : Results.Ok(new { token, expiresUtc = session.ExpiresUtc, account = Account(user, session) });
+        });
+
+        app.MapGet("/api/ben", (HttpContext context) =>
+            Results.Ok(Account((WebPanelUser)context.Items["panelAccount"]!, (MobileSession)context.Items["device"]!)))
+            .SignedIn(beforePasswordChange: true);
+
+        app.MapPost("/api/sifre", async (MobilePasswordRequest request, HttpContext context, WebPanelAuth auth, DeviceStore devices) =>
+        {
+            WebPanelUser user = (WebPanelUser)context.Items["panelAccount"]!;
+            MobileSession session = (MobileSession)context.Items["device"]!;
+            (string? error, int stamp) = await auth.ChangePasswordCoreAsync(user, WebPanelAuth.ClientIp(context), request.Mevcut, request.Yeni, request.Tekrar);
+            if (error is not null)
+            {
+                return Results.BadRequest(new { error });
+            }
+
+            devices.Restamp(session.Id, stamp);
+            return Results.Ok(new { message = "Şifreniz değiştirildi. Diğer cihaz ve tarayıcılardaki oturumlarınız kapatıldı." });
+        }).SignedIn(beforePasswordChange: true);
+
+        app.MapPost("/api/cikis", (HttpContext context, DeviceStore devices) =>
+        {
+            MobileSession session = (MobileSession)context.Items["device"]!;
+            devices.Remove(session.Id);
+            WebPanelAudit.Write(session.UserName, "Çıkış (mobil)", session.Name, ip: WebPanelAuth.ClientIp(context));
+            return Results.Ok(new { message = "Çıkış yapıldı." });
+        }).SignedIn(beforePasswordChange: true);
 
         app.MapGet("/api/yapilandirma", () =>
         {
@@ -56,25 +92,20 @@ internal static class MobileEndpoints
                     ? "Sabit sunucu adresi kullanılıyor; telefonda elle değiştirmeniz gerekmez."
                     : "Sunucu adresi yapılandırılmamış."
             });
-        });
+        }).SignedIn();
 
         app.MapGet("/indir", () => File.Exists(AppUpdates.ApkFile)
             ? Results.File(AppUpdates.ApkFile, "application/vnd.android.package-archive", AppUpdates.ApkFileName, enableRangeProcessing: true)
             : Results.NotFound("APK henüz yüklenmedi."));
 
-        app.MapPost("/api/pair/request", () => Results.Ok(new { message = PairingService.RequestMessage }));
+        app.MapGet("/api/ozet", () => Text(TupReports.SummaryAsync)).Requires(Perm.Summary);
 
-        app.MapPost("/api/pair", (PairRequest request, PairingService pairing) =>
-            pairing.TryPair(request.Code ?? string.Empty, request.DeviceName ?? string.Empty) is { } token
-                ? Results.Ok(new { token })
-                : Results.Json(new { error = "Kod hatalı veya süresi dolmuş. Yöneticinizden yeni kod isteyin." }, statusCode: StatusCodes.Status400BadRequest));
-
-        app.MapGet("/api/ozet", () => Text(TupReports.SummaryAsync));
-
-        app.MapGet("/api/musteriler", async (string? q) => Results.Ok(await CustomerChoices.SearchAsync(q)));
+        app.MapGet("/api/musteriler", async (string? q, HttpContext context) =>
+            Results.Ok(await CustomerChoices.SearchAsync(q, Perm.Has((WebPanelUser)context.Items["panelAccount"]!, Perm.CustomerView))))
+            .Requires(Perm.CustomerPicker);
 
         app.MapPost("/api/musteri", (CustomerCreateRequest request, HttpContext context) =>
-            CustomerChoices.CreateAsync(request, "mobil: " + DeviceName(context)));
+            CustomerChoices.CreateAsync(request, "mobil: " + DeviceName(context))).Requires(Perm.CustomerAdd);
 
         app.MapGet("/api/tup", async (string kod) =>
         {
@@ -89,12 +120,18 @@ internal static class MobileEndpoints
                     Status = cylinder.Status,
                     StatusName = CylinderTracking.StatusName((int)cylinder.Status),
                     Customer = cylinder.CurrentCustomer?.CompanyName,
-                    Detail = await TupReports.FindCylinderAsync(kod!)
+                    Detail = await TupReports.FindCylinderAsync(kod!),
+                    cylinder.Version
                 });
-        });
+        }).Requires([Perm.CylinderView, .. Perm.AnyMove]);
 
         app.MapPost("/api/tup/hareket", async (MoveRequest request, HttpContext context) =>
         {
+            if (MoveProblem(context, request.Status, request.IsFull, request.ConfirmCustomerChange) is IResult denied)
+            {
+                return denied;
+            }
+
             CrudService crud = new();
             Cylinder? cylinder = await crud.FindCylinderByCodeAsync(request.Code ?? string.Empty);
             if (cylinder is null)
@@ -106,7 +143,7 @@ internal static class MobileEndpoints
             try
             {
                 string note = string.IsNullOrWhiteSpace(request.Note) ? $"Mobil ({DeviceName(context)})" : request.Note.Trim();
-                warning = await crud.MoveCylinderAsync(cylinder.Id, request.Status, request.CustomerId, note, "Mobil hareket", request.Plate, request.IsFull, request.ConfirmCustomerChange);
+                warning = await crud.MoveCylinderAsync(cylinder.Id, request.Status, request.CustomerId, note, "Mobil hareket", request.Plate, request.IsFull, request.ConfirmCustomerChange, request.Version);
             }
             catch (CylinderConflictException conflict)
             {
@@ -122,10 +159,15 @@ internal static class MobileEndpoints
                 message = $"{cylinder.SerialNumber}: {CylinderTracking.StatusName((int)cylinder.Status)} → {CylinderTracking.StatusName((int)request.Status)} kaydedildi."
                     + (warning is null ? string.Empty : "\n" + warning)
             });
-        });
+        }).Requires(Perm.AnyMove);
 
         app.MapPost("/api/tup/toplu-hareket", async (BulkMoveRequest request, HttpContext context) =>
         {
+            if (MoveProblem(context, request.Status, request.IsFull, request.ConfirmCustomerChange) is IResult denied)
+            {
+                return denied;
+            }
+
             try
             {
                 string note = string.IsNullOrWhiteSpace(request.Note) ? $"Mobil toplu ({DeviceName(context)})" : request.Note.Trim();
@@ -148,7 +190,7 @@ internal static class MobileEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(Perm.MoveBulk);
 
         app.MapPost("/api/tup/yeni", async (NewCylinderRequest request, HttpContext context) =>
         {
@@ -172,19 +214,21 @@ internal static class MobileEndpoints
             {
                 return Results.BadRequest(new { error = "Bu seri numarası veya barkod zaten kayıtlı." });
             }
-        });
+        }).Requires(Perm.CylinderRegister);
 
-        app.MapGet("/api/tup/gaz-turleri", async () => Results.Ok(await new CrudService().KnownGasTypesAsync()));
+        app.MapGet("/api/tup/gaz-turleri", async () => Results.Ok(await new CrudService().KnownGasTypesAsync()))
+            .Requires(Perm.CylinderRegister, Perm.CylinderEdit, Perm.CylinderView);
 
-        app.MapGet("/api/tup/durum", async () => Results.Ok(await new CrudService().CylinderOverviewAsync()));
+        app.MapGet("/api/tup/durum", async () => Results.Ok(await new CrudService().CylinderOverviewAsync())).Requires(Perm.Summary);
 
         app.MapGet("/api/tup/liste", async (int? durum, string? plaka, bool? uzun) =>
         {
             CylinderStatus? status = durum is int value && Enum.IsDefined((CylinderStatus)value) ? (CylinderStatus)value : null;
             return Results.Ok(await new CrudService().CylinderListAsync(status, plaka, uzun == true));
-        });
+        }).Requires(Perm.CylinderView, Perm.Summary);
 
-        app.MapGet("/api/araclar", async () => Results.Ok(await new CrudService().KnownVehiclePlatesAsync()));
+        app.MapGet("/api/araclar", async () => Results.Ok(await new CrudService().KnownVehiclePlatesAsync()))
+            .Requires(Perm.VehicleView, Perm.MoveVehicle, Perm.TripStart);
 
         app.MapPost("/api/tup/sayim", async (AuditRequest request, HttpContext context) =>
         {
@@ -198,13 +242,47 @@ internal static class MobileEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        });
+        }).Requires(Perm.CylinderAudit);
 
-        app.MapGet("/api/tup/uzun-sure", (int? gun) => Text(() => TupReports.LongAtCustomerAsync(gun ?? CylinderTracking.LongAtCustomerDays)));
-        app.MapGet("/api/tahmin", () => Text(TupReports.ReorderForecastsAsync));
-        app.MapGet("/api/test-tarihleri", (int? gun) => Text(() => TupReports.TestDueAsync(gun ?? 30)));
-        app.MapGet("/api/hareketler", (int? gun) => Text(() => TupReports.RecentMovementsAsync(gun ?? 7)));
-        app.MapGet("/api/musterideki-tupler", (string? musteri) => Text(() => TupReports.CylindersAtCustomersAsync(musteri)));
+        app.MapGet("/api/tup/uzun-sure", (int? gun) => Text(() => TupReports.LongAtCustomerAsync(gun ?? CylinderTracking.LongAtCustomerDays))).Requires(Perm.Reports);
+        app.MapGet("/api/tahmin", () => Text(TupReports.ReorderForecastsAsync)).Requires(Perm.Reports);
+        app.MapGet("/api/test-tarihleri", (int? gun) => Text(() => TupReports.TestDueAsync(gun ?? 30))).Requires(Perm.Reports);
+        app.MapGet("/api/hareketler", (int? gun) => Text(() => TupReports.RecentMovementsAsync(gun ?? 7))).Requires(Perm.MovementHistory);
+        app.MapGet("/api/musterideki-tupler", (string? musteri) => Text(() => TupReports.CylindersAtCustomersAsync(musteri))).Requires(Perm.Reports);
+    }
+
+    internal static object Account(WebPanelUser user, MobileSession session) => new
+    {
+        user = user.UserName,
+        displayName = user.DisplayName,
+        role = user.Role,
+        roleText = PanelRoles.Description(user.Role),
+        permissions = Perm.Effective(user).Order(StringComparer.Ordinal).ToArray(),
+        mustChangePassword = user.MustChangePassword,
+        expiresUtc = session.ExpiresUtc,
+        device = session.Name
+    };
+
+    // The target status, manual full/empty choice and the "save anyway" confirmation each need their own permission.
+    internal static IResult? MoveProblem(HttpContext context, CylinderStatus target, bool? isFull, bool confirmCustomerChange)
+    {
+        HashSet<string> mine = Perm.Effective((WebPanelUser)context.Items["panelAccount"]!);
+        if (!Perm.MoveByStatus.TryGetValue((int)target, out string? needed))
+        {
+            return Results.BadRequest(new { error = "Geçersiz tüp durumu." });
+        }
+
+        if (!mine.Contains(needed))
+        {
+            return PermissionEndpointExtensions.Denied(needed);
+        }
+
+        if (isFull is not null && !mine.Contains(Perm.MoveFullness))
+        {
+            return PermissionEndpointExtensions.Denied(Perm.MoveFullness);
+        }
+
+        return confirmCustomerChange && !mine.Contains(Perm.MoveOverride) ? PermissionEndpointExtensions.Denied(Perm.MoveOverride) : null;
     }
 
     // 409 tells the phone that nothing was saved and the same request may be repeated with ConfirmCustomerChange.
@@ -227,5 +305,5 @@ internal static class MobileEndpoints
     }
 
     internal static string DeviceName(HttpContext context) =>
-        context.Items["device"] is PairedDevice device ? device.Name : "bilinmeyen cihaz";
+        context.Items["device"] is MobileSession session ? $"{session.UserName}, {session.Name}" : "bilinmeyen cihaz";
 }

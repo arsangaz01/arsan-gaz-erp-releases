@@ -18,6 +18,7 @@ public sealed class CylinderTrip
     public DateTime? ClosedAt { get; set; }
     public string? Note { get; set; }
     public string? CreatedBy { get; set; }
+    public uint Version { get; set; }
     public ICollection<CylinderTripVehicle> Vehicles { get; set; } = new List<CylinderTripVehicle>();
     public ICollection<CylinderTripCylinder> Cylinders { get; set; } = new List<CylinderTripCylinder>();
 }

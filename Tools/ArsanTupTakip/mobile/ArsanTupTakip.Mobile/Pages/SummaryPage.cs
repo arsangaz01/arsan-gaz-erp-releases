@@ -14,15 +14,28 @@ public sealed class SummaryPage : ContentPage
         Grid buttons = new()
         {
             ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star)],
-            RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto)],
             ColumnSpacing = 8,
             RowSpacing = 8
         };
-        buttons.Add(Ui.Secondary("Genel özet", async (_, _) => await ShowAsync("Genel özet", "/api/ozet")), 0, 0);
-        buttons.Add(Ui.Secondary("Sipariş tahmini", async (_, _) => await ShowAsync("Sipariş tahmini", "/api/tahmin")), 1, 0);
-        buttons.Add(Ui.Secondary("Test tarihi yaklaşan", async (_, _) => await ShowAsync("Test tarihi 30 gün içinde", "/api/test-tarihleri?gun=30")), 0, 1);
-        buttons.Add(Ui.Secondary("Son hareketler", async (_, _) => await ShowAsync("Son 7 gün hareketleri", "/api/hareketler?gun=7")), 1, 1);
-        buttons.Add(Ui.Secondary("Müşterideki tüpler", async (_, _) => await ShowAsync("Müşterideki tüpler", "/api/musterideki-tupler")), 0, 2);
+        (string Text, string Heading, string Path, string Permission)[] reports =
+        [
+            ("Genel özet", "Genel özet", "/api/ozet", Perm.Summary),
+            ("Sipariş tahmini", "Sipariş tahmini", "/api/tahmin", Perm.Reports),
+            ("Test tarihi yaklaşan", "Test tarihi 30 gün içinde", "/api/test-tarihleri?gun=30", Perm.Reports),
+            ("Son hareketler", "Son 7 gün hareketleri", "/api/hareketler?gun=7", Perm.MovementHistory),
+            ("Müşterideki tüpler", "Müşterideki tüpler", "/api/musterideki-tupler", Perm.Reports)
+        ];
+        int index = 0;
+        foreach (var report in reports.Where(r => ApiClient.Instance.Can(r.Permission)))
+        {
+            if (index % 2 == 0)
+            {
+                buttons.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            }
+
+            buttons.Add(Ui.Secondary(report.Text, async (_, _) => await ShowAsync(report.Heading, report.Path)), index % 2, index / 2);
+            index++;
+        }
 
         Ui.ApplyPageChrome(this);
         Content = new ScrollView
@@ -44,7 +57,7 @@ public sealed class SummaryPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        if (string.IsNullOrEmpty(_text.Text) && await ApiClient.Instance.IsPairedAsync())
+        if (string.IsNullOrEmpty(_text.Text) && ApiClient.Instance.Can(Perm.Summary) && await ApiClient.Instance.HasSessionAsync())
         {
             await ShowAsync("Genel özet", "/api/ozet");
         }

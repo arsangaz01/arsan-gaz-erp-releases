@@ -22,7 +22,7 @@ public static class ServerUrlCoordinator
             ApiClient.Instance.ServerUrl = DefaultServerUrl;
         }
 
-        if (await ApiClient.Instance.IsPairedAsync())
+        if (await ApiClient.Instance.HasSessionAsync())
         {
             await RefreshIfDueAsync(force: true);
         }
@@ -30,7 +30,7 @@ public static class ServerUrlCoordinator
 
     public static async Task RefreshIfDueAsync(bool force = false)
     {
-        if (!AutoManaged || ApiClient.Instance.ServerUrl.Length == 0 || !await ApiClient.Instance.IsPairedAsync())
+        if (!AutoManaged || ApiClient.Instance.ServerUrl.Length == 0 || !await ApiClient.Instance.HasSessionAsync())
         {
             return;
         }
@@ -67,7 +67,7 @@ public static class ServerUrlCoordinator
 
         try
         {
-            if (await ApiClient.Instance.IsPairedAsync())
+            if (await ApiClient.Instance.HasSessionAsync())
             {
                 await RefreshIfDueAsync(force: true);
             }
