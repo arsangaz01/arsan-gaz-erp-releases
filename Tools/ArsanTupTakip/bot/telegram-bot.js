@@ -2,10 +2,11 @@
 
 // @TuptakipArsanbot (service arsantuptakip-bot, user tuptakipbot): the only getUpdates consumer of the ArsanTüpTakip bot.
 // Independent of ArsanGaz ERP's bot and services. Accepts messages only from the configured chat:
-//   commands  -> /durum, /yayin, /yayin_onay, /geri_al, /iptal, /yeni, /yardim (release actions through
+//   commands  -> /durum, /yayin, /yayin_onay, /geri_al, /apk, /apk_onay, /iptal, /yeni, /yardim (release actions through
 //                sudo /usr/local/sbin/arsantuptakip-release, which validates its arguments itself)
 //   other     -> development request in the shared queue (queue.js) for arsantuptakip-agent (dev-agent.js);
 //                progress and the final report come back through this bot.
+// Notices dropped into <queue>/notices/*.txt (server scripts, admin) are sent verbatim and then deleted.
 // Secrets come only from the environment (EnvironmentFile=/etc/arsantuptakip/telegram.env) and are never logged.
 
 const fs = require("node:fs/promises");
@@ -14,6 +15,7 @@ const { execFile } = require("node:child_process");
 const queue = require("./queue");
 const {
   HELP_TEXT, parseCommand, isAuthorized, createConfirmation, checkConfirmation, parseTrailers, splitMessage, shortSha, formatProgress,
+  apkResultHeader,
 } = require("./commands");
 
 const env = process.env;
@@ -201,6 +203,38 @@ async function commandGeriAl(args) {
   });
 }
 
+async function commandApk() {
+  await withRelease("APK kontrolü", async () => {
+    await reply("🔎 main'deki mobil uygulamanın imzalı APK'sına bakılıyor...");
+    const result = await runRelease(["apkcheck"], 5 * 60_000);
+    const sha = result.trailers.TARGET;
+    if (result.code !== 0 || !/^[0-9a-f]{40}$/.test(sha ?? "")) {
+      state.confirmation = null;
+      await saveState();
+      await reply(result.text + (result.code !== 0 ? `\n\n⛔ APK kontrolü başarısız (çıkış ${result.code}).` : ""));
+      return;
+    }
+    state.confirmation = createConfirmation("apk", sha);
+    await saveState();
+    await reply(`${result.text}\n\nOnaylıyor musunuz? APK'yı yayınlamak için 15 dakika içinde şunu yazın:\n/apk_onay ${state.confirmation.code}`);
+  });
+}
+
+async function commandApkOnay(args) {
+  const check = checkConfirmation(state.confirmation, "apk", args[0]);
+  if (!check.ok) {
+    await reply(`❌ ${check.error}`);
+    return;
+  }
+  await withRelease("APK yayını", async () => {
+    state.confirmation = null;
+    await saveState();
+    await reply(`📱 APK yayını başladı (${shortSha(check.sha)}): GitHub'dan indirme, imza/paket/sürüm doğrulaması, /tuptakip/indir.`);
+    const result = await runRelease(["apk", check.sha], 15 * 60_000);
+    await reply(`${apkResultHeader(result.code, result.trailers)}\n\n${result.text}`);
+  });
+}
+
 async function commandIptal() {
   const active = [...await queue.listActive(queueRoot), ...await queue.listPending(queueRoot)];
   if (active.length === 0) {
@@ -224,6 +258,8 @@ async function handleCommand(parsed) {
     case "yayin": return commandYayin();
     case "yayin_onay": return commandYayinOnay(parsed.args);
     case "geri_al": return commandGeriAl(parsed.args);
+    case "apk": return commandApk();
+    case "apk_onay": return commandApkOnay(parsed.args);
     case "iptal": return commandIptal();
     case "yeni": return commandYeni();
     default: return reply(`Bilinmeyen komut: /${parsed.command}\n\n${HELP_TEXT}`);
@@ -372,6 +408,12 @@ async function deliver() {
     await queue.markDelivered(queueRoot, id);
     delete state.progress[id];
     await saveState();
+  }
+  for (const name of await queue.listNotices(queueRoot)) {
+    const text = await queue.readNotice(queueRoot, name);
+    if (text && !(await reply(text))) continue;
+    await queue.removeNotice(queueRoot, name);
+    log(`Bildirim gönderildi: ${name}`);
   }
 }
 

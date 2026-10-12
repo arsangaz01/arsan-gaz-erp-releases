@@ -9,6 +9,10 @@
 #                   kurar, sağlık kontrolü geçmezse önceki kuruluma otomatik döner
 #   previous        geri alınabilecek önceki kurulumu yazar
 #   rollback        önceki kuruluma döner (şimdiki kurulum "önceki" olur)
+#   apkcheck        main'deki mobil uygulama sürümü, yayındaki APK ve GitHub Actions'taki imzalı APK durumu
+#   apk <sha>       o commit'in mobil kodundan derlenmiş imzalı APK'yı (arsantuptakip.yml, main) indirir; imza sertifikası,
+#                   paket adı ve sürümü doğrulanınca /var/lib/arsantuptakip'e koyar (/tuptakip/indir, /tuptakip/api/guncelleme)
+#   apkinfo <dosya> APK'nın paket adı, versionName ve versionCode'unu yazar (sekmeyle ayrılmış; CI bunu aapt ile karşılaştırır)
 # Çıktının "@@ANAHTAR=değer" satırları bot içindir.
 set -euo pipefail
 umask 022
@@ -32,14 +36,30 @@ QUEUE_GROUP=tuptakipq
 BACKUP_STATUS=/var/lib/arsantuptakip-backup/status.json
 BACKUP_DIR=/var/backups/arsantuptakip
 DB=arsantuptakip
+GH_REPO=arsangaz01/arsan-gaz-erp-kaynak
+CI_WORKFLOW=arsantuptakip.yml
+APK_ARTIFACT=arsantuptakip-mobile-apk
+APK_PACKAGE=com.arsantuptakip.mobil
+# SHA-256 of the signing certificate (the same key as the ArsanGaz app; ci.yml and arsantuptakip.yml check it too).
+APK_CERT_SHA256=80ae16deb437fd9e1c7b26b3b38563977078c97a98a17f6983b7d5f19dd90153
+MOBILE_CSPROJ=$SCOPE/mobile/ArsanTupTakip.Mobile/ArsanTupTakip.Mobile.csproj
+MOBILE_PATHS=("$SCOPE/mobile" "$SCOPE/Directory.Build.props" "$SCOPE/global.json")
+DATA_DIR=/var/lib/arsantuptakip
+API_USER=arsantuptakip
+APK_NAME=ArsanTupTakip-Mobil.apk
+GITHUB_ENV_FILE=/etc/arsantuptakip/github.env
+PUBLIC_URL=https://arsantuptakip.com/tuptakip
+GH_TOKEN=""
 SANDBOX=""
 # test-release.sh: ARSANTUPTAKIP_RELEASE_SANDBOX=1 with its own paths; no root, no systemd, no GitHub, fake build.
+# SANDBOX_APK_ZIP stands in for the GitHub artifact; the certificate then comes from its apk-info.json.
 if [ "${ARSANTUPTAKIP_RELEASE_SANDBOX:-}" = 1 ]; then
   SANDBOX=1
   REPO_URL=$SANDBOX_ORIGIN
   BASE=$SANDBOX_BASE
   BUNDLE=$SANDBOX_BUNDLE
   APP_PARENT=$SANDBOX_APP_PARENT
+  DATA_DIR=${SANDBOX_DATA_DIR:-$SANDBOX_BASE/data}
 fi
 REPO=$BASE/repo
 MIRROR=$BASE/mirror.git
@@ -53,7 +73,7 @@ say() { printf '%s\n' "$*"; }
 trailer() { printf '@@%s=%s\n' "$1" "$2"; }
 die() { say "❌ $1"; exit "${2:-1}"; }
 short() { printf '%s' "${1:0:7}"; }
-sha_or() { if [ -n "$1" ]; then short "$1"; else printf '%s' "$2"; fi; }
+sha_or() { if [ -n "$1" ] && [ "$1" != - ]; then short "$1"; else printf '%s' "$2"; fi; }
 git_r() { git -C "$REPO" -c core.hooksPath=/dev/null -c advice.detachedHead=false "$@"; }
 git_net() { timeout 180 git -C "$REPO" -c core.hooksPath=/dev/null "$@"; }
 rev() { git_r rev-parse -q --verify "$1^{commit}" 2>/dev/null || true; }
@@ -67,7 +87,7 @@ fi
 # Mutating actions run as a transient systemd unit: they leave the bot's cgroup and sandbox, so a bot restart cannot
 # interrupt a release and /opt is writable.
 case "$ACTION" in
-  sync|pending|publish|rollback)
+  sync|pending|publish|rollback|apkcheck|apk)
     if [ -z "$SANDBOX" ] && [ -z "${ARSANTUPTAKIP_RELEASE_DETACHED:-}" ]; then
       exec systemd-run --quiet --wait --pipe --collect --unit "arsantuptakip-release-$STAMP-$$" \
         -p Description="ArsanTupTakip yayin ($ACTION)" -E ARSANTUPTAKIP_RELEASE_DETACHED=1 -E LANG=C.UTF-8 \
@@ -213,6 +233,122 @@ health() {
   return 1
 }
 
+# ---------------------------------------------------------------- mobile APK
+# Python reads API responses from stdin (never argv: large JSON exceeds the argument size limit).
+py_json() { local data=$1; shift; printf '%s' "$data" | python3 -c "$@"; }
+
+load_token() {
+  [ -z "$SANDBOX" ] || return 0
+  GH_TOKEN=$(grep -E '^GITHUB_ACTIONS_TOKEN=' "$GITHUB_ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d "\"' \r" || true)
+  [ -n "$GH_TOKEN" ] || die "GitHub okuma anahtarı yok ($GITHUB_ENV_FILE); install-bot.sh çalıştırılmamış." 4
+}
+
+# The token goes through a curl config on a pipe, so it never appears in a process list.
+gh_curl() {
+  curl -fsSL -K <(printf 'header = "Authorization: Bearer %s"\n' "$GH_TOKEN") "$@"
+}
+
+gh_api() {
+  gh_curl --max-time 30 -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "https://api.github.com/repos/$GH_REPO$1"
+}
+
+# "<versionCode> <versionName>" of the mobile app at a commit (csproj); "0 -" when unreadable.
+mobile_expected() {
+  local xml code name
+  xml=$(git_r show "$1:$MOBILE_CSPROJ" 2>/dev/null) || { echo "0 -"; return 0; }
+  code=$(grep -oP '(?<=<ApplicationVersion>)[0-9]+' <<<"$xml" | head -n1 || true)
+  name=$(grep -oP '(?<=<ApplicationDisplayVersion>)[^<]+' <<<"$xml" | head -n1 || true)
+  echo "${code:-0} ${name:--}"
+}
+
+# "<versionCode> <versionName> <sha>" of the APK phones are offered now; "0 - -" when there is none.
+apk_published() {
+  [ -f "$DATA_DIR/$APK_NAME" ] || { echo "0 - -"; return 0; }
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(int(d["versionCode"]), d.get("versionName") or "-", d.get("sha") or "-")' \
+    "$DATA_DIR/$APK_NAME.meta.json" 2>/dev/null || echo "0 - -"
+}
+
+# package<TAB>versionName<TAB>versionCode from the binary AndroidManifest.xml (no aapt on the server).
+apk_manifest() {
+  python3 - "$1" <<'PY'
+import struct, sys, zipfile
+data = zipfile.ZipFile(sys.argv[1]).read("AndroidManifest.xml")
+if struct.unpack_from("<H", data, 0)[0] != 0x0003:
+    sys.exit("AndroidManifest.xml ikili XML değil")
+ids = {0x0101021B: "versionCode", 0x0101021C: "versionName"}
+strings, resmap, pos = [], [], struct.unpack_from("<H", data, 2)[0]
+while pos + 8 <= len(data):
+    kind, head, size = struct.unpack_from("<HHI", data, pos)
+    if size < 8:
+        break
+    if kind == 0x0001:  # string pool
+        count, _styles, flags, start = struct.unpack_from("<IIII", data, pos + 8)
+        for i in range(count):
+            off = pos + start + struct.unpack_from("<I", data, pos + head + 4 * i)[0]
+            if flags & 0x100:  # UTF-8: utf16 length, utf8 length, bytes
+                off += 2 if data[off] & 0x80 else 1
+                n = data[off]
+                if n & 0x80:
+                    n, off = ((n & 0x7F) << 8) | data[off + 1], off + 2
+                else:
+                    off += 1
+                strings.append(data[off:off + n].decode("utf-8", "replace"))
+            else:
+                n = struct.unpack_from("<H", data, off)[0]
+                off += 2
+                if n & 0x8000:
+                    n, off = ((n & 0x7FFF) << 16) | struct.unpack_from("<H", data, off)[0], off + 2
+                strings.append(data[off:off + 2 * n].decode("utf-16-le", "replace"))
+    elif kind == 0x0180:  # resource ids of the attribute names
+        resmap = list(struct.unpack_from("<%dI" % ((size - head) // 4), data, pos + head))
+    elif kind == 0x0102:  # start element
+        if strings[struct.unpack_from("<I", data, pos + head + 4)[0]] == "manifest":
+            astart, asize, acount = struct.unpack_from("<HHH", data, pos + head + 8)
+            found = {}
+            for i in range(acount):
+                _ns, name, raw, _len, _res, dtype, value = struct.unpack_from("<IIIHBBI", data, pos + head + astart + i * asize)
+                key = ids.get(resmap[name] if name < len(resmap) else 0, strings[name])
+                if raw != 0xFFFFFFFF:
+                    found[key] = strings[raw]
+                elif dtype == 0x03:
+                    found[key] = strings[value]
+                else:
+                    found[key] = str(value)
+            print(found.get("package", ""), found.get("versionName", ""), found.get("versionCode", ""), sep="\t")
+            sys.exit(0)
+    pos += size
+sys.exit("manifest öğesi bulunamadı")
+PY
+}
+
+# Newest successful arsantuptakip.yml main run whose mobile sources equal $1's and that has the APK artifact.
+# Sets APK_URL / APK_RUN, and APK_WAITING=1 when a matching run is still going. Returns 1 when GitHub is unreachable.
+find_apk_run() {
+  local sha=$1 runs list id head status conclusion arts url
+  APK_URL=""; APK_RUN=""; APK_WAITING=0
+  if [ -n "$SANDBOX" ]; then
+    if [ -n "${SANDBOX_APK_ZIP:-}" ]; then APK_URL="file://$SANDBOX_APK_ZIP"; APK_RUN=sandbox; fi
+    return 0
+  fi
+  runs=$(gh_api "/actions/workflows/$CI_WORKFLOW/runs?branch=main&per_page=30" 2>/dev/null) || return 1
+  list=$(py_json "$runs" '
+import json, sys
+for r in json.load(sys.stdin).get("workflow_runs", []):
+    print(r["id"], r["head_sha"], r["status"], r.get("conclusion") or "-")
+') || return 1
+  while read -r id head status conclusion; do
+    [ -n "$id" ] || continue
+    git_r cat-file -e "$head^{commit}" 2>/dev/null || continue
+    git_r diff --quiet "$head" "$sha" -- "${MOBILE_PATHS[@]}" 2>/dev/null || continue
+    if [ "$status" != completed ]; then APK_WAITING=1; continue; fi
+    [ "$conclusion" = success ] || continue
+    arts=$(gh_api "/actions/runs/$id/artifacts" 2>/dev/null) || continue
+    url=$(py_json "$arts" 'import json,sys; a=[x for x in json.load(sys.stdin).get("artifacts",[]) if x["name"]==sys.argv[1] and not x["expired"]]; print(a[0]["archive_download_url"] if a else "")' "$APK_ARTIFACT")
+    if [ -n "$url" ]; then APK_URL=$url; APK_RUN=$id; return 0; fi
+  done <<<"$list"
+  return 0
+}
+
 # Puts $1 in place (current -> api.prev), restarts and health-checks; on failure the previous build comes back.
 # Returns 0 ok, 2 rolled back, 3 rollback failed too.
 swap_in() {
@@ -251,6 +387,9 @@ act_status() {
   fi
   deployed=$(deployed_sha "$APP_DIR"); prev=$(deployed_sha "$PREV_DIR")
   say "📦 Yayındaki commit: $(sha_or "$deployed" "bilinmiyor (elle kurulum)")$( [ -d "$PREV_DIR" ] && printf ' · önceki kurulum: %s' "$(sha_or "$prev" "elle kurulum")")"
+  local acode aname asha
+  read -r acode aname asha <<<"$(apk_published)"
+  if [ "$acode" -gt 0 ]; then say "📱 APK: $aname (build $acode, commit $(sha_or "$asha" bilinmiyor)) · $PUBLIC_URL/indir"; else say "📱 APK: yayında değil"; fi
   if [ -d "$REPO/.git" ]; then
     local main br ahead=0
     main=$(rev refs/remotes/origin/main); br=$(rev refs/remotes/agent/branch)
@@ -420,6 +559,109 @@ act_rollback() {
   return 3
 }
 
+act_apkcheck() {
+  lock; fetch; load_token
+  local main ecode ename ccode cname csha
+  main=$(rev refs/remotes/origin/main)
+  [ -n "$main" ] || die "origin/main okunamadı."
+  read -r ecode ename <<<"$(mobile_expected "$main")"
+  read -r ccode cname csha <<<"$(apk_published)"
+  say "📱 main ($(short "$main")): ArsanTüpTakip mobil $ename (build $ecode)"
+  if [ "$ccode" -gt 0 ]; then say "   Yayındaki APK: $cname (build $ccode, commit $(sha_or "$csha" bilinmiyor))"; else say "   Yayında APK yok."; fi
+  if [ "$ecode" -le 0 ]; then say "❌ main'deki mobil uygulama sürümü (ApplicationVersion) okunamadı."; trailer BLOCKED 1; return 0; fi
+  if [ "$ccode" -ge "$ecode" ]; then
+    say "✅ Yayındaki APK main ile güncel; yayınlanacak yeni APK yok. (Yeni APK için csproj'da ApplicationVersion artırılmalı.)"
+    trailer NOTHING 1; return 0
+  fi
+  if ! find_apk_run "$main"; then say "⚠️ GitHub Actions şu an okunamadı (geçici olabilir); biraz sonra tekrar deneyin."; trailer BLOCKED 1; return 0; fi
+  if [ -n "$APK_URL" ]; then
+    say "📦 İmzalı APK GitHub Actions'ta hazır (çalışma $APK_RUN)."
+    say "Yayın: indirme → imza sertifikası, paket adı ($APK_PACKAGE) ve sürüm doğrulaması → $PUBLIC_URL/indir"
+    trailer TARGET "$main"
+  elif [ "$APK_WAITING" = 1 ]; then
+    say "⏳ Bu sürümün imzalı APK derlemesi GitHub'da sürüyor; bitince /apk ile tekrar bakın."; trailer WAITING 1
+  else
+    say "❌ Bu sürüm için imzalı APK bulunamadı (main'deki CI başarısız olmuş veya artefaktın süresi dolmuş olabilir)."; trailer BLOCKED 1
+  fi
+}
+
+act_apk() {
+  local want=$1 main tmp apk info ipkg iname icode icert mpkg mname mcode ecode ename ccode cname csha cert size
+  [[ "$want" =~ ^[0-9a-f]{40}$ ]] || die "Geçersiz commit kimliği." 2
+  lock; fetch; load_token
+  main=$(rev refs/remotes/origin/main)
+  [ -n "$(rev "$want")" ] && git_r merge-base --is-ancestor "$want" "$main" \
+    || die "Commit ($(short "$want")) main'de değil; /apk ile yeniden bakın." 6
+  read -r ecode ename <<<"$(mobile_expected "$want")"
+  read -r ccode cname csha <<<"$(apk_published)"
+  if [ "$ecode" -gt 0 ] && [ "$ccode" -ge "$ecode" ]; then
+    say "✅ Yayındaki APK zaten $cname (build $ccode); yeni APK yok."; trailer APK_STATE published; return 0
+  fi
+  find_apk_run "$want" || die "GitHub Actions okunamadı (geçici olabilir)." 4
+  if [ -z "$APK_URL" ]; then
+    [ "$APK_WAITING" = 1 ] && { say "⏳ İmzalı APK derlemesi GitHub'da sürüyor."; trailer APK_STATE waiting; return 7; }
+    die "Bu commit için imzalı APK artefaktı bulunamadı." 7
+  fi
+
+  tmp=$BASE/apk-work
+  rm -rf "$tmp"; install -d -m 0700 "$tmp" "$tmp/x"
+  if [ -n "$SANDBOX" ]; then cp "${APK_URL#file://}" "$tmp/a.zip"
+  else gh_curl --max-time 300 -o "$tmp/a.zip" "$APK_URL" 2>/dev/null || die "APK GitHub'dan indirilemedi (geçici olabilir)." 4
+  fi
+  unzip -q -o "$tmp/a.zip" -d "$tmp/x" 2>/dev/null || die "APK arşivi açılamadı (eksik indirme olabilir)." 4
+  apk=$tmp/x/$APK_NAME; info=$tmp/x/apk-info.json
+  [ -f "$apk" ] && [ -f "$info" ] || die "Arşivde $APK_NAME veya apk-info.json yok." 1
+  unzip -tqq "$apk" >/dev/null 2>&1 || die "APK zip bütünlük denetiminden geçmedi." 1
+  IFS=$'\t' read -r ipkg iname icode icert <<<"$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["package"], d["versionName"], int(d["versionCode"]), d["certSha256"].lower(), sep="\t")' "$info")"
+  IFS=$'\t' read -r mpkg mname mcode <<<"$(apk_manifest "$apk")" || true
+  [ "$mpkg" = "$APK_PACKAGE" ] || die "APK paket adı '$mpkg' (beklenen $APK_PACKAGE); yayınlanmadı." 1
+  [ "$mcode" = "$icode" ] && [ "$mname" = "$iname" ] && [ "$ipkg" = "$mpkg" ] || die "APK içindeki sürüm ($mname/$mcode) CI bilgisiyle ($iname/$icode) uyuşmuyor." 1
+  [ "$mcode" = "$ecode" ] || die "APK sürümü (build $mcode) commit'teki csproj ile (build $ecode) uyuşmuyor." 1
+  if [ -n "$SANDBOX" ]; then cert=$icert
+  else
+    cert=$(apksigner verify --print-certs "$apk" 2>/dev/null | grep -m1 'certificate SHA-256 digest' | awk '{print $NF}') \
+      || die "APK imzası doğrulanamadı (apksigner)." 1
+  fi
+  [ "$cert" = "$APK_CERT_SHA256" ] || die "APK imza sertifikası beklenen anahtarınki değil; yayınlanmadı." 1
+  [ "$mcode" -gt "$ccode" ] || die "APK build numarası ($mcode) yayındakinden ($ccode) büyük değil; telefonlar güncellemeyi almaz." 1
+
+  install -d -m 0700 "$DATA_DIR"
+  [ -f "$DATA_DIR/$APK_NAME" ] && cp -p "$DATA_DIR/$APK_NAME" "$DATA_DIR/$APK_NAME.bak-$STAMP"
+  [ -f "$DATA_DIR/$APK_NAME.meta.json" ] && cp -p "$DATA_DIR/$APK_NAME.meta.json" "$DATA_DIR/$APK_NAME.meta.json.bak-$STAMP"
+  printf '{"versionName":"%s","versionCode":%d,"package":"%s","sha":"%s","run":"%s"}\n' "$mname" "$mcode" "$mpkg" "$want" "$APK_RUN" > "$tmp/meta"
+  local owner=(); [ -n "$SANDBOX" ] || owner=(-o "$API_USER" -g "$API_USER")
+  install -m 0600 "${owner[@]}" "$apk" "$DATA_DIR/$APK_NAME.upload"
+  install -m 0600 "${owner[@]}" "$tmp/meta" "$DATA_DIR/$APK_NAME.meta.json.upload"
+  # The APK first, then the meta that announces it: phones never see a version without its file.
+  mv -f "$DATA_DIR/$APK_NAME.upload" "$DATA_DIR/$APK_NAME"
+  mv -f "$DATA_DIR/$APK_NAME.meta.json.upload" "$DATA_DIR/$APK_NAME.meta.json"
+  { ls -t "$DATA_DIR/$APK_NAME".bak-2* 2>/dev/null || true; } | tail -n +4 | xargs -r rm -f
+  { ls -t "$DATA_DIR/$APK_NAME".meta.json.bak-2* 2>/dev/null || true; } | tail -n +4 | xargs -r rm -f
+  install -d -m 0700 "$STATE"
+  printf '%s apk %s %s\n' "$STAMP" "$want" "$mcode" >> "$STATE/history"
+  size=$(stat -c %s "$DATA_DIR/$APK_NAME")
+  rm -rf "$tmp"
+
+  if [ -z "$SANDBOX" ]; then
+    local json; json=$(curl -fsS --max-time 10 "http://127.0.0.1:$PORT/tuptakip/api/guncelleme" 2>/dev/null || true)
+    if py_json "$json" 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("apkReady") and int(d.get("publishedMobileBuild") or 0)==int(sys.argv[1]) else 1)' "$mcode" 2>/dev/null; then
+      say "✅ /tuptakip/api/guncelleme yeni sürümü bildiriyor."
+    else
+      say "⚠️ APK yerinde ama /tuptakip/api/guncelleme henüz yeni sürümü bildirmiyor; /durum ile bakın."
+    fi
+  fi
+  say "📱 ArsanTüpTakip APK yayında: $mname (build $mcode, $((size / 1024 / 1024)) MB, commit $(short "$want"))."
+  say "İndirme: $PUBLIC_URL/indir — uygulamalar açılışta güncellemeyi önerir."
+  trailer APK_STATE published
+  trailer APK_VERSION "$mname"
+  trailer APK_BUILD "$mcode"
+}
+
+act_apkinfo() {
+  [ -f "$1" ] || die "Dosya yok: $1" 2
+  apk_manifest "$1"
+}
+
 case "$ACTION" in
   status) act_status ;;
   sync) act_sync ;;
@@ -427,5 +669,8 @@ case "$ACTION" in
   publish) act_publish "$ARG" ;;
   previous) act_previous ;;
   rollback) act_rollback ;;
-  *) die "Kullanım: arsantuptakip-release status|sync|pending|publish <sha>|previous|rollback" 2 ;;
+  apkcheck) act_apkcheck ;;
+  apk) act_apk "$ARG" ;;
+  apkinfo) act_apkinfo "$ARG" ;;
+  *) die "Kullanım: arsantuptakip-release status|sync|pending|publish <sha>|previous|rollback|apkcheck|apk <sha>|apkinfo <dosya>" 2 ;;
 esac

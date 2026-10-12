@@ -13,6 +13,20 @@ async function tempRoot() {
   return root;
 }
 
+test("bildirim kutusu: yazılan metin sırayla okunur ve silinir", async () => {
+  const root = await tempRoot();
+  await queue.writeNotice(root, "b-apk.txt", "\uFEFF📱 APK yayında\n");
+  await queue.writeNotice(root, "a-ilk.txt", "ilk");
+  await fs.writeFile(path.join(root, "notices", ".yarim.tmp"), "yarım");
+  await fs.writeFile(path.join(root, "notices", "Gecersiz Ad.txt"), "x");
+  assert.deepEqual(await queue.listNotices(root), ["a-ilk.txt", "b-apk.txt"]);
+  assert.equal(await queue.readNotice(root, "b-apk.txt"), "📱 APK yayında");
+  await queue.removeNotice(root, "a-ilk.txt");
+  assert.deepEqual(await queue.listNotices(root), ["b-apk.txt"]);
+  await assert.rejects(queue.readNotice(root, "../state.json"), /Geçersiz bildirim adı/);
+  await assert.rejects(queue.writeNotice(root, "x/../y.txt", "x"), /Geçersiz bildirim adı/);
+});
+
 test("istek yaşam döngüsü: oluştur, sahiplen, ilerleme, sonuç, teslim", async () => {
   const root = await tempRoot();
   const { attachmentsDir } = await queue.beginRequest(root, "tg-1-a");

@@ -1,8 +1,8 @@
 #!/bin/bash
 # ArsanTüpTakip Telegram botu + sunucu Cursor ajanı + yayın betiği kurulumu (root, tekrar çalıştırılabilir).
 #   sudo bash install-bot.sh <paket-klasörü>     (paket: app/ [npm ci yapılmış], deploy/; Deploy-ArsanTupTakipBot.ps1 hazırlar)
-# ArsanGazERP'nin servislerini, botunu, arsangaz-release düzenini değiştirmez. /etc/arsangaz'dan yalnızca iki değeri
-# root'tan root'a kopyalar (yazdırmadan): izinli Telegram sohbet kimliği ve CURSOR_API_KEY.
+# ArsanGazERP'nin servislerini, botunu, arsangaz-release düzenini değiştirmez. /etc/arsangaz'dan yalnızca üç değeri
+# root'tan root'a kopyalar (yazdırmadan): izinli Telegram sohbet kimliği, CURSOR_API_KEY ve GITHUB_ACTIONS_TOKEN (APK indirme).
 # Gizli değer yazdırmaz; yalnızca yayın anahtarının açık (public) yarısını yazar (GitHub deploy key olarak eklenir).
 set -euo pipefail
 pkg=${1:?paket klasörü gerekli}
@@ -27,7 +27,7 @@ chmod 0750 /home/tuptakipagent
 echo "== Klasörler"
 install -d -m 0700 -o tuptakipbot -g tuptakipbot /var/lib/arsantuptakip-bot
 install -d -m 2770 -o root -g tuptakipq /var/lib/arsantuptakip-queue
-for sub in requests control outgoing; do install -d -m 2770 -o root -g tuptakipq "/var/lib/arsantuptakip-queue/$sub"; done
+for sub in requests control outgoing notices; do install -d -m 2770 -o root -g tuptakipq "/var/lib/arsantuptakip-queue/$sub"; done
 install -d -m 0700 -o tuptakipagent -g tuptakipagent /var/lib/arsantuptakip-agent
 install -d -m 0711 -o root -g root /var/lib/arsantuptakip-release
 install -d -m 0755 -o root -g root /opt/arsantuptakip-bot
@@ -39,7 +39,7 @@ sudoers=$(mktemp)
 cat > "$sudoers" <<'EOF'
 # ArsanTupTakip botu: yalnizca ArsanTupTakip yayin betigini root olarak calistirabilir (betik argumanlari kendisi dogrular).
 Defaults:tuptakipbot !log_allowed, !pam_session, !lecture
-tuptakipbot ALL=(root) NOPASSWD: /usr/local/sbin/arsantuptakip-release status, /usr/local/sbin/arsantuptakip-release sync, /usr/local/sbin/arsantuptakip-release pending, /usr/local/sbin/arsantuptakip-release previous, /usr/local/sbin/arsantuptakip-release rollback, /usr/local/sbin/arsantuptakip-release publish *
+tuptakipbot ALL=(root) NOPASSWD: /usr/local/sbin/arsantuptakip-release status, /usr/local/sbin/arsantuptakip-release sync, /usr/local/sbin/arsantuptakip-release pending, /usr/local/sbin/arsantuptakip-release previous, /usr/local/sbin/arsantuptakip-release rollback, /usr/local/sbin/arsantuptakip-release publish *, /usr/local/sbin/arsantuptakip-release apkcheck, /usr/local/sbin/arsantuptakip-release apk *
 EOF
 visudo -cqf "$sudoers"
 install -m 0440 -o root -g root "$sudoers" /etc/sudoers.d/arsantuptakip-bot
@@ -66,6 +66,19 @@ if ! grep -q '^CURSOR_API_KEY=.' "$agent_env" 2>/dev/null; then
   echo "agent.env: CURSOR_API_KEY kopyalandı"
 fi
 chown root:root "$agent_env"; chmod 600 "$agent_env"
+# arsantuptakip-release apk: Actions read access for downloading the signed APK artifact (only root reads it).
+gh_env=$conf/github.env
+if ! grep -q '^GITHUB_ACTIONS_TOKEN=.' "$gh_env" 2>/dev/null; then
+  line=$(grep -E '^GITHUB_ACTIONS_TOKEN=.' /etc/arsangaz/release.env 2>/dev/null | tail -n1 || true)
+  if [ -n "$line" ]; then
+    ( umask 077; printf '# ArsanTupTakip APK indirme: GitHub Actions okuma anahtari (root:root 600).\n%s\n' "$line" > "$gh_env" )
+    echo "github.env: GITHUB_ACTIONS_TOKEN kopyalandı"
+  else
+    echo "UYARI: /etc/arsangaz/release.env içinde GITHUB_ACTIONS_TOKEN yok; /apk çalışmaz."
+  fi
+  unset line
+fi
+[ ! -f "$gh_env" ] || { chown root:root "$gh_env"; chmod 600 "$gh_env"; }
 
 echo "== GitHub yayın anahtarı (yalnızca root)"
 [ -f "$conf/release/github_release" ] || ssh-keygen -q -t ed25519 -N "" -C "arsantuptakip-release@oracle" -f "$conf/release/github_release"

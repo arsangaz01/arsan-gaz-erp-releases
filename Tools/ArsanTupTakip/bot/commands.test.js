@@ -4,7 +4,33 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   parseCommand, isAuthorized, createConfirmation, checkConfirmation, parseTrailers, splitMessage, shortSha, foldTurkish, formatProgress,
+  apkResultHeader, HELP_TEXT,
 } = require("./commands");
+
+test("/apk ve /apk_onay komutları tanınır", () => {
+  assert.deepEqual(parseCommand("/apk"), { command: "apk", args: [], known: true });
+  assert.deepEqual(parseCommand("/APK_ONAY 123456"), { command: "apk_onay", args: ["123456"], known: true });
+  assert.deepEqual(parseCommand("/apk_onay@TuptakipArsanbot 654321", "TuptakipArsanbot"), { command: "apk_onay", args: ["654321"], known: true });
+  assert.match(HELP_TEXT, /\/apk_onay <kod>/);
+});
+
+test("APK onayı yalnızca /apk ile verilen kodla çalışır", () => {
+  const now = 2_000_000;
+  const sha = "c".repeat(40);
+  const pending = createConfirmation("apk", sha, now, () => 135790);
+  assert.deepEqual(checkConfirmation(pending, "apk", "135790", now), { ok: true, sha });
+  assert.match(checkConfirmation(pending, "yayin", "135790", now).error, /Önce \/yayin/);
+  assert.match(checkConfirmation(createConfirmation("yayin", sha, now, () => 135790), "apk", "135790", now).error, /APK onayı yok\. Önce \/apk/);
+  assert.match(checkConfirmation(pending, "apk", "135790", now + 16 * 60_000).error, /Yeniden \/apk yazın/);
+});
+
+test("APK yayın sonucu başlığı", () => {
+  const { trailers } = parseTrailers("📱 yayında\n@@APK_STATE=published\n@@APK_VERSION=1.0.0\n@@APK_BUILD=1\n");
+  assert.equal(apkResultHeader(0, trailers), "✅ APK yayında: 1.0.0 (build 1).");
+  assert.equal(apkResultHeader(0, {}), "✅ APK zaten güncel.");
+  assert.match(apkResultHeader(7), /henüz hazır değil/);
+  assert.match(apkResultHeader(1), /çıkış 1.*değişmedi/);
+});
 
 test("komutlar ve argümanlar ayrıştırılır", () => {
   assert.deepEqual(parseCommand("/durum"), { command: "durum", args: [], known: true });

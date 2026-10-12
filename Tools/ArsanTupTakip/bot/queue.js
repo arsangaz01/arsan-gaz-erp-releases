@@ -12,11 +12,14 @@
 //   <root>/control/new-conversation     bot: /yeni (timestamp); agent starts a fresh Cursor conversation
 //   <root>/agent-status.json            agent status for /durum (no secrets)
 //   <root>/outgoing/agent-branch.bundle agent commits for arsantuptakip-release (pending/publish)
+//   <root>/notices/<name>.txt           one-off message (server scripts, admin); the bot sends it verbatim and deletes it
 
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,80}$/;
+const NOTICE_PATTERN = /^[a-z0-9][a-z0-9-]{0,80}\.txt$/;
+const NOTICE_MAX_CHARS = 16_000;
 const KEEP_DELIVERED_MS = 7 * 24 * 60 * 60_000;
 
 function assertId(id) {
@@ -47,7 +50,7 @@ async function writeJsonAtomically(file, value, mode = 0o660) {
 }
 
 async function ensureLayout(root) {
-  for (const directory of [requestsDir(root), path.join(root, "control"), path.join(root, "outgoing")]) {
+  for (const directory of [requestsDir(root), path.join(root, "control"), path.join(root, "outgoing"), path.join(root, "notices")]) {
     await fs.mkdir(directory, { recursive: true, mode: 0o2770 });
   }
 }
@@ -153,7 +156,35 @@ async function readNewConversationMarker(root) {
   return (await fs.readFile(path.join(root, "control", "new-conversation"), "utf8").catch(() => "")).trim();
 }
 
+const noticeFile = (root, name) => {
+  if (!NOTICE_PATTERN.test(String(name))) throw new Error(`Geçersiz bildirim adı: ${name}`);
+  return path.join(root, "notices", name);
+};
+
+// Written under a temporary name first, so the bot never sends half a file.
+async function writeNotice(root, name, text) {
+  const file = noticeFile(root, name);
+  const temporary = path.join(root, "notices", `.${name}.${process.pid}.tmp`);
+  await fs.writeFile(temporary, String(text), { encoding: "utf8", mode: 0o660 });
+  await fs.rename(temporary, file);
+}
+
+async function listNotices(root) {
+  const names = await fs.readdir(path.join(root, "notices")).catch(() => []);
+  return names.filter((name) => NOTICE_PATTERN.test(name)).sort();
+}
+
+async function readNotice(root, name) {
+  const text = await fs.readFile(noticeFile(root, name), "utf8").catch(() => "");
+  return text.replace(/^\uFEFF/, "").trim().slice(0, NOTICE_MAX_CHARS);
+}
+
+async function removeNotice(root, name) {
+  await fs.rm(noticeFile(root, name), { force: true });
+}
+
 module.exports = {
+  writeNotice, listNotices, readNotice, removeNotice,
   ID_PATTERN, assertId, ensureLayout, beginRequest, commitRequest, listIds, listPending, listActive, listUndelivered, requestState,
   claim, readRequest, readProgress, readResult, writeProgress, writeResult, cancel, isCancelled, markDelivered, cleanup,
   requestNewConversation, readNewConversationMarker, readJson, writeJsonAtomically, requestDir,

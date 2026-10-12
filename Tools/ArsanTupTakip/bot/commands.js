@@ -8,7 +8,14 @@ const crypto = require("node:crypto");
 const CONFIRM_TTL_MS = 15 * 60_000;
 const TELEGRAM_TEXT_LIMIT = 4000;
 
-const COMMANDS = new Set(["start", "yardim", "durum", "yayin", "yayin_onay", "geri_al", "iptal", "yeni"]);
+const COMMANDS = new Set(["start", "yardim", "durum", "yayin", "yayin_onay", "geri_al", "apk", "apk_onay", "iptal", "yeni"]);
+
+// Per confirmation kind: what is missing and which command starts it again.
+const CONFIRM_KINDS = {
+  yayin: { missing: "Bekleyen yayın onayı yok.", start: "/yayin" },
+  geri_al: { missing: "Bekleyen geri alma onayı yok.", start: "/geri_al" },
+  apk: { missing: "Bekleyen APK onayı yok.", start: "/apk" },
+};
 
 const HELP_TEXT = [
   "🛢 ArsanTüpTakip botu — yalnızca ArsanTüpTakip sistemi için (ArsanGaz ERP'ye dokunmaz).",
@@ -18,6 +25,8 @@ const HELP_TEXT = [
   "/yayin — yayınlanmayı bekleyen değişiklikleri gösterir ve bir onay kodu verir",
   "/yayin_onay <kod> — sunucuda derler + test eder, main'e birleştirir ve kurar; sağlık kontrolü geçmezse otomatik geri döner",
   "/geri_al — bir önceki kuruluma dönmek için onay kodu verir; /geri_al <kod> ile uygulanır",
+  "/apk — main'deki mobil uygulamanın imzalı APK'sını gösterir ve bir onay kodu verir",
+  "/apk_onay <kod> — APK'yı GitHub'dan indirir, imza/paket/sürümü doğrular ve arsantuptakip.com/tuptakip/indir'e koyar",
   "/iptal — sürmekte olan geliştirme isteğini durdurur",
   "/yeni — Cursor ajanıyla yeni bir konuşma başlatır (önceki bağlam unutulur)",
   "/yardim — bu liste",
@@ -59,11 +68,12 @@ function createConfirmation(kind, sha, now = Date.now(), random = crypto.randomI
 
 // Returns { ok: true, sha } or { ok: false, error } in Turkish.
 function checkConfirmation(pending, kind, code, now = Date.now()) {
+  const info = CONFIRM_KINDS[kind] ?? CONFIRM_KINDS.yayin;
   if (!pending || pending.kind !== kind) {
-    return { ok: false, error: kind === "yayin" ? "Bekleyen yayın onayı yok. Önce /yayin yazın." : "Bekleyen geri alma onayı yok. Önce /geri_al yazın." };
+    return { ok: false, error: `${info.missing} Önce ${info.start} yazın.` };
   }
   if (now > pending.expiresMs) {
-    return { ok: false, error: `Onay kodunun süresi doldu. Yeniden ${kind === "yayin" ? "/yayin" : "/geri_al"} yazın.` };
+    return { ok: false, error: `Onay kodunun süresi doldu. Yeniden ${info.start} yazın.` };
   }
   if (!/^\d{6}$/.test(String(code ?? "")) || String(code) !== pending.code) {
     return { ok: false, error: "Onay kodu yanlış." };
@@ -107,7 +117,15 @@ function formatProgress(id, steps, startedMs, now = Date.now()) {
   return [`🛠 Cursor ajanı çalışıyor (${id}, ${minutes} dk)`, ...(recent.length ? ["", ...recent] : []), "", "Durdurmak için /iptal yazın."].join("\n");
 }
 
+// Headline for the result of "arsantuptakip-release apk <sha>" (exit 7: the signed APK is still being built on GitHub).
+function apkResultHeader(code, trailers = {}) {
+  if (code === 0) return trailers.APK_BUILD ? `✅ APK yayında: ${trailers.APK_VERSION ?? "?"} (build ${trailers.APK_BUILD}).` : "✅ APK zaten güncel.";
+  if (code === 7) return "⏳ İmzalı APK henüz hazır değil.";
+  return `❌ APK yayınlanamadı (çıkış ${code}); yayındaki APK değişmedi.`;
+}
+
 module.exports = {
   CONFIRM_TTL_MS, HELP_TEXT, TELEGRAM_TEXT_LIMIT,
   foldTurkish, parseCommand, isAuthorized, createConfirmation, checkConfirmation, parseTrailers, splitMessage, shortSha, formatProgress,
+  apkResultHeader,
 };

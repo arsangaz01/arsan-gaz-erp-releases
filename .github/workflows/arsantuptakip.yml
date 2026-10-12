@@ -1,5 +1,7 @@
 # ArsanTüpTakip (Tools/ArsanTupTakip) için ayrı derleme kontrolü. Mevcut CI (ci.yml) işlerinden bağımsızdır.
-# APK yayınlanmaz ve imzalanmaz; mobil iş yalnızca projenin derlendiğini doğrular.
+# Dallarda mobil iş yalnızca imzasız Debug derler. main'de (push / elle başlatma) mobil-apk işi android-signing ortamındaki
+# mevcut anahtarla imzalı Release APK üretir (paket com.arsantuptakip.mobil; mevcut uygulamayla yan yana kurulur) ve
+# arsantuptakip-mobile-apk artefaktına koyar; sunucudaki arsantuptakip-release apk onu indirip /tuptakip/indir'e koyar.
 name: ArsanTupTakip
 on:
   push:
@@ -47,6 +49,7 @@ jobs:
 
   mobile:
     name: mobil-derleme
+    if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -66,3 +69,73 @@ jobs:
           dotnet build "$proj" -t:InstallAndroidDependencies -f net10.0-android \
             -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True -nologo -v q
           dotnet build "$proj" -c Debug -f net10.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -nologo -clp:ErrorsOnly
+
+  apk:
+    name: mobil-apk
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: android-signing
+    timeout-minutes: 45
+    env:
+      # Same key as the ArsanGaz app (ci.yml); the package id differs, so both apps install side by side.
+      APK_CERT_SHA256: 80ae16deb437fd9e1c7b26b3b38563977078c97a98a17f6983b7d5f19dd90153
+      APK_PACKAGE: com.arsantuptakip.mobil
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: Tools/ArsanTupTakip/global.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: dotnet workload install maui-android
+      - name: İmzalı APK
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$ANDROID_STORE_PASS" ] || [ -z "$ANDROID_KEY_ALIAS" ]; then
+            echo "::error::android-signing ortamında ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS eksik."; exit 1
+          fi
+          proj=Tools/ArsanTupTakip/mobile/ArsanTupTakip.Mobile/ArsanTupTakip.Mobile.csproj
+          ks="$RUNNER_TEMP/tuptakip.keystore"
+          base64 -d <<<"$KEYSTORE_B64" > "$ks"
+          dotnet build "$proj" -t:InstallAndroidDependencies -f net10.0-android \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True -nologo -v q
+          dotnet publish "$proj" -c Release -f net10.0-android -r android-arm64 \
+            -p:AndroidPackageFormat=apk -p:RunAOTCompilation=false -p:AndroidSdkDirectory="$ANDROID_HOME" \
+            -p:AndroidKeyStore=true -p:AndroidSigningKeyStore="$ks" -p:AndroidSigningKeyAlias="$ANDROID_KEY_ALIAS" \
+            -p:AndroidSigningStorePass=env:ANDROID_STORE_PASS -p:AndroidSigningKeyPass=env:ANDROID_KEY_PASS \
+            -o "$RUNNER_TEMP/apk" -nologo -clp:ErrorsOnly
+          rm -f "$ks"
+          apk=$(ls "$RUNNER_TEMP"/apk/*-Signed.apk | head -n1)
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)
+          cert=$("$tools/apksigner" verify --print-certs "$apk" | grep -m1 'certificate SHA-256 digest' | awk '{print $NF}')
+          if [ "$cert" != "$APK_CERT_SHA256" ]; then echo "::error::APK sertifikası beklenen anahtarınki değil ($cert)."; exit 1; fi
+          badging=$("$tools/aapt" dump badging "$apk" | head -n1)
+          pkg=$(sed -E "s/.*package: name='([^']+)'.*/\1/" <<<"$badging")
+          name=$(sed -E "s/.*versionName='([^']+)'.*/\1/" <<<"$badging")
+          code=$(sed -E "s/.*versionCode='([0-9]+)'.*/\1/" <<<"$badging")
+          if [ "$pkg" != "$APK_PACKAGE" ]; then echo "::error::APK paket adı $pkg (beklenen $APK_PACKAGE)."; exit 1; fi
+          mkdir -p out && cp "$apk" out/ArsanTupTakip-Mobil.apk
+          printf '{"package":"%s","versionName":"%s","versionCode":%s,"certSha256":"%s","sha":"%s"}\n' \
+            "$pkg" "$name" "$code" "$cert" "$GITHUB_SHA" > out/apk-info.json
+          cat out/apk-info.json
+      - name: Sunucu betiğinin APK okuyucusu (gerçek APK ile)
+        run: |
+          set -euo pipefail
+          got=$(ARSANTUPTAKIP_RELEASE_SANDBOX=1 SANDBOX_ORIGIN=x SANDBOX_BASE="$RUNNER_TEMP/rel" SANDBOX_BUNDLE=x SANDBOX_APP_PARENT=x \
+            bash Tools/ArsanTupTakip/deploy/arsantuptakip-release apkinfo out/ArsanTupTakip-Mobil.apk)
+          want=$(python3 -c 'import json; d=json.load(open("out/apk-info.json")); print(d["package"], d["versionName"], d["versionCode"], sep="\t")')
+          echo "betik: $got"; echo "aapt:  $want"
+          [ "$got" = "$want" ] || { echo "::error::arsantuptakip-release apkinfo aapt ile aynı sonucu vermedi."; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arsantuptakip-mobile-apk
+          path: out/
+          retention-days: 14
+          if-no-files-found: error
