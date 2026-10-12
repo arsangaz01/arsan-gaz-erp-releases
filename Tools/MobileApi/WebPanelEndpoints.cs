@@ -17,6 +17,7 @@ internal sealed record PanelUserUpdateRequest(string? AdSoyad, string? Rol, bool
 internal sealed record PanelTripLoadRequest(string? Plate, List<string?>? Codes);
 internal sealed record PanelUserPasswordRequest(string? Sifre, bool SifreDegistirsin = true);
 internal sealed record PanelPermissionsRequest(List<string>? Izinler, bool Sifirla = false);
+internal sealed record PanelUserDeleteRequest(string? Onay);
 
 // Endpoint metadata read by the /panel/api filter and the /api middleware.
 internal sealed record PanelPermission(string Name);
@@ -238,6 +239,14 @@ internal static class WebPanelEndpoints
             string? error = auth.ResetPassword(Account(context), WebPanelAuth.ClientIp(context), id, request.Sifre, request.SifreDegistirsin);
             return error is null
                 ? Results.Ok(new { message = "Şifre sıfırlandı; kullanıcının açık oturumları kapatıldı." + (request.SifreDegistirsin ? " İlk girişte yeni şifre belirleyecek." : string.Empty) })
+                : Results.BadRequest(new { error });
+        }).Requires(PanelPermissions.ManageUsers);
+
+        api.MapPost("/yonetim/kullanici/{id:int}/sil", (int id, PanelUserDeleteRequest request, HttpContext context) =>
+        {
+            string? error = auth.DeleteUser(Account(context), WebPanelAuth.ClientIp(context), id, request.Onay, devices, out string summary);
+            return error is null
+                ? Results.Ok(new { message = $"{request.Onay?.Trim()} kullanıcısı kalıcı olarak silindi; {summary}. Geçmiş kayıtlardaki adı korunur." })
                 : Results.BadRequest(new { error });
         }).Requires(PanelPermissions.ManageUsers);
 

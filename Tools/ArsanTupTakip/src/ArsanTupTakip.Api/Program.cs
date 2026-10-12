@@ -37,7 +37,7 @@ if (args is ["--sifre-sifirla", { Length: > 0 } resetName])
     {
         WebPanelUserStore.Update(users =>
         {
-            WebPanelUser target = users.First(u => string.Equals(u.UserName, user, StringComparison.OrdinalIgnoreCase));
+            WebPanelUser target = users.First(u => u.DeletedAt is null && string.Equals(u.UserName, user, StringComparison.OrdinalIgnoreCase));
             WebPanelUserStore.SetPassword(target, password);
             target.MustChangePassword = true;
             return 0;

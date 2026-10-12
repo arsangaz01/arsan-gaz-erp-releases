@@ -303,7 +303,7 @@ internal sealed class WebPanelAuth
         {
             if (users.Any(u => string.Equals(u.UserName, name, StringComparison.OrdinalIgnoreCase)))
             {
-                return "Bu kullanıcı adı zaten var (pasif hesaplar dahil).";
+                return "Bu kullanıcı adı zaten var veya silinmiş bir hesaba ait (pasif ve silinmiş hesaplar dahil); başka bir ad seçin.";
             }
 
             WebPanelUser created = new()
@@ -339,7 +339,7 @@ internal sealed class WebPanelAuth
         string? targetName = null;
         string? error = WebPanelUserStore.Update(users =>
         {
-            WebPanelUser? target = users.FirstOrDefault(u => u.Id == id);
+            WebPanelUser? target = users.FirstOrDefault(u => u.Id == id && u.DeletedAt is null);
             if (target is null)
             {
                 return "Kullanıcı bulunamadı.";
@@ -409,7 +409,7 @@ internal sealed class WebPanelAuth
         string detail = string.Empty;
         string? error = WebPanelUserStore.Update(users =>
         {
-            WebPanelUser? target = users.FirstOrDefault(u => u.Id == id);
+            WebPanelUser? target = users.FirstOrDefault(u => u.Id == id && u.DeletedAt is null);
             if (target is null)
             {
                 return "Kullanıcı bulunamadı.";
@@ -467,6 +467,62 @@ internal sealed class WebPanelAuth
         DropSessions(id, except: null, onlyStale: true);
         Notify(actor, ip, "Şifre sıfırlandı", existing.UserName, mustChange ? "geçici şifre; ilk girişte değiştirecek" : "kalıcı şifre",
             $"🔑 Tüp takip paneli: {existing.UserName} kullanıcısının şifresi yönetici tarafından sıfırlandı. Yapan: {actor.UserName}.");
+        return null;
+    }
+
+    // Permanent removal; confirmUserName must repeat the account's user name. Every browser session and phone of the
+    // account ends at once. Returns null on success or the message to show; summary describes what was closed.
+    internal string? DeleteUser(WebPanelUser actor, string ip, int id, string? confirmUserName, DeviceStore devices, out string summary)
+    {
+        summary = string.Empty;
+        WebPanelUser? existing = WebPanelUserStore.Find(id);
+        if (existing is null)
+        {
+            return "Kullanıcı bulunamadı (zaten silinmiş olabilir).";
+        }
+
+        if (existing.Id == actor.Id)
+        {
+            return "Kendi hesabınızı silemezsiniz. Bunu başka bir yönetici yapmalı.";
+        }
+
+        if (actor.Role != PanelRoles.Admin && existing.Role == PanelRoles.Admin)
+        {
+            return "Yönetici hesaplarını yalnızca bir Yönetici silebilir.";
+        }
+
+        if (!string.Equals((confirmUserName ?? string.Empty).Trim(), existing.UserName, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Onay için kullanıcı adını ({existing.UserName}) aynen yazın.";
+        }
+
+        string? error = WebPanelUserStore.Update(users =>
+        {
+            WebPanelUser? target = users.FirstOrDefault(u => u.Id == id && u.DeletedAt is null);
+            if (target is null)
+            {
+                return "Kullanıcı bulunamadı (zaten silinmiş olabilir).";
+            }
+
+            if (target.IsActive && target.Role == PanelRoles.Admin && !users.Any(u => u.Id != target.Id && u.IsActive && u.Role == PanelRoles.Admin))
+            {
+                return "Son aktif yönetici silinemez. Önce başka bir yöneticiyi aktif edin.";
+            }
+
+            WebPanelUserStore.MarkDeleted(target, actor.UserName);
+            return null;
+        });
+        if (error is not null)
+        {
+            return error;
+        }
+
+        int sessions = ActiveSessionCount(id);
+        DropSessions(id, except: null);
+        int phones = devices.RemoveForUser(id, exceptId: null);
+        summary = $"{sessions} panel oturumu ve {phones} telefon oturumu kapatıldı";
+        Notify(actor, ip, "Kullanıcı silindi", existing.UserName, $"{existing.DisplayName}, {existing.Role}; {summary}",
+            $"🗑 Tüp takip paneli kullanıcısı silindi: {existing.UserName} ({existing.Role}). Yapan: {actor.UserName}.");
         return null;
     }
 

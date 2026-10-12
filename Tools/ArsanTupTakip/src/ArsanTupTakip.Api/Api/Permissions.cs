@@ -110,7 +110,7 @@ internal static class Perm
             P(VehicleDeactivate, "Aracı pasife alma / aktif etme", "Aracı yeni seferlerde seçilemez yapar veya geri açar.", VehicleView)
         ]),
         new("Yönetim", [
-            P(ManageUsers, "Kullanıcı yönetimi", "Kullanıcı ekler, düzenler, pasife alır, şifre sıfırlar ve yetkileri seçer. Yönetici hesaplarına dokunamaz ve kendinde olmayan yetkiyi veremez.", PanelLogin),
+            P(ManageUsers, "Kullanıcı yönetimi", "Kullanıcı ekler, düzenler, pasife alır, siler, şifre sıfırlar ve yetkileri seçer. Yönetici hesaplarına dokunamaz ve kendinde olmayan yetkiyi veremez.", PanelLogin),
             P(ManageDevices, "Cihaz yönetimi", "Giriş yapmış telefonları görür ve oturumlarını kapatır.", PanelLogin),
             P(AuditLog, "Denetim kaydı", "Giriş ve yönetim işlemlerinin kaydını görür.", PanelLogin)
         ])

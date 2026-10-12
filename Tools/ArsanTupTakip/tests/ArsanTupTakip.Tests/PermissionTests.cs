@@ -26,7 +26,8 @@ internal static class PermissionTests
         ParallelLoginsStayIndependent().GetAwaiter().GetResult();
         WrongPasswordsLockTheAddress().GetAwaiter().GetResult();
         HttpChecks().GetAwaiter().GetResult();
-        Console.WriteLine("PASS: yetki kataloğu, rol varsayılanları, kullanıcıya özel yetkiler, son yönetici koruması, oturum süreleri (panel 1 saat, mobil 24 saat), eşzamanlı girişler ve sunucu tarafı yetki denetimi.");
+        DeletingUsers().GetAwaiter().GetResult();
+        Console.WriteLine("PASS: yetki kataloğu, rol varsayılanları, kullanıcıya özel yetkiler, son yönetici koruması, kullanıcı silme, oturum süreleri (panel 1 saat, mobil 24 saat), eşzamanlı girişler ve sunucu tarafı yetki denetimi.");
     }
 
     private static void CatalogIsConsistent()
@@ -259,6 +260,11 @@ internal static class PermissionTests
                 Check(users.StatusCode == HttpStatusCode.Forbidden, "Kaldırılan yetki hemen etkisini göstermeli.");
             }
 
+            using (HttpResponseMessage delete = await Send(http, HttpMethod.Post, $"panel/api/yonetim/kullanici/{admin.Id}/sil", null, new { onay = admin.UserName }, cookie))
+            {
+                Check(delete.StatusCode == HttpStatusCode.Forbidden && WebPanelUserStore.Find(admin.Id) is not null, "Kullanıcı yönetimi yetkisi olmayan kimseyi silememeli.");
+            }
+
             using (HttpResponseMessage noCsrf = await Send(http, HttpMethod.Post, "panel/api/sifre", null, new { mevcut = "x" }, cookie, csrf: false))
             {
                 Check(noCsrf.StatusCode == HttpStatusCode.Forbidden, "CSRF başlığı olmayan panel isteği reddedilmeli.");
@@ -296,6 +302,56 @@ internal static class PermissionTests
             await app.StopAsync();
             await app.DisposeAsync();
         }
+    }
+
+    private static async Task DeletingUsers()
+    {
+        WebPanelAuth auth = new();
+        DeviceStore devices = new();
+        const string ip = "127.0.0.1";
+        WebPanelUser admin = WebPanelUserStore.FindByName("yonetici")!;
+        WebPanelUser manager = WebPanelUserStore.FindByName("sorumlu")!;
+        Check(auth.CreateUser(admin, ip, "silinecek", "Silinecek Kişi", "Operatör", Password, false) is null, "Silinecek kullanıcı açılabilmeli.");
+        WebPanelUser victim = WebPanelUserStore.FindByName("silinecek")!;
+        PermissionOverrides.Replace(victim.Id, new Dictionary<string, bool> { [Perm.MoveScrap] = false }, "test");
+
+        DefaultHttpContext panel = Context("10.4.0.1");
+        Check(await auth.LoginAsync(panel, "silinecek", Password) is null, "Silinecek kullanıcı panele girebilmeli.");
+        var phone = await auth.MobileLoginAsync(Context("10.4.0.2"), devices, "silinecek", Password, "Telefon");
+        Check(phone.Error is null, "Silinecek kullanıcı telefona girebilmeli.");
+        DefaultHttpContext bystander = Context("10.4.0.3");
+        Check(await auth.LoginAsync(bystander, "sorumlu", Password) is null, "Başka kullanıcı panele girebilmeli.");
+
+        Check(auth.DeleteUser(admin, ip, admin.Id, admin.UserName, devices, out _) is not null, "Kullanıcı kendini silememeli.");
+        Check(auth.DeleteUser(manager, ip, admin.Id, admin.UserName, devices, out _) is not null, "Yönetici olmayan, Yönetici hesabını silememeli.");
+        Check(auth.DeleteUser(admin, ip, victim.Id, "baska-ad", devices, out _) is not null, "Onay adı yanlışsa silinmemeli.");
+        Check(auth.DeleteUser(manager, ip, victim.Id, "SILINECEK", devices, out string summary) is null, "Kullanıcı yöneticisi Yönetici olmayan hesabı silebilmeli.");
+        Check(summary.Contains("1 panel", StringComparison.Ordinal) && summary.Contains("1 telefon", StringComparison.Ordinal), "Kapatılan oturumlar bildirilmeli: " + summary);
+        Check(WebPanelUserStore.Find(victim.Id) is null && WebPanelUserStore.FindByName("silinecek") is null, "Silinen kullanıcı listede görünmemeli.");
+        Check(auth.Current(WithCookie(panel)) is null, "Silinen kullanıcının panel oturumu hemen kapanmalı.");
+        Check(devices.Validate(phone.Token!) is null && devices.All().All(s => s.UserId != victim.Id), "Silinen kullanıcının telefon oturumu hemen kapanmalı.");
+        DefaultHttpContext bystanderRequest = Context("10.4.0.3");
+        bystanderRequest.Request.Headers.Cookie = CookieValue(bystander);
+        Check(auth.Current(bystanderRequest) is not null, "Silme başka kullanıcının oturumunu kapatmamalı.");
+        Check((await auth.AuthenticateAsync("10.4.0.9", "silinecek", Password, "mobil")).User is null, "Silinen kullanıcı giriş yapamamalı.");
+        Check(auth.CreateUser(admin, ip, "silinecek", null, "İzleyici", Password, false) is not null, "Silinen kullanıcının adı yeni hesaba verilmemeli.");
+        Check(PermissionOverrides.For(victim.Id).Count == 0, "Silinen kullanıcının özel yetkileri temizlenmeli.");
+        Check(auth.DeleteUser(admin, ip, victim.Id, "silinecek", devices, out _) is not null, "Silinen kullanıcı ikinci kez silinmemeli.");
+        Check(WebPanelAudit.Latest(20).Any(e => e.Action == "Kullanıcı silindi" && e.Target == "silinecek" && e.Actor == "sorumlu"), "Silme denetim kaydına yazılmalı.");
+        Check(auth.CreateUser(admin, ip, "silmesonrasi", null, "İzleyici", Password, false) is null && WebPanelUserStore.FindByName("silmesonrasi")!.Id > victim.Id,
+            "Silinen kullanıcının numarası yeniden kullanılmamalı.");
+
+        Check(auth.CreateUser(admin, ip, "yonetici4", null, PanelRoles.Admin, Password, false) is null, "Ek yönetici açılabilmeli.");
+        Check(auth.DeleteUser(admin, ip, WebPanelUserStore.FindByName("yonetici4")!.Id, "yonetici4", devices, out _) is null, "Yönetici başka bir yöneticiyi silebilmeli.");
+        foreach (WebPanelUser other in WebPanelUserStore.All().Where(u => u.Role == PanelRoles.Admin && u.IsActive && u.Id != admin.Id).ToList())
+        {
+            Check(auth.UpdateUser(admin, ip, other.Id, other.DisplayName, PanelRoles.Admin, false) is null, "Fazladan yönetici pasife alınabilmeli.");
+        }
+
+        WebPanelUser staleAdmin = WebPanelUserStore.FindByName("yonetici3")!;
+        string? lastAdmin = auth.DeleteUser(staleAdmin, ip, admin.Id, admin.UserName, devices, out _);
+        Check(lastAdmin is not null && lastAdmin.Contains("Son aktif yönetici", StringComparison.Ordinal), "Son aktif yönetici silinememeli.");
+        Check(WebPanelUserStore.IsConfigured && WebPanelUserStore.Find(admin.Id)!.IsActive, "İlk yönetici aktif kalmalı.");
     }
 
     // Every /api and /panel/api endpoint must carry permission metadata; a forgotten one would be refused anyway.

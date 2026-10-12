@@ -37,6 +37,11 @@ if (args is ["--panel-sifre-ayarla", { Length: > 0 }] or ["--panel-kullanici-ekl
                 return "Bu kullanıcı adı zaten var.";
             }
 
+            if (existing?.DeletedAt is not null)
+            {
+                return "Bu kullanıcı adı silinmiş bir hesaba ait; başka bir ad seçin.";
+            }
+
             if (existing is null)
             {
                 existing = new WebPanelUser

@@ -16,6 +16,7 @@ internal sealed record PanelUserCreateRequest(string? KullaniciAdi, string? AdSo
 internal sealed record PanelUserUpdateRequest(string? AdSoyad, string? Rol, bool Aktif, List<string>? Yetkiler = null);
 internal sealed record PanelTripLoadRequest(string? Plate, List<string?>? Codes);
 internal sealed record PanelUserPasswordRequest(string? Sifre, bool SifreDegistirsin = true);
+internal sealed record PanelUserDeleteRequest(string? Onay);
 
 // Browser panel for inspecting and managing cylinder tracking: /panel (page) and /panel/api/* (data).
 internal static class WebPanelEndpoints
@@ -161,6 +162,14 @@ internal static class WebPanelEndpoints
             string? error = auth.ResetPassword(Account(context), WebPanelAuth.ClientIp(context), id, request.Sifre, request.SifreDegistirsin);
             return error is null
                 ? Results.Ok(new { message = "Şifre sıfırlandı; kullanıcının açık oturumları kapatıldı." + (request.SifreDegistirsin ? " İlk girişte yeni şifre belirleyecek." : string.Empty) })
+                : Results.BadRequest(new { error });
+        }).Requires(Perm.ManageUsers);
+
+        api.MapPost("/yonetim/kullanici/{id:int}/sil", (int id, PanelUserDeleteRequest request, HttpContext context, DeviceStore devices) =>
+        {
+            string? error = auth.DeleteUser(Account(context), WebPanelAuth.ClientIp(context), id, request.Onay, devices, out string summary);
+            return error is null
+                ? Results.Ok(new { message = $"{request.Onay?.Trim()} kullanıcısı kalıcı olarak silindi; {summary}. Geçmiş kayıtlardaki adı korunur." })
                 : Results.BadRequest(new { error });
         }).Requires(Perm.ManageUsers);
 

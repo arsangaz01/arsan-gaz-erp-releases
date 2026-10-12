@@ -1010,7 +1010,8 @@ function renderUsers() {
       el("button", { class: "link", type: "button", onclick: () => openPermDialog(u) }, "Yetkiler"),
       el("button", { class: "link", type: "button", onclick: () => openUserDialog(u) }, "Düzenle"),
       el("button", { class: "link", type: "button", onclick: () => openResetDialog(u) }, "Şifre sıfırla"),
-      u.isSelf ? null : el("button", { class: u.isActive ? "danger" : "link", type: "button", onclick: () => toggleUser(u) }, u.isActive ? "Pasife al" : "Aktif et"))));
+      u.isSelf ? null : el("button", { class: u.isActive ? "danger" : "link", type: "button", onclick: () => toggleUser(u) }, u.isActive ? "Pasife al" : "Aktif et"),
+      u.isSelf ? null : el("button", { class: "link delete-link", type: "button", onclick: () => openDeleteDialog(u) }, "Sil"))));
   $("users").replaceChildren(el("thead", {}, head), el("tbody", {}, ...body));
 }
 
@@ -1019,7 +1020,7 @@ async function loadAudit() {
   const head = el("tr", {}, ...["Zaman", "Kullanıcı", "İşlem", "Hedef", "Ayrıntı", "IP"].map((h) => el("th", {}, h)));
   const body = rows.map((a) => el("tr", {},
     el("td", {}, a.at), el("td", {}, a.actor),
-    el("td", { class: a.action.includes("Hatalı") || a.action.includes("Pasif") ? "warn-text" : "" }, a.action),
+    el("td", { class: a.action.includes("Hatalı") || a.action.includes("Pasif") || a.action.includes("silindi") ? "warn-text" : "" }, a.action),
     el("td", {}, a.target || "-"), el("td", { class: "muted" }, a.detail || ""), el("td", { class: "muted" }, a.ip || "")));
   $("audit").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6, class: "muted" }, "Kayıt yok."))])));
 }
@@ -1223,5 +1224,38 @@ async function toggleUser(u) {
     show($("admin-msg"), error.message);
   }
 }
+
+let deleteUser = null;
+
+function openDeleteDialog(u) {
+  deleteUser = u;
+  $("delete-form").reset();
+  hide($("x-msg"));
+  $("x-title").textContent = `Kullanıcıyı sil: ${u.userName}`;
+  $("x-who").textContent = `${u.displayName} (${u.userName}) – ${u.role}`;
+  $("x-name").placeholder = u.userName;
+  $("x-save").disabled = true;
+  $("delete-dialog").showModal();
+  $("x-name").focus();
+}
+
+$("x-name").addEventListener("input", () => {
+  $("x-save").disabled = !deleteUser || $("x-name").value.trim().toLowerCase() !== deleteUser.userName.toLowerCase();
+});
+$("x-close").addEventListener("click", () => $("delete-dialog").close());
+
+$("delete-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("x-save").disabled = true;
+  try {
+    const result = await api(`/panel/api/yonetim/kullanici/${deleteUser.id}/sil`, { method: "POST", body: { onay: $("x-name").value.trim() } });
+    $("delete-dialog").close();
+    await loadAdmin();
+    show($("admin-msg"), result.message, "ok");
+  } catch (error) {
+    show($("x-msg"), error.message);
+    $("x-save").disabled = false;
+  }
+});
 
 start().then(() => { if ($("app").classList.contains("hidden")) showLogin(); });

@@ -1,5 +1,13 @@
 # Devam Notları — 11 Ekim 2026, 01:20
 
+## Kullanıcı silme (iki panel, 12 Ekim 2026)
+- Yönetim → Kullanıcılar → "Sil": kullanıcı adını yazarak onaylanır; kalıcıdır ("Pasife al" geri alınabilir yol olarak kalır).
+- Sunucu: `POST /panel/api/yonetim/kullanici/{id}/sil` (`{onay: kullanıcıAdı}`). Kendini silemez, son aktif Yönetici silinemez,
+  Yönetici hesabını yalnız Yönetici siler (ArsanGaz'da kullanıcı yönetimi zaten yalnız Yöneticide). Panel oturumları + telefon
+  oturumları anında kapanır; TüpTakip'te kişiye özel yetki satırları da silinir. Denetim: "Kullanıcı silindi".
+- Kayıt `web-panel-users.json` içinde mezar taşı olarak kalır (`DeletedAt/DeletedBy`, rastgele şifre özeti, pasif);
+  `WebPanelUserStore.All()` göstermez. Kullanıcı adı ve Id yeniden verilmez (hareketler/denetim adı metin olarak tutar, FK yok).
+
 ## Mevcut sistem (arsantuptakip.com) — ayrıntılı yetkiler + mobil kullanıcı girişi (12 Ekim 2026, mobil 1.8.0 / build 28)
 - Yetki kataloğu `Tools/MobileApi/PanelPermissions.cs` (≈30 izin, gruplu). Rol = şablon; Yönetim → Kullanıcılar → "Yetkiler"
   ile kişiye ek/çıkarma yapılır, "Rol varsayılanına dön" sıfırlar. Kişiye özel farklar DB'de değil `web-panel-users.json`

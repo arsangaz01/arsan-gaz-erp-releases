@@ -36,6 +36,7 @@ internal static class MobileApiSelfTest
             Run("Kullanıcıya özel yetkiler", Overrides);
             Run("Tüp hareketi yetkisi", MovePermissions);
             await RunAsync("Kullanıcı yönetimi ve son yönetici koruması", UserManagementAsync);
+            await RunAsync("Kullanıcı silme ve korumaları", DeleteUserAsync);
             await RunAsync("Panel 1 saat / mobil 24 saat oturum süresi", LifetimesAsync);
             await RunAsync("Aynı anda girişler birbirini bozmaz", ParallelLoginsAsync);
             await RunAsync("Mobil şifre değişimi ve kilitleme", PasswordAndLockoutAsync);
@@ -194,6 +195,52 @@ internal static class MobileApiSelfTest
         Check(auth.UpdateUser(viewer, "yerel", admin.Id, "yonetici1", PanelRoles.Admin, false) is not null, "son aktif yönetici pasife alınabildi");
         Check(WebPanelUserStore.Find(admin.Id)!.Role == PanelRoles.Admin, "yönetici rolü değişti");
         return Task.CompletedTask;
+    }
+
+    private static async Task DeleteUserAsync()
+    {
+        WebPanelAuth auth = NewAuth();
+        DeviceStore devices = new();
+        WebPanelUser boss = AddUser("silyonetici1", PanelRoles.Admin);
+        WebPanelUser operatorUser = AddUser("siloperator", PanelRoles.Operator);
+        WebPanelUser victim = AddUser("silinecek", PanelRoles.Driver);
+        string bystanderSession = auth.CreateSession(operatorUser, "yerel");
+
+        Check(auth.DeleteUser(boss, "yerel", boss.Id, boss.UserName, devices, out _) is not null, "yönetici kendini silebildi");
+        Check(auth.DeleteUser(operatorUser, "yerel", boss.Id, boss.UserName, devices, out _) is not null, "yönetici olmayan yönetici sildi");
+        Check(auth.DeleteUser(boss, "yerel", victim.Id, "baska-ad", devices, out _) is not null, "onay adı yanlışken silindi");
+
+        string panelSession = auth.CreateSession(victim, "yerel");
+        (MobileLogin? phone, string? phoneError) = await auth.MobileLoginAsync("yerel", "silinecek", Password, "Telefon", devices);
+        Check(phone is not null, "silinecek kullanıcı telefona giremedi: " + phoneError);
+        Check(auth.DeleteUser(boss, "yerel", victim.Id, "SILINECEK", devices, out string summary) is null, "normal silme başarısız");
+        Check(summary.Contains("1 panel", StringComparison.Ordinal) && summary.Contains("1 telefon", StringComparison.Ordinal), "kapatılan oturum sayısı: " + summary);
+        Check(WebPanelUserStore.Find(victim.Id) is null && WebPanelUserStore.FindByName("silinecek") is null, "silinen kullanıcı hâlâ listede");
+        Check(auth.CurrentByToken(panelSession) is null, "silinen kullanıcının panel oturumu açık kaldı");
+        Check(devices.All().All(d => d.UserId != victim.Id), "silinen kullanıcının telefon kaydı kaldı");
+        Check(auth.CheckDevice(devices.Validate(phone!.Token), devices).User is null, "silinen kullanıcının telefon oturumu açık kaldı");
+        Check(auth.CurrentByToken(bystanderSession) is not null, "silme başka kullanıcının oturumunu kapattı");
+        Check((await auth.MobileLoginAsync("yerel", "silinecek", Password, "Telefon", devices)).Login is null, "silinen kullanıcı giriş yapabildi");
+        Check(auth.CreateUser(boss, "yerel", "silinecek", null, PanelRoles.Viewer, Password, false) is not null, "silinen kullanıcının adı yeniden verildi");
+        Check(auth.DeleteUser(boss, "yerel", victim.Id, "silinecek", devices, out _) is not null, "silinen kullanıcı ikinci kez silindi");
+        Check(WebPanelAudit.Latest(20).Any(e => e.Action == "Kullanıcı silindi" && e.Target == "silinecek"), "denetim kaydı yazılmadı");
+        WebPanelUser nextUser = AddUser("silmesonrasi", PanelRoles.Viewer);
+        Check(nextUser.Id > victim.Id, "silinen kullanıcının numarası yeniden kullanıldı");
+
+        WebPanelUser secondBoss = AddUser("silyonetici2", PanelRoles.Admin);
+        Check(auth.DeleteUser(boss, "yerel", secondBoss.Id, secondBoss.UserName, devices, out _) is null, "ikinci yönetici silinemedi");
+        WebPanelUserStore.Update(users =>
+        {
+            foreach (WebPanelUser other in users.Where(u => u.Role == PanelRoles.Admin && u.Id != boss.Id))
+            {
+                other.IsActive = false;
+            }
+
+            return 0;
+        });
+        WebPanelUser lastBoss = WebPanelUserStore.Find(boss.Id)!;
+        Check(auth.DeleteUser(secondBoss, "yerel", lastBoss.Id, lastBoss.UserName, devices, out _) is not null, "son aktif yönetici silinebildi");
+        Check(WebPanelUserStore.Find(boss.Id) is not null, "son yönetici kayboldu");
     }
 
     private static async Task LifetimesAsync()

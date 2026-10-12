@@ -60,6 +60,11 @@ internal sealed class WebPanelUser
 
     // Raised on deactivation, role change and password change; sessions carrying an older value are refused.
     public int SecurityStamp { get; set; }
+
+    // Deleted accounts stay in the file without a usable password so their user name and id are never handed to a new
+    // account (movements and the audit log refer to users by name). WebPanelUserStore.All() leaves them out.
+    public DateTime? DeletedAt { get; set; }
+    public string? DeletedBy { get; set; }
 }
 
 // Panel accounts in <data folder>/web-panel-users.json. Only PBKDF2 hashes are stored.
@@ -113,7 +118,7 @@ internal static class WebPanelUserStore
                 string temp = FilePath + ".tmp";
                 File.WriteAllText(temp, JsonSerializer.Serialize(users, Json));
                 File.Move(temp, FilePath, overwrite: true);
-                _cache = users;
+                _cache = Live(users);
                 _cacheStamp = FileStamp();
                 return result;
             }
@@ -170,6 +175,21 @@ internal static class WebPanelUserStore
             : null;
     }
 
+    // Removes the account for good: it can no longer sign in, is left out of every list and its name stays reserved.
+    internal static void MarkDeleted(WebPanelUser user, string actor)
+    {
+        user.DeletedAt = DateTime.UtcNow;
+        user.DeletedBy = actor;
+        user.IsActive = false;
+        user.MustChangePassword = false;
+        user.Salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+        user.Hash = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        user.Iterations = HashIterations;
+        user.SecurityStamp++;
+    }
+
+    private static List<WebPanelUser> Live(List<WebPanelUser> users) => users.Where(u => u.DeletedAt is null).ToList();
+
     // Used once by the installer: creates the first Yönetici, who must change the password at first login.
     internal static string? CreateInitialAdmin(string userName, string password)
     {
@@ -220,7 +240,7 @@ internal static class WebPanelUserStore
 
         try
         {
-            _cache = ReadFile() ?? [];
+            _cache = Live(ReadFile() ?? []);
             _cacheStamp = stamp;
         }
         catch (Exception exception) when (exception is IOException or JsonException)

@@ -86,6 +86,7 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
 button.small, a.small { padding:5px 10px; font-size:13px; }
 button.link { background:none; border:none; color:var(--accent); cursor:pointer; padding:2px 4px; font:inherit; font-size:13px; text-decoration:underline; }
 button.link:active { opacity:.65; transform:scale(0.98); }
+button.link.delete-link { color:#b91c1c; }
 button.danger { background:#fff; color:var(--navy); border:1px solid #cbd5e1; border-radius:8px; padding:5px 10px; cursor:pointer; font:inherit; font-size:13px; }
 button.danger:active { background:#e5e7eb; transform:scale(0.97); }
 button.small:active:not(:disabled), a.small:active { transform:scale(0.97); }
@@ -308,7 +309,7 @@ tr.alarm-row td { background:#fef2f2; }
           <button class="primary" id="u-new" type="button">+ Yeni kullanıcı</button>
         </div>
         <div class="table-wrap"><table id="users"></table></div>
-        <div class="hint">Her kullanıcı aynı kullanıcı adı ve şifreyle hem web paneline hem mobil uygulamaya girer. Yetki düzeyi (rol) hazır bir başlangıç setidir; "Düzenle" ile yetkileri tek tek işaretleyip kaldırabilirsiniz, rolden farklı olanlar "+ / −" ile gösterilir. Kullanıcılar silinmez, pasife alınır; pasif hesap giriş yapamaz ve açık oturumları hemen kapanır. Son aktif yönetici pasife alınamaz; Yönetici her zaman tüm yetkilere sahiptir. Panel oturumu 1 saat, mobil oturum 24 saat geçerlidir; süre dolunca yeniden giriş istenir. Yönetici telefonda çıkış yapana kadar açık kalır.</div>
+        <div class="hint">Her kullanıcı aynı kullanıcı adı ve şifreyle hem web paneline hem mobil uygulamaya girer. Yetki düzeyi (rol) hazır bir başlangıç setidir; "Düzenle" ile yetkileri tek tek işaretleyip kaldırabilirsiniz, rolden farklı olanlar "+ / −" ile gösterilir. "Pasife al" geri alınabilir: pasif hesap giriş yapamaz ve açık oturumları hemen kapanır. "Sil" kalıcıdır: hesap listeden kalkar, tüm panel ve telefon oturumları kapanır, kullanıcı adı yeniden kullanılamaz; geçmiş kayıtlarda adı korunur. Kendi hesabınızı silemezsiniz; Yönetici hesaplarını yalnızca Yönetici silebilir. Son aktif yönetici pasife alınamaz veya silinemez; Yönetici her zaman tüm yetkilere sahiptir. Panel oturumu 1 saat, mobil oturum 24 saat geçerlidir; süre dolunca yeniden giriş istenir. Yönetici telefonda çıkış yapana kadar açık kalır.</div>
       </div>
       <div class="card" data-perm="cihaz-yonetimi">
         <div class="toolbar">
@@ -522,6 +523,19 @@ tr.alarm-row td { background:#fef2f2; }
       <button class="primary" type="submit">Şifreyi sıfırla</button>
       <div class="hint">Kullanıcının açık oturumları kapanır. Şifreyi kullanıcıya güvenli bir yoldan iletin.</div>
       <div id="r-msg" class="msg hidden"></div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="delete-dialog" class="narrow">
+  <div class="dlg-head"><h3 id="x-title">Kullanıcıyı sil</h3><button class="secondary" id="x-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <form id="delete-form" style="display:flex;flex-direction:column;gap:10px">
+      <div><b id="x-who"></b></div>
+      <div class="msg alarm">Bu işlem kalıcıdır ve geri alınamaz. Hesap listeden kalkar, web paneldeki ve telefonlardaki tüm oturumları hemen kapanır, bu kullanıcı adı bir daha kullanılamaz. Geçmiş hareketlerde ve denetim kaydında adı korunur. Geri alınabilir bir yol istiyorsanız "Pasife al"ı kullanın.</div>
+      <label class="field">Onaylamak için kullanıcı adını aynen yazın<input id="x-name" required maxlength="40" autocomplete="off"></label>
+      <button class="primary" type="submit" id="x-save" disabled>Evet, kalıcı olarak sil</button>
+      <div id="x-msg" class="msg hidden"></div>
     </form>
   </div>
 </dialog>
