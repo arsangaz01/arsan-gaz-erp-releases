@@ -15,7 +15,8 @@ const HEARTBEAT_INTERVAL_MS = 5000;
 const POLL_INTERVAL_MS = 1500;
 const REQUEST_MAX_LENGTH = 4096;
 const REQUEST_MAX_BYTES = 65_536;
-const DEFAULT_MODEL = "composer-2.5";
+// Named models stop when the plan's usage pool runs out; "auto" keeps working on the paid plan.
+const DEFAULT_MODEL = "auto";
 // The open Cursor IDE chat (Tools/CursorIdeBridge/ide-watch.ps1) refreshes its heartbeat every 3 s.
 const IDE_SESSION_STALE_MS = 90_000;
 // A monitored shell does not guarantee the IDE chat gets a turn; unstarted claims fall back to this bridge.

@@ -19,7 +19,8 @@ const workspace = env.TUPTAKIP_AGENT_WORKSPACE || "/home/tuptakipagent/arsan-gaz
 const stateDir = env.TUPTAKIP_AGENT_STATE_DIR || "/var/lib/arsantuptakip-agent";
 const queueRoot = env.TUPTAKIP_QUEUE_DIR || "/var/lib/arsantuptakip-queue";
 const mirror = env.TUPTAKIP_AGENT_MIRROR || "/var/lib/arsantuptakip-release/mirror.git";
-const model = env.TUPTAKIP_AGENT_MODEL || "composer-2.5";
+// Named models stop when the plan's usage pool runs out; "auto" keeps working on the paid plan.
+const model = env.TUPTAKIP_AGENT_MODEL || "auto";
 const autoReview = env.TUPTAKIP_AGENT_AUTO_REVIEW !== "0";
 const bundlePath = path.join(queueRoot, "outgoing", "agent-branch.bundle");
 

@@ -22,7 +22,8 @@ const stateDir = env.CURSOR_AGENT_STATE_DIR || "/var/lib/arsangaz-cursoragent";
 const repoUrl = env.CURSOR_AGENT_REPO || "git@github.com:arsangaz01/arsan-gaz-erp-kaynak.git";
 const workBranch = env.CURSOR_AGENT_BRANCH || "cursor/server-agent";
 const waitMinutes = Number(env.CURSOR_AGENT_WAIT_MINUTES ?? DEFAULT_WAIT_MINUTES);
-const model = env.CURSOR_BRIDGE_MODEL || "composer-2.5";
+// Named models stop when the plan's usage pool runs out; "auto" keeps working on the paid plan.
+const model = env.CURSOR_BRIDGE_MODEL || "auto";
 const autoReview = env.CURSOR_AGENT_AUTO_REVIEW !== "0";
 // Written by arsangaz-release after every release action (no secrets).
 const releaseStatusPath = env.CURSOR_AGENT_RELEASE_STATUS || "/var/lib/arsangaz-release/public/status.json";

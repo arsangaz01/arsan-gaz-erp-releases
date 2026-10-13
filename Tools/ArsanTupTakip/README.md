@@ -88,7 +88,7 @@ Komut olmayan her mesaj (metin, fotoğraf, belge, video; video karelere çevrili
 
 1. `arsantuptakip-bot` (kullanıcı `tuptakipbot`) isteği ve ekleri `/var/lib/arsantuptakip-queue/requests/<id>/` altına yazar.
 2. `arsantuptakip-agent` (kullanıcı `tuptakipagent`, sudo ve GitHub anahtarı yok) isteği kendi klonunda
-   (`/home/tuptakipagent/arsan-gaz-erp`, dal `cursor/arsantuptakip-agent`, model composer-2.5) Cursor SDK ile işler.
+   (`/home/tuptakipagent/arsan-gaz-erp`, dal `cursor/arsantuptakip-agent`, model auto) Cursor SDK ile işler.
    Talimatı: yalnızca `Tools/ArsanTupTakip/**` değiştirilir, derleme + testler geçmeden commit edilmez, push yapılmaz.
    İlerleme ve son rapor bot üzerinden Telegram'a gelir.
 3. Ajanın commit'leri `outgoing/agent-branch.bundle` paketine konur. `/yayin` paketi root'taki yayın deposuna alır;
