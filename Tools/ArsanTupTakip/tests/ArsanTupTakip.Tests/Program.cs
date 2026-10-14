@@ -8,6 +8,7 @@ try
     CylinderTrackingTests.Run();
     CylinderTripTrackingTests.Run();
     ReorderPredictionTests.Run();
+    CustomerStockTests.Run();
     VehicleTrackingTests.Run();
     ApiLogicTests.Run();
     PermissionTests.Run();

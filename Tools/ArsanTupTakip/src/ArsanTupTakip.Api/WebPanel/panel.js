@@ -191,6 +191,7 @@ function openTab(tab) {
   if (tab === "seferler") loadTrips();
   if (tab === "araclar") loadVehicles();
   if (tab === "musteriler") loadCustomers();
+  if (tab === "musteri-stok") loadStock();
   if (tab === "yonetim") loadAdmin();
 }
 
@@ -993,8 +994,131 @@ async function loadCustomers() {
 }
 
 function openCustomerCylinders(c) {
-  openFiltered({ customer: c });
+  if (can("tup-goruntule")) openStockDialog(c.id);
+  else openFiltered({ customer: c });
 }
+
+// ---- Customer stock --------------------------------------------------------------------------------
+
+let stockCustomer = null;
+const daysText = (days) => (days === null || days === undefined ? "-" : `${days} gün`);
+const fullEmpty = (full, empty) => `dolu ${full} · boş ${empty}`;
+
+function stockFilter() {
+  const query = new URLSearchParams();
+  if ($("ms-q").value.trim()) query.set("q", $("ms-q").value.trim());
+  if ($("ms-gaz").value.trim()) query.set("gaz", $("ms-gaz").value.trim());
+  if ($("ms-uzun").checked) query.set("uzun", "true");
+  return query;
+}
+
+$("ms-ara").addEventListener("click", loadStock);
+for (const id of ["ms-q", "ms-gaz"]) $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") loadStock(); });
+$("ms-csv").addEventListener("click", (e) => {
+  e.preventDefault();
+  const query = new URLSearchParams();
+  if ($("ms-gaz").value.trim()) query.set("gaz", $("ms-gaz").value.trim());
+  window.location.href = BASE + "/panel/api/musteri-stok.csv?" + query;
+});
+
+function stockGroupTable(table, groups, longDays) {
+  const head = el("tr", {}, ...["Gaz türü", "Boyut", "Adet", "Dolu / boş", "En kısa", "Ortalama", "En uzun", `${longDays}+ gün`].map((h) => el("th", {}, h)));
+  const body = groups.map((g) => el("tr", {},
+    el("td", {}, el("b", {}, g.gasType)),
+    el("td", {}, g.capacity),
+    el("td", {}, el("b", {}, String(g.count))),
+    el("td", {}, fullEmpty(g.full, g.empty)),
+    el("td", {}, daysText(g.minDays)),
+    el("td", {}, daysText(g.avgDays)),
+    el("td", { class: g.maxDays >= longDays ? "warn-text" : "" }, daysText(g.maxDays)),
+    el("td", { class: g.long ? "warn-text" : "muted" }, String(g.long))));
+  table.replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 8, class: "muted" }, "Tüp yok."))])));
+}
+
+async function loadStock() {
+  try {
+    const data = await api("/panel/api/musteri-stok?" + stockFilter());
+    $("ms-stats").replaceChildren(
+      stat(data.customers, "Tüpü olan müşteri", "Filtreye uyan", () => {}),
+      stat(data.cylinders, "Müşterideki tüp", fullEmpty(data.full, data.empty), () => openFiltered({ durum: 3 })),
+      stat(data.longCount, `${data.longDays}+ gündür bekleyen`, "Dönmeyen tüpler", () => openFiltered({ uzun: true }), true));
+    stockGroupTable($("ms-gas"), data.gasTotals, data.longDays);
+    $("ms-count").textContent = `${data.customers} müşteri · ${data.cylinders} tüp`;
+    const head = el("tr", {}, ...["Müşteri", "Şehir", "Tüp", "Dolu / boş", "Gaz türleri", "Son teslim", "En uzun", `${data.longDays}+ gün`].map((h) => el("th", {}, h)));
+    const body = data.rows.map((c) => el("tr", { class: "click", onclick: () => openStockDialog(c.id) },
+      el("td", {}, el("b", {}, c.name), el("div", { class: "muted" }, c.code + (c.customerOwned ? ` · ${c.customerOwned} müşteri malı` : ""))),
+      el("td", {}, [c.city, c.district].filter(Boolean).join(" / ") || "-"),
+      el("td", {}, el("b", {}, String(c.count))),
+      el("td", {}, fullEmpty(c.full, c.empty)),
+      el("td", { class: "muted" }, c.gases),
+      el("td", {}, c.lastDelivery || "-"),
+      el("td", { class: c.maxDays >= data.longDays ? "warn-text" : "" }, daysText(c.maxDays)),
+      el("td", { class: c.long ? "warn-text" : "muted" }, String(c.long))));
+    $("ms-table").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 8, class: "muted" }, "Bu filtreye uyan müşteri stoku yok."))])));
+  } catch (error) {
+    show($("global-msg"), error.message);
+  }
+}
+
+async function openStockDialog(id) {
+  hide($("sd-msg"));
+  try {
+    stockCustomer = await api(`/panel/api/musteri/${id}/stok`);
+  } catch (error) {
+    show($("global-msg"), error.message);
+    return;
+  }
+  const s = stockCustomer;
+  const t = s.totals;
+  $("sd-title").textContent = s.name;
+  const info = [
+    ["Müşteri kodu", s.code], ["Şehir / ilçe", [s.city, s.district].filter(Boolean).join(" / ") || "-"],
+    ["Toplam tüp", String(t.count)], ["Dolu / boş", fullEmpty(t.full, t.empty) + (t.unknown ? ` · bilinmiyor ${t.unknown}` : "")],
+    ["En uzun bekleyen", daysText(t.maxDays)], ["Ortalama bekleme", daysText(t.avgDays)],
+    [`${s.longDays}+ gündür bekleyen`, String(t.long)], ["Müşteri malı tüp", String(t.customerOwned)]
+  ];
+  if (s.phone) info.splice(2, 0, ["Telefon", s.phone]);
+  if (!s.isActive) info.push(["Kayıt", "Pasif müşteri"]);
+  $("sd-info").replaceChildren(...info.map(([k, v]) => el("div", {}, el("span", {}, k), v)));
+  stockGroupTable($("sd-groups"), s.groups, s.longDays);
+  $("sd-q").value = "";
+  renderStockCylinders();
+  if (!$("stock-dialog").open) $("stock-dialog").showModal();
+}
+
+function renderStockCylinders() {
+  const s = stockCustomer;
+  if (!s) return;
+  const term = $("sd-q").value.trim().toLocaleLowerCase("tr-TR");
+  const rows = s.cylinders
+    .filter((c) => !term || [c.serialNumber, c.barcode, c.manufacturerSerial, c.gasType].some((v) => v && v.toLocaleLowerCase("tr-TR").includes(term)))
+    .sort((a, b) => (b.days ?? -1) - (a.days ?? -1));
+  const head = el("tr", {}, ...["Seri no / barkod", "Gaz", "Boyut", "Dolu/Boş", "Teslim", "Gün", "Test"].map((h) => el("th", {}, h)));
+  const body = rows.map((c) => el("tr", { class: "click", onclick: () => openDetail(c.id) },
+    el("td", {}, el("b", {}, (c.needsReview ? "⚠ " : "") + c.serialNumber),
+      c.barcode !== c.serialNumber ? el("div", { class: "muted" }, c.barcode) : null,
+      c.manufacturerSerial ? el("div", { class: "muted" }, "Üretici seri: " + c.manufacturerSerial) : null,
+      c.customerOwned ? el("div", { class: "muted" }, "Müşteri malı") : null),
+    el("td", {}, c.gasType),
+    el("td", {}, c.capacity),
+    el("td", {}, c.fullness),
+    el("td", {}, c.since || "-"),
+    el("td", { class: c.days >= s.longDays ? "warn-text" : "" }, daysText(c.days)),
+    el("td", { class: c.testOverdue ? "bad-text" : "" }, c.testDue || "-")));
+  $("sd-cylinders").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 7, class: "muted" }, s.cylinders.length ? "Aramaya uyan tüp yok." : "Bu müşteride tüp yok."))])));
+}
+
+$("sd-q").addEventListener("input", renderStockCylinders);
+$("sd-close").addEventListener("click", () => $("stock-dialog").close());
+$("sd-list").addEventListener("click", () => {
+  if (!stockCustomer) return;
+  $("stock-dialog").close();
+  openFiltered({ customer: { id: stockCustomer.id, name: stockCustomer.name, city: stockCustomer.city, cylinders: stockCustomer.totals.count } });
+});
+$("sd-csv").addEventListener("click", (e) => {
+  e.preventDefault();
+  if (stockCustomer) window.location.href = BASE + "/panel/api/musteri-stok.csv?musteri=" + stockCustomer.id;
+});
 
 // ---- Administration ------------------------------------------------------------------------------
 

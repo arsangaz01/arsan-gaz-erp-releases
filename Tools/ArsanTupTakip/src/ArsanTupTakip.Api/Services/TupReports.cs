@@ -96,27 +96,57 @@ public static class TupReports
 
     public static async Task<string> CylindersAtCustomersAsync(string? customer)
     {
+        DateTime today = DateTime.Today;
+        int longDays = CylinderTracking.LongAtCustomerDays;
+        List<CustomerStockCylinder> stock = await CustomerStock.LoadAsync();
         await using TupTakipDbContext db = new();
-        var rows = await db.Cylinders.AsNoTracking()
-            .Where(x => x.Status == CylinderStatus.Customer && x.IsActive && x.CurrentCustomerId != null)
-            .OrderBy(x => x.LastMovementAt)
-            .Select(x => new { Customer = x.CurrentCustomer!.CompanyName, x.SerialNumber, x.GasType, x.LastMovementAt })
-            .ToListAsync();
+        Dictionary<int, string> names = await db.Customers.AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.CompanyName);
         string term = (customer ?? string.Empty).Trim();
-        List<string> lines = rows
-            .Where(x => term.Length == 0 || Contains(x.Customer, term))
-            .Take(100)
-            .Select(x =>
-            {
-                int? elapsed = CylinderTracking.DaysSince(x.LastMovementAt, DateTime.Today);
-                string days = elapsed is int value
-                    ? $"{value} gündür müşteride{(value > CylinderTracking.LongAtCustomerDays ? " ⚠" : "")}"
-                    : "teslim tarihi yok";
-                return $"- {x.Customer} · {x.SerialNumber} ({x.GasType}) · {days}";
-            })
+        var customers = stock.GroupBy(c => c.CustomerId)
+            .Select(g => (Name: names.GetValueOrDefault(g.Key, $"#{g.Key}"), Rows: g.ToList()))
+            .Where(x => term.Length == 0 || Contains(x.Name, term))
+            .OrderByDescending(x => x.Rows.Count)
             .ToList();
-        return lines.Count == 0 ? "Müşteride duran tüp kaydı yok." : string.Join(Environment.NewLine, lines);
+        if (customers.Count == 0)
+        {
+            return term.Length == 0 ? "Müşteride duran tüp kaydı yok." : $"'{term}' ile eşleşen müşteride tüp yok.";
+        }
+
+        List<string> lines = [$"{customers.Count} müşteride {customers.Sum(x => x.Rows.Count)} tüp (⚠ = {longDays}+ gün):"];
+        bool detailed = customers.Count <= 3;
+        foreach (var (name, rows) in customers.Take(100))
+        {
+            CustomerStockTotals totals = CustomerStock.Totals(rows, today, longDays);
+            IReadOnlyList<CustomerStockGroup> groups = CustomerStock.Groups(rows, today, longDays);
+            lines.Add(string.Empty);
+            lines.Add($"■ {name}: {totals.Count} tüp · dolu {totals.Full} · boş {totals.Empty} · en uzun {DaysText(totals.MaxDays)}{(totals.Long > 0 ? $" ⚠{totals.Long}" : string.Empty)}");
+            lines.AddRange(groups.Select(g => $"  {g.GasType} {g.Capacity}: {g.Count} adet (dolu {g.Full}, boş {g.Empty}) · {DaysText(g.MinDays)}–{DaysText(g.MaxDays)}"));
+            if (detailed)
+            {
+                lines.AddRange(rows.OrderByDescending(c => CylinderTracking.DaysSince(c.Since, today) ?? -1).Select(c =>
+                {
+                    int? days = CylinderTracking.DaysSince(c.Since, today);
+                    string code = c.ManufacturerSerial is { Length: > 0 } serial ? $"{c.SerialNumber} / {serial}" : c.SerialNumber;
+                    return $"  - {code} · {c.GasType} {CustomerStock.CapacityText(c.Capacity, c.CapacityUnit)} · {CylinderTracking.FullnessName(c.IsFull)} · "
+                        + $"{c.Since?.ToString("dd.MM.yyyy") ?? "tarih yok"} ({DaysText(days)}){(days >= longDays ? " ⚠" : string.Empty)}";
+                }));
+            }
+        }
+
+        if (customers.Count > 100)
+        {
+            lines.Add($"… ilk 100 müşteri gösterildi; müşteri adıyla arayın.");
+        }
+        else if (!detailed)
+        {
+            lines.Add(string.Empty);
+            lines.Add("Barkod listesi için müşteri adıyla arayın (en fazla 3 müşteri eşleşirse tüpler tek tek listelenir).");
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
+
+    private static string DaysText(int? days) => days is int value ? $"{value} gün" : "tarih yok";
 
     public static async Task<string> LongAtCustomerAsync(int days)
     {

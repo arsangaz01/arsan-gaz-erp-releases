@@ -169,6 +169,7 @@ tr.alarm-row td { background:#fef2f2; }
       <button data-tab="hareketler" data-perm="hareket-gecmisi">Hareketler</button>
       <button data-tab="seferler" data-perm="sefer-goruntule">Seferler</button>
       <button data-tab="araclar" data-perm="arac-goruntule">Araç İşlemleri</button>
+      <button data-tab="musteri-stok" data-perm="tup-goruntule">Müşteri Stoku</button>
       <button data-tab="musteriler" data-perm="musteri-goruntule">Müşteriler</button>
       <button data-tab="yeni" data-perm="tup-kayit">Yeni tüp</button>
       <button data-tab="yonetim" data-perm="kullanici-yonetimi|cihaz-yonetimi|denetim-kaydi">Yönetim</button>
@@ -288,6 +289,28 @@ tr.alarm-row td { background:#fef2f2; }
       </div>
     </section>
 
+    <section data-page="musteri-stok" class="hidden">
+      <div class="card">
+        <div class="filters">
+          <label>Müşteri<input id="ms-q" placeholder="Ad, kod, şehir, ilçe"></label>
+          <label>Gaz türü<input id="ms-gaz" list="gas-list" placeholder="Tümü"></label>
+          <label><span><input type="checkbox" id="ms-uzun"> Yalnızca uzun süredir bekleyen tüpü olanlar</span></label>
+          <button class="primary" id="ms-ara" type="button">Listele</button>
+          <a class="secondary" id="ms-csv" href="#" data-perm="disa-aktar">Excel'e aktar (tüp tüp, CSV)</a>
+        </div>
+      </div>
+      <div class="grid" id="ms-stats"></div>
+      <div class="card" style="margin-top:16px">
+        <h2>Gaz türü ve boyuta göre müşterilerdeki toplam</h2>
+        <div class="table-wrap"><table id="ms-gas"></table></div>
+      </div>
+      <div class="card">
+        <div class="muted" id="ms-count"></div>
+        <div class="table-wrap"><table id="ms-table"></table></div>
+        <div class="hint">Gün: tüpün müşteriye teslim edildiği (son hareket) tarihten bugüne geçen süre. Bir müşteriye tıklayınca elindeki tüpler gaz türü ve boyuta göre, her tüpün barkodu, teslim tarihi ve gün sayısıyla açılır.</div>
+      </div>
+    </section>
+
     <section data-page="musteriler" class="hidden">
       <div class="card">
         <div class="toolbar">
@@ -298,7 +321,7 @@ tr.alarm-row td { background:#fef2f2; }
         </div>
         <div class="muted" id="c-count"></div>
         <div class="table-wrap"><table id="customers"></table></div>
-        <div class="hint">Elinde tüp olan müşteriler önce gelir. Bir satıra tıklayınca o müşterideki tüpler açılır.</div>
+        <div class="hint">Elinde tüp olan müşteriler önce gelir. Bir satıra tıklayınca o müşterinin tüp stoku (gaz türü ve boyuta göre adet, gün, barkodlar) açılır.</div>
       </div>
     </section>
 
@@ -462,6 +485,26 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="hint">Değişiklikten sonra diğer cihazlardaki oturumlarınız kapanır.</div>
       <div id="password-msg" class="msg hidden"></div>
     </form>
+  </div>
+</dialog>
+
+<dialog id="stock-dialog">
+  <div class="dlg-head"><h3 id="sd-title">Müşteri stoku</h3><button class="secondary" id="sd-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <div id="sd-msg" class="msg hidden"></div>
+    <div class="card">
+      <div class="toolbar">
+        <h2>Müşteri</h2>
+        <button class="secondary small" id="sd-list" type="button">Tüp listesinde aç</button>
+        <a class="secondary small" id="sd-csv" href="#" data-perm="disa-aktar">Excel'e aktar (CSV)</a>
+      </div>
+      <div class="kv" id="sd-info"></div>
+    </div>
+    <div class="card"><h2>Gaz türü ve boyuta göre</h2><div class="table-wrap"><table id="sd-groups"></table></div></div>
+    <div class="card">
+      <div class="toolbar"><h2>Tüpler (en uzun bekleyen önce)</h2><input id="sd-q" placeholder="Barkod, seri no, gaz ara" style="min-width:220px"></div>
+      <div class="table-wrap"><table id="sd-cylinders"></table></div>
+    </div>
   </div>
 </dialog>
 

@@ -353,6 +353,109 @@ internal static class WebPanelEndpoints
             });
         }).Requires(Perm.CylinderView);
 
+        api.MapGet("/musteri-stok", async (string? q, string? gaz, bool? uzun, HttpContext context) =>
+        {
+            DateTime today = DateTime.Today;
+            int longDays = CylinderTracking.LongAtCustomerDays;
+            List<CustomerStockCylinder> stock = FilterGas(await CustomerStock.LoadAsync(), gaz);
+            Dictionary<int, Customer> customers = await StockCustomersAsync(stock.Select(c => c.CustomerId));
+            bool phones = Perm.Has(Account(context), Perm.CustomerView);
+            string term = (q ?? string.Empty).Trim();
+            var rows = stock.GroupBy(c => c.CustomerId)
+                .Where(g => customers.ContainsKey(g.Key))
+                .Select(g => (Customer: customers[g.Key], Totals: CustomerStock.Totals(g.ToList(), today, longDays), Groups: CustomerStock.Groups(g, today, longDays)))
+                .Where(x => term.Length == 0 || Contains(x.Customer.CompanyName, term) || Contains(x.Customer.Code, term) || Contains(x.Customer.City, term) || Contains(x.Customer.District, term))
+                .Where(x => uzun != true || x.Totals.Long > 0)
+                .OrderByDescending(x => x.Totals.Count)
+                .ThenBy(x => x.Customer.CompanyName, StringComparer.Create(Turkish, true))
+                .ToList();
+            HashSet<int> shown = [.. rows.Select(x => x.Customer.Id)];
+            return Results.Ok(new
+            {
+                longDays,
+                customers = rows.Count,
+                cylinders = rows.Sum(x => x.Totals.Count),
+                full = rows.Sum(x => x.Totals.Full),
+                empty = rows.Sum(x => x.Totals.Empty),
+                longCount = rows.Sum(x => x.Totals.Long),
+                gasTotals = CustomerStock.Groups(stock.Where(c => shown.Contains(c.CustomerId)), today, longDays),
+                rows = rows.Select(x => new
+                {
+                    x.Customer.Id,
+                    Name = x.Customer.CompanyName,
+                    x.Customer.Code,
+                    x.Customer.City,
+                    x.Customer.District,
+                    Phone = phones ? x.Customer.Phone : null,
+                    x.Totals.Count,
+                    x.Totals.Full,
+                    x.Totals.Empty,
+                    x.Totals.CustomerOwned,
+                    x.Totals.MaxDays,
+                    x.Totals.AvgDays,
+                    x.Totals.Long,
+                    LastDelivery = x.Totals.LastDelivery?.ToString("dd.MM.yyyy", Turkish),
+                    Gases = CustomerStock.GroupText(x.Groups)
+                })
+            });
+        }).Requires(Perm.CylinderView);
+
+        api.MapGet("/musteri/{id:int}/stok", async (int id, HttpContext context) =>
+        {
+            await using TupTakipDbContext db = new();
+            Customer? customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+            if (customer is null)
+            {
+                return Results.NotFound(new { error = "Müşteri bulunamadı." });
+            }
+
+            DateTime today = DateTime.Today;
+            int longDays = CylinderTracking.LongAtCustomerDays;
+            List<CustomerStockCylinder> stock = await CustomerStock.LoadAsync(id);
+            bool phones = Perm.Has(Account(context), Perm.CustomerView);
+            return Results.Ok(new
+            {
+                customer.Id,
+                Name = customer.CompanyName,
+                customer.Code,
+                customer.City,
+                customer.District,
+                Phone = phones ? customer.Phone : null,
+                customer.IsActive,
+                longDays,
+                Totals = CustomerStock.Totals(stock, today, longDays),
+                Groups = CustomerStock.Groups(stock, today, longDays),
+                Cylinders = stock.Select(c => StockRow(c, today))
+            });
+        }).Requires(Perm.CylinderView);
+
+        api.MapGet("/musteri-stok.csv", async (int? musteri, string? gaz) =>
+        {
+            DateTime today = DateTime.Today;
+            List<CustomerStockCylinder> stock = FilterGas(await CustomerStock.LoadAsync(musteri), gaz);
+            Dictionary<int, Customer> customers = await StockCustomersAsync(stock.Select(c => c.CustomerId));
+            StringBuilder csv = new();
+            csv.AppendLine("Müşteri;Müşteri kodu;Şehir;İlçe;Seri no;Barkod / QR;Üretici seri no;Gaz;Kapasite;Dolu/Boş;Teslim tarihi;Gün;Müşteri malı;Test tarihi");
+            foreach (CustomerStockCylinder c in stock
+                .Where(c => customers.ContainsKey(c.CustomerId))
+                .OrderBy(c => customers[c.CustomerId].CompanyName, StringComparer.Create(Turkish, true))
+                .ThenBy(c => c.GasType, StringComparer.Create(Turkish, true))
+                .ThenBy(c => c.Since))
+            {
+                Customer customer = customers[c.CustomerId];
+                csv.AppendLine(string.Join(';', new[]
+                {
+                    customer.CompanyName, customer.Code, customer.City, customer.District, c.SerialNumber, c.Barcode, c.ManufacturerSerial, c.GasType,
+                    CustomerStock.CapacityText(c.Capacity, c.CapacityUnit), CylinderTracking.FullnessName(c.IsFull), c.Since?.ToString("dd.MM.yyyy", Turkish),
+                    CylinderTracking.DaysSince(c.Since, today)?.ToString(Turkish), c.CustomerOwned ? "Evet" : string.Empty, c.TestDueDate?.ToString("dd.MM.yyyy", Turkish)
+                }.Select(CsvCell)));
+            }
+
+            byte[] bytes = [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(csv.ToString())];
+            string name = musteri is int one && customers.TryGetValue(one, out Customer? only) ? "musteri-" + only.Code : "musteri-stok";
+            return Results.File(bytes, "text/csv; charset=utf-8", $"{name}-{DateTime.Now:yyyyMMdd-HHmm}.csv");
+        }).Requires(Perm.Export);
+
         api.MapGet("/hareketler", async (string? bas, string? bit, int? musteri, int? durum, string? q) =>
         {
             await using TupTakipDbContext db = new();
@@ -676,6 +779,36 @@ internal static class WebPanelEndpoints
         Fullness = CylinderTracking.FullnessName(m.IsFull),
         Note = m.Description,
         Warning = m.Description?.Contains("Uyarı onaylandı", StringComparison.Ordinal) == true
+    };
+
+    private static List<CustomerStockCylinder> FilterGas(List<CustomerStockCylinder> stock, string? gas)
+    {
+        string term = (gas ?? string.Empty).Trim();
+        return term.Length == 0 ? stock : stock.Where(c => Contains(c.GasType, term)).ToList();
+    }
+
+    private static async Task<Dictionary<int, Customer>> StockCustomersAsync(IEnumerable<int> ids)
+    {
+        HashSet<int> wanted = [.. ids];
+        await using TupTakipDbContext db = new();
+        return await db.Customers.AsNoTracking().Where(c => wanted.Contains(c.Id)).ToDictionaryAsync(c => c.Id);
+    }
+
+    private static object StockRow(CustomerStockCylinder c, DateTime today) => new
+    {
+        c.Id,
+        c.SerialNumber,
+        c.Barcode,
+        c.ManufacturerSerial,
+        c.GasType,
+        Capacity = CustomerStock.CapacityText(c.Capacity, c.CapacityUnit),
+        Fullness = CylinderTracking.FullnessName(c.IsFull),
+        Since = c.Since?.ToString("dd.MM.yyyy", Turkish),
+        Days = CylinderTracking.DaysSince(c.Since, today),
+        c.CustomerOwned,
+        TestDue = c.TestDueDate?.ToString("dd.MM.yyyy", Turkish),
+        TestOverdue = c.TestDueDate != null && c.TestDueDate < today,
+        c.NeedsReview
     };
 
     private static DateTime? ParseDate(string? value) =>
