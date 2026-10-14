@@ -32,7 +32,7 @@ public static class UpdateCheck
         return _available;
     }
 
-    // "Senkronize et": asks the server now (ignores the 30-minute wait). Available is the newer build whose APK is ready.
+    // "Güncellemeyi denetle": asks the server now (ignores the 30-minute wait). Available is the newer build whose APK is ready.
     public static async Task<(UpdateInfo? Available, string Text)> CheckNowAsync()
     {
         if (ApiClient.Instance.ServerUrl.Length == 0)
@@ -64,7 +64,7 @@ public static class UpdateCheck
     // Asks once per app run, and never again for a build the user put off with "Sonra".
     public static async Task PromptOnceAsync(Page page, UpdateInfo info, Label status, ActivityIndicator busy)
     {
-        if (_prompted || info.PublishedMobileBuild <= Preferences.Default.Get(DismissedUpdateBuildKey, 0))
+        if (_prompted || SyncNow.IsRunning || info.PublishedMobileBuild <= Preferences.Default.Get(DismissedUpdateBuildKey, 0))
         {
             return;
         }
@@ -135,6 +135,30 @@ public static class UpdateCheck
         {
             await page.DisplayAlertAsync("Güncelleme", "Önce sunucu adresini ayarlayın.", "Tamam");
             return;
+        }
+
+        if (SyncNow.IsRunning)
+        {
+            await page.DisplayAlertAsync("Güncelleme", "Senkronizasyon sürüyor. Bitmesini bekleyin, sonra güncelleyin.", "Tamam");
+            return;
+        }
+
+        // Unsent records stay on the phone through an update, but they are sent first so nothing is left half-done.
+        if (SyncNow.PendingCount is int pending and > 0 && ApiClient.Instance.Account is not null)
+        {
+            if (!await page.DisplayAlertAsync("Güncelleme",
+                    $"Telefonda sunucuya gönderilmemiş {pending} kayıt var. Güncellemeden önce senkronize edilsin mi?", "Önce senkronize et", "Vazgeç"))
+            {
+                return;
+            }
+
+            await SyncNow.RunAsync(page);
+            if (SyncNow.PendingCount > 0)
+            {
+                await page.DisplayAlertAsync("Güncelleme",
+                    $"{SyncNow.PendingCount} kayıt hâlâ gönderilemedi. Bağlantı gelince \"Senkronize et\"e basın, sonra güncelleyin.", "Tamam");
+                return;
+            }
         }
 
         await Ui.RunAsync(page, busy, async () =>

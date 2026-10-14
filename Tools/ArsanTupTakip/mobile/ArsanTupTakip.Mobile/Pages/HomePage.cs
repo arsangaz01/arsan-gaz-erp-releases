@@ -22,6 +22,10 @@ public sealed class HomePage : ContentPage
     private readonly Border _sync;
     private readonly Label _syncText = new() { FontSize = 12, TextColor = Colors.White.WithAlpha(0.85f), LineBreakMode = LineBreakMode.WordWrap };
     private readonly ActivityIndicator _syncBusy = new() { IsVisible = false, IsRunning = false, Color = Colors.White, WidthRequest = 22, HeightRequest = 22 };
+    private readonly Border _check;
+    private readonly Label _checkText = new() { FontSize = 12, TextColor = Colors.White.WithAlpha(0.85f), LineBreakMode = LineBreakMode.WordWrap,
+        Text = "Telefondaki sürüm: " + AppInfo.Current.VersionString };
+    private readonly ActivityIndicator _checkBusy = new() { IsVisible = false, IsRunning = false, Color = Colors.White, WidthRequest = 22, HeightRequest = 22 };
     private readonly Border _update;
     private readonly Label _updateText = new() { FontSize = 14, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.WordWrap, VerticalTextAlignment = TextAlignment.Center };
     private readonly ActivityIndicator _updateBusy = new() { IsVisible = false, Color = Glow };
@@ -136,7 +140,7 @@ public sealed class HomePage : ContentPage
             VerticalOptions = LayoutOptions.Center,
             Children =
             {
-                new Label { Text = "Senkronize et ve güncellemeyi denetle", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.WordWrap },
+                new Label { Text = "Senkronize et", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.WordWrap },
                 _syncText
             }
         }, 1, 0);
@@ -152,8 +156,38 @@ public sealed class HomePage : ContentPage
             Content = syncRow,
             GestureRecognizers = { syncTap }
         };
-        SemanticProperties.SetDescription(_sync, "Senkronize et ve güncellemeyi denetle");
+        SemanticProperties.SetDescription(_sync, "Senkronize et");
         OfflineMoves.Changed += () => MainThread.BeginInvokeOnMainThread(RefreshSync);
+
+        Grid checkRow = new()
+        {
+            ColumnSpacing = 12,
+            ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)]
+        };
+        checkRow.Add(Ui.IconLabel(Icons.SystemUpdate, Colors.White, 26), 0, 0);
+        checkRow.Add(new VerticalStackLayout
+        {
+            Spacing = 2,
+            VerticalOptions = LayoutOptions.Center,
+            Children =
+            {
+                new Label { Text = "Güncellemeyi denetle", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White },
+                _checkText
+            }
+        }, 1, 0);
+        checkRow.Add(_checkBusy, 2, 0);
+        TapGestureRecognizer checkTap = new();
+        checkTap.Tapped += async (_, _) => await CheckUpdateAsync();
+        _check = new Border
+        {
+            Padding = new Thickness(16, 12),
+            StrokeThickness = 0,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 18 },
+            BackgroundColor = Color.FromArgb("#334155"),
+            Content = checkRow,
+            GestureRecognizers = { checkTap }
+        };
+        SemanticProperties.SetDescription(_check, "Güncellemeyi denetle");
 
         Grid updateRow = new() { ColumnSpacing = 12, ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
         updateRow.Add(Ui.IconLabel(Icons.SystemUpdate, Colors.White, 26), 0, 0);
@@ -187,12 +221,9 @@ public sealed class HomePage : ContentPage
                 Children =
                 {
                     Header(account),
-                    new VerticalStackLayout
-                    {
-                        Padding = new Thickness(14, 0),
-                        Spacing = 12,
-                        Children = { _update, _updateBusy, _driver ? TileGrid(tiles) : _sync, _driver ? _sync : TileGrid(tiles), Footer() }
-                    }
+                    Body(_driver
+                        ? [_update, _updateBusy, TileGrid(tiles), _sync, _check, Footer()]
+                        : [_update, _updateBusy, _sync, TileGrid(tiles), _check, Footer()])
                 }
             }
         };
@@ -216,7 +247,9 @@ public sealed class HomePage : ContentPage
     // rebuild the home screen at once (tiles appear or disappear); returns true when it was rebuilt.
     public async Task<bool> RefreshAccessAsync(bool force = false)
     {
-        if (_checkingAccess || (!force && DateTime.UtcNow - _accessCheckedUtc < AccessRefreshInterval) || ApiClient.Instance.Account is not AccountInfo before)
+        // Rebuilding the home screen during a sync or an update download would cut that work off.
+        if (_checkingAccess || SyncNow.IsRunning || _updateBusy.IsRunning
+            || (!force && DateTime.UtcNow - _accessCheckedUtc < AccessRefreshInterval) || ApiClient.Instance.Account is not AccountInfo before)
         {
             return false;
         }
@@ -292,43 +325,68 @@ public sealed class HomePage : ContentPage
             return;
         }
 
+        if (_updateBusy.IsRunning)
+        {
+            await DisplayAlertAsync("Senkronizasyon", "Güncelleme indiriliyor; bitince senkronize edin.", "Tamam");
+            return;
+        }
+
         _syncBusy.IsVisible = _syncBusy.IsRunning = true;
-        _syncText.Text = "Sunucuya bağlanılıyor…";
-        UpdateInfo? install;
+        _syncText.Text = "Kayıtlar gönderiliyor…";
         try
         {
-            install = await SyncNow.RunAsync(this, text => _syncText.Text = text);
+            await SyncNow.RunAsync(this);
         }
         finally
         {
             _syncBusy.IsVisible = _syncBusy.IsRunning = false;
             RefreshSync();
         }
+    }
 
+    private async Task CheckUpdateAsync()
+    {
+        if (_checkBusy.IsRunning || _updateBusy.IsRunning)
+        {
+            return;
+        }
+
+        if (SyncNow.IsRunning)
+        {
+            await DisplayAlertAsync("Güncelleme", "Senkronizasyon sürüyor. Bitmesini bekleyin, sonra güncellemeyi denetleyin.", "Tamam");
+            return;
+        }
+
+        _checkBusy.IsVisible = _checkBusy.IsRunning = true;
+        _checkText.Text = "Denetleniyor…";
+        UpdateInfo? available;
         try
         {
-            UpdateInfo? available = await UpdateCheck.GetAvailableAsync();
-            _update.IsVisible = available is not null;
-            if (available is not null)
-            {
-                _updateText.Text = $"Yeni sürüm {available.PublishedMobileVersion} (build {available.PublishedMobileBuild}) hazır. Kurmak için dokunun.";
-            }
-
-            if (install is not null && !_updateBusy.IsRunning)
-            {
-                await UpdateCheck.InstallAsync(this, _updateText, _updateBusy);
-            }
+            (available, string text) = await UpdateCheck.CheckNowAsync();
+            _checkText.Text = text;
         }
-        catch (Exception exception)
+        finally
         {
-            CrashLog.Write(exception, "Güncelleme denetimi");
+            _checkBusy.IsVisible = _checkBusy.IsRunning = false;
+        }
+
+        _update.IsVisible = available is not null;
+        if (available is null)
+        {
+            return;
+        }
+
+        _updateText.Text = $"Yeni sürüm {available.PublishedMobileVersion} (build {available.PublishedMobileBuild}) hazır. Kurmak için dokunun.";
+        if (await DisplayAlertAsync("Güncelleme", _checkText.Text + " Şimdi güncellensin mi?", "Güncelle", "Sonra"))
+        {
+            await UpdateCheck.InstallAsync(this, _updateText, _updateBusy);
         }
     }
 
     // Also called when the app comes back to the foreground: a signed-in user may never see the login screen again.
     public async Task RefreshUpdateAsync()
     {
-        if (_checkingUpdate || _updateBusy.IsRunning)
+        if (_checkingUpdate || _updateBusy.IsRunning || SyncNow.IsRunning)
         {
             return;
         }
@@ -357,6 +415,17 @@ public sealed class HomePage : ContentPage
         {
             _checkingUpdate = false;
         }
+    }
+
+    private static VerticalStackLayout Body(View[] views)
+    {
+        VerticalStackLayout body = new() { Padding = new Thickness(14, 0), Spacing = 12 };
+        foreach (View view in views)
+        {
+            body.Children.Add(view);
+        }
+
+        return body;
     }
 
     private static View Header(AccountInfo? account)
