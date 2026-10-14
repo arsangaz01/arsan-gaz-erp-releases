@@ -220,6 +220,7 @@ function openTab(tab) {
   if (tab === "musteriler") loadCustomers();
   if (tab === "musteri-stok") loadStock();
   if (tab === "sayimlar") loadCounts();
+  if (tab === "barkod") loadLabelTemplates();
   if (tab === "yonetim") loadAdmin();
 }
 
@@ -2114,7 +2115,10 @@ function renderLabelList() {
     return el("tr", {},
       el("td", {}, item.code, check.error ? el("div", { class: "hint", style: "color:#b91c1c" }, check.error) : check.narrow ? el("div", { class: "hint" }, "Çizgiler çok ince; daha geniş etiket veya daha kısa kod önerilir.") : null),
       el("td", {}, item.gas || ""), el("td", {}, item.serial || ""), el("td", {}, item.test || ""), el("td", {}, item.source),
-      el("td", {}, el("button", { class: "secondary small", type: "button", onclick: () => { labelList.splice(index, 1); renderLabelList(); } }, "Çıkar")));
+      el("td", {},
+        el("button", { class: "secondary small", type: "button", title: "Bu barkodun önek ve basamağını, gaz yazısını ve şu anki etiket ayarlarını ürün olarak kaydeder",
+          onclick: () => openTemplateDialog(null, { sample: item.code, gas: item.gas, test: item.test }) }, "Ürün olarak kaydet"), " ",
+        el("button", { class: "secondary small", type: "button", onclick: () => { labelList.splice(index, 1); renderLabelList(); } }, "Çıkar")));
   });
   table.replaceChildren(head, ...rows);
 }
@@ -2150,8 +2154,144 @@ async function searchLabelCylinders() {
   }
 }
 
+let labelTemplates = [];
+let editingTemplate = null;
+const LABEL_TEMPLATE_KEY = "arsan-etiket-urun";
+
+function selectedTemplate() {
+  return labelTemplates.find((t) => String(t.id) === $("lt-select").value) || null;
+}
+
+function renderTemplateInfo() {
+  const t = selectedTemplate();
+  $("lt-edit").disabled = $("lt-delete").disabled = $("lt-next").disabled = $("lt-generate").disabled = !t;
+  if (!t) {
+    $("lt-info").textContent = labelTemplates.length ? "" : "Henüz kayıtlı ürün yok. \"Yeni ürün kaydet\" ile veya listedeki bir etiketten kaydedin.";
+    return;
+  }
+  const format = `${t.prefix}${"0".repeat(Math.max(0, t.digits - 1))}1`;
+  $("lt-info").textContent = `Barkod biçimi: ${t.prefix || "(öneksiz)"} + ${t.digits} basamak (ör. ${format})`
+    + (t.gasText ? ` · Etikette: ${t.gasText}` : "") + (t.testText ? ` · Test: ${t.testText}` : "")
+    + ` · Etiket ${t.widthMm}x${t.heightMm} mm, ${t.copies} kopya` + (t.sampleCode ? ` · Örnek: ${t.sampleCode}` : "")
+    + ` · Son değişiklik: ${t.updated} ${t.updatedBy}`;
+}
+
+function renderTemplates(selectId) {
+  const keep = selectId ?? $("lt-select").value ?? localStorage.getItem(LABEL_TEMPLATE_KEY);
+  $("lt-select").replaceChildren(el("option", { value: "" }, labelTemplates.length ? "Ürün seçin…" : "Kayıtlı ürün yok"),
+    ...labelTemplates.map((t) => el("option", { value: String(t.id) }, t.gasText && t.gasText !== t.name ? `${t.name} (${t.gasText})` : t.name)));
+  if (keep && labelTemplates.some((t) => String(t.id) === String(keep))) $("lt-select").value = String(keep);
+  renderTemplateInfo();
+}
+
+async function loadLabelTemplates(selectId) {
+  try {
+    labelTemplates = await api("/panel/api/etiket/urunler");
+    renderTemplates(selectId ?? localStorage.getItem(LABEL_TEMPLATE_KEY));
+  } catch (error) {
+    show($("lb-msg"), error.message);
+  }
+}
+
+function applyTemplateSettings(t) {
+  $("lb-w").value = t.widthMm; $("lb-h").value = t.heightMm; $("lb-copies").value = t.copies; $("lb-title").value = t.title || "";
+  $("lb-f-gas").checked = t.showGas; $("lb-f-serial").checked = t.showSerial; $("lb-f-test").checked = t.showTest; $("lb-f-text").checked = t.showText;
+  saveLabelSettings();
+}
+
+function openTemplateDialog(t, preset = {}) {
+  editingTemplate = t;
+  hide($("ltd-msg"));
+  $("ltd-title").textContent = t ? `Ürünü düzenle: ${t.name}` : "Ürün kaydet";
+  $("ltd-name").value = t ? t.name : preset.gas || "";
+  $("ltd-sample").value = t ? t.sampleCode || "" : preset.sample || "";
+  $("ltd-prefix").value = t ? t.prefix : "";
+  $("ltd-digits").value = t ? t.digits : 6;
+  $("ltd-gas").value = t ? t.gasText : preset.gas || "";
+  $("ltd-test").value = t ? t.testText || "" : preset.test || "";
+  $("label-template-dialog").showModal();
+  $("ltd-name").focus();
+}
+
+async function saveTemplate() {
+  const s = labelSettings();
+  try {
+    const saved = await api("/panel/api/etiket/urunler", { method: "POST", body: {
+      id: editingTemplate ? editingTemplate.id : null, name: $("ltd-name").value, sampleCode: $("ltd-sample").value,
+      prefix: $("ltd-prefix").value, digits: Number($("ltd-digits").value), gasText: $("ltd-gas").value, testText: $("ltd-test").value,
+      title: s.title, widthMm: s.w, heightMm: s.h, copies: s.copies, showGas: s.gas, showSerial: s.serial, showTest: s.test, showText: s.text
+    } });
+    $("label-template-dialog").close();
+    try { localStorage.setItem(LABEL_TEMPLATE_KEY, String(saved.id)); } catch { /* private mode */ }
+    await loadLabelTemplates(saved.id);
+    show($("lb-msg"), `"${saved.name}" ürünü kaydedildi. Seri numarasını yazıp "Barkod oluştur" ile yeni etiket ekleyebilirsiniz.`, "ok");
+  } catch (error) {
+    show($("ltd-msg"), error.message);
+  }
+}
+
+async function generateFromTemplate() {
+  const t = selectedTemplate();
+  if (!t) { show($("lb-msg"), "Önce bir ürün seçin.", "warn"); return; }
+  if (!$("lt-serial").value.trim()) { show($("lb-msg"), "Seri numarasını yazın (ör. 124) veya \"Sıradaki boş no\"ya basın.", "warn"); $("lt-serial").focus(); return; }
+  try {
+    const result = await api(`/panel/api/etiket/urunler/${t.id}/olustur`, { method: "POST", body: { serial: $("lt-serial").value, count: Number($("lt-count").value) || 1 } });
+    applyTemplateSettings(result.template);
+    const free = result.codes.filter((c) => !c.usedBy);
+    const used = result.codes.filter((c) => c.usedBy);
+    const added = addLabels(free.map((c) => ({ code: c.code, gas: result.template.gasText, serial: "", test: result.template.testText || "", source: "Ürün: " + result.template.name })));
+    const last = result.codes[result.codes.length - 1].code;
+    const lastNumber = Number(last.slice(result.template.prefix.length));
+    if (Number.isSafeInteger(lastNumber)) $("lt-serial").value = String(lastNumber + 1);
+    const usedText = used.length ? ` Bir tüpte kayıtlı olduğu için eklenmeyen ${used.length} barkod: ${used.slice(0, 5).map((c) => `${c.code} (${c.usedBy})`).join(", ")}${used.length > 5 ? "…" : ""}` : "";
+    show($("lb-msg"), `${added} barkod listeye eklendi (${result.template.name}). Seri no kutusuna sıradaki numara yazıldı.${usedText}`, used.length || !added ? "warn" : "ok");
+  } catch (error) {
+    show($("lb-msg"), error.message);
+  }
+}
+
+function initLabelTemplates() {
+  $("lt-select").addEventListener("change", () => {
+    try { localStorage.setItem(LABEL_TEMPLATE_KEY, $("lt-select").value); } catch { /* private mode */ }
+    const t = selectedTemplate();
+    if (t) applyTemplateSettings(t);
+    renderTemplateInfo();
+    renderLabelList();
+  });
+  $("lt-new").addEventListener("click", () => openTemplateDialog(null));
+  $("lt-edit").addEventListener("click", () => { const t = selectedTemplate(); if (t) openTemplateDialog(t); });
+  $("lt-delete").addEventListener("click", async () => {
+    const t = selectedTemplate();
+    if (!t || !window.confirm(`"${t.name}" ürünü silinsin mi? Yalnızca kayıtlı ürün şablonu silinir; tüpler ve basılmış etiketler etkilenmez.`)) return;
+    try {
+      const result = await api(`/panel/api/etiket/urunler/${t.id}/sil`, { method: "POST" });
+      await loadLabelTemplates("");
+      show($("lb-msg"), result.message, "ok");
+    } catch (error) { show($("lb-msg"), error.message); }
+  });
+  $("lt-next").addEventListener("click", async () => {
+    const t = selectedTemplate();
+    if (!t) return;
+    try {
+      const result = await api("/panel/api/etiket/sonraki?onek=" + encodeURIComponent(t.prefix));
+      $("lt-serial").value = result.next;
+      hide($("lb-msg"));
+    } catch (error) { show($("lb-msg"), error.message); }
+  });
+  $("lt-generate").addEventListener("click", generateFromTemplate);
+  $("lt-serial").addEventListener("keydown", (e) => { if (e.key === "Enter") generateFromTemplate(); });
+  $("ltd-close").addEventListener("click", () => $("label-template-dialog").close());
+  $("ltd-save").addEventListener("click", saveTemplate);
+  $("ltd-sample").addEventListener("input", () => {
+    const m = /^(.*?)(\d+)$/.exec($("ltd-sample").value.trim().toUpperCase());
+    if (m) { $("ltd-prefix").value = m[1]; $("ltd-digits").value = m[2].length; }
+  });
+  renderTemplates();
+}
+
 function initLabels() {
   loadLabelSettings();
+  initLabelTemplates();
   for (const id of ["lb-w", "lb-h", "lb-copies", "lb-title", "lb-f-gas", "lb-f-serial", "lb-f-test", "lb-f-text"]) {
     $(id).addEventListener("change", () => { saveLabelSettings(); renderLabelList(); });
   }

@@ -382,6 +382,22 @@ tr.alarm-row td { background:#fef2f2; }
         <div class="hint">Yazıcı: TSC TA310 (300 dpi). Yazdır'a basınca etiket önizlemesi açılır ve bilgisayarın yazdırma penceresi gelir; orada TSC yazıcısını seçin. İlk kullanımda: TSC Windows sürücüsünü kurun, sürücünün "Yazdırma tercihleri"nde kağıt boyutunu buradaki etiket ölçüsüyle aynı yapın, yazdırma penceresinde "Kenar boşluğu: Yok" ve "Ölçek: %100" seçin. Ayarlar bu bilgisayarda hatırlanır.</div>
       </div>
       <div class="card">
+        <div class="toolbar"><h2>Kayıtlı ürünler</h2>
+          <button class="secondary small" id="lt-new" type="button">Yeni ürün kaydet</button>
+          <button class="secondary small" id="lt-edit" type="button">Düzenle</button>
+          <button class="secondary small" id="lt-delete" type="button">Sil</button>
+        </div>
+        <div class="filters">
+          <label>Ürün<select id="lt-select" style="min-width:240px"></select></label>
+          <label>Seri no<input id="lt-serial" placeholder="ör. 124 veya AG000124" style="width:170px"></label>
+          <label>Adet (ardışık)<input id="lt-count" type="number" min="1" max="500" step="1" value="1" style="width:90px"></label>
+          <button class="secondary" id="lt-next" type="button" title="Bu ürünün önekiyle kayıtlı en büyük numaradan sonrakini getirir">Sıradaki boş no</button>
+          <button class="primary" id="lt-generate" type="button">Barkod oluştur ve listeye ekle</button>
+        </div>
+        <div class="hint" id="lt-info"></div>
+        <div class="hint">Çalışan bir barkodu ürün olarak kaydedin (ör. AG000123 → önek AG, 6 basamak); etiket ölçüsü ve yazılar da ürünle saklanır. Sonra ürünü seçip yalnızca seri numarasını yazarak yeni barkod oluşturun. Aşağıdaki listede bir etiketin yanındaki "Ürün olarak kaydet" ile de kaydedebilirsiniz. Ürünler sunucuda tutulur, her bilgisayardan görünür.</div>
+      </div>
+      <div class="card">
         <h2>Kayıtlı tüplerden ekle</h2>
         <div class="filters">
           <label>Ara<input id="lb-q" placeholder="Seri no, barkod, gaz, müşteri" style="width:240px"></label>
@@ -391,7 +407,7 @@ tr.alarm-row td { background:#fef2f2; }
         <div class="table-wrap"><table id="lb-results"></table></div>
       </div>
       <div class="card">
-        <h2>Yeni barkod numarası oluştur</h2>
+        <h2>Yeni barkod numarası oluştur (elle)</h2>
         <div class="filters">
           <label>Önek<input id="lb-prefix" maxlength="10" placeholder="ör. AG" style="width:100px"></label>
           <label>Başlangıç no<input id="lb-start" type="number" min="0" step="1" value="1" style="width:120px"></label>
@@ -537,6 +553,24 @@ tr.alarm-row td { background:#fef2f2; }
     <div class="actions"><button class="primary" id="ts-save" type="button">Seferi başlat</button></div>
     <div id="ts-msg" class="msg hidden"></div>
     <div class="hint">Listede olmayan araç için önce "Araç İşlemleri" sekmesinden araç ekleyin. Sefer başladıktan sonra açılan pencerede tüpleri araca yükleyin.</div>
+  </div>
+</dialog>
+
+<dialog id="label-template-dialog" class="narrow">
+  <div class="dlg-head"><h3 id="ltd-title">Ürün kaydet</h3><button class="secondary" id="ltd-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <label class="field">Ürün adı<input id="ltd-name" maxlength="60" placeholder="ör. Oksijen 40 lt"></label>
+    <label class="field">Çalışan örnek barkod<input id="ltd-sample" maxlength="40" placeholder="ör. AG000123"></label>
+    <div class="hint">Önek ve basamak sayısı bu barkoddan çıkarılır. Örnek barkod yoksa boş bırakıp önek ve basamağı yazın.</div>
+    <div class="filters">
+      <label>Önek<input id="ltd-prefix" maxlength="10" style="width:100px"></label>
+      <label>Basamak<input id="ltd-digits" type="number" min="1" max="10" step="1" value="6" style="width:80px"></label>
+    </div>
+    <label class="field">Gaz + kapasite (etikette)<input id="ltd-gas" maxlength="60" placeholder="ör. Oksijen 40 lt"></label>
+    <label class="field">Test tarihi (isteğe bağlı)<input id="ltd-test" maxlength="30" placeholder="ör. 05.2031"></label>
+    <div class="hint">Etiket ölçüsü, kopya, üst yazı ve gösterilecek alanlar şu anki "Etiket ayarları"ndan alınır.</div>
+    <div id="ltd-msg" class="msg hidden"></div>
+    <div class="actions"><button class="primary" id="ltd-save" type="button">Kaydet</button></div>
   </div>
 </dialog>
 
