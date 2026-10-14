@@ -16,11 +16,13 @@
     /etc/arsangaz/cursoragent.env (0600 cursoragent), not in serveragent.env; restarts arsangaz-cursoragent.
     GITHUB_ACTIONS_TOKEN: fine-grained GitHub token (only arsan-gaz-erp-kaynak, Actions: Read and write) that the
     release script uses for CI status and the signed APK. Stored in /etc/arsangaz/release.env (0600 root).
+    GOOGLE_MAPS_API_KEY: Google Cloud API key (Geocoding API + Places API (New)) for finding customer locations.
+    Stored in /etc/arsantuptakip/api.env (0600 root); restarts arsantuptakip-api.
 #>
 [CmdletBinding(DefaultParameterSetName = 'Set')]
 param(
     [Parameter(ParameterSetName = 'Set', Mandatory = $true)]
-    [ValidateSet('TELEGRAM_BOT_TOKEN', 'CLOUD_RELAY_TOKEN', 'TELEGRAM_CHAT_ID', 'CLOUD_RELAY_URL', 'CURSOR_API_KEY', 'GITHUB_ACTIONS_TOKEN')]
+    [ValidateSet('TELEGRAM_BOT_TOKEN', 'CLOUD_RELAY_TOKEN', 'TELEGRAM_CHAT_ID', 'CLOUD_RELAY_URL', 'CURSOR_API_KEY', 'GITHUB_ACTIONS_TOKEN', 'GOOGLE_MAPS_API_KEY')]
     [string]$Key,
     [Parameter(ParameterSetName = 'Status', Mandatory = $true)]
     [switch]$Status,
@@ -40,7 +42,7 @@ if ($Status) {
 }
 
 if ($FromClipboard) {
-    $prefix = switch ($Key) { 'CURSOR_API_KEY' { '^(crsr|key)_' } 'TELEGRAM_BOT_TOKEN' { '^\d{8,12}:' } 'GITHUB_ACTIONS_TOKEN' { '^(github_pat_|ghp_)' } default { '.' } }
+    $prefix = switch ($Key) { 'CURSOR_API_KEY' { '^(crsr|key)_' } 'TELEGRAM_BOT_TOKEN' { '^\d{8,12}:' } 'GITHUB_ACTIONS_TOKEN' { '^(github_pat_|ghp_)' } 'GOOGLE_MAPS_API_KEY' { '^AIza' } default { '.' } }
     $clip = [string](Get-Clipboard -Raw)
     for ($try = 0; $clip.Trim() -notmatch $prefix -and $try -lt 5; $try++) {
         Write-Host "Panoda $Key yok (muhtemelen komutun kendisi kopyalandi)." -ForegroundColor Yellow
@@ -82,6 +84,13 @@ Write-Output ($output | Select-Object -Last 1)
 
 if ($Key -eq 'GITHUB_ACTIONS_TOKEN') {
     & ssh @ssh 'sudo /usr/local/sbin/arsangaz-release pending | grep -E ^@*CI'
+    return
+}
+
+if ($Key -eq 'GOOGLE_MAPS_API_KEY') {
+    if (-not $NoRestart) {
+        & ssh @ssh 'sudo systemctl restart arsantuptakip-api && sleep 6 && systemctl is-active arsantuptakip-api'
+    }
     return
 }
 

@@ -22,6 +22,10 @@ public sealed class CylinderTripPage : ContentPage
     private readonly VerticalStackLayout _proximityBox = new() { Spacing = 4, IsVisible = false };
     private List<TripStopItem> _stops = [];
     private bool _locationAsked;
+    private readonly TodayPlanView _todayPlan = new();
+    private readonly Border _todaySection;
+    // Customers whose found location was already asked about on this page; asked again on the next visit.
+    private readonly HashSet<int> _verifyAsked = [];
 
     private static (string Label, int Kind, string Permission)[] Modes()
     {
@@ -95,6 +99,8 @@ public sealed class CylinderTripPage : ContentPage
         _resultCard.IsVisible = false;
         _customerSearchButton = Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync());
         _customerSearchButton.IsVisible = false;
+        _todaySection = Ui.Section("🗓️ Bugünkü sefer planım", _todayPlan);
+        _todaySection.IsVisible = false;
 
         Content = new ScrollView
         {
@@ -104,6 +110,7 @@ public sealed class CylinderTripPage : ContentPage
                 Spacing = 14,
                 Children =
                 {
+                    _todaySection,
                     Ui.Note(_pickup
                         ? "\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteride verdiğiniz dolu tüpleri \"Müşteriye teslim (dolu)\", aldığınız boşları \"Müşteriden boş alım\" ile okutun; her kayıttan sonra o müşteriye verilen/alınan sayısı ve müşterideki güncel tüp bakiyesi gösterilir. Depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir. Sefer kapatılırken okutulmayan her tüp için gerekçe seçilir; gerekçeler yöneticiye bildirilir (müşteriye mesaj gitmez)."
                         : "\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteriye teslim ve depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir. Sefer kapatılırken okutulmayan her tüp için gerekçe seçilir; gerekçeler yöneticiye bildirilir (müşteriye mesaj gitmez)."),
@@ -159,6 +166,14 @@ public sealed class CylinderTripPage : ContentPage
         RefreshScanned();
         ApplyMode();
         _ = RefreshTripsAsync();
+    }
+
+    private async Task RefreshTodayPlanAsync()
+    {
+        if (_routes)
+        {
+            _todaySection.IsVisible = await _todayPlan.RefreshAsync();
+        }
     }
 
     // The signed-in driver's fixed vehicle: trips start with it directly and it is preselected for loading and return.
@@ -750,6 +765,8 @@ public sealed class CylinderTripPage : ContentPage
         ProximityAlerts.Approached -= OnApproached;
         ProximityAlerts.Approached += OnApproached;
         _proximitySwitch.IsToggled = ProximityAlerts.Enabled;
+        _verifyAsked.Clear();
+        _ = RefreshTodayPlanAsync();
     }
 
     protected override void OnDisappearing()
@@ -759,9 +776,9 @@ public sealed class CylinderTripPage : ContentPage
     }
 
     // The driver stands at the customer: the phone's own GPS fix becomes the customer's location.
-    private async Task SaveLocationAsync(TripStopItem stop)
+    private async Task SaveLocationAsync(TripStopItem stop, bool ask = true)
     {
-        if (!await DisplayAlertAsync("Konumu kaydet",
+        if (ask && !await DisplayAlertAsync("Konumu kaydet",
                 $"Şu anki konumunuz {stop.CustomerName} müşterisinin konumu olarak kaydedilsin mi? Müşterinin kapısında / deposunda olduğunuzdan emin olun.",
                 "Kaydet", "Vazgeç"))
         {
@@ -798,6 +815,46 @@ public sealed class CylinderTripPage : ContentPage
         }
     }
 
+    // A location found on Google is asked about the first time the driver is at the customer (approach warning or
+    // "📷 Burada") until someone confirms or corrects it.
+    private async Task ConfirmLocationAsync(TripStopItem stop, bool force = false)
+    {
+        if (!_saveLocation || stop.LocationVerified != false || stop.Latitude is null || (!force && !_verifyAsked.Add(stop.CustomerId)))
+        {
+            return;
+        }
+
+        const string Correct = "✓ Evet, konum doğru";
+        const string Here = "📍 Buradayım, konumu buraya taşı";
+        const string Map = "🗺️ Haritada göster";
+        string? choice = await DisplayActionSheetAsync(
+            $"{stop.CustomerName}: haritadaki konum doğru mu? (Google'dan bulundu, henüz teyit edilmedi)", "Sonra", null, Correct, Here, Map);
+        try
+        {
+            switch (choice)
+            {
+                case Correct:
+                    string message = await ApiClient.Instance.VerifyCustomerLocationAsync(stop.CustomerId);
+                    _result.Text = $"{stop.CustomerName}: {message}";
+                    _result.TextColor = Ui.Muted;
+                    _resultCard.IsVisible = true;
+                    await RefreshRouteAsync();
+                    break;
+                case Here:
+                    await SaveLocationAsync(stop, false);
+                    break;
+                case Map when stop.MapUrl is string url:
+                    _verifyAsked.Remove(stop.CustomerId);
+                    await OpenAsync(url);
+                    break;
+            }
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Konum", exception.Message, "Tamam");
+        }
+    }
+
     private View StopCard(int tripId, TripStopItem stop, int index, int count)
     {
         string place = string.Join(", ", new[] { stop.Address, stop.District, stop.City }.Where(x => !string.IsNullOrWhiteSpace(x)));
@@ -812,7 +869,9 @@ public sealed class CylinderTripPage : ContentPage
             + (stop.Delivered + stop.Collected > 0 ? $"\nBu seferde verilen {stop.Delivered}, alınan {stop.Collected}" : string.Empty)
             + (string.IsNullOrEmpty(stop.Note) ? string.Empty : "\nNot: " + stop.Note)
             + (stop.AlertMeters is null ? string.Empty
-                : stop.Latitude is null ? "\n📍 Konum kayıtlı değil (yaklaşma uyarısı çıkmaz)" : $"\n📍 Konum kayıtlı · {stop.AlertMeters} m kala uyarı"));
+                : stop.Latitude is null ? "\n📍 Konum kayıtlı değil (yaklaşma uyarısı çıkmaz)"
+                : stop.LocationVerified == false ? $"\n📍 Konum Google'dan bulundu, doğrulanmamış · {stop.AlertMeters} m kala uyarı"
+                : $"\n📍 Konum kayıtlı · {stop.AlertMeters} m kala uyarı"));
 
         List<View> actions = [];
         if (stop.MapUrl is string url)
@@ -822,7 +881,9 @@ public sealed class CylinderTripPage : ContentPage
 
         if (_saveLocation && stop.AlertMeters is not null)
         {
-            actions.Add(Ui.Compact(stop.Latitude is null ? "📍 Konumu kaydet" : "📍 Konumu güncelle", async (_, _) => await SaveLocationAsync(stop)));
+            actions.Add(stop.LocationVerified == false
+                ? Ui.Compact("📍 Konumu teyit et", async (_, _) => await ConfirmLocationAsync(stop, true))
+                : Ui.Compact(stop.Latitude is null ? "📍 Konumu kaydet" : "📍 Konumu güncelle", async (_, _) => await SaveLocationAsync(stop)));
         }
 
         if (!string.IsNullOrWhiteSpace(stop.Phone))
@@ -865,6 +926,7 @@ public sealed class CylinderTripPage : ContentPage
             : $"{stop.CustomerName} seçildi. Teslim ettiğiniz tüpleri okutun.";
         _result.TextColor = Ui.Muted;
         _resultCard.IsVisible = true;
+        _ = ConfirmLocationAsync(stop);
     }
 
     private async Task OpenAsync(string uri)

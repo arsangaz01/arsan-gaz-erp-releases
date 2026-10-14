@@ -13,7 +13,7 @@ namespace ArsanTupTakip.Services;
 public sealed record TripStopView(
     int Id, int Position, string Plate, int CustomerId, string CustomerName, string? Address, string? District, string? City, string? Phone,
     bool Done, DateTime? DoneAt, int Delivered, int Collected, string? Note, string? MapUrl,
-    double? Latitude = null, double? Longitude = null, int? AlertMeters = null);
+    double? Latitude = null, double? Longitude = null, int? AlertMeters = null, bool? LocationVerified = null);
 
 public sealed record TripStopSuggestion(int CustomerId, string CustomerName, string? City, string Reason);
 
@@ -89,7 +89,8 @@ public static class TripRoutes
                 customer?.Address, customer?.District, customer?.City, withPhones ? customer?.Phone : null,
                 stop.DoneAt is not null || delivered + collected > 0, stop.DoneAt, delivered, collected, stop.Note,
                 location is not null ? CoordinateMapUrl(location.Latitude, location.Longitude) : MapUrl(customer?.Address, customer?.District, customer?.City),
-                location?.Latitude, location?.Longitude, withLocations ? stop.AlertMeters ?? TripPlans.DefaultAlertMeters : null);
+                location?.Latitude, location?.Longitude, withLocations ? stop.AlertMeters ?? TripPlans.DefaultAlertMeters : null,
+                location?.Verified);
         }).ToList();
     }
 

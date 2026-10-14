@@ -101,7 +101,12 @@ public static class Perm
 }
 public sealed record TripStopItem(int Id, int Position, string Plate, int CustomerId, string CustomerName, string? Address, string? District, string? City, string? Phone,
     bool Done, DateTime? DoneAt, int Delivered, int Collected, string? Note, string? MapUrl,
-    double? Latitude = null, double? Longitude = null, int? AlertMeters = null);
+    double? Latitude = null, double? Longitude = null, int? AlertMeters = null, bool? LocationVerified = null);
+public sealed record TripPlanStopItem(int CustomerId, string CustomerName, string? City, string? District, string? Address, string? Note,
+    double? Latitude, double? Longitude, bool? LocationVerified, bool Done);
+public sealed record TripPlanItem(int Id, DateTime Date, string Plate, int AlertMeters, string? Note, string Status, int? TripId,
+    int StopCount, int Located, int Unverified, int Done, List<TripPlanStopItem> Stops);
+public sealed record TodayPlansResponse(bool On, List<TripPlanItem>? Plans);
 public sealed record TripStopSuggestionItem(int CustomerId, string CustomerName, string? City, string Reason);
 public sealed record FillLineItem(string Code, bool Ok, string Message, bool TestOverdue);
 public sealed record FillResponse(string Message, int Filled, List<FillLineItem> Lines, List<string> NeedsTestConfirmation);
@@ -783,6 +788,11 @@ public sealed class ApiClient
 
     public Task<string> SaveCustomerLocationAsync(int customerId, double latitude, double longitude, double? accuracy) =>
         PostMessageAsync("/api/musteri/" + customerId + "/konum", new { latitude, longitude, accuracy });
+
+    public Task<string> VerifyCustomerLocationAsync(int customerId) =>
+        PostMessageAsync("/api/musteri/" + customerId + "/konum/onayla", new { });
+
+    public Task<TodayPlansResponse> TodayPlansAsync() => GetAsync<TodayPlansResponse>("/api/sefer-plani/bugun");
 
     public Task<string> PickupTripCylindersAsync(int tripId, string plate, int customerId, IReadOnlyList<string> codes, string? note) =>
         PostMessageAsync("/api/sefer/bos-alim", new { tripId, plate, customerId, codes, note });

@@ -45,6 +45,11 @@ public sealed class HomePage : ContentPage
         Color navy = Ui.Navy;
         Color indigo = Ui.Indigo;
         _driver = account?.IsDriver == true;
+        // Perm.CustomerLocation is only granted while the trip plan feature is on.
+        Tile? planTile = api.Can(Perm.TripRoute) && api.Can(Perm.CustomerLocation)
+            ? new Tile(Icons.Event, "Bugünkü sefer planım", "Panelde hazırlanan müşteri sırası", true, Color.FromArgb("#0E7490"), navy,
+                () => Open("sefer-plani", () => new TripPlanTodayPage()))
+            : null;
         if (_driver)
         {
             // Drivers: the four daily jobs first, in this order; every tile still needs its permission, so a permission
@@ -54,6 +59,10 @@ public sealed class HomePage : ContentPage
             {
                 tiles.Add(new Tile(Icons.Shipping, "Sevkiyat başlat", plate is null ? "Sefer, yükleme, teslim, dönüş" : $"Araç: {plate}", true,
                     Color.FromArgb("#B45309"), Color.FromArgb("#78350F"), OpenTripAsync, _tripTitle));
+                if (planTile is not null)
+                {
+                    tiles.Add(planTile);
+                }
             }
 
             if (api.Can(Perm.CylinderView))
@@ -103,6 +112,10 @@ public sealed class HomePage : ContentPage
         if (!_driver && api.Can(Perm.TripView))
         {
             tiles.Add(new Tile(Icons.Shipping, "Sefer", "Yükle, teslim et, dönüş", true, Color.FromArgb("#312E81"), navy, () => Open("sefer", () => new CylinderTripPage())));
+            if (planTile is not null)
+            {
+                tiles.Add(planTile);
+            }
         }
 
         if (api.Can(Perm.VehicleView))

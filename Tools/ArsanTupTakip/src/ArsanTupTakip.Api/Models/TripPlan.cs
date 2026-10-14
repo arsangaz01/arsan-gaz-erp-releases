@@ -29,8 +29,9 @@ public sealed class TripPlanStop
     public string? Note { get; set; }
 }
 
-// Where a customer is, for the approach warning and the map link. Entered in the panel (map link or coordinates) or
-// saved by a driver standing at the customer.
+// Where a customer is, for the approach warning and the map link. Entered in the panel (map link or coordinates),
+// saved by a driver standing at the customer, or found on Google from the customer's name and address. A found one is
+// not verified until someone confirms it in the panel or a driver confirms it at the customer.
 public sealed class CustomerLocation
 {
     public int CustomerId { get; set; }
@@ -39,4 +40,6 @@ public sealed class CustomerLocation
     public DateTime UpdatedAt { get; set; } = DateTime.Now;
     public string UpdatedBy { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
+    public bool Verified { get; set; } = true;
+    public string? Label { get; set; }
 }

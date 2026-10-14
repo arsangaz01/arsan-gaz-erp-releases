@@ -400,6 +400,24 @@ tr.alarm-row td { background:#fef2f2; }
         <div class="table-wrap"><table id="tp-rows"></table></div>
         <div class="hint">Gün ve araç için uğranacak müşterileri sırasıyla seçin. O gün araç sefere çıkınca (veya sefer zaten açıksa plan kaydedilince) müşteriler aracın rotasına kendiliğinden eklenir. Şoförün telefonu, konumu kayıtlı müşteriye seçilen mesafeye kadar yaklaşınca titreşir ve bildirim gösterir; şoförün konumu sunucuya gönderilmez. Konumu olmayan müşteride uyarı çıkmaz: konumu buradan (📍) veya şoför müşterinin yanındayken telefondan kaydedebilir.</div>
       </div>
+      <div class="card">
+        <div class="toolbar">
+          <h2>Müşteri konumları</h2>
+          <input id="cl-musteri-q" placeholder="Müşteri ara" autocomplete="off">
+          <select id="cl-musteri"></select>
+          <button class="secondary small" id="cl-open" type="button">📍 Konumu aç</button>
+        </div>
+        <div id="cl-msg" class="msg hidden"></div>
+        <div data-admin-only>
+          <div class="toolbar">
+            <span id="cl-summary" class="muted"></span>
+            <button class="primary small" id="cl-start" type="button">Konumu olmayanları Google'da bul</button>
+            <button class="secondary small hidden" id="cl-stop" type="button">Durdur</button>
+          </div>
+          <div id="cl-progress" class="muted"></div>
+        </div>
+        <div class="hint">Google'da müşterinin adı, ilçesi ve ili ile aranır; bulunamazsa adresiyle. Bulunan konum "doğrulanmamış" kaydedilir: panelde haritada kontrol edip onaylayabilir veya değiştirebilirsiniz; şoför de müşteriye ilk vardığında telefonda "Konum doğru mu?" sorusuyla teyit eder. Elle girilmiş veya onaylanmış konumlar toplu aramada değiştirilmez. Google'a yalnızca müşteri adı ve adresi gönderilir.</div>
+      </div>
     </section>
 
     <section data-page="talepler" class="hidden">
@@ -836,6 +854,8 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="hint">Google Haritalar'da müşterinin yerine uzun basın: üstte çıkan koordinatı kopyalayın ya da Paylaş &gt; Bağlantıyı kopyala ile gelen bağlantıyı yapıştırın.</div>
       <div class="toolbar">
         <button class="primary" type="submit" id="loc-save">Kaydet</button>
+        <button class="primary hidden" type="button" id="loc-verify">✓ Konumu onayla</button>
+        <button class="secondary" type="button" id="loc-google">Google'da bul</button>
         <button class="secondary delete-link" type="button" id="loc-clear">Konumu sil</button>
       </div>
       <div id="loc-msg" class="msg hidden"></div>

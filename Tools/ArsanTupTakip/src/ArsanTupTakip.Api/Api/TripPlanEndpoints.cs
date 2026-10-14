@@ -7,6 +7,7 @@ namespace ArsanTupTakip.Api;
 internal sealed record TripPlanStopRequest(int MusteriId, string? Not);
 internal sealed record TripPlanSaveRequest(int? Id, DateTime? Tarih, string? Plaka, int? Mesafe, string? Not, List<TripPlanStopRequest>? Duraklar);
 internal sealed record CustomerLocationTextRequest(string? Metin);
+internal sealed record CustomerGoogleRequest(bool? Degistir);
 
 // Panel Sefer Planı tab: day plans per vehicle with the warning distance, and customer locations entered as a Google
 // Maps link or coordinates. Everything here works only while the "Sefer planı" feature is on (Perm.TripPlan).
@@ -50,6 +51,12 @@ internal static class TripPlanEndpoints
                 WebPanelAudit.Write(user, request.Id is null ? "Sefer planı oluşturuldu" : "Sefer planı güncellendi", $"Plan #{id}",
                     $"{CylinderTracking.NormalizePlate(request.Plaka)} {request.Tarih:dd.MM.yyyy}, {request.Duraklar?.Count ?? 0} müşteri, {request.Mesafe} m",
                     WebPanelAuth.ClientIp(context));
+                if (CustomerGeocoder.Configured && request.Duraklar is { Count: > 0 } stops
+                    && CustomerGeocoder.Start(stops.Select(d => d.MusteriId).ToList(), $"Plan #{id}", "Google (" + user + ")", AppLog.Write))
+                {
+                    message += " Konumu olmayan müşteriler Google'da aranıyor.";
+                }
+
                 return Results.Ok(new { id, message });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -125,7 +132,117 @@ internal static class TripPlanEndpoints
                 return Results.BadRequest(new { error = exception.Message });
             }
         }).Requires(Perm.TripPlan);
+
+        api.MapPost("/musteri/{id:int}/konum/onayla", async (int id, HttpContext context) =>
+        {
+            string user = Account(context).UserName;
+            CustomerLocationView? location = await TripPlans.VerifyLocationAsync(id, "Web panel (" + user + ")");
+            if (location is null)
+            {
+                return Results.BadRequest(new { error = "Müşterinin kayıtlı konumu yok." });
+            }
+
+            WebPanelAudit.Write(user, "Müşteri konumu onaylandı", $"Müşteri #{id}", null, WebPanelAuth.ClientIp(context));
+            return Results.Ok(new { message = "Konum onaylandı.", location = LocationRow(location) });
+        }).Requires(Perm.TripPlan);
+
+        // Looks the customer up on Google now. A verified location is replaced only when the user says so (Degistir).
+        api.MapPost("/musteri/{id:int}/konum/google", async (int id, CustomerGoogleRequest request, HttpContext context) =>
+        {
+            string user = Account(context).UserName;
+            await using TupTakipDbContext db = new();
+            Models.Customer? customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            if (customer is null)
+            {
+                return Results.NotFound(new { error = "Müşteri bulunamadı." });
+            }
+
+            GeoMatch? match;
+            try
+            {
+                match = await CustomerGeocoder.FindAsync(customer);
+            }
+            catch (GeocoderException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+            {
+                AppLog.Write($"Google konum araması müşteri #{id}: {exception.Message}");
+                return Results.BadRequest(new { error = "Google'a ulaşılamadı; biraz sonra tekrar deneyin." });
+            }
+
+            if (match is null)
+            {
+                return Results.BadRequest(new { error = "Google'da bu müşteri bulunamadı. Haritada yerini bulup bağlantıyı veya koordinatı yapıştırın." });
+            }
+
+            CustomerLocationView? saved = await TripPlans.SetFoundLocationAsync(id, match.Latitude, match.Longitude, match.Label, "Google (" + user + ")", request.Degistir == true);
+            if (saved is null)
+            {
+                return Results.Conflict(new { error = "Müşterinin onaylı bir konumu var.", label = match.Label, confirm = true });
+            }
+
+            WebPanelAudit.Write(user, "Müşteri konumu Google'dan alındı", $"Müşteri #{id}", match.Method, WebPanelAuth.ClientIp(context));
+            return Results.Ok(new { message = "Google'da bulundu; haritada kontrol edip onaylayın.", location = LocationRow(saved) });
+        }).Requires(Perm.TripPlan);
+
+        // Bulk lookup of every active customer without a location; Yönetici only (the /yonetim path).
+        api.MapGet("/yonetim/konum-bul", async () =>
+        {
+            await using TupTakipDbContext db = new();
+            int customers = await db.Customers.CountAsync(x => x.IsActive);
+            int located = await db.CustomerLocations.CountAsync(l => db.Customers.Any(c => c.Id == l.CustomerId && c.IsActive));
+            int unverified = await db.CustomerLocations.CountAsync(l => !l.Verified && db.Customers.Any(c => c.Id == l.CustomerId && c.IsActive));
+            return Results.Ok(new { status = StatusRow(CustomerGeocoder.Status), customers, located, unverified });
+        }).Requires(Perm.TripPlan);
+
+        api.MapPost("/yonetim/konum-bul", (HttpContext context) =>
+        {
+            string user = Account(context).UserName;
+            try
+            {
+                if (!CustomerGeocoder.Start(null, "Tüm müşteriler", "Google (" + user + ")", AppLog.Write))
+                {
+                    return Results.BadRequest(new { error = "Bir konum arama zaten sürüyor." });
+                }
+            }
+            catch (GeocoderException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+
+            WebPanelAudit.Write(user, "Toplu Google konum arama başlatıldı", "Müşteriler", null, WebPanelAuth.ClientIp(context));
+            return Results.Ok(new { message = "Konumu olmayan müşteriler Google'da aranıyor. Bulunanlar \"doğrulanmamış\" olarak kaydedilir." });
+        }).Requires(Perm.TripPlan);
+
+        api.MapPost("/yonetim/konum-bul/durdur", (HttpContext context) =>
+        {
+            bool stopped = CustomerGeocoder.Stop();
+            if (stopped)
+            {
+                WebPanelAudit.Write(Account(context).UserName, "Toplu Google konum arama durduruldu", "Müşteriler", null, WebPanelAuth.ClientIp(context));
+            }
+
+            return Results.Ok(new { message = stopped ? "Durduruluyor." : "Süren bir arama yok." });
+        }).Requires(Perm.TripPlan);
     }
+
+    private static object StatusRow(LocationLookupStatus s) => new
+    {
+        s.Configured,
+        s.Running,
+        s.Scope,
+        s.Total,
+        s.Done,
+        s.Found,
+        s.NotFound,
+        s.Failed,
+        s.LastError,
+        Started = s.StartedAt?.ToString("dd.MM.yyyy HH:mm"),
+        Finished = s.FinishedAt?.ToString("dd.MM.yyyy HH:mm"),
+        s.StartedBy
+    };
 
     private static object Row(TripPlanView p, bool withStops) => new
     {
@@ -138,6 +255,7 @@ internal static class TripPlanEndpoints
         p.TripId,
         p.StopCount,
         p.Located,
+        p.Unverified,
         p.Done,
         Drivers = WebPanelUserStore.All()
             .Where(u => u.IsActive && string.Equals(u.FixedPlate, p.Plate, StringComparison.OrdinalIgnoreCase))
@@ -154,6 +272,8 @@ internal static class TripPlanEndpoints
         l.Longitude,
         l.MapUrl,
         l.Source,
+        l.Verified,
+        l.Label,
         l.UpdatedBy,
         Updated = l.UpdatedAt.ToString("dd.MM.yyyy HH:mm")
     };

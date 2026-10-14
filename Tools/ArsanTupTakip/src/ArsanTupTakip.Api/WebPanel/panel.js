@@ -220,7 +220,7 @@ function openTab(tab) {
   if (tab === "araclar") loadVehicles();
   if (tab === "musteriler") loadCustomers();
   if (tab === "talepler") loadRequests();
-  if (tab === "sefer-plani") loadPlans();
+  if (tab === "sefer-plani") { loadPlans(); loadLookup(); }
   if (tab === "musteri-stok") loadStock();
   if (tab === "sayimlar") loadCounts();
   if (tab === "barkod") loadLabelTemplates();
@@ -578,7 +578,8 @@ async function loadPlans() {
       el("td", {}, el("b", {}, p.plate), p.note ? el("div", { class: "muted" }, p.note) : null),
       el("td", {}, p.drivers.length ? p.drivers.join(", ") : el("span", { class: "muted" }, "sabit şoför yok")),
       el("td", {}, String(p.stopCount), p.done ? el("div", { class: "muted" }, `${p.done} uğrandı`) : null),
-      el("td", { class: p.located < p.stopCount ? "warn-text" : "" }, `${p.located} / ${p.stopCount}`),
+      el("td", { class: p.located < p.stopCount ? "warn-text" : "" }, `${p.located} / ${p.stopCount}`,
+        p.unverified ? el("div", { class: "muted" }, `${p.unverified} doğrulanmamış`) : null),
       el("td", {}, metersLabel(p.alertMeters)),
       el("td", {}, PLAN_STATUS[p.status] || p.status, p.tripId ? el("div", { class: "muted" }, `Sefer #${p.tripId}`) : null),
       el("td", { class: "muted" }, `${p.updated} · ${p.updatedBy}`)));
@@ -596,7 +597,7 @@ async function openPlan(id) {
     const plan = id ? await api(`/panel/api/sefer-plani/${id}`) : null;
     editingPlan = plan;
     planStops = plan
-      ? plan.stops.map((s) => ({ customerId: s.customerId, name: s.customerName, place: [s.city, s.district].filter(Boolean).join(" / "), note: s.note || "", latitude: s.latitude, longitude: s.longitude, done: s.done }))
+      ? plan.stops.map((s) => ({ customerId: s.customerId, name: s.customerName, place: [s.city, s.district].filter(Boolean).join(" / "), note: s.note || "", latitude: s.latitude, longitude: s.longitude, verified: s.locationVerified, done: s.done }))
       : [];
     const plates = planData.vehicles.map((v) => v.plate);
     if (plan && !plates.includes(plan.plate)) plates.unshift(plan.plate);
@@ -638,12 +639,13 @@ function renderPlanStops() {
     note.disabled = closed;
     note.addEventListener("input", () => { s.note = note.value; });
     const located = s.latitude != null;
+    const unverified = located && s.verified === false;
     return el("tr", { class: s.done ? "off" : "" },
       el("td", {}, String(i + 1)),
       el("td", {}, el("b", {}, s.name), s.place ? el("div", { class: "muted" }, s.place) : null, s.done ? el("div", { class: "muted" }, "✓ uğrandı") : null),
       el("td", {}, note),
-      el("td", {}, el("button", { class: "link" + (located ? "" : " delete-link"), type: "button", onclick: () => openLocation(s) },
-        located ? "📍 Kayıtlı" : "📍 Konum yok")),
+      el("td", {}, el("button", { class: "link" + (located && !unverified ? "" : " delete-link"), type: "button", onclick: () => openLocation(s) },
+        !located ? "📍 Konum yok" : unverified ? "📍 Doğrulanmamış" : "📍 Kayıtlı")),
       el("td", {}, closed ? null : el("span", {},
         el("button", { class: "link", type: "button", title: "Yukarı", onclick: () => movePlanStop(i, -1) }, "▲"),
         el("button", { class: "link", type: "button", title: "Aşağı", onclick: () => movePlanStop(i, 1) }, "▼"),
@@ -670,7 +672,7 @@ $("tp-add").addEventListener("click", async () => {
   const label = select.options[select.selectedIndex].textContent;
   let location = null;
   try { location = (await api(`/panel/api/musteri/${id}/konum`)).location; } catch { location = null; }
-  planStops.push({ customerId: id, name: label, place: "", note: "", latitude: location?.latitude ?? null, longitude: location?.longitude ?? null, done: false });
+  planStops.push({ customerId: id, name: label, place: "", note: "", latitude: location?.latitude ?? null, longitude: location?.longitude ?? null, verified: location?.verified, done: false });
   planCustomer.reset();
   renderPlanStops();
 });
@@ -723,11 +725,26 @@ $("tp-date").addEventListener("change", loadPlans);
 // Customer location: a pasted Google Maps link (short links too) or coordinates; empty clears it.
 let locationStop = null;
 
+const LOCATION_SOURCE = { telefon: "telefondan", google: "Google'dan", panel: "panelden" };
+
 function showLocation(location) {
+  const unverified = location && location.verified === false;
   $("loc-current").replaceChildren(location
-    ? el("span", {}, `Kayıtlı konum: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} (${location.source === "telefon" ? "telefondan" : "panelden"}, ${location.updated}) `,
-      el("a", { href: location.mapUrl, target: "_blank", rel: "noopener" }, "Haritada aç"))
+    ? el("span", {}, unverified ? el("b", { class: "warn-text" }, "Doğrulanmamış konum. ") : null,
+      `Kayıtlı konum: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} (${LOCATION_SOURCE[location.source] || location.source}, ${location.updated}) `,
+      el("a", { href: location.mapUrl, target: "_blank", rel: "noopener" }, "Haritada aç"),
+      location.label ? el("div", { class: "muted" }, `Google: ${location.label}`) : null,
+      unverified ? el("div", { class: "muted" }, "Haritada doğruysa onaylayın; yanlışsa doğru bağlantıyı veya koordinatı yapıştırın. Şoför de müşteriye vardığında telefonda teyit eder.") : null)
     : "Kayıtlı konum yok; bu müşteride yaklaşma uyarısı çıkmaz.");
+  $("loc-verify").classList.toggle("hidden", !unverified);
+}
+
+function locationChanged(location) {
+  locationStop.latitude = location?.latitude ?? null;
+  locationStop.longitude = location?.longitude ?? null;
+  locationStop.verified = location?.verified;
+  showLocation(location);
+  if (planStops.includes(locationStop)) renderPlanStops();
 }
 
 async function openLocation(stop) {
@@ -736,6 +753,7 @@ async function openLocation(stop) {
   $("loc-title").textContent = `Konum · ${stop.name}`;
   $("loc-text").value = "";
   $("loc-current").textContent = "Yükleniyor…";
+  $("loc-verify").classList.add("hidden");
   $("loc-dialog").showModal();
   try {
     showLocation((await api(`/panel/api/musteri/${stop.customerId}/konum`)).location);
@@ -749,12 +767,9 @@ async function saveLocation(text) {
   $("loc-save").disabled = true;
   try {
     const result = await api(`/panel/api/musteri/${locationStop.customerId}/konum`, { method: "POST", body: { metin: text } });
-    locationStop.latitude = result.location?.latitude ?? null;
-    locationStop.longitude = result.location?.longitude ?? null;
-    showLocation(result.location);
+    locationChanged(result.location);
     $("loc-text").value = "";
     show($("loc-msg"), result.message, "ok");
-    renderPlanStops();
   } catch (error) {
     show($("loc-msg"), error.message);
   } finally {
@@ -772,6 +787,94 @@ $("loc-clear").addEventListener("click", () => {
   if (window.confirm(`${locationStop.name} için kayıtlı konum silinsin mi?`)) saveLocation("");
 });
 $("loc-close").addEventListener("click", () => $("loc-dialog").close());
+$("loc-verify").addEventListener("click", async () => {
+  hide($("loc-msg"));
+  $("loc-verify").disabled = true;
+  try {
+    const result = await api(`/panel/api/musteri/${locationStop.customerId}/konum/onayla`, { method: "POST", body: {} });
+    locationChanged(result.location);
+    show($("loc-msg"), result.message, "ok");
+  } catch (error) {
+    show($("loc-msg"), error.message);
+  } finally {
+    $("loc-verify").disabled = false;
+  }
+});
+
+async function findOnGoogle(replace) {
+  hide($("loc-msg"));
+  $("loc-google").disabled = true;
+  try {
+    const result = await api(`/panel/api/musteri/${locationStop.customerId}/konum/google`, { method: "POST", body: { degistir: replace } });
+    locationChanged(result.location);
+    show($("loc-msg"), result.message, "ok");
+  } catch (error) {
+    if (error.status === 409 && error.data?.confirm && window.confirm(`Müşterinin onaylı konumu var. Google'ın bulduğu yerle değiştirilsin mi?\n\n${error.data.label || ""}`)) {
+      await findOnGoogle(true);
+      return;
+    }
+    show($("loc-msg"), error.message);
+  } finally {
+    $("loc-google").disabled = false;
+  }
+}
+$("loc-google").addEventListener("click", () => findOnGoogle(false));
+
+// Customer locations card: open any customer's location; Yönetici can look up all customers without one on Google.
+const locationCustomer = customerPicker("cl-musteri-q", "cl-musteri", null);
+let lookupTimer = null;
+
+$("cl-open").addEventListener("click", async () => {
+  hide($("cl-msg"));
+  const select = $("cl-musteri");
+  if (!select.value && locationCustomer.query()) await locationCustomer.search();
+  const id = Number(select.value);
+  if (!id) { show($("cl-msg"), "Önce müşteri arayıp seçin."); return; }
+  openLocation({ customerId: id, name: select.options[select.selectedIndex].textContent });
+});
+
+async function loadLookup() {
+  clearTimeout(lookupTimer);
+  if (!me || me.role !== "Yönetici") return;
+  try {
+    const data = await api("/panel/api/yonetim/konum-bul");
+    const s = data.status;
+    $("cl-summary").textContent = `${data.customers} aktif müşteri · ${data.located} konumlu · ${data.unverified} doğrulanmamış`;
+    $("cl-start").disabled = s.running || !s.configured;
+    $("cl-stop").classList.toggle("hidden", !s.running);
+    const parts = [];
+    if (!s.configured) parts.push("Google anahtarı tanımlı değil; sunucuya GOOGLE_MAPS_API_KEY girilince bu düğme çalışır.");
+    if (s.started) {
+      parts.push(`${s.running ? "Sürüyor" : "Son arama"} (${s.scope}, ${s.started}${s.finished ? " – " + s.finished : ""}): ${s.done} / ${s.total} · bulunan ${s.found} · bulunamayan ${s.notFound}${s.failed ? ` · hata ${s.failed}` : ""}`);
+    }
+    if (s.lastError) parts.push(`Son hata: ${s.lastError}`);
+    $("cl-progress").textContent = parts.join(" ");
+    if (s.running) lookupTimer = setTimeout(loadLookup, 4000);
+  } catch (error) {
+    show($("cl-msg"), error.message);
+  }
+}
+
+$("cl-start").addEventListener("click", async () => {
+  if (!window.confirm("Konumu olmayan tüm aktif müşteriler Google'da aranacak (müşteri adı ve adresi Google'a gönderilir). Başlatılsın mı?")) return;
+  hide($("cl-msg"));
+  try {
+    const result = await api("/panel/api/yonetim/konum-bul", { method: "POST", body: {} });
+    show($("cl-msg"), result.message, "ok");
+  } catch (error) {
+    show($("cl-msg"), error.message);
+  }
+  loadLookup();
+});
+$("cl-stop").addEventListener("click", async () => {
+  try {
+    const result = await api("/panel/api/yonetim/konum-bul/durdur", { method: "POST", body: {} });
+    show($("cl-msg"), result.message, "ok");
+  } catch (error) {
+    show($("cl-msg"), error.message);
+  }
+  loadLookup();
+});
 
 function renderMovements(table, rows, empty) {
   const head = el("tr", {}, ...["Tarih", "Tüp", "Hareket", "Durum", "Müşteri / Plaka", "Dolu/Boş", "Not"].map((h) => el("th", {}, h)));

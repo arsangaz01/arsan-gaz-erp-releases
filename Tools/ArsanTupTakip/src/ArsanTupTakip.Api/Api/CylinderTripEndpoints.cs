@@ -260,6 +260,41 @@ internal static class CylinderTripEndpoints
             }
         }).Requires(Perm.CustomerLocation);
 
+        // A driver at the customer confirms the location found on Google as it is.
+        app.MapPost("/api/musteri/{customerId:int}/konum/onayla", async (int customerId, HttpContext context) =>
+        {
+            string by = "Mobil (" + MobileEndpoints.DeviceName(context) + ")";
+            CustomerLocationView? location = await TripPlans.VerifyLocationAsync(customerId, by);
+            if (location is null)
+            {
+                return Results.BadRequest(new { error = "Müşterinin kayıtlı konumu yok." });
+            }
+
+            AppLog.Write($"Müşteri #{customerId} konumu telefondan onaylandı — {by}.");
+            return Results.Ok(new { message = "Konum onaylandı." });
+        }).Requires(Perm.CustomerLocation);
+
+        // Today's plans, also before the trip starts. A driver with a fixed vehicle sees only that vehicle's plan.
+        app.MapGet("/api/sefer-plani/bugun", async (string? plaka, HttpContext context) =>
+        {
+            if (!Features.IsOn(Features.TripPlan))
+            {
+                return Results.Ok(new { on = false, plans = Array.Empty<object>() });
+            }
+
+            try
+            {
+                WebPanelUser user = User(context);
+                string? plate = string.IsNullOrEmpty(user.FixedPlate) ? plaka : DriverVehicle.PlateFor(user.FixedPlate, plaka);
+                List<TripPlanView> plans = await TripPlans.TodayAsync(plate);
+                return Results.Ok(new { on = true, plans });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(Perm.TripRoute);
+
         app.MapGet("/api/sefer/{tripId:int}/rota/oneriler", async (int tripId, string? plaka) =>
             Results.Ok(await TripRoutes.SuggestionsAsync(tripId, plaka, Features.IsOn(Features.CustomerPortal)))).Requires(Perm.TripRoute);
 

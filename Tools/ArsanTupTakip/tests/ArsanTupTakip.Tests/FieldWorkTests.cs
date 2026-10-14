@@ -36,6 +36,11 @@ internal static class FieldWorkTests
         double d = TripPlans.DistanceMeters(37.0, 35.0, 37.0027, 35.0);
         Assert(d > 290 && d < 310, $"About 300 m between points 0.0027° of latitude apart (was {d:0}).");
         Assert(TripRoutes.CoordinateMapUrl(37.001234, 35.321) == "https://www.google.com/maps/dir/?api=1&destination=37.001234,35.321", "Coordinate map link.");
+        Assert(CustomerGeocoder.Mentions("Kurttepe, 01370 Çukurova/Adana, Türkiye", "ÇUKUROVA") && CustomerGeocoder.Mentions("Seyhan/Adana", "adana"),
+            "Google's address matches the customer's district and city regardless of case and Turkish letters.");
+        Assert(CustomerGeocoder.Mentions("Sarıçam/Adana", "SARIÇAM") && CustomerGeocoder.Mentions("İstanbul", "istanbul") && CustomerGeocoder.Mentions("Istanbul", "İSTANBUL"),
+            "Dotted and dotless I fold the same way.");
+        Assert(!CustomerGeocoder.Mentions("Akdeniz/Mersin", "Adana") && !CustomerGeocoder.Mentions("Seyhan/Adana", ""), "Another city or an empty part does not match.");
     }
 
     private static void ExchangeBalanceText()

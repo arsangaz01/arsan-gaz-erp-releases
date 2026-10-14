@@ -546,7 +546,9 @@ internal static class PermissionTests
                 (HttpMethod.Post, "api/sefer/bos-alim", new { tripId = 1, plate = "34 ABC 123", customerId = 1, codes = new[] { "X1" } }, Features.CustomerExchange),
                 (HttpMethod.Get, "api/sefer/1/rota?plaka=34%20ABC%20123", null, Features.TripRoute),
                 (HttpMethod.Post, "api/sefer/rota/ekle", new { tripId = 1, plate = "34 ABC 123", customerId = 1 }, Features.TripRoute),
-                (HttpMethod.Post, "api/musteri/1/konum", new { latitude = 37.0, longitude = 35.3, accuracy = 10.0 }, Features.TripPlan)
+                (HttpMethod.Post, "api/musteri/1/konum", new { latitude = 37.0, longitude = 35.3, accuracy = 10.0 }, Features.TripPlan),
+                (HttpMethod.Post, "api/musteri/1/konum/onayla", new { }, Features.TripPlan),
+                (HttpMethod.Get, "api/sefer-plani/bugun", null, Features.TripRoute)
             })
             {
                 using HttpResponseMessage off = await Send(http, method, path, token, body);

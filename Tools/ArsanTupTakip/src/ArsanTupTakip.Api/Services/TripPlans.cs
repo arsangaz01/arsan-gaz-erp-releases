@@ -15,14 +15,16 @@ public sealed record TripPlanStopInput(int CustomerId, string? Note);
 
 public sealed record TripPlanStopView(
     int CustomerId, string CustomerName, string? City, string? District, string? Address, string? Note,
-    double? Latitude, double? Longitude, bool Done);
+    double? Latitude, double? Longitude, bool? LocationVerified, bool Done);
 
 // Status: "bekliyor" (no trip yet), "seferde" (copied onto an open trip), "kapandi" (that trip is closed).
 public sealed record TripPlanView(
     int Id, DateTime Date, string Plate, int AlertMeters, string? Note, string Status, int? TripId,
-    string CreatedBy, DateTime UpdatedAt, string UpdatedBy, int StopCount, int Located, int Done, List<TripPlanStopView> Stops);
+    string CreatedBy, DateTime UpdatedAt, string UpdatedBy, int StopCount, int Located, int Unverified, int Done, List<TripPlanStopView> Stops);
 
-public sealed record CustomerLocationView(int CustomerId, double Latitude, double Longitude, DateTime UpdatedAt, string UpdatedBy, string Source, string MapUrl);
+public sealed record CustomerLocationView(
+    int CustomerId, double Latitude, double Longitude, DateTime UpdatedAt, string UpdatedBy, string Source, string MapUrl,
+    bool Verified, string? Label);
 
 // Day plans for vehicles and the customer locations the phone's approach warning uses. A plan is copied onto the route
 // of the open trip that has its vehicle on the plan's day; the stops it added carry the "Plan #id" mark so that a later
@@ -53,6 +55,13 @@ public static class TripPlans
         }
 
         return result;
+    }
+
+    // Today's plans for the phone: only the given vehicle's when a plate is given.
+    public static async Task<List<TripPlanView>> TodayAsync(string? plate)
+    {
+        string? only = CylinderTracking.NormalizePlate(plate);
+        return (await ListAsync(Today)).Where(x => only is null || x.Plate == only).ToList();
     }
 
     public static async Task<TripPlanView?> GetAsync(int id)
@@ -89,10 +98,11 @@ public static class TripPlans
             Customer? c = customers.GetValueOrDefault(s.CustomerId);
             CustomerLocation? l = locations.GetValueOrDefault(s.CustomerId);
             return new TripPlanStopView(s.CustomerId, c?.CompanyName ?? $"#{s.CustomerId}", c?.City, c?.District, c?.Address, s.Note,
-                l?.Latitude, l?.Longitude, done.Contains(s.CustomerId));
+                l?.Latitude, l?.Longitude, l?.Verified, done.Contains(s.CustomerId));
         }).ToList();
         return new TripPlanView(plan.Id, plan.PlanDate, plan.Plate, plan.AlertMeters, plan.Note, status, plan.TripId,
-            plan.CreatedBy, plan.UpdatedAt, plan.UpdatedBy, views.Count, views.Count(x => x.Latitude is not null), views.Count(x => x.Done), views);
+            plan.CreatedBy, plan.UpdatedAt, plan.UpdatedBy, views.Count, views.Count(x => x.Latitude is not null),
+            views.Count(x => x.LocationVerified == false), views.Count(x => x.Done), views);
     }
 
     // Creates or replaces a plan; a plan for today is copied onto the open trip of its vehicle straight away.
@@ -365,7 +375,69 @@ public static class TripPlans
         location.UpdatedAt = DateTime.Now;
         location.UpdatedBy = by;
         location.Source = source;
+        location.Verified = true;
+        location.Label = null;
         await db.SaveChangesAsync();
+        return View(location);
+    }
+
+    // Saves a location found on Google as not verified. A verified one (entered, saved at the customer or confirmed)
+    // is kept unless replaceVerified is set by a user asking for it; returns null when it was kept.
+    public static async Task<CustomerLocationView?> SetFoundLocationAsync(
+        int customerId, double latitude, double longitude, string? label, string by, bool replaceVerified)
+    {
+        if (!InTurkey(latitude, longitude))
+        {
+            throw new ArgumentException("Bulunan konum Türkiye sınırları içinde değil.");
+        }
+
+        await using TupTakipDbContext db = new();
+        if (!await db.Customers.AnyAsync(x => x.Id == customerId))
+        {
+            throw new ArgumentException("Müşteri bulunamadı.");
+        }
+
+        CustomerLocation? location = await db.CustomerLocations.FirstOrDefaultAsync(x => x.CustomerId == customerId);
+        if (location is { Verified: true } && !replaceVerified)
+        {
+            return null;
+        }
+
+        if (location is null)
+        {
+            location = new CustomerLocation { CustomerId = customerId };
+            db.CustomerLocations.Add(location);
+        }
+
+        location.Latitude = Math.Round(latitude, 6);
+        location.Longitude = Math.Round(longitude, 6);
+        location.UpdatedAt = DateTime.Now;
+        location.UpdatedBy = by;
+        location.Source = "google";
+        location.Verified = false;
+        location.Label = label is { Length: > 300 } ? label[..300] : label;
+        await db.SaveChangesAsync();
+        return View(location);
+    }
+
+    // Confirms a found location as it is. Null when the customer has no location.
+    public static async Task<CustomerLocationView?> VerifyLocationAsync(int customerId, string by)
+    {
+        await using TupTakipDbContext db = new();
+        CustomerLocation? location = await db.CustomerLocations.FirstOrDefaultAsync(x => x.CustomerId == customerId);
+        if (location is null)
+        {
+            return null;
+        }
+
+        if (!location.Verified)
+        {
+            location.Verified = true;
+            location.UpdatedAt = DateTime.Now;
+            location.UpdatedBy = by;
+            await db.SaveChangesAsync();
+        }
+
         return View(location);
     }
 
@@ -384,7 +456,8 @@ public static class TripPlans
     }
 
     private static CustomerLocationView View(CustomerLocation l) =>
-        new(l.CustomerId, l.Latitude, l.Longitude, l.UpdatedAt, l.UpdatedBy, l.Source, TripRoutes.CoordinateMapUrl(l.Latitude, l.Longitude));
+        new(l.CustomerId, l.Latitude, l.Longitude, l.UpdatedAt, l.UpdatedBy, l.Source, TripRoutes.CoordinateMapUrl(l.Latitude, l.Longitude),
+            l.Verified, l.Label);
 
     public static bool InTurkey(double latitude, double longitude) =>
         latitude is >= 35.0 and <= 43.0 && longitude is >= 25.0 and <= 46.0;
