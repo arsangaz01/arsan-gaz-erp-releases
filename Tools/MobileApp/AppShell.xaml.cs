@@ -10,9 +10,12 @@ public partial class AppShell : Shell
     {
         InitializeComponent();
         HomePage home = new(session);
+        Home = home;
         ShellContent content = new() { Title = "Ana menü", Content = home };
         Shell.SetTabBarIsVisible(home, false);
         Items.Add(content);
         CurrentItem = content;
     }
+
+    public HomePage Home { get; }
 }

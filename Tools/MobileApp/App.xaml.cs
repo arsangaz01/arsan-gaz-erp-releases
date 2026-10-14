@@ -33,6 +33,15 @@ public partial class App : Application
 		return _window;
 	}
 
+	protected override async void OnResume()
+	{
+		base.OnResume();
+		if (_window?.Page is AppShell shell)
+		{
+			await shell.Home.RefreshUpdateAsync();
+		}
+	}
+
 	// Signed in (token not expired) → tabs; otherwise the sign-in screen. Phones paired before 1.8.0 have a token
 	// but no user; the server refuses it, so they land on the sign-in screen as well.
 	private async Task StartAsync()

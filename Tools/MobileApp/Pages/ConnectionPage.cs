@@ -125,10 +125,7 @@ public sealed class ConnectionPage : ContentPage
             UpdateInfo info = await ApiClient.Instance.GetUpdateInfoAsync();
             string local = AppInfo.Current.VersionString;
             int.TryParse(AppInfo.Current.BuildString, out int localBuild);
-            // On Android BuildString is the versionCode; Version.Build is not populated from it.
-            bool newer = localBuild > 0
-                ? info.PublishedMobileBuild > localBuild
-                : string.Compare(info.PublishedMobileVersion, local, StringComparison.Ordinal) > 0;
+            bool newer = UpdateCheck.IsNewer(info);
             string buildHint = localBuild > 0 ? $" (build {localBuild})" : string.Empty;
             _update.Text = newer
                 ? $"Yeni sürüm: {info.PublishedMobileVersion} (build {info.PublishedMobileBuild}). Telefondaki: {local}{buildHint}."
@@ -137,24 +134,15 @@ public sealed class ConnectionPage : ContentPage
             {
                 _update.Text += " Sunucuda APK dosyası henüz yok.";
             }
-            else if (newer && !showAlerts && !_updatePrompted)
+            else if (newer && !showAlerts)
             {
-                int dismissed = Preferences.Default.Get(DismissedUpdateBuildKey, 0);
-                if (info.PublishedMobileBuild <= dismissed)
+                if (UpdateCheck.IsDismissed(info))
                 {
                     _update.Text += " Hesap ve Bağlantı ekranından \"Güncelle\" ile kurabilirsiniz.";
                 }
                 else
                 {
-                    _updatePrompted = true;
-                    if (await DisplayAlertAsync("Güncelleme", $"Yeni sürüm {info.PublishedMobileVersion} (build {info.PublishedMobileBuild}) hazır. Şimdi güncellensin mi?", "Güncelle", "Sonra"))
-                    {
-                        await UpdateNowAsync();
-                    }
-                    else
-                    {
-                        Preferences.Default.Set(DismissedUpdateBuildKey, info.PublishedMobileBuild);
-                    }
+                    await UpdateCheck.PromptOnceAsync(this, info, _update, _busy);
                 }
             }
         }
@@ -164,33 +152,7 @@ public sealed class ConnectionPage : ContentPage
         }
     }
 
-    private const string DismissedUpdateBuildKey = "dismissed_mobile_update_build";
-
-    private bool _updatePrompted;
-
-    private async Task UpdateNowAsync()
-    {
-        string server = ApiClient.Instance.ServerUrl;
-        if (server.Length == 0)
-        {
-            await DisplayAlertAsync("Güncelleme", "Önce sunucu adresini ayarlayın.", "Tamam");
-            return;
-        }
-
-        await Ui.RunAsync(this, _busy, async () =>
-        {
-            Progress<string> progress = new(text => _update.Text = text);
-            try
-            {
-                await ApkUpdater.DownloadAndInstallAsync(server, progress);
-                _update.Text = "Kurulum ekranında \"Güncelle\"ye basın; uygulama yeni sürümle açılır, oturum korunur.";
-            }
-            catch (Exception exception) when (exception is HttpRequestException or IOException or TaskCanceledException)
-            {
-                throw new ApiException("Güncelleme indirilemedi: " + exception.Message);
-            }
-        });
-    }
+    private Task UpdateNowAsync() => UpdateCheck.InstallAsync(this, _update, _busy);
 
     private async Task OpenDownloadAsync()
     {

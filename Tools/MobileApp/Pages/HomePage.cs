@@ -37,6 +37,8 @@ public sealed class HomePage : ContentPage
     private readonly Label _initials = new() { TextColor = Colors.White, FontSize = 16, FontFamily = "OpenSansSemibold", HorizontalTextAlignment = TextAlignment.Center, VerticalTextAlignment = TextAlignment.Center };
     private readonly Border _updateBanner;
     private readonly Label _updateText = new() { TextColor = Colors.White, FontSize = 14, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap };
+    private readonly ActivityIndicator _updateBusy = new() { IsVisible = false, Color = Ui.Accent };
+    private bool _checkingUpdate;
     private readonly Label _date = new() { FontSize = 15, FontFamily = "OpenSansSemibold", HorizontalTextAlignment = TextAlignment.Center };
     private readonly Dictionary<string, Page> _pages = [];
     private string _permissionKey = string.Empty;
@@ -62,7 +64,13 @@ public sealed class HomePage : ContentPage
             Background = Gradient("#B45309", "#F59E0B"),
             Content = Row(Icons.Glyph(Icons.SystemUpdate, Colors.White, 26), _updateText)
         };
-        AddTap(_updateBanner, () => OpenAsync("Hesap ve Bağlantı", () => new ConnectionPage()));
+        AddTap(_updateBanner, async () =>
+        {
+            if (!_updateBusy.IsRunning)
+            {
+                await UpdateCheck.InstallAsync(this, _updateText, _updateBusy);
+            }
+        });
         _date.SetAppThemeColor(Label.TextColorProperty, Color.FromArgb("#1E3A8A"), Color.FromArgb("#BAE6FD"));
 
         Content = new ScrollView
@@ -78,7 +86,7 @@ public sealed class HomePage : ContentPage
                     {
                         Padding = new Thickness(14, 0),
                         Spacing = 16,
-                        Children = { _updateBanner, _grid, Footer() }
+                        Children = { _updateBanner, _updateBusy, _grid, Footer() }
                     }
                 }
             }
@@ -90,22 +98,55 @@ public sealed class HomePage : ContentPage
     {
         base.OnAppearing();
         _date.Text = DateTime.Now.ToString("d MMMM yyyy, dddd", Turkish);
-        if (_started)
+        if (!_started)
+        {
+            _started = true;
+            try
+            {
+                await ServerUrlCoordinator.BootstrapAsync();
+                Apply(await ApiClient.Instance.RefreshSessionAsync());
+            }
+            catch (ApiException)
+            {
+            }
+        }
+
+        await RefreshUpdateAsync();
+    }
+
+    // Also called when the app comes back to the foreground: an admin session stays open until logout, so the user
+    // may never restart the app.
+    public async Task RefreshUpdateAsync()
+    {
+        if (_checkingUpdate || _updateBusy.IsRunning)
         {
             return;
         }
 
-        _started = true;
+        _checkingUpdate = true;
         try
         {
-            await ServerUrlCoordinator.BootstrapAsync();
-            Apply(await ApiClient.Instance.RefreshSessionAsync());
-        }
-        catch (ApiException)
-        {
-        }
+            UpdateInfo? info = await UpdateCheck.GetAvailableAsync();
+            _updateBanner.IsVisible = info is not null;
+            if (info is null)
+            {
+                return;
+            }
 
-        await CheckUpdateAsync();
+            _updateText.Text = $"Yeni sürüm {info.PublishedMobileVersion} (build {info.PublishedMobileBuild}) hazır. Kurmak için dokunun.";
+            if (Shell.Current?.CurrentPage == this && Navigation.ModalStack.Count == 0)
+            {
+                await UpdateCheck.PromptOnceAsync(this, info, _updateText, _updateBusy);
+            }
+        }
+        catch (Exception exception)
+        {
+            CrashLog.Write(exception, "Güncelleme denetimi");
+        }
+        finally
+        {
+            _checkingUpdate = false;
+        }
     }
 
     private void Apply(UserSession session)
@@ -331,22 +372,6 @@ public sealed class HomePage : ContentPage
         Label version = Ui.Note($"Arsan Gaz ERP mobil {AppInfo.Current.VersionString} (build {AppInfo.Current.BuildString})");
         version.HorizontalTextAlignment = TextAlignment.Center;
         return new VerticalStackLayout { Spacing = 6, Children = { line, version } };
-    }
-
-    private async Task CheckUpdateAsync()
-    {
-        try
-        {
-            UpdateInfo info = await ApiClient.Instance.GetUpdateInfoAsync();
-            if (int.TryParse(AppInfo.Current.BuildString, out int local) && info.ApkReady && info.PublishedMobileBuild > local)
-            {
-                _updateText.Text = $"Yeni sürüm {info.PublishedMobileVersion} (build {info.PublishedMobileBuild}) hazır. Kurmak için dokunun.";
-                _updateBanner.IsVisible = true;
-            }
-        }
-        catch (ApiException)
-        {
-        }
     }
 
     // Pages are kept like the former tabs: some subscribe to app-wide events in their constructor, and state such as a
