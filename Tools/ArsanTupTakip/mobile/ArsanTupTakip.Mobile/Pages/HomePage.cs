@@ -322,6 +322,7 @@ public sealed class HomePage : ContentPage
 
         await RefreshTripTileAsync();
         await RefreshUpdateAsync();
+        await LocationPermission.EnsureAsync(this);
     }
 
     // Also called when the app comes back to the foreground. Permissions or the fixed vehicle changed in the panel
