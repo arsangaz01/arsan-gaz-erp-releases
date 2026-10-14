@@ -80,6 +80,8 @@ public static class Perm
     public const string TripStart = "sefer-baslat";
     public const string TripLoad = "sefer-yukle";
     public const string TripDeliver = "sefer-teslim";
+    public const string TripPickup = "sefer-bos-alim";
+    public const string TripRoute = "sefer-rota";
     public const string TripReturn = "sefer-donus";
     public const string TripClose = "sefer-kapat";
     public const string VehicleView = "arac-goruntule";

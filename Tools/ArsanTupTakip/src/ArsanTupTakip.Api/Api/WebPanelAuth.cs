@@ -323,6 +323,11 @@ internal sealed class WebPanelAuth
             return "Kullanıcı bulunamadı.";
         }
 
+        if (existing.Role == PanelRoles.Customer)
+        {
+            return "Müşteri hesapları Yönetim > Müşteri hesapları bölümünden düzenlenir.";
+        }
+
         bool actorIsAdmin = actor.Role == PanelRoles.Admin;
         if (!actorIsAdmin && (existing.Role == PanelRoles.Admin || normalizedRole == PanelRoles.Admin))
         {
@@ -507,6 +512,180 @@ internal sealed class WebPanelAuth
         return null;
     }
 
+    // Customer portal account for one customer. Only a Yönetici reaches this (panel /yonetim); the customer must exist.
+    internal string? CreateCustomerAccount(WebPanelUser actor, string ip, string? userName, string? displayName, int customerId, string customerName,
+        string? password, bool mustChange)
+    {
+        string name = (userName ?? string.Empty).Trim();
+        if (WebPanelUserStore.UserNameProblem(name) is string nameProblem)
+        {
+            return nameProblem;
+        }
+
+        if (WebPanelUserStore.PasswordProblem(password, name) is string passwordProblem)
+        {
+            return passwordProblem;
+        }
+
+        string display = CleanDisplayName(displayName, customerName);
+        string? error = WebPanelUserStore.Update(users =>
+        {
+            if (users.Any(u => string.Equals(u.UserName, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                return "Bu kullanıcı adı zaten var veya silinmiş bir hesaba ait; başka bir ad seçin.";
+            }
+
+            WebPanelUser created = new()
+            {
+                Id = users.Count == 0 ? 1 : users.Max(u => u.Id) + 1,
+                UserName = name,
+                DisplayName = display,
+                Role = PanelRoles.Customer,
+                CustomerId = customerId,
+                CreatedBy = actor.UserName,
+                MustChangePassword = mustChange
+            };
+            WebPanelUserStore.SetPassword(created, password!);
+            users.Add(created);
+            return null;
+        });
+        if (error is null)
+        {
+            Notify(actor, ip, "Müşteri hesabı oluşturuldu", name, $"{customerName}" + (mustChange ? ", ilk girişte şifre değiştirecek" : string.Empty));
+        }
+
+        return error;
+    }
+
+    internal string? UpdateCustomerAccount(WebPanelUser actor, string ip, int id, string? displayName, bool active)
+    {
+        List<string> changes = [];
+        string? error = WebPanelUserStore.Update(users =>
+        {
+            WebPanelUser? target = users.FirstOrDefault(u => u.Id == id && u.DeletedAt is null && u.Role == PanelRoles.Customer);
+            if (target is null)
+            {
+                return "Müşteri hesabı bulunamadı.";
+            }
+
+            string display = CleanDisplayName(displayName, target.DisplayName);
+            if (display != target.DisplayName)
+            {
+                changes.Add($"ad: {display}");
+                target.DisplayName = display;
+            }
+
+            if (active != target.IsActive)
+            {
+                changes.Add(active ? "aktif edildi" : "pasife alındı");
+                target.IsActive = active;
+                target.SecurityStamp++;
+            }
+
+            return null;
+        });
+        if (error is null && changes.Count > 0)
+        {
+            DropSessions(id, except: null, onlyStale: true);
+            Notify(actor, ip, "Müşteri hesabı güncellendi", WebPanelUserStore.Find(id)?.UserName, string.Join(", ", changes));
+        }
+
+        return error;
+    }
+
+    internal const string CustomerCookieName = "att_musteri";
+
+    internal static string CustomerCookiePath(HttpContext context) => context.Request.PathBase + "/musteri";
+
+    // Portal login: only active customer accounts while the portal feature is on. Returns null or the message to show.
+    internal async Task<string?> CustomerLoginAsync(HttpContext context, string? userName, string? password)
+    {
+        if (!Features.IsOn(Features.CustomerPortal))
+        {
+            return "Müşteri girişi şu an kapalı.";
+        }
+
+        string ip = ClientIp(context);
+        (WebPanelUser? user, string? error) = await AuthenticateAsync(ip, userName, password, "müşteri portalı");
+        if (user is null)
+        {
+            return error;
+        }
+
+        if (user.Role != PanelRoles.Customer || user.CustomerId is null)
+        {
+            WebPanelAudit.Write(user.UserName, "Müşteri portalı girişi reddedildi (müşteri hesabı değil)", ip: ip);
+            return "Bu adres yalnızca müşteri hesapları içindir. Personel girişi için web panelini kullanın.";
+        }
+
+        DateTime now = _clock();
+        string token = NewToken();
+        _sessions[TokenKey(token)] = new WebPanelSession(user.Id, user.CreatedAt, user.SecurityStamp, now + SessionLifetime, ip);
+        context.Response.Cookies.Append(CustomerCookieName, token, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = IsSecureRequest(context),
+            SameSite = SameSiteMode.Strict,
+            Path = CustomerCookiePath(context),
+            MaxAge = SessionLifetime
+        });
+        AppLog.Write($"Müşteri portalına giriş: {user.UserName} ({ip}).");
+        WebPanelAudit.Write(user.UserName, "Giriş (müşteri portalı)", ip: ip);
+        return null;
+    }
+
+    // The signed-in customer account, or null when signed out, expired, deactivated, changed or the portal is off.
+    internal (WebPanelSession Session, WebPanelUser User)? CurrentCustomer(HttpContext context)
+    {
+        string token = context.Request.Cookies[CustomerCookieName] ?? string.Empty;
+        if (token.Length is 0 or > 100 || !_sessions.TryGetValue(TokenKey(token), out WebPanelSession? session))
+        {
+            return null;
+        }
+
+        WebPanelUser? user = WebPanelUserStore.Find(session.UserId);
+        if (session.ExpiresUtc <= _clock() || user is null || !user.IsActive || user.CreatedAt != session.UserCreatedAt)
+        {
+            _sessions.TryRemove(TokenKey(token), out _);
+            return null;
+        }
+
+        return user.SecurityStamp == session.Stamp && user.Role == PanelRoles.Customer && user.CustomerId is not null && Features.IsOn(Features.CustomerPortal)
+            ? (session, user)
+            : null;
+    }
+
+    internal void CustomerLogout(HttpContext context)
+    {
+        string token = context.Request.Cookies[CustomerCookieName] ?? string.Empty;
+        if (token.Length > 0 && _sessions.TryRemove(TokenKey(token), out WebPanelSession? session)
+            && WebPanelUserStore.Find(session.UserId) is { } user)
+        {
+            WebPanelAudit.Write(user.UserName, "Çıkış (müşteri portalı)", ip: ClientIp(context));
+        }
+
+        context.Response.Cookies.Delete(CustomerCookieName, new CookieOptions { Path = CustomerCookiePath(context) });
+    }
+
+    internal async Task<string?> CustomerChangePasswordAsync(HttpContext context, string? currentPassword, string? newPassword, string? repeat)
+    {
+        if (CurrentCustomer(context) is not (WebPanelSession session, WebPanelUser user))
+        {
+            return "Oturum kapalı; yeniden giriş yapın.";
+        }
+
+        (string? error, int stamp) = await ChangePasswordCoreAsync(user, ClientIp(context), currentPassword, newPassword, repeat);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        string currentKey = TokenKey(context.Request.Cookies[CustomerCookieName] ?? string.Empty);
+        _sessions[currentKey] = session with { Stamp = stamp };
+        DropSessions(user.Id, except: currentKey);
+        return null;
+    }
+
     private static string? GrantProblem(WebPanelUser actor, HashSet<string> before, HashSet<string> after)
     {
         if (actor.Role == PanelRoles.Admin)
@@ -514,7 +693,7 @@ internal sealed class WebPanelAuth
             return null;
         }
 
-        HashSet<string> mine = Perm.Effective(actor);
+        HashSet<string> mine = Perm.Assigned(actor);
         List<string> notMine = after.Except(before).Where(k => !mine.Contains(k)).Select(k => Perm.ByKey[k].Label).ToList();
         return notMine.Count == 0 ? null : "Kendinizde olmayan yetkiyi veremezsiniz: " + string.Join(", ", notMine) + ".";
     }

@@ -37,10 +37,13 @@ internal static class Perm
     internal const string CustomerView = "musteri-goruntule";
     internal const string CustomerAdd = "musteri-ekle";
     internal const string CustomerStockTotals = "musteri-stok-toplam";
+    internal const string CustomerRequests = "musteri-talepleri";
     internal const string TripView = "sefer-goruntule";
     internal const string TripStart = "sefer-baslat";
     internal const string TripLoad = "sefer-yukle";
     internal const string TripDeliver = "sefer-teslim";
+    internal const string TripPickup = "sefer-bos-alim";
+    internal const string TripRoute = "sefer-rota";
     internal const string TripReturn = "sefer-donus";
     internal const string TripClose = "sefer-kapat";
     internal const string TripLossCheck = "sefer-kayip-kontrol";
@@ -103,13 +106,16 @@ internal static class Perm
         new("Müşteriler", [
             P(CustomerView, "Müşterileri görüntüleme", "Müşteriler sekmesi ve müşteri telefonları. Yoksa seçim listelerinde yalnızca ad ve şehir görünür."),
             P(CustomerAdd, "Yeni müşteri", "Yeni müşteri kaydı açabilir."),
-            P(CustomerStockTotals, "Müşteri stoğunda tüm müşterilerin toplamı", "Panel Müşteri Stoku sekmesinde müşterilerdeki toplam tüp sayılarını, gaz türü ve boyuta göre toplam tabloyu görür ve tüm müşterilerin stoğunu Excel'e aktarır. Yoksa yalnızca müşteri bazında sayılar görünür. Varsayılan olarak yalnızca Yönetici'de vardır.", PanelLogin, CylinderView)
+            P(CustomerStockTotals, "Müşteri stoğunda tüm müşterilerin toplamı", "Panel Müşteri Stoku sekmesinde müşterilerdeki toplam tüp sayılarını, gaz türü ve boyuta göre toplam tabloyu görür ve tüm müşterilerin stoğunu Excel'e aktarır. Yoksa yalnızca müşteri bazında sayılar görünür. Varsayılan olarak yalnızca Yönetici'de vardır.", PanelLogin, CylinderView),
+            P(CustomerRequests, "Müşteri talepleri (portal)", "Panelde Müşteri Talepleri sekmesi: müşterilerin portaldan gönderdiği boş tüp alımı ve dolu tüp siparişi taleplerini görür, tamamlandı veya iptal olarak işaretler. Müşteri portalı özelliği açıkken çalışır.", PanelLogin)
         ]),
         new("Seferler", [
             P(TripView, "Seferleri görüntüleme", "Sefer listesi, sefer ayrıntısı, araç yükü ve kontrol."),
             P(TripStart, "Sefer başlatma ve sefere araç ekleme", "Kayıtlı araçlardan seçerek sefer açar.", TripView),
             P(TripLoad, "Araca yükleme (sefer)", "Seferdeki araca tüp okutup yükler.", TripView),
             P(TripDeliver, "Seferde müşteriye teslim", "Seferdeki tüpleri müşteriye teslim olarak okutur.", TripView),
+            P(TripPickup, "Seferde müşteriden boş alım", "Müşteriden alınan boş tüpleri okutup araca alır; teslim ve boş alımdan sonra müşteriye verilen/alınan sayısı ve müşteri bakiyesi görünür. \"Müşteride dolu/boş değişimi\" özelliği açıkken çalışır.", TripView),
+            P(TripRoute, "Sefer rotası (durak sırası, yol tarifi)", "Seferdeki araç için müşteri sırasını görür ve düzenler, yol tarifini açar, önerilen müşterileri ekler. \"Sefer rotası\" özelliği açıkken çalışır.", TripView),
             P(TripReturn, "Sefer dönüşü (depoya)", "Dönen aracın tüplerini depoya okutur.", TripView),
             P(TripClose, "Seferi kapatma", "Seferi kapatır. Yeni seferlerde okutulmayan her tüpe gerekçe seçilmeden kapatılamaz; gerekçeler yöneticiye bildirilir.", TripView),
             P(TripLossCheck, "Kayıp kontrolü onayı", "Okutulmayan tüplerin gerekçelerini \"kontrol edildi\" olarak işaretler ve Özet'te kontrol bekleyen sefer eksiklerini görür. Varsayılan olarak yalnızca Yönetici'de vardır.", TripView)
@@ -137,8 +143,8 @@ internal static class Perm
     [
         PanelLogin, MobileLogin, Summary, Reports, CylinderView, CylinderRegister, CylinderEdit, CylinderDeactivate, CylinderAudit, StockCount, LabelPrint,
         MoveDeliver, MoveReturn, MoveVehicle, MoveFilling, FillRecord, MoveService, MoveScrap, MoveFullness, MoveBulk, MoveOverride,
-        MovementHistory, Export, CustomerView, CustomerAdd, TripView, TripStart, TripLoad, TripDeliver, TripReturn, TripClose,
-        VehicleView, VehicleAdd, VehicleEdit, VehicleDeactivate
+        MovementHistory, Export, CustomerView, CustomerAdd, CustomerRequests, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute,
+        TripReturn, TripClose, VehicleView, VehicleAdd, VehicleEdit, VehicleDeactivate
     ];
 
     private static readonly string[] ViewerDefaults =
@@ -147,7 +153,7 @@ internal static class Perm
     // Phone only: the trip flow (with reasons for unscanned cylinders), cylinder info, customer stock and the depot count.
     // CylinderView covers the cylinder info screen, the customer stock screen and the customer picker without phones.
     private static readonly string[] DriverDefaults =
-        [MobileLogin, CylinderView, StockCount, TripView, TripStart, TripLoad, TripDeliver, TripReturn, TripClose];
+        [MobileLogin, CylinderView, StockCount, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute, TripReturn, TripClose];
 
     internal static IReadOnlyList<string> RoleDefaults(string? role) => role switch
     {
@@ -199,8 +205,18 @@ internal static class Perm
         return set;
     }
 
-    internal static HashSet<string> Effective(WebPanelUser user) =>
+    // What the role and the per-user choices give, whether or not the features behind them are switched on. The user
+    // editors read and write this set so a switched-off feature never turns into a stored revocation.
+    internal static HashSet<string> Assigned(WebPanelUser user) =>
         user.Role == PanelRoles.Admin ? [.. All] : Effective(user.Role, PermissionOverrides.For(user.Id));
+
+    // What the user may do now: the assigned permissions minus those of switched-off features (Features).
+    internal static HashSet<string> Effective(WebPanelUser user)
+    {
+        HashSet<string> set = Assigned(user);
+        set.ExceptWith(Features.DisabledPermissions());
+        return set;
+    }
 
     internal static bool Has(WebPanelUser user, string permission) => Effective(user).Contains(permission);
 
@@ -263,6 +279,11 @@ internal static class PermissionEndpointExtensions
         HashSet<string> effective = Perm.Effective(user);
         if (required is null || !required.AnyOf.Any(effective.Contains))
         {
+            if (required is not null && required.AnyOf.Select(Features.OwnerOf).ToList() is { } owners && owners.All(f => f is not null && !Features.IsOn(f.Key)))
+            {
+                return FeatureOff(owners[0]!);
+            }
+
             string wanted = required is null ? "tanımsız" : string.Join(" / ", required.AnyOf.Select(k => Perm.ByKey.TryGetValue(k, out PermissionInfo? p) ? p.Label : k));
             return DeniedText(wanted);
         }
@@ -272,6 +293,10 @@ internal static class PermissionEndpointExtensions
 
     private static IResult DeniedText(string what) =>
         Results.Json(new { error = $"Bu işlem için yetkiniz yok ({what}). Yöneticinizden yetki isteyin.", permission = what }, statusCode: StatusCodes.Status403Forbidden);
+
+    internal static IResult FeatureOff(FeatureInfo feature) =>
+        Results.Json(new { error = $"\"{feature.Label}\" özelliği şu an kapalı. Yönetici web panelde Yönetim > Özellikler bölümünden açabilir.", featureOff = feature.Key },
+            statusCode: StatusCodes.Status403Forbidden);
 
     internal static IResult Denied(params string[] keys) =>
         DeniedText(string.Join(" / ", keys.Select(k => Perm.ByKey.TryGetValue(k, out PermissionInfo? p) ? p.Label : k)));

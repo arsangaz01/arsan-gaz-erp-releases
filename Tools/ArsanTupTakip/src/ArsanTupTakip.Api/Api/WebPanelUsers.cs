@@ -16,6 +16,10 @@ internal static class PanelRoles
     internal const string Driver = "Şoför";
     internal static readonly string[] All = [Admin, Operator, Viewer, Driver];
 
+    // Customer portal accounts (WebPanelUser.CustomerId). Deliberately not in All and not accepted by Normalize: they
+    // have no staff permission at all, cannot be made from the staff user editor and only open /musteri.
+    internal const string Customer = "Müşteri";
+
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
 
     internal static string Description(string role) => role switch
@@ -63,6 +67,9 @@ internal sealed class WebPanelUser
 
     // Normalized plate of the vehicle this user always drives; trips of the user start with it and no other vehicle.
     public string? FixedPlate { get; set; }
+
+    // Only for PanelRoles.Customer: the customer whose cylinders the portal account sees.
+    public int? CustomerId { get; set; }
 
     // Raised on deactivation, role change and password change; sessions carrying an older value are refused.
     public int SecurityStamp { get; set; }

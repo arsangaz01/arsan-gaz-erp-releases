@@ -129,12 +129,19 @@ internal static class CylinderTripEndpoints
                     request.TripId, request.Codes ?? [], request.CustomerId, request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
                 int ok = results.Count(r => r.Ok);
                 string failures = string.Join("\n", results.Where(r => !r.Ok).Select(r => $"{r.Code}: {r.Message}"));
-                CustomerTripBalance balance = await service.CustomerBalanceAsync(request.TripId, request.CustomerId!.Value);
-                return Results.Ok(new
+                string message = $"{ok}/{results.Count} tüp teslim kaydedildi." + (failures.Length > 0 ? "\n" + failures : string.Empty);
+                if (ok > 0)
                 {
-                    message = $"{ok}/{results.Count} tüp teslim kaydedildi." + (failures.Length > 0 ? "\n" + failures : string.Empty) + "\n" + balance.Text,
-                    balance
-                });
+                    message += await CompleteRequestsAsync(request.CustomerId!.Value, CustomerRequests.Order, request.TripId);
+                }
+
+                if (!Features.IsOn(Features.CustomerExchange))
+                {
+                    return Results.Ok(new { message });
+                }
+
+                CustomerTripBalance balance = await service.CustomerBalanceAsync(request.TripId, request.CustomerId!.Value);
+                return Results.Ok(new { message = message + "\n" + balance.Text, balance });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
@@ -152,9 +159,10 @@ internal static class CylinderTripEndpoints
                     request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
                 int ok = result.Results.Count(r => r.Ok);
                 string details = string.Join("\n", result.Results.Where(r => !r.Ok || r.Message.Contains('⚠')).Select(r => r.Ok ? r.Message : $"{r.Code}: {r.Message}"));
+                string completed = ok > 0 ? await CompleteRequestsAsync(request.CustomerId!.Value, CustomerRequests.Pickup, request.TripId) : string.Empty;
                 return Results.Ok(new
                 {
-                    message = $"{ok}/{result.Results.Count} boş tüp araca alındı." + (details.Length > 0 ? "\n" + details : string.Empty) + "\n" + result.Balance.Text,
+                    message = $"{ok}/{result.Results.Count} boş tüp araca alındı." + (details.Length > 0 ? "\n" + details : string.Empty) + completed + "\n" + result.Balance.Text,
                     balance = result.Balance
                 });
             }
@@ -162,7 +170,7 @@ internal static class CylinderTripEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        }).Requires(Perm.TripDeliver);
+        }).Requires(Perm.TripPickup);
 
         app.MapPost("/api/sefer/donus", async (TripReturnRequest request, HttpContext context) =>
         {
@@ -227,10 +235,10 @@ internal static class CylinderTripEndpoints
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
-        }).Requires(Perm.TripView);
+        }).Requires(Perm.TripRoute);
 
         app.MapGet("/api/sefer/{tripId:int}/rota/oneriler", async (int tripId, string? plaka) =>
-            Results.Ok(await TripRoutes.SuggestionsAsync(tripId, plaka))).Requires(Perm.TripView);
+            Results.Ok(await TripRoutes.SuggestionsAsync(tripId, plaka, Features.IsOn(Features.CustomerPortal)))).Requires(Perm.TripRoute);
 
         app.MapPost("/api/sefer/rota/ekle", async (TripStopAddRequest request, HttpContext context) =>
             await RouteAsync(async () => await TripRoutes.AddAsync(request.TripId, DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate),
@@ -300,7 +308,19 @@ internal static class CylinderTripEndpoints
 
     private static WebPanelUser User(HttpContext context) => (WebPanelUser)context.Items["panelAccount"]!;
 
-    internal static readonly string[] RouteEditors = [Perm.TripStart, Perm.TripDeliver];
+    internal static readonly string[] RouteEditors = [Perm.TripRoute];
+
+    // With the customer portal on, a delivery closes the customer's open orders and a pickup the open pickup requests.
+    private static async Task<string> CompleteRequestsAsync(int customerId, string kind, int tripId)
+    {
+        if (!Features.IsOn(Features.CustomerPortal))
+        {
+            return string.Empty;
+        }
+
+        int closed = await CustomerRequests.CompleteForCustomerAsync(customerId, kind, "Sefer #" + tripId, $"Seferde {(kind == CustomerRequests.Pickup ? "boş alım" : "teslim")} okutuldu (sefer #{tripId}).");
+        return closed > 0 ? $"\nMüşterinin {closed} açık talebi ({CustomerRequests.KindLabel(kind).ToLower(System.Globalization.CultureInfo.GetCultureInfo("tr-TR"))}) tamamlandı." : string.Empty;
+    }
 
     private static string? OwnPlate(HttpContext context) => User(context).FixedPlate is { Length: > 0 } plate ? plate : null;
 

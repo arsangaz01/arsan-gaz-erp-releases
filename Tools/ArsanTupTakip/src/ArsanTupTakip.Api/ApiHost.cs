@@ -45,6 +45,7 @@ internal static class ApiHost
         CylinderTripEndpoints.Map(app);
         VehicleEndpoints.Map(app);
         WebPanelEndpoints.Map(app);
+        CustomerPortalEndpoints.Map(app);
         return app;
     }
 }

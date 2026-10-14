@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="base-path" content="{{BASE}}">
+<title>Arsan Gaz · Müşteri</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 666 666'%3E%3Crect width='666' height='666' rx='120' fill='%23fff'/%3E%3Cg transform='translate(0 88)'%3E%3Cpath fill='%23075A9C' d='M20 470 300 18 480 300C405 264 210 356 20 470Z'/%3E%3Cpath fill='%2300AEEF' d='M20 470C125 340 325 120 630 126L535 312C382 293 184 376 20 470Z'/%3E%3Cpath fill='%23D6DADF' d='M20 470C196 380 372 290 535 312L646 470C445 402 230 412 20 470Z'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+:root { --navy:#1e3a8a; --sea:#0284c7; --sea-light:#e0f2fe; --bg:#f3f4f6; --line:#e5e7eb; --text:#1f2937; --muted:#6b7280; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:"Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); font-size:16px; }
+header { background:var(--navy); color:#fff; padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+header h1 { font-size:18px; margin:0; font-weight:600; display:flex; align-items:center; gap:10px; flex:1; }
+.brand-logo { width:34px; height:34px; flex:none; background:#fff; border-radius:8px; padding:4px; }
+main { max-width:760px; margin:0 auto; padding:14px; }
+.card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+.card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--sea); margin:0 0 12px; }
+.muted { color:var(--muted); font-size:14px; }
+.hidden { display:none !important; }
+input, select, textarea { font:inherit; padding:10px 12px; border:1px solid #d6d3d1; border-radius:10px; background:#fff; color:var(--text); width:100%; }
+label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); }
+form { display:flex; flex-direction:column; gap:10px; }
+button { font:inherit; border-radius:10px; padding:11px 16px; cursor:pointer; border:1px solid var(--sea); }
+button.primary { background:var(--sea); color:#fff; }
+button.secondary { background:var(--sea-light); color:var(--navy); border-color:#7dd3fc; }
+button.small { padding:6px 10px; font-size:14px; }
+header button { background:rgba(255,255,255,.12); color:#fff; border-color:rgba(255,255,255,.45); padding:7px 12px; font-size:14px; }
+button:disabled { opacity:.5; }
+.msg { padding:10px 12px; border-radius:10px; margin:8px 0; white-space:pre-line; }
+.msg.err { background:#fef2f2; color:#b91c1c; border:1px solid #fca5a5; }
+.msg.ok { background:#eff6ff; color:#0369a1; border:1px solid #bfdbfe; }
+.stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.stat { border:1px solid var(--line); border-radius:12px; padding:12px; text-align:center; }
+.stat .n { font-size:28px; font-weight:700; color:var(--sea); }
+.stat .l { font-size:13px; color:var(--muted); }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th { text-align:left; font-size:12px; color:var(--muted); padding:7px 6px; border-bottom:1px solid var(--line); }
+td { padding:7px 6px; border-bottom:1px solid #f0efee; vertical-align:top; }
+.table-wrap { overflow-x:auto; }
+.kinds { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.kinds label { flex-direction:row; align-items:center; gap:8px; border:1px solid var(--line); border-radius:12px; padding:12px; font-size:15px; color:var(--text); cursor:pointer; }
+.kinds input { width:auto; }
+.badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:12px; background:#f3f4f6; border:1px solid var(--line); }
+.badge.open { background:#e0f2fe; border-color:#7dd3fc; color:#0369a1; }
+.warn { color:#b91c1c; }
+#login { max-width:400px; margin:8vh auto; }
+@media (max-width:520px) { .kinds { grid-template-columns:1fr; } .stat .n { font-size:24px; } }
+</style>
+</head>
+<body>
+<div id="login" class="hidden">
+  <div class="card">
+    <h1 style="display:flex;align-items:center;gap:10px;margin:0 0 6px;font-size:20px;color:var(--sea)"><svg class="brand-logo" viewBox="0 0 666 490" aria-hidden="true"><path fill="#075A9C" d="M20 470 300 18 480 300C405 264 210 356 20 470Z"/><path fill="#00AEEF" d="M20 470C125 340 325 120 630 126L535 312C382 293 184 376 20 470Z"/><path fill="#D6DADF" d="M20 470C196 380 372 290 535 312L646 470C445 402 230 412 20 470Z"/></svg>Arsan Gaz</h1>
+    <div class="muted">Müşteri girişi: tüpleriniz ve talepleriniz</div>
+    <form id="login-form" autocomplete="on" style="margin-top:14px">
+      <input id="login-user" name="username" autocomplete="username" placeholder="Kullanıcı adı" required maxlength="100">
+      <input id="login-pass" name="password" type="password" autocomplete="current-password" placeholder="Şifre" required maxlength="200">
+      <button class="primary" type="submit">Giriş yap</button>
+      <div id="login-msg" class="msg err hidden"></div>
+    </form>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <h1><svg class="brand-logo" viewBox="0 0 666 490" aria-hidden="true"><path fill="#075A9C" d="M20 470 300 18 480 300C405 264 210 356 20 470Z"/><path fill="#00AEEF" d="M20 470C125 340 325 120 630 126L535 312C382 293 184 376 20 470Z"/><path fill="#D6DADF" d="M20 470C196 380 372 290 535 312L646 470C445 402 230 412 20 470Z"/></svg><span id="who">Arsan Gaz</span></h1>
+    <button id="password-open" type="button">Şifre</button>
+    <button id="logout" type="button">Çıkış</button>
+  </header>
+  <main>
+    <div id="global-msg" class="msg hidden"></div>
+
+    <div class="card hidden" id="password-card">
+      <h2>Şifre değiştir</h2>
+      <p class="muted hidden" id="password-forced">İlk girişiniz: devam etmeden önce kendinize yeni bir şifre belirleyin (en az 8 karakter, harf ve rakam).</p>
+      <form id="password-form">
+        <input id="username-hidden" name="username" autocomplete="username" class="hidden" readonly>
+        <label>Mevcut şifre<input id="p-current" type="password" autocomplete="current-password" required maxlength="200"></label>
+        <label>Yeni şifre<input id="p-new" type="password" autocomplete="new-password" required minlength="8" maxlength="200"></label>
+        <label>Yeni şifre (tekrar)<input id="p-repeat" type="password" autocomplete="new-password" required minlength="8" maxlength="200"></label>
+        <button class="primary" type="submit">Şifreyi kaydet</button>
+        <div id="password-msg" class="msg hidden"></div>
+      </form>
+    </div>
+
+    <div id="content">
+      <div class="card">
+        <h2>Talep gönder</h2>
+        <form id="request-form">
+          <div class="kinds">
+            <label><input type="radio" name="kind" value="bos-alim" checked> Boş tüplerimi alın</label>
+            <label><input type="radio" name="kind" value="siparis"> Dolu tüp istiyorum</label>
+          </div>
+          <label>Adet (isteğe bağlı)<input id="r-count" type="number" min="1" max="500" inputmode="numeric" placeholder="ör. 4"></label>
+          <label>Not (isteğe bağlı: gaz türü, saat, adres tarifi)<textarea id="r-note" rows="2" maxlength="300"></textarea></label>
+          <button class="primary" type="submit">Talebi gönder</button>
+          <div id="request-msg" class="msg hidden"></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Taleplerim</h2>
+        <div class="table-wrap"><table id="requests"></table></div>
+      </div>
+
+      <div class="card">
+        <h2>Bizdeki kayıtlara göre sizdeki tüpler</h2>
+        <div class="stats" id="stats"></div>
+        <div class="table-wrap" style="margin-top:12px"><table id="groups"></table></div>
+        <p class="muted">Sayılar teslim ve alım okutmalarına göre tutulur. Farklılık görürseniz bize bildirin.</p>
+      </div>
+
+      <div class="card">
+        <h2>Tüp listesi</h2>
+        <div class="table-wrap"><table id="cylinders"></table></div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="{{BASE}}/musteri/app.js"></script>
+</body>
+</html>

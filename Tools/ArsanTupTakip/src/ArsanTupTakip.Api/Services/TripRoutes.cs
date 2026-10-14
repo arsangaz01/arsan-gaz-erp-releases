@@ -163,7 +163,8 @@ public static class TripRoutes
         forecast.DaysUntilExpected <= 2 && forecast.DaysUntilExpected >= -Math.Max(14, forecast.TypicalIntervalDays);
 
     // Customers whose usual ordering rhythm says they are due now and are not on the route yet, the most urgent first.
-    public static async Task<List<TripStopSuggestion>> SuggestionsAsync(int tripId, string? plate)
+    // With customerRequests the customers with an open portal request come first.
+    public static async Task<List<TripStopSuggestion>> SuggestionsAsync(int tripId, string? plate, bool customerRequests = false)
     {
         string? normalized = CylinderTracking.NormalizePlate(plate);
         await using TupTakipDbContext db = new();
@@ -176,9 +177,19 @@ public static class TripRoutes
             .OrderBy(x => Math.Abs(x.DaysUntilExpected))
             .Take(20)
             .ToList();
-        List<int> ids = due.Select(x => x.CustomerId).ToList();
-        Dictionary<int, string?> cities = await db.Customers.AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.City);
-        return due.Select(x => new TripStopSuggestion(x.CustomerId, x.CustomerName, cities.GetValueOrDefault(x.CustomerId), "Sipariş zamanı: " + x.Timing)).ToList();
+        Dictionary<int, List<CustomerRequest>> requested = customerRequests
+            ? (await CustomerRequests.OpenByCustomerAsync()).Where(p => !onRoute.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value)
+            : [];
+        List<int> ids = [.. due.Select(x => x.CustomerId), .. requested.Keys];
+        var customers = await db.Customers.AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => new { x.CompanyName, x.City });
+        List<TripStopSuggestion> result = requested
+            .Where(p => customers.ContainsKey(p.Key))
+            .OrderBy(p => p.Value.Min(r => r.CreatedAt))
+            .Select(p => new TripStopSuggestion(p.Key, customers[p.Key].CompanyName, customers[p.Key].City, "Müşteri talebi: " + CustomerRequests.Summary(p.Value)))
+            .ToList();
+        result.AddRange(due.Where(x => !requested.ContainsKey(x.CustomerId))
+            .Select(x => new TripStopSuggestion(x.CustomerId, x.CustomerName, customers.GetValueOrDefault(x.CustomerId)?.City, "Sipariş zamanı: " + x.Timing)));
+        return result;
     }
 
     private static void EnsurePlate(CylinderTripStop stop, string? onlyPlate)

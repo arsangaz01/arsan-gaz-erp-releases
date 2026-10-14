@@ -37,7 +37,7 @@ internal static class WebPanelEndpoints
 
         app.Use(async (context, next) =>
         {
-            if (context.Request.Path.StartsWithSegments("/panel"))
+            if (context.Request.Path.StartsWithSegments("/panel") || context.Request.Path.StartsWithSegments("/musteri"))
             {
                 IHeaderDictionary headers = context.Response.Headers;
                 headers["X-Content-Type-Options"] = "nosniff";
@@ -101,6 +101,7 @@ internal static class WebPanelEndpoints
                 role = user.Role,
                 permissions = Perm.Effective(user).Order(StringComparer.Ordinal).ToArray(),
                 mustChangePassword = user.MustChangePassword,
+                features = Features.Catalog.Where(f => Features.IsOn(f.Key)).Select(f => f.Key).ToArray(),
                 sessionMinutes = (int)WebPanelAuth.SessionLifetime.TotalMinutes,
                 roles = PanelRoles.All.Select(r => new { name = r, description = PanelRoles.Description(r) })
             });
@@ -127,12 +128,13 @@ internal static class WebPanelEndpoints
             int self = Account(context).Id;
             IReadOnlyList<MobileSession> phones = devices.All();
             return Results.Ok(WebPanelUserStore.All()
+                .Where(u => u.Role != PanelRoles.Customer)
                 .OrderByDescending(u => u.IsActive)
                 .ThenBy(u => Array.IndexOf(PanelRoles.All, u.Role))
                 .ThenBy(u => u.UserName, StringComparer.OrdinalIgnoreCase)
                 .Select(u =>
                 {
-                    Dictionary<string, bool> diff = u.Role == PanelRoles.Admin ? [] : Perm.Diff(u.Role, Perm.Effective(u));
+                    Dictionary<string, bool> diff = u.Role == PanelRoles.Admin ? [] : Perm.Diff(u.Role, Perm.Assigned(u));
                     return new
                     {
                         u.Id,
@@ -149,7 +151,7 @@ internal static class WebPanelEndpoints
                         PasswordChanged = u.PasswordChangedAt is DateTime changed ? LocalText(changed) : null,
                         Sessions = auth.ActiveSessionCount(u.Id),
                         Phones = phones.Count(p => p.UserId == u.Id),
-                        Permissions = Perm.Effective(u).Order(StringComparer.Ordinal).ToArray(),
+                        Permissions = Perm.Assigned(u).Order(StringComparer.Ordinal).ToArray(),
                         Granted = diff.Where(p => p.Value).Select(p => p.Key).ToArray(),
                         Revoked = diff.Where(p => !p.Value).Select(p => p.Key).ToArray(),
                         IsSelf = u.Id == self
@@ -561,7 +563,7 @@ internal static class WebPanelEndpoints
                     c.CheckedBy,
                     c.Pickup
                 }),
-                customers = detail.Customers ?? [],
+                customers = Features.IsOn(Features.CustomerExchange) ? detail.Customers ?? [] : [],
                 unexpected = detail.UnexpectedReturns.Select(u => new
                 {
                     u.CylinderId,
@@ -765,6 +767,7 @@ internal static class WebPanelEndpoints
 
         StockCountEndpoints.MapPanel(api);
         LabelEndpoints.MapPanel(api);
+        CustomerPortalEndpoints.MapPanel(api, auth);
 
         api.MapGet("/musteriler", async (string? q, int? take, HttpContext context) =>
             Results.Ok(await CustomerChoices.SearchAsync(q, Perm.Has(Account(context), Perm.CustomerView), take ?? 50)))
@@ -1079,7 +1082,7 @@ internal static class WebPanelEndpoints
     }
 
     // panel.html refers to {{BASE}} so links and API calls work behind the /tuptakip path prefix.
-    private static IResult Asset(string name, string contentType, HttpContext context)
+    internal static IResult Asset(string name, string contentType, HttpContext context)
     {
         using Stream? stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("WebPanel." + name);
         if (stream is null)

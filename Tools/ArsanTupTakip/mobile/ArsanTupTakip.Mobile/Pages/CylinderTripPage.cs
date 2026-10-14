@@ -10,16 +10,23 @@ public sealed class CylinderTripPage : ContentPage
     private const int ReturnMode = 2;
     private const int PickupMode = 4;
 
-    private static readonly (string Label, int Kind, string Permission)[] AllModes =
-    [
-        ("Yükleme", LoadMode, Perm.TripLoad),
-        ("Müşteriye teslim (dolu)", DeliverMode, Perm.TripDeliver),
-        ("Müşteriden boş alım", PickupMode, Perm.TripDeliver),
-        ("Depo dönüşü", ReturnMode, Perm.TripReturn),
-        ("Kontrol", 3, Perm.TripView)
-    ];
+    // Pickup and the route are optional features: when they are off the page looks and works as before 1.4.0.
+    private readonly bool _pickup = ApiClient.Instance.Can(Perm.TripPickup);
+    private readonly bool _routes = ApiClient.Instance.Can(Perm.TripRoute);
+    private readonly (string Label, int Kind, string Permission)[] _modes = Modes();
 
-    private readonly (string Label, int Kind, string Permission)[] _modes = AllModes.Where(m => ApiClient.Instance.Can(m.Permission)).ToArray();
+    private static (string Label, int Kind, string Permission)[] Modes()
+    {
+        (string Label, int Kind, string Permission)[] all =
+        [
+            ("Yükleme", LoadMode, Perm.TripLoad),
+            (ApiClient.Instance.Can(Perm.TripPickup) ? "Müşteriye teslim (dolu)" : "Müşteriye teslim", DeliverMode, Perm.TripDeliver),
+            ("Müşteriden boş alım", PickupMode, Perm.TripPickup),
+            ("Depo dönüşü", ReturnMode, Perm.TripReturn),
+            ("Kontrol", 3, Perm.TripView)
+        ];
+        return all.Where(m => ApiClient.Instance.Can(m.Permission)).ToArray();
+    }
 
     private readonly Label _overview = new() { FontSize = 14, LineBreakMode = LineBreakMode.WordWrap };
     private readonly Picker _trip = new() { Title = "Aktif sefer" };
@@ -71,7 +78,9 @@ public sealed class CylinderTripPage : ContentPage
                 Spacing = 14,
                 Children =
                 {
-                    Ui.Note("\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteride verdiğiniz dolu tüpleri \"Müşteriye teslim (dolu)\", aldığınız boşları \"Müşteriden boş alım\" ile okutun; her kayıttan sonra o müşteriye verilen/alınan sayısı ve müşterideki güncel tüp bakiyesi gösterilir. Depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir. Sefer kapatılırken okutulmayan her tüp için gerekçe seçilir; gerekçeler yöneticiye bildirilir (müşteriye mesaj gitmez)."),
+                    Ui.Note(_pickup
+                        ? "\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteride verdiğiniz dolu tüpleri \"Müşteriye teslim (dolu)\", aldığınız boşları \"Müşteriden boş alım\" ile okutun; her kayıttan sonra o müşteriye verilen/alınan sayısı ve müşterideki güncel tüp bakiyesi gösterilir. Depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir. Sefer kapatılırken okutulmayan her tüp için gerekçe seçilir; gerekçeler yöneticiye bildirilir (müşteriye mesaj gitmez)."
+                        : "\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteriye teslim ve depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir. Sefer kapatılırken okutulmayan her tüp için gerekçe seçilir; gerekçeler yöneticiye bildirilir (müşteriye mesaj gitmez)."),
                     Ui.Primary("🚚 Sefer Başlat", async (_, _) => await StartTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripStart)),
                     Ui.Section(
                         "Seferdeki araçlar",
@@ -89,7 +98,7 @@ public sealed class CylinderTripPage : ContentPage
                         _route,
                         Ui.ActionRow(
                             Ui.Secondary("Müşteri ekle", async (_, _) => await AddStopAsync()),
-                            Ui.Secondary("Önerilenler", async (_, _) => await SuggestStopsAsync()))).ShowIf(ApiClient.Instance.CanAny(Perm.TripStart, Perm.TripDeliver)),
+                            Ui.Secondary("Önerilenler", async (_, _) => await SuggestStopsAsync()))).ShowIf(_routes),
                     Ui.Section(
                         "Okutma",
                         _mode,
@@ -606,6 +615,11 @@ public sealed class CylinderTripPage : ContentPage
     // Route of the selected vehicle: one card per customer in visiting order with map, call and scan shortcuts.
     private async Task RefreshRouteAsync()
     {
+        if (!_routes)
+        {
+            return;
+        }
+
         if (SelectedTrip is not ActiveTripSummary trip || SelectedPlate is not string plate)
         {
             _routeInfo.Text = "Rota için sefer ve araç seçin.";
@@ -688,7 +702,9 @@ public sealed class CylinderTripPage : ContentPage
 
         _scanned.Clear();
         RefreshScanned();
-        _result.Text = $"{stop.CustomerName} seçildi. Verdiğiniz dolu tüpleri \"Müşteriye teslim (dolu)\", aldığınız boşları \"Müşteriden boş alım\" ile okutun.";
+        _result.Text = _pickup
+            ? $"{stop.CustomerName} seçildi. Verdiğiniz dolu tüpleri \"Müşteriye teslim (dolu)\", aldığınız boşları \"Müşteriden boş alım\" ile okutun."
+            : $"{stop.CustomerName} seçildi. Teslim ettiğiniz tüpleri okutun.";
         _result.TextColor = Ui.Muted;
         _resultCard.IsVisible = true;
     }

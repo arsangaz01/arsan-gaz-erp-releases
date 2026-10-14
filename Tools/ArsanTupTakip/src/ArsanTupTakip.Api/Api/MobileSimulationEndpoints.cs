@@ -17,7 +17,7 @@ internal static class MobileSimulationEndpoints
             }
 
             return Results.Ok(WebPanelUserStore.All()
-                .Where(u => u.DeletedAt is null && u.Id != admin.Id)
+                .Where(u => u.DeletedAt is null && u.Id != admin.Id && u.Role != PanelRoles.Customer)
                 .OrderByDescending(u => u.IsActive)
                 .ThenBy(u => Array.IndexOf(PanelRoles.All, u.Role))
                 .ThenBy(u => u.UserName, StringComparer.OrdinalIgnoreCase)
@@ -58,7 +58,7 @@ internal static class MobileSimulationEndpoints
                 return Results.BadRequest(new { error = "Yönetici her zaman tüm yetkilere sahiptir; yetkileri tek tek değiştirilemez." });
             }
 
-            HashSet<string> before = Perm.Effective(user);
+            HashSet<string> before = Perm.Assigned(user);
             HashSet<string> wanted = [.. before];
             if (request.Granted)
             {
@@ -76,7 +76,7 @@ internal static class MobileSimulationEndpoints
             }
 
             WebPanelUser updated = WebPanelUserStore.Find(id) ?? user;
-            HashSet<string> after = Perm.Effective(updated);
+            HashSet<string> after = Perm.Assigned(updated);
             List<string> changes =
             [
                 .. after.Except(before).Select(k => "+ " + Perm.ByKey[k].Label),
@@ -108,6 +108,7 @@ internal static class MobileSimulationEndpoints
     private static object View(WebPanelUser user, List<string> changes)
     {
         HashSet<string> effective = Perm.Effective(user);
+        HashSet<string> assigned = Perm.Assigned(user);
         HashSet<string> defaults = [.. Perm.RoleDefaults(user.Role)];
         return new
         {
@@ -129,7 +130,7 @@ internal static class MobileSimulationEndpoints
                     key = p.Key,
                     label = p.Label,
                     description = p.Description,
-                    granted = effective.Contains(p.Key),
+                    granted = assigned.Contains(p.Key),
                     roleDefault = defaults.Contains(p.Key)
                 })
             })

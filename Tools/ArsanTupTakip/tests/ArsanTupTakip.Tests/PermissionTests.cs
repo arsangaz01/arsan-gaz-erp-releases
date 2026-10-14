@@ -20,6 +20,7 @@ internal static class PermissionTests
     {
         PermissionOverrides.UseStore(new MemoryPermissionOverrideStore());
         IdempotencyMiddleware.Store = new MemoryRequestKeyStore();
+        Features.UseMemory(Features.Catalog.ToDictionary(f => f.Key, _ => true));
         CatalogIsConsistent();
         RoleDefaultsAndOverrides();
         DriverRoleAndFixedVehicle();
@@ -94,7 +95,8 @@ internal static class PermissionTests
     private static void DriverRoleAndFixedVehicle()
     {
         HashSet<string> driver = Perm.Effective(PanelRoles.Driver, null);
-        string[] expected = [Perm.MobileLogin, Perm.CylinderView, Perm.StockCount, Perm.TripView, Perm.TripStart, Perm.TripLoad, Perm.TripDeliver, Perm.TripReturn, Perm.TripClose];
+        string[] expected = [Perm.MobileLogin, Perm.CylinderView, Perm.StockCount, Perm.TripView, Perm.TripStart, Perm.TripLoad, Perm.TripDeliver, Perm.TripPickup, Perm.TripRoute,
+            Perm.TripReturn, Perm.TripClose];
         Check(driver.SetEquals(expected), "Şoför varsayılanı yalnızca mobil giriş, tüp bilgisi/müşteri stoku, depo sayımı ve sefer akışı olmalı: " + string.Join(", ", driver.Order()));
         Check(!driver.Contains(Perm.PanelLogin) && !driver.Contains(Perm.ManageUsers) && !driver.Contains(Perm.ManageDevices) && !driver.Contains(Perm.AuditLog),
             "Şoför panele giremez ve yönetim yetkisi yoktur.");
@@ -162,7 +164,7 @@ internal static class PermissionTests
         Check(auth.UpdateUser(manager, ip, admin.Id, admin.DisplayName, "Operatör", true) is not null, "Yönetici olmayan, Yönetici hesabına dokunamamalı.");
 
         PermissionOverrides.Replace(admin.Id, Perm.All.ToDictionary(k => k, _ => false), "test");
-        Check(Perm.Effective(WebPanelUserStore.Find(admin.Id)!).SetEquals(Perm.All), "Yöneticiye yazılmış kısıtlamalar etkisiz olmalı.");
+        Check(Perm.Assigned(WebPanelUserStore.Find(admin.Id)!).SetEquals(Perm.All), "Yöneticiye yazılmış kısıtlamalar etkisiz olmalı.");
         PermissionOverrides.Replace(admin.Id, new Dictionary<string, bool>(), "test");
 
         Check(auth.UpdateUser(admin, ip, admin.Id, admin.DisplayName, "Operatör", true) is not null, "Yönetici kendi yönetici yetkisini kaldıramamalı.");
@@ -374,6 +376,7 @@ internal static class PermissionTests
 
             await DriverHttpChecks(http, auth, admin);
             await SimulationHttpChecks(http);
+            await FeatureHttpChecks(http, auth, admin);
 
             Check(auth.CreateUser(admin, "127.0.0.1", "yeniperson", null, "Operatör", Password, true) is null, "Geçici şifreli kullanıcı açılabilmeli.");
             (string fresh, JsonElement freshAccount) = await MobileLogin(http, "yeniperson");
@@ -480,6 +483,99 @@ internal static class PermissionTests
             "Yönetici sabit aracı kaldırabilmeli.");
         Check(auth.UpdateUser(admin, ip, driver.Id, driver.DisplayName, driver.Role, true, null, "34 ABC 123") is null && WebPanelUserStore.Find(driver.Id)!.FixedPlate == "34 ABC 123"
             && Perm.Has(WebPanelUserStore.Find(driver.Id)!, Perm.CylinderAudit), "Sabit araç değişince kişiye özel yetkiler korunmalı.");
+    }
+
+    // Optional features: switched off, their permissions vanish for everyone and the server refuses their endpoints with a
+    // "feature off" message, while the stored per-user choices survive; customer accounts only ever reach the portal.
+    private static async Task FeatureHttpChecks(HttpClient http, WebPanelAuth auth, WebPanelUser admin)
+    {
+        const string ip = "127.0.0.1";
+        Dictionary<string, bool> allOn = Features.Catalog.ToDictionary(f => f.Key, _ => true);
+        Check(auth.CreateCustomerAccount(admin, ip, "musteri1", "Firma Yetkilisi", 999, "Test Firma", Password, false) is null, "Müşteri hesabı açılabilmeli.");
+        WebPanelUser customer = WebPanelUserStore.FindByName("musteri1")!;
+        Check(customer.Role == PanelRoles.Customer && customer.CustomerId == 999 && Perm.Assigned(customer).Count == 0 && !PanelRoles.All.Contains(PanelRoles.Customer),
+            "Müşteri hesabının personel yetkisi olmamalı ve rol listesinde görünmemeli.");
+        Check(auth.CreateCustomerAccount(admin, ip, "musteri1", null, 999, "Test Firma", Password, false) is not null, "Aynı kullanıcı adıyla ikinci hesap açılamamalı.");
+        Check(auth.UpdateUser(admin, ip, customer.Id, "x", PanelRoles.Operator, true) is not null, "Müşteri hesabı personel hesabına çevrilememeli.");
+
+        using (HttpResponseMessage panel = await http.PostAsJsonAsync("panel/giris", new { kullanici = "musteri1", sifre = Password }))
+        {
+            Check(panel.StatusCode == HttpStatusCode.Unauthorized, "Müşteri hesabı web paneline giremez.");
+        }
+
+        using (HttpResponseMessage phone = await http.PostAsJsonAsync("api/giris", new { kullanici = "musteri1", sifre = Password, cihazAdi = "x" }))
+        {
+            Check(phone.StatusCode == HttpStatusCode.Unauthorized, "Müşteri hesabı mobil uygulamaya giremez.");
+        }
+
+        using (HttpResponseMessage staff = await http.PostAsJsonAsync("musteri/giris", new { kullanici = "sofor1", sifre = Password }))
+        {
+            Check(staff.StatusCode == HttpStatusCode.Unauthorized, "Personel hesabı müşteri portalına giremez.");
+        }
+
+        string portalCookie;
+        using (HttpResponseMessage portal = await http.PostAsJsonAsync("musteri/giris", new { kullanici = "musteri1", sifre = Password }))
+        {
+            Check(portal.StatusCode == HttpStatusCode.OK, "Portal açıkken müşteri giriş yapabilmeli.");
+            portalCookie = portal.Headers.GetValues("Set-Cookie").First(c => c.StartsWith(WebPanelAuth.CustomerCookieName + "=", StringComparison.Ordinal)).Split(';')[0];
+        }
+
+        using (HttpResponseMessage asPanel = await Send(http, HttpMethod.Get, "panel/api/ben", null, cookie: portalCookie.Replace(WebPanelAuth.CustomerCookieName + "=", WebPanelAuth.CookieName + "=")))
+        {
+            Check(asPanel.StatusCode == HttpStatusCode.Unauthorized, "Portal oturum anahtarı panel çerezi olarak kullanılamamalı.");
+        }
+
+        WebPanelUser driver = WebPanelUserStore.FindByName("sofor1")!;
+        (string token, _) = await MobileLogin(http, "sofor1");
+        Features.UseMemory(Features.Catalog.ToDictionary(f => f.Key, _ => false));
+        try
+        {
+            using (HttpResponseMessage me = await Send(http, HttpMethod.Get, "api/ben", token))
+            {
+                HashSet<string> now = [.. (await Json(me)).GetProperty("permissions").EnumerateArray().Select(p => p.GetString()!)];
+                Check(!now.Contains(Perm.TripPickup) && !now.Contains(Perm.TripRoute) && now.Contains(Perm.TripDeliver) && now.Contains(Perm.TripStart),
+                    "Kapalı özelliklerin yetkileri telefona gitmemeli; eski sefer yetkileri kalmalı.");
+            }
+
+            Check(Perm.Assigned(driver).Contains(Perm.TripPickup) && !Perm.Effective(driver).Contains(Perm.TripPickup),
+                "Özellik kapanınca kişiye verilen yetki saklı kalmalı, yalnızca etkin olmamalı.");
+            Check(Perm.Effective(WebPanelUserStore.FindByName("yonetici")!).All(p => Features.OwnerOf(p) is null), "Kapalı özellik yöneticide de görünmemeli.");
+
+            foreach ((HttpMethod method, string path, object? body, string feature) in new (HttpMethod, string, object?, string)[]
+            {
+                (HttpMethod.Post, "api/sefer/bos-alim", new { tripId = 1, plate = "34 ABC 123", customerId = 1, codes = new[] { "X1" } }, Features.CustomerExchange),
+                (HttpMethod.Get, "api/sefer/1/rota?plaka=34%20ABC%20123", null, Features.TripRoute),
+                (HttpMethod.Post, "api/sefer/rota/ekle", new { tripId = 1, plate = "34 ABC 123", customerId = 1 }, Features.TripRoute)
+            })
+            {
+                using HttpResponseMessage off = await Send(http, method, path, token, body);
+                JsonElement json = await Json(off);
+                Check(off.StatusCode == HttpStatusCode.Forbidden && json.GetProperty("featureOff").GetString() == feature
+                    && json.GetProperty("error").GetString()!.Contains("özelliği şu an kapalı", StringComparison.Ordinal),
+                    $"Kapalı özellikte {path} \"özellik kapalı\" mesajıyla reddedilmeli ({(int)off.StatusCode}).");
+            }
+
+            using (HttpResponseMessage portal = await http.PostAsJsonAsync("musteri/giris", new { kullanici = "musteri1", sifre = Password }))
+            {
+                Check(portal.StatusCode == HttpStatusCode.Unauthorized && (await Json(portal)).GetProperty("error").GetString()!.Contains("kapalı", StringComparison.Ordinal),
+                    "Portal kapalıyken müşteri giriş yapamamalı.");
+            }
+
+            using (HttpResponseMessage open = await Send(http, HttpMethod.Get, "musteri/api/ben", null, cookie: portalCookie))
+            {
+                Check(open.StatusCode == HttpStatusCode.Unauthorized, "Portal kapanınca açık müşteri oturumu da geçersiz olmalı.");
+            }
+        }
+        finally
+        {
+            Features.UseMemory(allOn);
+        }
+
+        using (HttpResponseMessage back = await Send(http, HttpMethod.Get, "api/ben", token))
+        {
+            HashSet<string> now = [.. (await Json(back)).GetProperty("permissions").EnumerateArray().Select(p => p.GetString()!)];
+            Check(now.Contains(Perm.TripPickup) && now.Contains(Perm.TripRoute), "Özellik yeniden açılınca saklı yetkiler geri gelmeli.");
+        }
     }
 
     // Mobile "Kullanıcı gözünden": only a Yönetici lists users, sees one user's permissions and toggles single ones.
