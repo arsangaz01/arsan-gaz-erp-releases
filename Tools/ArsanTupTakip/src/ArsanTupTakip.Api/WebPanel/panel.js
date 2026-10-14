@@ -193,6 +193,16 @@ for (const button of document.querySelectorAll("nav button")) {
   button.addEventListener("click", () => openTab(button.dataset.tab));
 }
 
+function goHome() {
+  for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
+  const first = [...document.querySelectorAll("nav button")].find((b) => !b.classList.contains("hidden"));
+  if (first) openTab(first.dataset.tab);
+  window.scrollTo({ top: 0 });
+}
+
+$("home-link").addEventListener("click", goHome);
+$("home-link").addEventListener("keydown", (e) => { if (e.key === "Enter") goHome(); });
+
 function openTab(tab) {
   for (const b of document.querySelectorAll("nav button")) b.classList.toggle("active", b.dataset.tab === tab);
   for (const s of document.querySelectorAll("section[data-page]")) s.classList.toggle("hidden", s.dataset.page !== tab);

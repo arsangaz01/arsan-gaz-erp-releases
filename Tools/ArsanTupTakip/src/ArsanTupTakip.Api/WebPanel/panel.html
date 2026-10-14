@@ -12,6 +12,8 @@
 body { margin:0; font-family:"Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); font-size:15px; }
 header { background:var(--navy); color:#fff; padding:12px 20px; display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:5; flex-wrap:wrap; }
 header h1 { font-size:18px; margin:0; font-weight:600; }
+#home-link { cursor:pointer; }
+#home-link:hover { opacity:.85; }
 nav { display:flex; gap:4px; flex-wrap:wrap; }
 nav button { background:transparent; color:#fff; border:1px solid transparent; border-radius:8px; padding:7px 12px; cursor:pointer; font-size:14px; transition:transform .07s ease, background-color .07s ease; -webkit-tap-highlight-color:rgba(255,255,255,.2); }
 nav button.active, nav button:hover { background:rgba(255,255,255,.18); }
@@ -164,7 +166,7 @@ tr.alarm-row td { background:#fef2f2; }
 
 <div id="app" class="hidden">
   <header>
-    <h1>ArsanTüpTakip</h1>
+    <h1 id="home-link" title="Ana sayfaya dön" role="link" tabindex="0">ArsanTüpTakip</h1>
     <nav>
       <button data-tab="ozet" data-perm="ozet">Özet</button>
       <button data-tab="tupler" data-perm="tup-goruntule">Tüpler</button>
