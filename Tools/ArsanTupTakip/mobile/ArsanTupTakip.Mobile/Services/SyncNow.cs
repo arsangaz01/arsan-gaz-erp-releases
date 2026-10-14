@@ -19,10 +19,22 @@ public static class SyncNow
     public static string StatusText()
     {
         int pending = OfflineMoves.Pending.Count;
+        int scans = OfflineCountScans.Pending.Count;
         string last = LastSyncUtc is DateTime at ? "Son: " + at.ToLocalTime().ToString("dd.MM HH:mm") : "Henüz senkronize edilmedi";
-        return pending > 0
-            ? $"Telefonda bekleyen {pending} hareket var · {last}"
-            : $"Bekleyen hareket yok · {last}";
+        List<string> waiting = [];
+        if (pending > 0)
+        {
+            waiting.Add($"{pending} hareket");
+        }
+
+        if (scans > 0)
+        {
+            waiting.Add($"{scans} sayım okutması");
+        }
+
+        return waiting.Count > 0
+            ? $"Telefonda bekleyen {string.Join(", ", waiting)} var · {last}"
+            : $"Bekleyen kayıt yok · {last}";
     }
 
     public static async Task RunAsync(Page page)
@@ -35,7 +47,7 @@ public static class SyncNow
         _running = true;
         try
         {
-            int before = OfflineMoves.Pending.Count;
+            int before = OfflineMoves.Pending.Count + OfflineCountScans.Pending.Count;
             try
             {
                 await ApiClient.Instance.RefreshAccountAsync();
@@ -43,21 +55,31 @@ public static class SyncNow
             catch (ServerUnreachableException)
             {
                 await page.DisplayAlertAsync("Senkronizasyon",
-                    "Sunucuya ulaşılamadı. " + (before > 0 ? $"{before} hareket telefonda güvende bekliyor; bağlantı gelince tekrar deneyin." : "İnternet bağlantısını kontrol edin."), "Tamam");
+                    "Sunucuya ulaşılamadı. " + (before > 0 ? $"{before} kayıt telefonda güvende bekliyor; bağlantı gelince tekrar deneyin." : "İnternet bağlantısını kontrol edin."), "Tamam");
                 return;
             }
             catch (ApiException exception)
             {
                 await page.DisplayAlertAsync("Senkronizasyon", exception.Message
-                    + (before > 0 ? $"\n\n{before} hareket telefonda bekliyor; tekrar giriş yaptıktan sonra gönderilir." : string.Empty), "Tamam");
+                    + (before > 0 ? $"\n\n{before} kayıt telefonda bekliyor; tekrar giriş yaptıktan sonra gönderilir." : string.Empty), "Tamam");
                 return;
             }
 
             (int sent, string? error, string? warning) = await OfflineMoves.FlushAsync();
             int left = OfflineMoves.Pending.Count;
-            if (error is null && left == 0)
+            (int scansSent, _, List<string> scansRejected) = await OfflineCountScans.FlushAsync();
+            int scansLeft = OfflineCountScans.Pending.Count;
+            if (error is null && left == 0 && scansLeft == 0)
             {
                 Preferences.Default.Set(LastSyncKey, DateTime.UtcNow.Ticks);
+            }
+
+            if (scansSent + scansLeft + scansRejected.Count > 0)
+            {
+                string scanText = $"Depo sayımı: {scansSent} okutma sunucuya gönderildi"
+                    + (scansLeft > 0 ? $", {scansLeft} okutma bağlantı bekliyor" : string.Empty) + "."
+                    + (scansRejected.Count > 0 ? "\n\nKabul edilmeyenler:\n" + string.Join("\n", scansRejected.Take(10)) : string.Empty);
+                await page.DisplayAlertAsync("Senkronizasyon", scanText, "Tamam");
             }
 
             if (warning is not null)

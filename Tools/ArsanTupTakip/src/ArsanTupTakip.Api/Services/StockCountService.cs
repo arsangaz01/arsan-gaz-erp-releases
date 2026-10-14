@@ -150,8 +150,11 @@ public sealed class StockCountService
         return (await ReportAsync(db, count.Id), false);
     }
 
-    public async Task<StockCountScanResult> ScanAsync(int countId, string? code, string scannedBy)
+    // scannedAt: time on the phone when the code was read offline and sent later by "Senkronize et".
+    public async Task<StockCountScanResult> ScanAsync(int countId, string? code, string scannedBy, DateTime? scannedAt = null)
     {
+        DateTime now = DateTime.Now;
+        DateTime at = scannedAt is DateTime sent && sent > now.AddDays(-7) && sent < now.AddMinutes(5) ? sent : now;
         string value = (code ?? string.Empty).Trim();
         if (value.Length == 0)
         {
@@ -183,7 +186,7 @@ public sealed class StockCountService
                 CountId = count.Id,
                 CylinderId = cylinder?.Id,
                 Code = value,
-                ScannedAt = DateTime.Now,
+                ScannedAt = at,
                 ScannedBy = scannedBy,
                 StatusAtScan = cylinder is null ? null : (int)cylinder.Status,
                 PlaceAtScan = cylinder is null ? null : StockCounting.Place((int)cylinder.Status, cylinder.CurrentCustomer?.CompanyName, cylinder.VehiclePlate)

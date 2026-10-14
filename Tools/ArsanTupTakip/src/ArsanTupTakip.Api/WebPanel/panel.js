@@ -1367,7 +1367,8 @@ async function loadCounts() {
       stat(open ? open.counted : "-", open ? "Açık sayım: okutulan" : "Açık sayım yok", open ? `${open.started} · ${open.startedBy}` : "Mobilde Depo Sayımı ile başlatın", () => open && openCountDialog(open.id)),
       stat(last ? last.missing : "-", "Son sayımda eksik", last ? last.closed : "Bitmiş sayım yok", () => last && openCountDialog(last.id, "missing"), !!last && last.missing > 0),
       stat(last ? last.extra : "-", "Son sayımda fazla", last ? `${last.matched} eşleşen · ${last.unknown} tanınmayan` : "", () => last && openCountDialog(last.id, "extra"), !!last && last.extra > 0));
-    const head = el("tr", {}, ...["Başlangıç", "Durum", "Yapan", "Kayıtta depoda", "Okutulan", "Eşleşen", "Eksik", "Fazla", "Tanınmayan", "Not"].map((h) => el("th", {}, h)));
+    const head = el("tr", {}, ...["Başlangıç", "Durum", "Yapan", "Kayıtta depoda", "Okutulan", "Eşleşen", "Eksik", "Fazla", "Tanınmayan", "Not", "Dışa aktar"].map((h) => el("th", {}, h)));
+    const exportLink = (id, kind, text) => el("a", { href: `${BASE}/panel/api/sayim/${id}/${kind}`, onclick: (e) => e.stopPropagation(), ...(kind === "pdf" ? { target: "_blank", rel: "noopener" } : {}) }, text);
     const body = data.counts.map((c) => el("tr", { class: "click", onclick: () => openCountDialog(c.id) },
       el("td", {}, el("b", {}, c.started), el("div", { class: "muted" }, c.location)),
       el("td", {}, c.open ? el("span", { class: "badge b2" }, "Devam ediyor") : el("span", {}, "Bitti", el("div", { class: "muted" }, c.closed))),
@@ -1378,8 +1379,9 @@ async function loadCounts() {
       el("td", { class: c.missing ? "bad-text" : "muted" }, String(c.missing)),
       el("td", { class: c.extra ? "warn-text" : "muted" }, String(c.extra)),
       el("td", { class: c.unknown ? "warn-text" : "muted" }, String(c.unknown)),
-      el("td", { class: "muted" }, c.note || "")));
-    $("sc-counts").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 10, class: "muted" }, "Henüz depo sayımı yapılmadı. Mobil uygulamada Depo Sayımı ekranından başlatın."))])));
+      el("td", { class: "muted" }, c.note || ""),
+      el("td", {}, exportLink(c.id, "excel", "Excel"), " · ", exportLink(c.id, "pdf", "PDF"))));
+    $("sc-counts").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 11, class: "muted" }, "Henüz depo sayımı yapılmadı. Mobil uygulamada Depo Sayımı ekranından başlatın."))])));
     const aHead = el("tr", {}, ...["Tarih", "Müşteri", "Kayıtta", "Bulunan", "Eksik", "Fazla", "Tanınmayan", "Yapan"].map((h) => el("th", {}, h)));
     const list = (items) => items.length ? el("div", { class: "muted" }, items.join(", ")) : null;
     const aBody = data.audits.map((a) => el("tr", {},
@@ -1417,6 +1419,8 @@ function renderCount() {
   if (!r) return;
   $("cd-title").textContent = `${r.location} sayımı · ${r.started}` + (r.open ? " (devam ediyor)" : "");
   $("cd-close-count").classList.toggle("hidden", !r.open || !can("depo-sayim"));
+  $("cd-xlsx").href = `${BASE}/panel/api/sayim/${r.id}/excel`;
+  $("cd-pdf").href = `${BASE}/panel/api/sayim/${r.id}/pdf`;
   const info = [
     ["Başlatan", `${r.startedBy} · ${r.started}`],
     ["Durum", r.open ? "Devam ediyor (kayıttaki depo listesi canlı)" : `Bitti · ${r.closed} · ${r.closedBy || ""}`],

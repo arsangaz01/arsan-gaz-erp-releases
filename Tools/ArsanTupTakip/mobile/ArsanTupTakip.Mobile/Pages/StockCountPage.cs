@@ -1,11 +1,15 @@
+using System.Text.Json;
 using ArsanTupTakip.Mobile.Services;
 
 namespace ArsanTupTakip.Mobile.Pages;
 
 // Main depot count: every scanned cylinder is counted once under its gas type and size; the panel compares the count
-// with the cylinders the records show in the warehouse (Sayım Raporları).
+// with the cylinders the records show in the warehouse (Sayım Raporları). Without a connection the scans wait on the
+// phone (OfflineCountScans) and "Senkronize et" sends them.
 public sealed class StockCountPage : ContentPage
 {
+    private const string SavedCountKey = "stock_count_open";
+    private const string XlsxMime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private static readonly Color Good = Color.FromArgb("#15803D");
     private static readonly Color Warn = Color.FromArgb("#B45309");
     private static readonly Color Bad = Color.FromArgb("#B91C1C");
@@ -14,6 +18,8 @@ public sealed class StockCountPage : ContentPage
     private readonly Entry _note = new() { Placeholder = "Not (isteğe bağlı), ör. ay sonu sayımı", MaxLength = 500 };
     private readonly Entry _code = new() { Placeholder = "Barkod / seri no (el terminali veya elle)", ReturnType = ReturnType.Send };
     private readonly Label _last = new() { FontSize = 15, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap };
+    private readonly Label _pending = new() { FontSize = 14, TextColor = Color.FromArgb("#B45309"), LineBreakMode = LineBreakMode.WordWrap };
+    private readonly Button _pendingButton;
     private readonly Label _totals = new() { FontSize = 14, LineBreakMode = LineBreakMode.WordWrap };
     private readonly VerticalStackLayout _groups = new() { Spacing = 8 };
     private readonly Label _recent = Ui.Note(string.Empty);
@@ -29,6 +35,7 @@ public sealed class StockCountPage : ContentPage
     {
         Title = "Depo sayımı";
         _code.Completed += async (_, _) => await ManualAsync();
+        _pendingButton = Ui.Secondary("🔄 Bekleyenleri sunucuya gönder", async (_, _) => await FlushAsync(quiet: false));
 
         _startSection = Ui.Section("Sayım başlat",
             Ui.Note("Açık sayım yok. Başlatınca depodaki tüpleri okutun; her okutulan tüp gaz türü ve boyutuna göre 1 sayılır. Aynı sayıma birden çok telefon aynı anda okutabilir."),
@@ -42,8 +49,13 @@ public sealed class StockCountPage : ContentPage
                 Ui.Secondary("Son okutmayı geri al", async (_, _) => await UndoAsync()),
                 Ui.Secondary("Yenile", async (_, _) => await LoadAsync())),
             _last,
+            _pending,
+            _pendingButton,
             _totals,
-            Ui.Secondary("✅ Sayımı bitir", async (_, _) => await CloseAsync()));
+            Ui.ActionRow(
+                Ui.Secondary("📊 Excel", async (_, _) => await ExportAsync(_count?.Id, excel: true)),
+                Ui.Secondary("📄 PDF", async (_, _) => await ExportAsync(_count?.Id, excel: false))),
+            Ui.Primary("✅ Sayımı bitir", async (_, _) => await CloseAsync()));
         _resultSection = Ui.Section("Gaz türü ve boyuta göre (sayılan / kayıtta depoda)", _groups);
 
         Ui.ApplyPageChrome(this);
@@ -59,7 +71,10 @@ public sealed class StockCountPage : ContentPage
                     _startSection,
                     _scanSection,
                     _resultSection,
-                    Ui.Section("Son okutulanlar", _recent)
+                    Ui.Section("Son okutulanlar", _recent),
+                    Ui.Section("Raporlar",
+                        Ui.Note("Bitmiş ve devam eden sayımların raporunu Excel veya PDF olarak indirip paylaşın (WhatsApp, e-posta, Drive...). Aynı raporlar web panelde Sayım Raporları sekmesindedir."),
+                        Ui.Secondary("📄 Sayım raporları (Excel / PDF)", async (_, _) => await HistoryAsync()))
                 }
             }
         };
@@ -72,7 +87,37 @@ public sealed class StockCountPage : ContentPage
         await LoadAsync();
     }
 
-    private Task LoadAsync() => Ui.RunAsync(this, _busy, async () => Show((await ApiClient.Instance.ActiveStockCountAsync()).Count));
+    private async Task LoadAsync()
+    {
+        _busy.IsRunning = _busy.IsVisible = true;
+        try
+        {
+            Show((await ApiClient.Instance.ActiveStockCountAsync()).Count);
+            if (_count is not null && OfflineCountScans.PendingFor(_count.Id) > 0)
+            {
+                await FlushAsync(quiet: true);
+            }
+        }
+        catch (ServerUnreachableException)
+        {
+            // Keep counting on the phone with the last known open count; the scans are sent later.
+            Show(Saved());
+            SetLast(_count is null
+                ? "📴 Sunucuya ulaşılamıyor. Sayım başlatmak için bağlantı gerekir."
+                : "📴 Sunucuya ulaşılamıyor; okutmalar telefonda biriktirilir, bağlantı gelince Senkronize edin.", Warn);
+        }
+        catch (SessionExpiredException)
+        {
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Depo sayımı", exception.Message, "Tamam");
+        }
+        finally
+        {
+            _busy.IsRunning = _busy.IsVisible = false;
+        }
+    }
 
     private Task StartAsync() => Ui.RunAsync(this, _busy, async () =>
     {
@@ -127,7 +172,7 @@ public sealed class StockCountPage : ContentPage
     // Shared by the camera and the manual box; returns the line the camera screen shows.
     private async Task<string> SendAsync(string code)
     {
-        if (_count is null)
+        if (_count is not StockCountInfo count)
         {
             throw new InvalidOperationException("Açık sayım yok.");
         }
@@ -135,7 +180,7 @@ public sealed class StockCountPage : ContentPage
         _sending = true;
         try
         {
-            StockCountScanResponse response = await ApiClient.Instance.ScanStockCountAsync(_count.Id, code);
+            StockCountScanResponse response = await ApiClient.Instance.ScanStockCountAsync(count.Id, code);
             if (response.Outcome != "duplicate")
             {
                 _lastCode = code;
@@ -143,12 +188,45 @@ public sealed class StockCountPage : ContentPage
 
             Show(response.Count);
             SetLast(response.Message, response.Outcome switch { "matched" => Good, "duplicate" => Ui.Muted, "extra" => Warn, _ => Bad });
+            if (OfflineCountScans.PendingFor(count.Id) > 0)
+            {
+                _ = FlushAsync(quiet: true);
+            }
+
             return $"{response.Message}\nToplam {response.Count.Counted} tüp";
+        }
+        catch (ServerUnreachableException)
+        {
+            OfflineCountScans.Add(count.Id, code);
+            ShowPending();
+            string text = $"📴 {code} telefonda kaydedildi; bağlantı gelince gönderilir.";
+            SetLast(text, Warn);
+            return text + $"\nBekleyen {OfflineCountScans.PendingFor(count.Id)} okutma";
         }
         finally
         {
             _sending = false;
         }
+    }
+
+    private async Task<bool> FlushAsync(bool quiet)
+    {
+        (int sent, StockCountInfo? last, List<string> rejected) = await OfflineCountScans.FlushAsync();
+        if (last is not null)
+        {
+            Show(last);
+        }
+
+        ShowPending();
+        int left = _count is null ? 0 : OfflineCountScans.PendingFor(_count.Id);
+        if (!quiet || rejected.Count > 0)
+        {
+            string text = $"{sent} okutma sunucuya gönderildi." + (left > 0 ? $" {left} okutma hâlâ bağlantı bekliyor." : string.Empty)
+                + (rejected.Count > 0 ? "\n\nKabul edilmeyenler:\n" + string.Join("\n", rejected.Take(10)) : string.Empty);
+            await DisplayAlertAsync("Senkronizasyon", text, "Tamam");
+        }
+
+        return left == 0;
     }
 
     private async Task UndoAsync()
@@ -180,6 +258,14 @@ public sealed class StockCountPage : ContentPage
             return;
         }
 
+        if (OfflineCountScans.PendingFor(count.Id) > 0 && !await FlushAsync(quiet: true))
+        {
+            await DisplayAlertAsync("Sayımı bitir",
+                $"Telefonda sunucuya gönderilemeyen {OfflineCountScans.PendingFor(count.Id)} okutma var. Bağlantı gelince \"Bekleyenleri sunucuya gönder\" veya ana sayfadaki \"Senkronize et\" ile gönderin, sonra sayımı bitirin.", "Tamam");
+            return;
+        }
+
+        count = _count ?? count;
         string question = count.Counted + count.Unknown == 0
             ? "Hiç tüp okutulmadı. Sayım kaydedilmeden kapatılsın mı?"
             : $"{count.Counted} tüp okutuldu. Şu an kayıtta depoda {count.Expected} tüp var: {count.Missing} eksik, {count.Extra} fazla görünüyor.\n\nSayım bitirilsin mi? Bitince bu sayıma okutma yapılamaz; rapor panelde Sayım Raporları sekmesinde kalır.";
@@ -188,11 +274,78 @@ public sealed class StockCountPage : ContentPage
             return;
         }
 
+        StockCountResponse? response = null;
         await Ui.RunAsync(this, _busy, async () =>
         {
-            StockCountResponse response = await ApiClient.Instance.CloseStockCountAsync(count.Id);
+            response = await ApiClient.Instance.CloseStockCountAsync(count.Id);
             Show(null);
-            await DisplayAlertAsync("Sayım bitti", response.Message, "Tamam");
+        });
+        if (response is null)
+        {
+            return;
+        }
+
+        if (response.Count is null)
+        {
+            await DisplayAlertAsync("Sayım kapatıldı", response.Message, "Tamam");
+            return;
+        }
+
+        await ChooseExportAsync(count.Id, "Sayım bitti", response.Message + "\n\nRaporu indirmek ister misiniz?");
+    }
+
+    private async Task HistoryAsync()
+    {
+        List<StockCountListInfo> counts = [];
+        await Ui.RunAsync(this, _busy, async () => counts = await ApiClient.Instance.StockCountsAsync());
+        if (counts.Count == 0)
+        {
+            await DisplayAlertAsync("Sayım raporları", "Henüz depo sayımı yok.", "Tamam");
+            return;
+        }
+
+        Dictionary<string, StockCountListInfo> options = counts.Take(20).ToDictionary(
+            c => $"#{c.Id} · {c.Started}{(c.Open ? " (devam ediyor)" : string.Empty)} · {c.Counted} okutulan · {c.Missing} eksik · {c.Extra} fazla");
+        string? chosen = await DisplayActionSheetAsync("Hangi sayım?", "Vazgeç", null, [.. options.Keys]);
+        if (chosen is not null && options.TryGetValue(chosen, out StockCountListInfo? pick))
+        {
+            await ChooseExportAsync(pick.Id, $"Sayım #{pick.Id}", null);
+        }
+    }
+
+    private async Task ChooseExportAsync(int id, string title, string? message)
+    {
+        if (message is not null)
+        {
+            await DisplayAlertAsync(title, message, "Tamam");
+        }
+
+        string? format = await DisplayActionSheetAsync($"{title} · rapor biçimi", "Vazgeç", null, "📊 Excel (.xlsx)", "📄 PDF");
+        if (format is not null && format != "Vazgeç")
+        {
+            await ExportAsync(id, excel: format.Contains("Excel", StringComparison.Ordinal));
+        }
+    }
+
+    // Downloads the report and opens the Android share sheet (Excel/PDF viewer, WhatsApp, e-posta, Drive...).
+    private async Task ExportAsync(int? id, bool excel)
+    {
+        if (id is not int countId)
+        {
+            return;
+        }
+
+        await Ui.RunAsync(this, _busy, async () =>
+        {
+            string kind = excel ? "excel" : "pdf";
+            (byte[] bytes, string name) = await ApiClient.Instance.DownloadAsync($"/api/depo-sayim/{countId}/{kind}", $"depo-sayimi-{countId}.{(excel ? "xlsx" : "pdf")}");
+            string path = Path.Combine(FileSystem.CacheDirectory, name);
+            await File.WriteAllBytesAsync(path, bytes);
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = name,
+                File = new ShareFile(path, excel ? XlsxMime : "application/pdf")
+            });
         });
     }
 
@@ -202,11 +355,41 @@ public sealed class StockCountPage : ContentPage
         _last.TextColor = color;
     }
 
+    private void ShowPending()
+    {
+        int pending = _count is null ? 0 : OfflineCountScans.PendingFor(_count.Id);
+        _pending.Text = pending > 0 ? $"📴 Telefonda sunucuya gönderilmeyi bekleyen {pending} okutma var (toplamlara henüz eklenmedi)." : string.Empty;
+        _pending.IsVisible = _pendingButton.IsVisible = pending > 0;
+    }
+
+    private static StockCountInfo? Saved()
+    {
+        string json = Preferences.Default.Get(SavedCountKey, string.Empty);
+        try
+        {
+            return json.Length == 0 ? null : JsonSerializer.Deserialize<StockCountInfo>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private void Show(StockCountInfo? count)
     {
         _count = count is { Open: true } ? count : null;
+        if (_count is null)
+        {
+            Preferences.Default.Remove(SavedCountKey);
+        }
+        else
+        {
+            Preferences.Default.Set(SavedCountKey, JsonSerializer.Serialize(_count with { Recent = [], UnknownCodes = [] }));
+        }
+
         _startSection.IsVisible = _count is null;
         _scanSection.IsVisible = _resultSection.IsVisible = _count is not null;
+        ShowPending();
         if (_count is null)
         {
             _last.Text = _totals.Text = string.Empty;

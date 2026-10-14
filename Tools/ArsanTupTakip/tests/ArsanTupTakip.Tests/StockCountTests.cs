@@ -8,6 +8,36 @@ internal static class StockCountTests
     {
         ComparesDepotCountByGasAndSize();
         NamesPlaces();
+        ExportsExcelAndPdf();
+    }
+
+    private static void ExportsExcelAndPdf()
+    {
+        StockCountComparison comparison = StockCounting.Compare(
+            [C(1, "ARGON", "50 Litre"), C(2, "OKSİJEN", "40 Litre")],
+            [(C(1, "ARGON", "50 Litre"), true), (C(3, "AZOT", "10 Litre", false, "Müşteride · Şeker & <Ltd>"), false)]);
+        StockCountReport report = new(7, "Ana depo", new DateTime(2026, 10, 14, 9, 30, 0), "Ali, telefon", new DateTime(2026, 10, 14, 11, 0, 0), "Ali", "Ay sonu ığüşöç",
+            comparison, [new UnknownScan("ZZ-1", new DateTime(2026, 10, 14, 10, 0, 0), "Ali")], []);
+
+        byte[] xlsx = StockCountExport.Xlsx(report);
+        using (System.IO.Compression.ZipArchive zip = new(new MemoryStream(xlsx)))
+        {
+            string[] names = [.. zip.Entries.Select(e => e.FullName)];
+            Assert(names.Contains("xl/workbook.xml") && names.Count(n => n.StartsWith("xl/worksheets/sheet", StringComparison.Ordinal)) == 6,
+                "The workbook has summary, groups, missing, extra, matched and unknown sheets.");
+            using StreamReader reader = new(zip.GetEntry("xl/worksheets/sheet4.xml")!.Open());
+            string extraSheet = reader.ReadToEnd();
+            Assert(extraSheet.Contains("Şeker &amp; &lt;Ltd&gt;") && System.Xml.Linq.XDocument.Parse(extraSheet) is not null, "Cell text is XML-escaped and keeps Turkish letters.");
+        }
+
+        byte[] pdf = StockCountExport.Pdf(report);
+        string text = System.Text.Encoding.Latin1.GetString(pdf);
+        Assert(text.StartsWith("%PDF-1.4", StringComparison.Ordinal) && text.TrimEnd().EndsWith("%%EOF", StringComparison.Ordinal), "The PDF has a header and trailer.");
+        Assert(text.Contains("/Differences [128 /Gbreve /gbreve /Idotaccent /dotlessi /Scedilla /scedilla]"), "Turkish letters are mapped in the font encoding.");
+        Assert(text.Contains("(Ay sonu \\203\\201\\374\\205\\366\\347)"), "ı ğ ü ş ö ç are written with the mapped codes.");
+        int xref = int.Parse(text[(text.LastIndexOf("startxref", StringComparison.Ordinal) + 10)..].Split('\n')[0]);
+        Assert(text[xref..].StartsWith("xref", StringComparison.Ordinal), "startxref points at the cross-reference table.");
+        Assert(StockCountExport.FileName(report, "pdf") == "depo-sayimi-7-20261014-0930.pdf", "Export file name has the count number and date.");
     }
 
     private static CountCylinder C(int id, string gas, string capacity, bool? full = true, string place = "Depoda") =>

@@ -207,6 +207,9 @@ public sealed record StockCountInfo(
     List<StockCountCylinderInfo> Recent,
     List<StockCountUnknownInfo> UnknownCodes);
 
+public sealed record StockCountListInfo(int Id, string Location, string Started, string StartedBy, string? Closed, bool Open,
+    int Expected, int Counted, int Matched, int Missing, int Extra, int Unknown);
+
 public sealed record StockCountActiveResponse(StockCountInfo? Count);
 
 public sealed record StockCountResponse(string Message, StockCountInfo? Count);
@@ -612,8 +615,24 @@ public sealed class ApiClient
     public Task<StockCountResponse> StartStockCountAsync(string? note) =>
         PostAsync<StockCountResponse>("/api/depo-sayim/baslat", new { note });
 
-    public Task<StockCountScanResponse> ScanStockCountAsync(int id, string code) =>
-        PostAsync<StockCountScanResponse>($"/api/depo-sayim/{id}/okut", new { code });
+    public Task<StockCountScanResponse> ScanStockCountAsync(int id, string code, DateTime? at = null) =>
+        PostAsync<StockCountScanResponse>($"/api/depo-sayim/{id}/okut", new { code, at });
+
+    public Task<List<StockCountListInfo>> StockCountsAsync() => GetAsync<List<StockCountListInfo>>("/api/depo-sayim/liste");
+
+    // File download (Excel/PDF); the name comes from the server's Content-Disposition.
+    public async Task<(byte[] Bytes, string FileName)> DownloadAsync(string path, string fallbackName)
+    {
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Get, path, null);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ReadAsync<JsonElement>(response);
+        }
+
+        byte[] bytes = await response.Content.ReadAsByteArrayAsync();
+        string? name = response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+        return (bytes, string.IsNullOrWhiteSpace(name) ? fallbackName : Path.GetFileName(name));
+    }
 
     public Task<StockCountResponse> UndoStockCountAsync(int id, string code) =>
         PostAsync<StockCountResponse>($"/api/depo-sayim/{id}/geri-al", new { code });
