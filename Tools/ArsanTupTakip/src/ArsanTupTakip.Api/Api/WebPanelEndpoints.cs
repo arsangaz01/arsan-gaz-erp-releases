@@ -369,18 +369,8 @@ internal static class WebPanelEndpoints
         {
             DateTime today = DateTime.Today;
             int longDays = CylinderTracking.LongAtCustomerDays;
-            List<CustomerStockCylinder> stock = FilterGas(await CustomerStock.LoadAsync(), gaz);
-            Dictionary<int, Customer> customers = await StockCustomersAsync(stock.Select(c => c.CustomerId));
             bool phones = Perm.Has(Account(context), Perm.CustomerView);
-            string term = (q ?? string.Empty).Trim();
-            var rows = stock.GroupBy(c => c.CustomerId)
-                .Where(g => customers.ContainsKey(g.Key))
-                .Select(g => (Customer: customers[g.Key], Totals: CustomerStock.Totals(g.ToList(), today, longDays), Groups: CustomerStock.Groups(g, today, longDays)))
-                .Where(x => term.Length == 0 || Contains(x.Customer.CompanyName, term) || Contains(x.Customer.Code, term) || Contains(x.Customer.City, term) || Contains(x.Customer.District, term))
-                .Where(x => uzun != true || x.Totals.Long > 0)
-                .OrderByDescending(x => x.Totals.Count)
-                .ThenBy(x => x.Customer.CompanyName, StringComparer.Create(Turkish, true))
-                .ToList();
+            (List<CustomerStockCylinder> stock, var rows) = await StockCustomerRowsAsync(q, gaz, uzun, today, longDays);
             HashSet<int> shown = [.. rows.Select(x => x.Customer.Id)];
             return Results.Ok(new
             {
@@ -409,6 +399,49 @@ internal static class WebPanelEndpoints
                     LastDelivery = x.Totals.LastDelivery?.ToString("dd.MM.yyyy", Turkish),
                     Gases = CustomerStock.GroupText(x.Groups)
                 })
+            });
+        }).Requires(Perm.CylinderView);
+
+        // Every cylinder of one gas type and size held by the customers that match the stock filter, with a per-customer breakdown.
+        api.MapGet("/musteri-stok/grup", async (string? q, string? gaz, bool? uzun, string? grupGaz, string? boyut) =>
+        {
+            DateTime today = DateTime.Today;
+            int longDays = CylinderTracking.LongAtCustomerDays;
+            string gas = (grupGaz ?? string.Empty).Trim();
+            string size = (boyut ?? string.Empty).Trim();
+            (List<CustomerStockCylinder> stock, var rows) = await StockCustomerRowsAsync(q, gaz, uzun, today, longDays);
+            Dictionary<int, Customer> customers = rows.ToDictionary(x => x.Customer.Id, x => x.Customer);
+            List<CustomerStockCylinder> group = stock
+                .Where(c => customers.ContainsKey(c.CustomerId)
+                    && string.Equals(c.GasType.Trim(), gas, StringComparison.CurrentCultureIgnoreCase)
+                    && CustomerStock.CapacityText(c.Capacity, c.CapacityUnit) == size)
+                .ToList();
+            return Results.Ok(new
+            {
+                gasType = gas,
+                capacity = size,
+                longDays,
+                totals = CustomerStock.Totals(group, today, longDays),
+                customers = group.GroupBy(c => c.CustomerId)
+                    .Select(g => (Customer: customers[g.Key], Totals: CustomerStock.Totals(g.ToList(), today, longDays)))
+                    .OrderByDescending(x => x.Totals.Count)
+                    .ThenBy(x => x.Customer.CompanyName, StringComparer.Create(Turkish, true))
+                    .Select(x => new
+                    {
+                        x.Customer.Id,
+                        Name = x.Customer.CompanyName,
+                        x.Customer.Code,
+                        x.Customer.City,
+                        x.Customer.District,
+                        x.Totals.Count,
+                        x.Totals.Full,
+                        x.Totals.Empty,
+                        x.Totals.MaxDays,
+                        x.Totals.Long
+                    }),
+                cylinders = group
+                    .OrderByDescending(c => CylinderTracking.DaysSince(c.Since, today) ?? -1)
+                    .Select(c => new { row = StockRow(c, today), customerId = c.CustomerId, customer = customers[c.CustomerId].CompanyName })
             });
         }).Requires(Perm.CylinderView);
 
@@ -800,6 +833,24 @@ internal static class WebPanelEndpoints
     {
         string term = (gas ?? string.Empty).Trim();
         return term.Length == 0 ? stock : stock.Where(c => Contains(c.GasType, term)).ToList();
+    }
+
+    // The customers listed on the stock tab for the given filter, largest stock first, with the gas filtered stock behind them.
+    private static async Task<(List<CustomerStockCylinder> Stock, List<(Customer Customer, CustomerStockTotals Totals, IReadOnlyList<CustomerStockGroup> Groups)> Rows)>
+        StockCustomerRowsAsync(string? q, string? gaz, bool? uzun, DateTime today, int longDays)
+    {
+        List<CustomerStockCylinder> stock = FilterGas(await CustomerStock.LoadAsync(), gaz);
+        Dictionary<int, Customer> customers = await StockCustomersAsync(stock.Select(c => c.CustomerId));
+        string term = (q ?? string.Empty).Trim();
+        var rows = stock.GroupBy(c => c.CustomerId)
+            .Where(g => customers.ContainsKey(g.Key))
+            .Select(g => (Customer: customers[g.Key], Totals: CustomerStock.Totals(g.ToList(), today, longDays), Groups: CustomerStock.Groups(g, today, longDays)))
+            .Where(x => term.Length == 0 || Contains(x.Customer.CompanyName, term) || Contains(x.Customer.Code, term) || Contains(x.Customer.City, term) || Contains(x.Customer.District, term))
+            .Where(x => uzun != true || x.Totals.Long > 0)
+            .OrderByDescending(x => x.Totals.Count)
+            .ThenBy(x => x.Customer.CompanyName, StringComparer.Create(Turkish, true))
+            .ToList();
+        return (stock, rows);
     }
 
     private static async Task<Dictionary<int, Customer>> StockCustomersAsync(IEnumerable<int> ids)

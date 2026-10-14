@@ -305,6 +305,7 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="grid" id="ms-stats"></div>
       <div class="card" style="margin-top:16px">
         <h2>Gaz türü ve boyuta göre müşterilerdeki toplam</h2>
+        <p class="muted">Bir satıra tıklayınca o grubun hangi müşteride kaç adet olduğu ve tüm tüpleri tek tek açılır.</p>
         <div class="table-wrap"><table id="ms-gas"></table></div>
       </div>
       <div class="card">
@@ -507,6 +508,18 @@ tr.alarm-row td { background:#fef2f2; }
     <div class="card">
       <div class="toolbar"><h2 id="sd-cyl-title">Tüpler (gaz türü ve boyuta göre, en uzun bekleyen önce)</h2><input id="sd-q" placeholder="Barkod, seri no, gaz ara" style="min-width:220px"></div>
       <div class="table-wrap"><table id="sd-cylinders"></table></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="group-dialog">
+  <div class="dlg-head"><h3 id="gd-title">Gaz grubu</h3><button class="secondary" id="gd-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <div class="card"><div class="kv" id="gd-info"></div></div>
+    <div class="card"><h2>Hangi müşteride kaç adet</h2><p class="muted">Müşteriye tıklayınca o müşterinin stoku bu grup seçili olarak açılır.</p><div class="table-wrap"><table id="gd-customers"></table></div></div>
+    <div class="card">
+      <div class="toolbar"><h2 id="gd-cyl-title">Tüpler</h2><input id="gd-q" placeholder="Müşteri, barkod, seri no ara" style="min-width:220px"></div>
+      <div class="table-wrap"><table id="gd-cylinders"></table></div>
     </div>
   </div>
 </dialog>

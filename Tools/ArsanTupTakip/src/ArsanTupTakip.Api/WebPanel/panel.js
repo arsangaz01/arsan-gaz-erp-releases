@@ -1074,7 +1074,7 @@ async function loadStock() {
       stat(data.customers, "Tüpü olan müşteri", "Filtreye uyan", () => {}),
       stat(data.cylinders, "Müşterideki tüp", fullEmpty(data.full, data.empty), () => openFiltered({ durum: 3 })),
       stat(data.longCount, `${data.longDays}+ gündür bekleyen`, "Dönmeyen tüpler", () => openFiltered({ uzun: true }), true));
-    stockGroupTable($("ms-gas"), data.gasTotals, data.longDays);
+    stockGroupTable($("ms-gas"), data.gasTotals, data.longDays, openGroupDialog);
     $("ms-count").textContent = `${data.customers} müşteri · ${data.cylinders} tüp`;
     const head = el("tr", {}, ...["Müşteri", "Şehir", "Tüp", "Dolu / boş", "Gaz türleri", "Son teslim", "En uzun", `${data.longDays}+ gün`].map((h) => el("th", {}, h)));
     const body = data.rows.map((c) => el("tr", { class: "click", onclick: () => openStockDialog(c.id) },
@@ -1092,7 +1092,7 @@ async function loadStock() {
   }
 }
 
-async function openStockDialog(id) {
+async function openStockDialog(id, pick = null) {
   hide($("sd-msg"));
   try {
     stockCustomer = await api(`/panel/api/musteri/${id}/stok`);
@@ -1112,7 +1112,7 @@ async function openStockDialog(id) {
   if (s.phone) info.splice(2, 0, ["Telefon", s.phone]);
   if (!s.isActive) info.push(["Kayıt", "Pasif müşteri"]);
   $("sd-info").replaceChildren(...info.map(([k, v]) => el("div", {}, el("span", {}, k), v)));
-  stockPick = null;
+  stockPick = pick;
   renderStockGroups();
   $("sd-q").value = "";
   renderStockCylinders();
@@ -1170,6 +1170,64 @@ function stockCylinderRow(c, longDays) {
     el("td", { class: c.testOverdue ? "bad-text" : "" }, c.testDue || "-"));
 }
 
+let stockGroup = null;
+
+async function openGroupDialog(g) {
+  const query = stockFilter();
+  query.set("grupGaz", g.gasType);
+  query.set("boyut", g.capacity);
+  try {
+    stockGroup = await api("/panel/api/musteri-stok/grup?" + query);
+  } catch (error) {
+    show($("global-msg"), error.message);
+    return;
+  }
+  const s = stockGroup;
+  const t = s.totals;
+  $("gd-title").textContent = `${s.gasType} ${s.capacity} · ${t.count} adet`;
+  $("gd-info").replaceChildren(...[
+    ["Toplam tüp", String(t.count)], ["Dolu / boş", fullEmpty(t.full, t.empty) + (t.unknown ? ` · bilinmiyor ${t.unknown}` : "")],
+    ["Müşteri sayısı", String(s.customers.length)], ["En uzun bekleyen", daysText(t.maxDays)],
+    ["Ortalama bekleme", daysText(t.avgDays)], [`${s.longDays}+ gündür bekleyen`, String(t.long)], ["Müşteri malı tüp", String(t.customerOwned)]
+  ].map(([k, v]) => el("div", {}, el("span", {}, k), v)));
+  const pick = stockGroupKey(s.gasType, s.capacity);
+  const head = el("tr", {}, ...["Müşteri", "Şehir", "Adet", "Dolu / boş", "En uzun", `${s.longDays}+ gün`].map((h) => el("th", {}, h)));
+  const body = s.customers.map((c) => el("tr", { class: "click", onclick: () => openStockDialog(c.id, pick) },
+    el("td", {}, el("b", {}, c.name), el("div", { class: "muted" }, c.code)),
+    el("td", {}, [c.city, c.district].filter(Boolean).join(" / ") || "-"),
+    el("td", {}, el("b", {}, String(c.count))),
+    el("td", {}, fullEmpty(c.full, c.empty)),
+    el("td", { class: c.maxDays >= s.longDays ? "warn-text" : "" }, daysText(c.maxDays)),
+    el("td", { class: c.long ? "warn-text" : "muted" }, String(c.long))));
+  $("gd-customers").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6, class: "muted" }, "Tüp yok."))])));
+  $("gd-q").value = "";
+  renderGroupCylinders();
+  if (!$("group-dialog").open) $("group-dialog").showModal();
+}
+
+function renderGroupCylinders() {
+  const s = stockGroup;
+  if (!s) return;
+  const term = $("gd-q").value.trim().toLocaleLowerCase("tr-TR");
+  const rows = s.cylinders.filter((x) => !term || [x.customer, x.row.serialNumber, x.row.barcode, x.row.manufacturerSerial]
+    .some((v) => v && v.toLocaleLowerCase("tr-TR").includes(term)));
+  $("gd-cyl-title").textContent = term ? `'${$("gd-q").value.trim()}' için ${rows.length} tüp` : `Tüpler (${rows.length}) · en uzun bekleyen önce`;
+  const head = el("tr", {}, ...["Seri no / barkod", "Müşteri", "Dolu/Boş", "Teslim", "Gün", "Test"].map((h) => el("th", {}, h)));
+  const body = rows.map(({ row: c, customer, customerId }) => el("tr", { class: "click", onclick: () => openDetail(c.id) },
+    el("td", {}, el("b", {}, (c.needsReview ? "⚠ " : "") + c.serialNumber),
+      c.barcode !== c.serialNumber ? el("div", { class: "muted" }, c.barcode) : null,
+      c.manufacturerSerial ? el("div", { class: "muted" }, "Üretici seri: " + c.manufacturerSerial) : null,
+      c.customerOwned ? el("div", { class: "muted" }, "Müşteri malı") : null),
+    el("td", {}, el("a", { href: "#", onclick: (e) => { e.preventDefault(); e.stopPropagation(); openStockDialog(customerId, stockGroupKey(s.gasType, s.capacity)); } }, customer)),
+    el("td", {}, c.fullness),
+    el("td", {}, c.since || "-"),
+    el("td", { class: c.days >= s.longDays ? "warn-text" : "" }, daysText(c.days)),
+    el("td", { class: c.testOverdue ? "bad-text" : "" }, c.testDue || "-")));
+  $("gd-cylinders").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6, class: "muted" }, "Aramaya uyan tüp yok."))])));
+}
+
+$("gd-q").addEventListener("input", renderGroupCylinders);
+$("gd-close").addEventListener("click", () => $("group-dialog").close());
 $("sd-q").addEventListener("input", renderStockCylinders);
 $("sd-close").addEventListener("click", () => $("stock-dialog").close());
 $("sd-list").addEventListener("click", () => {
