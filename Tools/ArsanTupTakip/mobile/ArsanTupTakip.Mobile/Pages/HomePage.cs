@@ -46,6 +46,12 @@ public sealed class HomePage : ContentPage
             tiles.Add(new Tile(Icons.Dashboard, "Tüp Durumu", null, false, indigo, navy, () => Open("durum", () => new CylinderStatusPage())));
         }
 
+        if (api.Can(Perm.CylinderView))
+        {
+            tiles.Add(new Tile(Icons.Inventory, "Müşteri Stoku", "Müşterideki tüpler: adet, gün, barkod", true, Color.FromArgb("#0F766E"), navy,
+                () => Open("stok", () => new CustomerStockPage())));
+        }
+
         if (api.Can(Perm.TripView))
         {
             tiles.Add(new Tile(Icons.Shipping, "Sefer", "Yükle, teslim et, dönüş", true, Color.FromArgb("#312E81"), navy, () => Open("sefer", () => new CylinderTripPage())));

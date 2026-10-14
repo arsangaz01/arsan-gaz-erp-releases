@@ -13,6 +13,7 @@ public sealed class CylinderAuditPage : ContentPage
     private readonly Label _scannedText = new() { FontSize = 14 };
     private readonly Label _result = new() { FontSize = 14 };
     private readonly Border _resultCard;
+    private readonly Button _stockButton;
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
     private readonly List<string> _scanned = [];
     private List<CustomerItem> _customers = [];
@@ -25,6 +26,14 @@ public sealed class CylinderAuditPage : ContentPage
         _code.Completed += (_, _) => AddManual();
         _resultCard = Ui.Card(_result);
         _resultCard.IsVisible = false;
+        _stockButton = Ui.Secondary("📋 Müşterideki tüpleri gör", async (_, _) =>
+        {
+            if (SelectedCustomer is CustomerItem customer)
+            {
+                await Navigation.PushAsync(new CustomerStockPage(customer));
+            }
+        });
+        _stockButton.IsVisible = false;
 
         Ui.ApplyPageChrome(this);
         Content = new ScrollView
@@ -41,7 +50,8 @@ public sealed class CylinderAuditPage : ContentPage
                         _customerSearch,
                         Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
                         _customer,
-                        _expected),
+                        _expected,
+                        _stockButton),
                     Ui.Section(
                         "2 · Sahadaki tüpler",
                         Ui.Primary("📷 Sahadaki tüpleri okut", async (_, _) => await ScanAsync()),
@@ -64,8 +74,11 @@ public sealed class CylinderAuditPage : ContentPage
 
     private CustomerItem? SelectedCustomer => _customer.SelectedIndex >= 0 ? _customers[_customer.SelectedIndex] : null;
 
-    private void ShowExpected() =>
+    private void ShowExpected()
+    {
         _expected.Text = SelectedCustomer is CustomerItem customer ? $"Kayıtlara göre {customer.Name} müşterisinde {customer.Cylinders} tüp var." : string.Empty;
+        _stockButton.IsVisible = SelectedCustomer is not null && ApiClient.Instance.Can(Perm.CylinderView);
+    }
 
     private void RefreshScanned() =>
         _scannedText.Text = _scanned.Count == 0 ? "Henüz tüp okutulmadı." : $"{_scanned.Count} tüp okutuldu:\n{string.Join(", ", _scanned)}";

@@ -46,6 +46,21 @@ public sealed class CylinderInfoPage : ContentPage
         };
     }
 
+    // Opened from a list: shows the given cylinder right away.
+    public CylinderInfoPage(string code) : this()
+    {
+        _code.Text = code;
+        bool shown = false;
+        Loaded += async (_, _) =>
+        {
+            if (!shown)
+            {
+                shown = true;
+                await LookupAsync(code);
+            }
+        };
+    }
+
     private static Border SourceButton(string glyph, string text, Func<Task> action)
     {
         Border tile = new()

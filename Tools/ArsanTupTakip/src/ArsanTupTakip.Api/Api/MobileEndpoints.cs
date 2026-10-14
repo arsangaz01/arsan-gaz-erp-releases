@@ -299,6 +299,9 @@ internal static class MobileEndpoints
         app.MapGet("/api/tahmin", () => Text(TupReports.ReorderForecastsAsync)).Requires(Perm.Reports);
         app.MapGet("/api/test-tarihleri", (int? gun) => Text(() => TupReports.TestDueAsync(gun ?? 30))).Requires(Perm.Reports);
         app.MapGet("/api/hareketler", (int? gun) => Text(() => TupReports.RecentMovementsAsync(gun ?? 7))).Requires(Perm.MovementHistory);
+        app.MapGet("/api/musteri/{id:int}/stok", (int id, HttpContext context) =>
+            WebPanelEndpoints.CustomerStockAsync(id, Perm.Has((WebPanelUser)context.Items["panelAccount"]!, Perm.CustomerView)))
+            .Requires(Perm.CylinderView);
         app.MapGet("/api/musterideki-tupler", (string? musteri) => Text(() => TupReports.CylindersAtCustomersAsync(musteri))).Requires(Perm.Reports);
     }
 

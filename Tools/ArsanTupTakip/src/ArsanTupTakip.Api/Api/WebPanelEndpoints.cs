@@ -412,34 +412,8 @@ internal static class WebPanelEndpoints
             });
         }).Requires(Perm.CylinderView);
 
-        api.MapGet("/musteri/{id:int}/stok", async (int id, HttpContext context) =>
-        {
-            await using TupTakipDbContext db = new();
-            Customer? customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
-            if (customer is null)
-            {
-                return Results.NotFound(new { error = "Müşteri bulunamadı." });
-            }
-
-            DateTime today = DateTime.Today;
-            int longDays = CylinderTracking.LongAtCustomerDays;
-            List<CustomerStockCylinder> stock = await CustomerStock.LoadAsync(id);
-            bool phones = Perm.Has(Account(context), Perm.CustomerView);
-            return Results.Ok(new
-            {
-                customer.Id,
-                Name = customer.CompanyName,
-                customer.Code,
-                customer.City,
-                customer.District,
-                Phone = phones ? customer.Phone : null,
-                customer.IsActive,
-                longDays,
-                Totals = CustomerStock.Totals(stock, today, longDays),
-                Groups = CustomerStock.Groups(stock, today, longDays),
-                Cylinders = stock.Select(c => StockRow(c, today))
-            });
-        }).Requires(Perm.CylinderView);
+        api.MapGet("/musteri/{id:int}/stok", (int id, HttpContext context) => CustomerStockAsync(id, Perm.Has(Account(context), Perm.CustomerView)))
+            .Requires(Perm.CylinderView);
 
         api.MapGet("/musteri-stok.csv", async (int? musteri, string? gaz) =>
         {
@@ -792,6 +766,35 @@ internal static class WebPanelEndpoints
         Note = m.Description,
         Warning = m.Description?.Contains("Uyarı onaylandı", StringComparison.Ordinal) == true
     };
+
+    // Shared by the web panel and the phone: one customer's cylinders by gas/size with waiting days and barcodes.
+    internal static async Task<IResult> CustomerStockAsync(int id, bool phones)
+    {
+        await using TupTakipDbContext db = new();
+        Customer? customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+        if (customer is null)
+        {
+            return Results.NotFound(new { error = "Müşteri bulunamadı." });
+        }
+
+        DateTime today = DateTime.Today;
+        int longDays = CylinderTracking.LongAtCustomerDays;
+        List<CustomerStockCylinder> stock = await CustomerStock.LoadAsync(id);
+        return Results.Ok(new
+        {
+            customer.Id,
+            Name = customer.CompanyName,
+            customer.Code,
+            customer.City,
+            customer.District,
+            Phone = phones ? customer.Phone : null,
+            customer.IsActive,
+            longDays,
+            Totals = CustomerStock.Totals(stock, today, longDays),
+            Groups = CustomerStock.Groups(stock, today, longDays),
+            Cylinders = stock.OrderByDescending(c => CylinderTracking.DaysSince(c.Since, today) ?? -1).Select(c => StockRow(c, today))
+        });
+    }
 
     private static List<CustomerStockCylinder> FilterGas(List<CustomerStockCylinder> stock, string? gas)
     {

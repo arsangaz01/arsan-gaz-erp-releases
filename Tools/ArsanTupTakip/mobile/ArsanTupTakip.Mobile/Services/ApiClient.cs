@@ -71,6 +71,64 @@ public sealed record CylinderStatusCount(int Status, string Name, int Total, int
 public sealed record CylinderPlateCount(string Plate, int Count);
 public sealed record CylinderOverview(List<CylinderStatusCount> Statuses, List<CylinderPlateCount> Vehicles, int LongAtCustomer, int LongAtCustomerDays);
 
+public sealed record CustomerStockTotals(int Count, int Full, int Empty, int Unknown, int CustomerOwned, int? MaxDays, int? AvgDays, int Long, DateTime? LastDelivery);
+
+public sealed record CustomerStockGroupItem(string GasType, string Capacity, int Count, int Full, int Empty, int? MinDays, int? MaxDays, int? AvgDays, int Long)
+{
+    public string Title => $"{GasType} {Capacity}";
+
+    public string Subtitle => $"dolu {Full} · boş {Empty} · {DaysRange(MinDays, MaxDays)}" + (Long > 0 ? $" · ⚠ {Long} tüp uzun süredir" : string.Empty);
+
+    internal static string DaysRange(int? min, int? max) =>
+        max is null ? "teslim tarihi yok" : min == max ? $"{max} gün" : $"{min}–{max} gün";
+}
+
+public sealed record CustomerStockCylinderItem(
+    int Id,
+    string SerialNumber,
+    string Barcode,
+    string? ManufacturerSerial,
+    string GasType,
+    string Capacity,
+    string Fullness,
+    string? Since,
+    int? Days,
+    bool CustomerOwned,
+    string? TestDue,
+    bool TestOverdue,
+    bool NeedsReview)
+{
+    public string Title => $"{(NeedsReview ? "⚠ " : string.Empty)}{SerialNumber} · {GasType} {Capacity}";
+
+    public string Subtitle => string.Join(" · ", new[]
+    {
+        Fullness == "-" ? null : Fullness,
+        Since is null ? "teslim tarihi yok" : $"teslim {Since}",
+        Days is int days ? $"{days} gündür" : null,
+        TestDue is null ? null : (TestOverdue ? "test geçmiş " : "test ") + TestDue,
+        CustomerOwned ? "müşteri malı" : null
+    }.Where(part => !string.IsNullOrEmpty(part)));
+
+    public string Codes => string.Join(" · ", new[]
+    {
+        Barcode == SerialNumber ? null : "QR " + Barcode,
+        ManufacturerSerial is null ? null : "üretici seri " + ManufacturerSerial
+    }.Where(part => !string.IsNullOrEmpty(part)));
+}
+
+public sealed record CustomerStockResponse(
+    int Id,
+    string Name,
+    string Code,
+    string? City,
+    string? District,
+    string? Phone,
+    bool IsActive,
+    int LongDays,
+    CustomerStockTotals Totals,
+    List<CustomerStockGroupItem> Groups,
+    List<CustomerStockCylinderItem> Cylinders);
+
 public sealed record CylinderListItem(
     string SerialNumber,
     string Barcode,
@@ -463,6 +521,8 @@ public sealed class ApiClient
 
     public async Task<List<CustomerItem>> CustomersAsync(string query) =>
         await GetAsync<List<CustomerItem>>("/api/musteriler?q=" + Uri.EscapeDataString(query));
+
+    public Task<CustomerStockResponse> CustomerStockAsync(int customerId) => GetAsync<CustomerStockResponse>("/api/musteri/" + customerId + "/stok");
 
     public Task<CustomerCreated> CreateCustomerAsync(object customer) => PostAsync<CustomerCreated>("/api/musteri", customer);
 
