@@ -456,7 +456,7 @@ tr.alarm-row td { background:#fef2f2; }
     <div id="vd-msg" class="msg hidden"></div>
     <div id="vd-alarm" class="alarm-box hidden"></div>
     <div class="card">
-      <div class="toolbar"><h2>Bilgiler</h2><button class="secondary small" id="vd-edit" type="button" data-perm="arac-duzenle">Düzenle</button><button class="danger" id="vd-toggle" type="button" data-perm="arac-pasif">Pasife al</button></div>
+      <div class="toolbar"><h2>Bilgiler</h2><button class="secondary small" id="vd-edit" type="button" data-perm="arac-duzenle">Düzenle</button><button class="danger" id="vd-toggle" type="button" data-perm="arac-pasif">Pasife al</button><button class="danger" id="vd-delete" type="button" data-perm="arac-sil">Aracı sil</button></div>
       <div class="kv" id="vd-info"></div>
     </div>
     <div class="card"><h2>Araçtaki tüpler (gaz türüne göre)</h2><div id="vd-groups"></div></div>
@@ -602,6 +602,19 @@ tr.alarm-row td { background:#fef2f2; }
       <label class="field">Onaylamak için kullanıcı adını aynen yazın<input id="x-name" required maxlength="40" autocomplete="off"></label>
       <button class="primary" type="submit" id="x-save" disabled>Evet, kalıcı olarak sil</button>
       <div id="x-msg" class="msg hidden"></div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="vehicle-delete-dialog" class="narrow">
+  <div class="dlg-head"><h3 id="vx-title">Aracı sil</h3><button class="secondary" id="vx-close" type="button">Vazgeç</button></div>
+  <div class="dlg-body">
+    <form id="vehicle-delete-form" style="display:flex;flex-direction:column;gap:10px">
+      <div><b id="vx-who"></b></div>
+      <div class="msg alarm" id="vx-warning"></div>
+      <label class="field">Onaylamak için plakayı aynen yazın<input id="vx-plate" required maxlength="20" autocomplete="off"></label>
+      <button class="primary" type="submit" id="vx-save" disabled>Evet, aracı kalıcı olarak sil</button>
+      <div id="vx-msg" class="msg hidden"></div>
     </form>
   </div>
 </dialog>

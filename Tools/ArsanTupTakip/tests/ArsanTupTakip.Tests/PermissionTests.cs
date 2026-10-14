@@ -50,6 +50,9 @@ internal static class PermissionTests
         Check(Perm.Effective(PanelRoles.Admin, Perm.All.ToDictionary(k => k, _ => false)).SetEquals(Perm.All), "Yönetici her zaman tüm yetkilere sahip olmalı.");
         HashSet<string> op = Perm.Effective(PanelRoles.Operator, null);
         Check(op.Contains(Perm.MoveDeliver) && op.Contains(Perm.TripStart) && !op.Contains(Perm.ManageUsers) && !op.Contains(Perm.AuditLog), "Operatör varsayılanı: işlemler var, yönetim yok.");
+        Check(Perm.Effective(PanelRoles.Admin, null).Contains(Perm.VehicleDelete) && !op.Contains(Perm.VehicleDelete)
+            && Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.VehicleDelete] = true }).Contains(Perm.VehicleDelete),
+            "Araç silme varsayılan olarak yalnızca Yönetici'de olmalı; yönetici başkasına verebilmeli.");
         HashSet<string> viewer = Perm.Effective(PanelRoles.Viewer, null);
         Check(viewer.Contains(Perm.CylinderView) && Perm.AnyMove.All(m => !viewer.Contains(m)) && !viewer.Contains(Perm.VehicleAdd), "İzleyici varsayılanı yalnızca görüntüleme olmalı.");
         Check(Perm.Effective("bilinmeyen", new Dictionary<string, bool> { [Perm.Summary] = true }).Count == 0, "Bilinmeyen rol hiçbir yetki almamalı.");

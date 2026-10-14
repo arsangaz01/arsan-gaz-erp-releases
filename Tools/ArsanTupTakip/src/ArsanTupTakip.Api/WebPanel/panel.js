@@ -970,6 +970,7 @@ async function openVehicle(id, message) {
   $("vd-toggle").textContent = v.isActive ? "Pasife al" : "Aktif et";
   $("vd-toggle").className = v.isActive ? "danger" : "secondary small";
   $("vd-toggle").classList.toggle("hidden", !can("arac-pasif"));
+  $("vd-delete").classList.toggle("hidden", !can("arac-sil"));
   renderGroups($("vd-groups"), data.onBoard, "Bu araçta şu an tüp yok.");
   const head = el("tr", {}, ...["Sefer", "Başlangıç", "Araç dönüşü", "Yüklenen", "Teslim", "Depoya dönen", "Eksik"].map((h) => el("th", {}, h)));
   const body = data.trips.map((t) => el("tr", { class: "click" + (t.missing ? " alarm-row" : ""), onclick: () => openTrip(t.tripId) },
@@ -983,6 +984,50 @@ async function openVehicle(id, message) {
 }
 
 $("vd-close").addEventListener("click", () => $("vehicle-dialog").close());
+
+const plateKey = (text) => String(text || "").replace(/[\s-]+/g, "").toUpperCase();
+
+$("vd-delete").addEventListener("click", () => {
+  const v = currentVehicle;
+  if (!v) return;
+  $("vehicle-delete-form").reset();
+  hide($("vx-msg"));
+  $("vx-title").textContent = `Aracı sil: ${v.plate}`;
+  $("vx-who").textContent = `${v.plate}` + (v.name ? ` · ${v.name}` : "") + (v.driverName ? ` · şoför ${v.driverName}` : "");
+  $("vx-warning").textContent = v.activeTripId
+    ? `Bu araç şu an açık bir seferde ("${v.activeTripTitle}"). Silinemez; önce depo dönüşünü okutun veya seferi kapatın.`
+    : "Bu işlem kalıcıdır ve geri alınamaz. Araç kaydı listeden kalkar. Geçmiş seferler ve tüp hareketleri plakayla birlikte korunur."
+      + (v.cylindersOnBoard > 0 ? ` Araçta kayıtlı ${v.cylindersOnBoard} tüp "Depoda" durumuna alınır ve her biri için hareket kaydı yazılır.` : "")
+      + " Geri alınabilir bir yol istiyorsanız \"Pasife al\"ı kullanın.";
+  $("vx-plate").placeholder = v.plate;
+  $("vx-plate").disabled = !!v.activeTripId;
+  $("vx-save").disabled = true;
+  $("vehicle-delete-dialog").showModal();
+  if (!v.activeTripId) $("vx-plate").focus();
+});
+
+$("vx-plate").addEventListener("input", () => {
+  $("vx-save").disabled = !currentVehicle || plateKey($("vx-plate").value) !== plateKey(currentVehicle.plate);
+});
+$("vx-close").addEventListener("click", () => $("vehicle-delete-dialog").close());
+
+$("vehicle-delete-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const v = currentVehicle;
+  if (!v) return;
+  $("vx-save").disabled = true;
+  try {
+    const result = await api(`/panel/api/arac/${v.id}/sil`, { method: "POST", body: { onay: $("vx-plate").value.trim(), version: v.version } });
+    $("vehicle-delete-dialog").close();
+    $("vehicle-dialog").close();
+    currentVehicle = null;
+    await loadVehicles();
+    show($("global-msg"), result.message, "ok");
+  } catch (error) {
+    show($("vx-msg"), error.message);
+    $("vx-save").disabled = false;
+  }
+});
 $("vd-edit").addEventListener("click", () => openVehicleForm(currentVehicle));
 $("v-yeni").addEventListener("click", () => openVehicleForm(null));
 $("vf-close").addEventListener("click", () => $("vehicle-form-dialog").close());

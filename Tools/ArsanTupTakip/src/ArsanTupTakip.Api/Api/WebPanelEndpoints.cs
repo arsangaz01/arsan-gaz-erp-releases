@@ -11,6 +11,7 @@ namespace ArsanTupTakip.Api;
 internal sealed record PanelLoginRequest(string? Kullanici, string? Sifre);
 internal sealed record PanelPasswordRequest(string? Mevcut, string? Yeni, string? YeniTekrar);
 internal sealed record PanelMoveRequest(CylinderStatus Status, int? CustomerId, string? Plate, bool? IsFull, string? Note, bool Confirm = false, uint? Version = null);
+internal sealed record VehicleDeleteRequest(string? Onay, uint? Version = null);
 internal sealed record PanelEditRequest(string? GasType, decimal Capacity, string? CapacityUnit, DateTime? TestDueDate, bool IsActive, uint? Version = null);
 internal sealed record PanelUserCreateRequest(string? KullaniciAdi, string? AdSoyad, string? Rol, string? Sifre, bool SifreDegistirsin = true, List<string>? Yetkiler = null);
 internal sealed record PanelUserUpdateRequest(string? AdSoyad, string? Rol, bool Aktif, List<string>? Yetkiler = null);
@@ -611,6 +612,36 @@ internal static class WebPanelEndpoints
             await VehicleEndpoints.UpdateAsync(id, request, context, vehicle =>
                 WebPanelAudit.Write((string)context.Items["panelUser"]!, vehicle.IsActive ? "Araç güncellendi" : "Araç pasif", vehicle.Plate, null, WebPanelAuth.ClientIp(context))))
             .Requires(Perm.VehicleEdit, Perm.VehicleDeactivate);
+
+        api.MapPost("/arac/{id:int}/sil", async (int id, VehicleDeleteRequest request, HttpContext context) =>
+        {
+            string user = (string)context.Items["panelUser"]!;
+            await using (TupTakipDbContext db = new())
+            {
+                string? plate = await db.Vehicles.AsNoTracking().Where(x => x.Id == id).Select(x => x.Plate).FirstOrDefaultAsync();
+                if (plate is null)
+                {
+                    return Results.NotFound(new { error = "Araç bulunamadı." });
+                }
+
+                static string Compact(string? text) => string.Concat((text ?? string.Empty).Where(c => !char.IsWhiteSpace(c) && c != '-')).ToUpperInvariant();
+                if (Compact(request.Onay) != Compact(plate))
+                {
+                    return Results.BadRequest(new { error = "Onay için aracın plakasını aynen yazın." });
+                }
+            }
+
+            try
+            {
+                (string deleted, int moved) = await new VehicleService().DeleteAsync(id, user, request.Version);
+                WebPanelAudit.Write(user, "Araç silindi", deleted, moved > 0 ? $"{moved} tüp depoya alındı" : null, WebPanelAuth.ClientIp(context));
+                return Results.Ok(new { message = $"{deleted} silindi." + (moved > 0 ? $" Araçtaki {moved} tüp depoya alındı." : string.Empty) });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(Perm.VehicleDelete);
 
         api.MapGet("/musteriler", async (string? q, int? take, HttpContext context) =>
             Results.Ok(await CustomerChoices.SearchAsync(q, Perm.Has(Account(context), Perm.CustomerView), take ?? 50)))

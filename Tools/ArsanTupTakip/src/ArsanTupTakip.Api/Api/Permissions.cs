@@ -43,6 +43,7 @@ internal static class Perm
     internal const string VehicleAdd = "arac-ekle";
     internal const string VehicleEdit = "arac-duzenle";
     internal const string VehicleDeactivate = "arac-pasif";
+    internal const string VehicleDelete = "arac-sil";
     internal const string ManageUsers = "kullanici-yonetimi";
     internal const string ManageDevices = "cihaz-yonetimi";
     internal const string AuditLog = "denetim-kaydi";
@@ -107,7 +108,8 @@ internal static class Perm
             P(VehicleView, "Araçları görüntüleme", "Araç listesi, araçtaki tüpler ve sefer geçmişi."),
             P(VehicleAdd, "Araç ekleme", "Yeni araç kaydı açar.", VehicleView),
             P(VehicleEdit, "Araç düzenleme", "Araç adı, türü, şoför, kapasite ve notu değiştirir.", VehicleView),
-            P(VehicleDeactivate, "Aracı pasife alma / aktif etme", "Aracı yeni seferlerde seçilemez yapar veya geri açar.", VehicleView)
+            P(VehicleDeactivate, "Aracı pasife alma / aktif etme", "Aracı yeni seferlerde seçilemez yapar veya geri açar.", VehicleView),
+            P(VehicleDelete, "Aracı silme", "Araç kaydını kalıcı olarak siler; araçtaki tüpler depoya alınır, sefer geçmişi korunur. Varsayılan olarak yalnızca Yönetici'de vardır.", VehicleView)
         ]),
         new("Yönetim", [
             P(ManageUsers, "Kullanıcı yönetimi", "Kullanıcı ekler, düzenler, pasife alır, siler, şifre sıfırlar ve yetkileri seçer. Yönetici hesaplarına dokunamaz ve kendinde olmayan yetkiyi veremez.", PanelLogin),

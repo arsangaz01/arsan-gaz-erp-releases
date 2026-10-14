@@ -178,6 +178,59 @@ public sealed class VehicleService
         return vehicle;
     }
 
+    // Removes the vehicle from the registry. Trip history keeps the plate text, so past trips stay readable. Cylinders still
+    // recorded on the vehicle go back to the warehouse with a movement record, so none is left on a vehicle that no longer exists.
+    public async Task<(string Plate, int MovedToWarehouse)> DeleteAsync(int id, string deletedBy, uint? expectedVersion = null)
+    {
+        await using TupTakipDbContext db = new();
+        Vehicle vehicle = await db.Vehicles.FirstOrDefaultAsync(x => x.Id == id) ?? throw new InvalidOperationException("Araç bulunamadı.");
+        if (expectedVersion is uint seen && seen != vehicle.Version)
+        {
+            throw new RecordChangedException();
+        }
+
+        string plate = vehicle.Plate;
+        if (await db.CylinderTripVehicles.AnyAsync(x => x.Plate == plate && x.ReturnedAt == null && x.Trip.Status == CylinderTripStatus.Active))
+        {
+            throw new InvalidOperationException($"{plate} aktif bir seferde; önce depo dönüşünü okutun veya seferi kapatın, sonra silin.");
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        List<Cylinder> onBoard = await db.Cylinders.Where(c => c.Status == CylinderStatus.Vehicle && c.VehiclePlate == plate).ToListAsync();
+        DateTime now = DateTime.Now;
+        foreach (Cylinder c in onBoard)
+        {
+            c.Status = CylinderStatus.Warehouse;
+            c.IsFull = CylinderTracking.NextFullness((int)CylinderStatus.Vehicle, (int)CylinderStatus.Warehouse, c.IsFull, null);
+            c.VehiclePlate = null;
+            c.LastMovementAt = now;
+            db.CylinderMovements.Add(new CylinderMovement
+            {
+                CylinderId = c.Id,
+                FromStatus = CylinderStatus.Vehicle,
+                ToStatus = CylinderStatus.Warehouse,
+                MovementType = "Araç silindi",
+                Description = $"{plate} aracı silindi ({deletedBy}); araçtaki tüp depoya alındı.",
+                MovementDate = now,
+                VehiclePlate = plate,
+                IsFull = c.IsFull
+            });
+        }
+
+        db.Vehicles.Remove(vehicle);
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new RecordChangedException();
+        }
+
+        await transaction.CommitAsync();
+        return (plate, onBoard.Count);
+    }
+
     // Trips may still receive plates that are not in the registry (older app versions); they are registered on the fly.
     // A plate registered as inactive cannot be sent on a new trip.
     internal static async Task EnsureUsableAsync(TupTakipDbContext db, string plate)
