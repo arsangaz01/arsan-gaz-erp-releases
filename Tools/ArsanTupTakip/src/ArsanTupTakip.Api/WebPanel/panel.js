@@ -220,7 +220,7 @@ function openTab(tab) {
   if (tab === "araclar") loadVehicles();
   if (tab === "musteriler") loadCustomers();
   if (tab === "talepler") loadRequests();
-  if (tab === "sefer-plani") { loadPlans(); loadLookup(); }
+  if (tab === "sefer-plani") loadPlans().then(loadLookup);
   if (tab === "musteri-stok") loadStock();
   if (tab === "sayimlar") loadCounts();
   if (tab === "barkod") loadLabelTemplates();
@@ -563,6 +563,13 @@ function isoToday() {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
+// Google lookups only show while the server has a Google key; the bulk lookup is for Yönetici only.
+function showGoogle(on) {
+  for (const node of document.querySelectorAll(".google-only")) {
+    node.classList.toggle("hidden", !on || (node.hasAttribute("data-google-admin") && me?.role !== "Yönetici"));
+  }
+}
+
 function metersLabel(m) { return m >= 1000 ? `${(m / 1000).toLocaleString("tr-TR")} km` : `${m} m`; }
 
 async function loadPlans() {
@@ -572,6 +579,7 @@ async function loadPlans() {
     const data = await api(`/panel/api/sefer-planlari?tarih=${$("tp-date").value}`);
     if (isStale("plans", ticket)) return;
     planData = data;
+    showGoogle(data.google);
     $("tp-count").textContent = data.plans.length ? `${data.plans.length} plan` : "";
     const head = el("tr", {}, ...["Araç", "Şoför", "Müşteri", "Konumu kayıtlı", "Uyarı mesafesi", "Durum", "Son değişiklik"].map((h) => el("th", {}, h)));
     const body = data.plans.map((p) => el("tr", { class: "click" + (p.status === "kapandi" ? " off" : ""), onclick: () => openPlan(p.id) },
@@ -835,7 +843,7 @@ $("cl-open").addEventListener("click", async () => {
 
 async function loadLookup() {
   clearTimeout(lookupTimer);
-  if (!me || me.role !== "Yönetici") return;
+  if (!me || me.role !== "Yönetici" || !planData?.google) return;
   try {
     const data = await api("/panel/api/yonetim/konum-bul");
     const s = data.status;

@@ -29,6 +29,7 @@ internal static class TripPlanEndpoints
                 date = day.ToString("yyyy-MM-dd"),
                 defaultMeters = TripPlans.DefaultAlertMeters,
                 distances = DistanceChoices,
+                google = CustomerGeocoder.Configured,
                 vehicles,
                 plans = plans.Select(p => Row(p, false))
             });

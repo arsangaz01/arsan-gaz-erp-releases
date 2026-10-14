@@ -408,7 +408,7 @@ tr.alarm-row td { background:#fef2f2; }
           <button class="secondary small" id="cl-open" type="button">📍 Konumu aç</button>
         </div>
         <div id="cl-msg" class="msg hidden"></div>
-        <div data-admin-only>
+        <div class="google-only hidden" data-google-admin>
           <div class="toolbar">
             <span id="cl-summary" class="muted"></span>
             <button class="primary small" id="cl-start" type="button">Konumu olmayanları Google'da bul</button>
@@ -416,7 +416,8 @@ tr.alarm-row td { background:#fef2f2; }
           </div>
           <div id="cl-progress" class="muted"></div>
         </div>
-        <div class="hint">Google'da müşterinin adı, ilçesi ve ili ile aranır; bulunamazsa adresiyle. Bulunan konum "doğrulanmamış" kaydedilir: panelde haritada kontrol edip onaylayabilir veya değiştirebilirsiniz; şoför de müşteriye ilk vardığında telefonda "Konum doğru mu?" sorusuyla teyit eder. Elle girilmiş veya onaylanmış konumlar toplu aramada değiştirilmez. Google'a yalnızca müşteri adı ve adresi gönderilir.</div>
+        <div class="hint">Müşteriyi arayıp seçin ve konumunu açın: Google Haritalar bağlantısını veya koordinatı yapıştırarak kaydedin. Şoför de müşterinin yanındayken telefondan "📍 Konumu kaydet" ile kaydedebilir.</div>
+        <div class="hint google-only hidden">Google'da müşterinin adı, ilçesi ve ili ile aranır; bulunamazsa adresiyle. Bulunan konum "doğrulanmamış" kaydedilir: panelde haritada kontrol edip onaylayabilir veya değiştirebilirsiniz; şoför de müşteriye ilk vardığında telefonda "Konum doğru mu?" sorusuyla teyit eder. Elle girilmiş veya onaylanmış konumlar toplu aramada değiştirilmez. Google'a yalnızca müşteri adı ve adresi gönderilir.</div>
       </div>
     </section>
 
@@ -855,7 +856,7 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="toolbar">
         <button class="primary" type="submit" id="loc-save">Kaydet</button>
         <button class="primary hidden" type="button" id="loc-verify">✓ Konumu onayla</button>
-        <button class="secondary" type="button" id="loc-google">Google'da bul</button>
+        <button class="secondary google-only hidden" type="button" id="loc-google">Google'da bul</button>
         <button class="secondary delete-link" type="button" id="loc-clear">Konumu sil</button>
       </div>
       <div id="loc-msg" class="msg hidden"></div>
