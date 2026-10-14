@@ -21,6 +21,7 @@ internal static class Perm
     internal const string CylinderDeactivate = "tup-pasif";
     internal const string CylinderAudit = "tup-sayim";
     internal const string StockCount = "depo-sayim";
+    internal const string LabelPrint = "barkod-yazdir";
     internal const string MoveDeliver = "hareket-teslim";
     internal const string MoveReturn = "hareket-iade";
     internal const string MoveVehicle = "hareket-arac";
@@ -79,7 +80,8 @@ internal static class Perm
             P(CylinderEdit, "Tüp bilgilerini düzenleme", "Gaz türü, kapasite, birim ve test tarihini değiştirebilir.", CylinderView),
             P(CylinderDeactivate, "Tüpü pasife alma / aktif etme", "Tüpü kullanım dışı bırakabilir veya yeniden aktif edebilir.", CylinderView),
             P(CylinderAudit, "Müşteride sayım", "Mobilde müşterideki tüpleri okutup sistemle karşılaştırır."),
-            P(StockCount, "Depo sayımı", "Mobilde ana depodaki tüpleri barkodla okutarak sayar, sayımı bitirir; panelde Sayım Raporları sekmesini görür.")
+            P(StockCount, "Depo sayımı", "Mobilde ana depodaki tüpleri barkodla okutarak sayar, sayımı bitirir; panelde Sayım Raporları sekmesini görür."),
+            P(LabelPrint, "Barkod etiketi yazdırma (yalnızca web)", "Web panelde Barkod Yazdır sekmesi: kayıtlı tüplerin veya yeni numaraların barkod etiketini oluşturur ve bilgisayara bağlı etiket yazıcısından (TSC) yazdırır. Varsayılan olarak Yönetici ve Operatör'de vardır.", PanelLogin, CylinderView)
         ]),
         new("Tüp hareketleri", [
             P(MoveDeliver, "Müşteriye teslim (çıkış)", "Tüpü müşteriye teslim edildi olarak kaydeder.", CylinderView),
@@ -127,7 +129,7 @@ internal static class Perm
 
     private static readonly string[] OperatorDefaults =
     [
-        PanelLogin, MobileLogin, Summary, Reports, CylinderView, CylinderRegister, CylinderEdit, CylinderDeactivate, CylinderAudit, StockCount,
+        PanelLogin, MobileLogin, Summary, Reports, CylinderView, CylinderRegister, CylinderEdit, CylinderDeactivate, CylinderAudit, StockCount, LabelPrint,
         MoveDeliver, MoveReturn, MoveVehicle, MoveFilling, MoveService, MoveScrap, MoveFullness, MoveBulk, MoveOverride,
         MovementHistory, Export, CustomerView, CustomerAdd, TripView, TripStart, TripLoad, TripDeliver, TripReturn, TripClose,
         VehicleView, VehicleAdd, VehicleEdit, VehicleDeactivate

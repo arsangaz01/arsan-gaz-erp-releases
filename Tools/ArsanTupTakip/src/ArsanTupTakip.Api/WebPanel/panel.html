@@ -181,6 +181,7 @@ tr.alarm-row td { background:#fef2f2; }
       <button data-tab="musteriler" data-perm="musteri-goruntule">Müşteriler</button>
       <button data-tab="sayimlar" data-perm="depo-sayim|tup-sayim|raporlar">Sayım Raporları</button>
       <button data-tab="yeni" data-perm="tup-kayit">Yeni tüp</button>
+      <button data-tab="barkod" data-perm="barkod-yazdir">Barkod Yazdır</button>
       <button data-tab="yonetim" data-admin-only>Yönetim</button>
     </nav>
     <div class="spacer"></div>
@@ -350,6 +351,52 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="card">
         <h2>Müşteride sayımlar</h2>
         <div class="table-wrap"><table id="sc-audits"></table></div>
+      </div>
+    </section>
+
+    <section data-page="barkod" class="hidden">
+      <div id="lb-msg" class="msg hidden"></div>
+      <div class="card">
+        <h2>Etiket ayarları</h2>
+        <div class="filters">
+          <label>Genişlik (mm)<input id="lb-w" type="number" min="20" max="104" step="1" value="50" style="width:90px"></label>
+          <label>Yükseklik (mm)<input id="lb-h" type="number" min="10" max="200" step="1" value="30" style="width:90px"></label>
+          <label>Kopya (her barkod)<input id="lb-copies" type="number" min="1" max="20" step="1" value="1" style="width:90px"></label>
+          <label>Üst yazı<input id="lb-title" maxlength="40" value="ARSAN GAZ" style="width:160px"></label>
+          <label><span><input type="checkbox" id="lb-f-gas" checked> Gaz + kapasite</span></label>
+          <label><span><input type="checkbox" id="lb-f-serial" checked> Seri no</span></label>
+          <label><span><input type="checkbox" id="lb-f-test" checked> Test tarihi</span></label>
+          <label><span><input type="checkbox" id="lb-f-text" checked> Barkod altında kod</span></label>
+        </div>
+        <div class="hint">Yazıcı: TSC TA310 (300 dpi). Yazdır'a basınca etiket önizlemesi açılır ve bilgisayarın yazdırma penceresi gelir; orada TSC yazıcısını seçin. İlk kullanımda: TSC Windows sürücüsünü kurun, sürücünün "Yazdırma tercihleri"nde kağıt boyutunu buradaki etiket ölçüsüyle aynı yapın, yazdırma penceresinde "Kenar boşluğu: Yok" ve "Ölçek: %100" seçin. Ayarlar bu bilgisayarda hatırlanır.</div>
+      </div>
+      <div class="card">
+        <h2>Kayıtlı tüplerden ekle</h2>
+        <div class="filters">
+          <label>Ara<input id="lb-q" placeholder="Seri no, barkod, gaz, müşteri" style="width:240px"></label>
+          <button class="secondary" id="lb-search" type="button">Ara</button>
+          <button class="secondary" id="lb-add-selected" type="button">Seçilenleri listeye ekle</button>
+        </div>
+        <div class="table-wrap"><table id="lb-results"></table></div>
+      </div>
+      <div class="card">
+        <h2>Yeni barkod numarası oluştur</h2>
+        <div class="filters">
+          <label>Önek<input id="lb-prefix" maxlength="10" placeholder="ör. AG" style="width:100px"></label>
+          <label>Başlangıç no<input id="lb-start" type="number" min="0" step="1" value="1" style="width:120px"></label>
+          <label>Adet<input id="lb-count" type="number" min="1" max="500" step="1" value="10" style="width:90px"></label>
+          <label>Basamak<input id="lb-digits" type="number" min="1" max="10" step="1" value="6" style="width:80px"></label>
+          <button class="secondary" id="lb-next" type="button" title="Bu önekle kayıtlı en büyük numaradan sonrakini getirir">Sıradaki boş no</button>
+          <button class="secondary" id="lb-generate" type="button">Oluştur ve listeye ekle</button>
+        </div>
+        <div class="hint">Örnek: önek AG, başlangıç 1, basamak 6 → AG000001, AG000002… Bir tüpte zaten barkod/seri no olarak kayıtlı numaralar listeye eklenmez ve uyarı verilir. Yeni numaralar yalnızca etiket olarak basılır; tüp kaydı "Yeni tüp" sekmesinden veya mobilde etiketi okutarak yapılır. Türkçe karakter (ç, ğ, ı, ö, ş, ü) kullanılamaz.</div>
+      </div>
+      <div class="card">
+        <div class="toolbar"><h2>Yazdırılacak etiketler <span id="lb-count-text" class="hint"></span></h2>
+          <button class="secondary small" id="lb-clear" type="button">Listeyi temizle</button>
+          <button class="primary" id="lb-print" type="button">Yazdır</button>
+        </div>
+        <div class="table-wrap"><table id="lb-list"></table></div>
       </div>
     </section>
 

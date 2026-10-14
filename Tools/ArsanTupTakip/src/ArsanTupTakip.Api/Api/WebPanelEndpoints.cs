@@ -649,6 +649,7 @@ internal static class WebPanelEndpoints
         }).Requires(Perm.VehicleDelete);
 
         StockCountEndpoints.MapPanel(api);
+        LabelEndpoints.MapPanel(api);
 
         api.MapGet("/musteriler", async (string? q, int? take, HttpContext context) =>
             Results.Ok(await CustomerChoices.SearchAsync(q, Perm.Has(Account(context), Perm.CustomerView), take ?? 50)))

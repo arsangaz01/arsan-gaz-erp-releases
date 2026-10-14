@@ -1852,4 +1852,229 @@ $("delete-form").addEventListener("submit", async (event) => {
   }
 });
 
+// ---- Barkod Yazdır: Code 128 labels drawn as SVG and printed through the computer's label printer driver (TSC TA310).
+const CODE128 = ("212222,222122,222221,121223,121322,131222,122213,122312,132212,221213,221312,231212,112232,122132,122231,113222,123122,123221,"
+  + "223211,221132,221231,213212,223112,312131,311222,321122,321221,312212,322112,322211,212123,212321,232121,111323,131123,131321,112313,132113,"
+  + "132311,211313,231113,231311,112133,112331,132131,113123,113321,133121,313121,211331,231131,213113,213311,213131,311123,311321,331121,312113,"
+  + "312311,332111,314111,221411,431111,111224,111422,121124,121421,141122,141221,112214,112412,122114,122411,142112,142211,241211,221114,413111,"
+  + "241112,134111,111242,121142,121241,114212,124112,124211,411212,421112,421211,212141,214121,412121,111143,111341,131141,114113,114311,411113,"
+  + "411311,113141,114131,311141,411131,211412,211214,211232,2331112").split(",");
+const LABEL_DOT_MM = 25.4 / 300;
+const LABEL_SETTINGS_KEY = "arsan-etiket-ayar";
+let labelList = [];
+let labelResults = [];
+
+// Symbol values (start … checksum, stop). Code B for letters; an all-digit code or a trailing run of 4+ digits
+// (e.g. AG000001) switches to Code C, two digits per symbol, which keeps the bars wider on small labels.
+function code128Values(text) {
+  if (!text || [...text].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) > 126)) return null;
+  const values = [];
+  const pairs = (digits) => { for (let i = 0; i < digits.length; i += 2) values.push(Number(digits.slice(i, i + 2))); };
+  const tail = (/\d+$/.exec(text) || [""])[0];
+  if (tail.length === text.length && text.length >= 4) {
+    const even = text.length - (text.length % 2);
+    values.push(105);
+    pairs(text.slice(0, even));
+    if (even < text.length) values.push(100, text.charCodeAt(even) - 32);
+  } else if (tail.length >= 4) {
+    const split = text.length - (tail.length - (tail.length % 2));
+    values.push(104, ...[...text.slice(0, split)].map((c) => c.charCodeAt(0) - 32), 99);
+    pairs(text.slice(split));
+  } else {
+    values.push(104, ...[...text].map((c) => c.charCodeAt(0) - 32));
+  }
+  const check = values.reduce((sum, v, i) => sum + v * (i === 0 ? 1 : i), 0) % 103;
+  return [...values, check, 106];
+}
+
+// Bars as [startModule, widthModules] plus total width in modules including 10-module quiet zones.
+function code128Bars(text) {
+  const values = code128Values(text);
+  if (!values) return null;
+  const bars = [];
+  let x = 10;
+  for (const v of values) {
+    [...CODE128[v]].forEach((w, i) => { if (i % 2 === 0) bars.push([x, Number(w)]); x += Number(w); });
+  }
+  return { bars, modules: x + 10 };
+}
+
+const xmlEsc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function labelSettings() {
+  const num = (id, min, max, fallback) => { const v = Math.round(Number($(id).value)); return Number.isFinite(v) && v >= min && v <= max ? v : fallback; };
+  return {
+    w: num("lb-w", 20, 104, 50), h: num("lb-h", 10, 200, 30), copies: num("lb-copies", 1, 20, 1),
+    title: $("lb-title").value.trim(), gas: $("lb-f-gas").checked, serial: $("lb-f-serial").checked,
+    test: $("lb-f-test").checked, text: $("lb-f-text").checked
+  };
+}
+
+function saveLabelSettings() {
+  try { localStorage.setItem(LABEL_SETTINGS_KEY, JSON.stringify(labelSettings())); } catch { /* private mode */ }
+}
+
+function loadLabelSettings() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(LABEL_SETTINGS_KEY) || "null"); } catch { s = null; }
+  if (!s) return;
+  $("lb-w").value = s.w; $("lb-h").value = s.h; $("lb-copies").value = s.copies; $("lb-title").value = s.title ?? "";
+  $("lb-f-gas").checked = !!s.gas; $("lb-f-serial").checked = !!s.serial; $("lb-f-test").checked = !!s.test; $("lb-f-text").checked = !!s.text;
+}
+
+// Narrowest bar = whole printer dots so every bar prints with the same width; null when the code does not fit the label.
+function labelBarcodeSvg(code, widthMm, heightMm) {
+  const symbol = code128Bars(code);
+  if (!symbol) return { error: "Barkodda Türkçe karakter veya desteklenmeyen işaret var." };
+  const dots = Math.floor(widthMm / (symbol.modules * LABEL_DOT_MM));
+  if (dots < 1) return { error: `Kod bu etiket genişliğine sığmıyor (en az ${Math.ceil(symbol.modules * LABEL_DOT_MM)} mm gerekir).` };
+  const width = symbol.modules * dots * LABEL_DOT_MM;
+  const rects = symbol.bars.map(([x, w]) => `<rect x="${x}" y="0" width="${w}" height="100"/>`).join("");
+  return {
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${symbol.modules} 100" preserveAspectRatio="none" shape-rendering="crispEdges" style="width:${width.toFixed(3)}mm;height:${heightMm.toFixed(2)}mm">${rects}</svg>`,
+    narrow: dots < 2
+  };
+}
+
+function labelHtml(item, s) {
+  const pad = 1.5;
+  const small = Math.max(1.8, Math.min(3.2, s.h / 11));
+  const head = s.title || (s.gas && item.gas);
+  const foot = (s.serial && item.serial && item.serial !== item.code) || (s.test && item.test);
+  const textLines = (head ? 1 : 0) + (foot ? 1 : 0) + (s.text ? 1 : 0);
+  const barHeight = Math.max(5, s.h - 2 * pad - textLines * (small * 1.25) - 0.5);
+  const bar = labelBarcodeSvg(item.code, s.w - 2 * pad - 1, barHeight);
+  const row = (left, right, bold) => `<div class="row${bold ? " b" : ""}"><span>${xmlEsc(left)}</span><span>${xmlEsc(right)}</span></div>`;
+  return `<div class="label">`
+    + (head ? row(s.title, s.gas ? item.gas || "" : "", true) : "")
+    + `<div class="bar">${bar.svg || `<b>${xmlEsc(bar.error)}</b>`}</div>`
+    + (s.text ? `<div class="code">${xmlEsc(item.code)}</div>` : "")
+    + (foot ? row(s.serial && item.serial && item.serial !== item.code ? "Seri: " + item.serial : "", s.test && item.test ? "Test: " + item.test : "") : "")
+    + `</div>`;
+}
+
+function labelDocument(items, s) {
+  const small = Math.max(1.8, Math.min(3.2, s.h / 11));
+  const pages = items.flatMap((item) => Array(s.copies).fill(labelHtml(item, s))).join("");
+  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Barkod etiketleri (${items.length * s.copies})</title><style>
+@page { size: ${s.w}mm ${s.h}mm; margin: 0; }
+html, body { margin: 0; padding: 0; background: #fff; }
+.label { width: ${s.w}mm; height: ${s.h}mm; box-sizing: border-box; padding: 1.5mm; overflow: hidden; display: flex; flex-direction: column;
+  justify-content: space-between; font-family: Arial, Helvetica, sans-serif; color: #000; page-break-after: always; break-after: page; }
+.label:last-child { page-break-after: auto; break-after: auto; }
+.row { display: flex; justify-content: space-between; gap: 1mm; font-size: ${small.toFixed(2)}mm; line-height: 1.2; white-space: nowrap; overflow: hidden; }
+.row.b { font-weight: bold; }
+.bar { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.bar svg { display: block; fill: #000; }
+.code { text-align: center; font-size: ${(small * 1.05).toFixed(2)}mm; line-height: 1.2; letter-spacing: .3mm; font-weight: bold; }
+@media screen { body { background: #ccc; padding: 10px; } .label { background: #fff; margin: 0 auto 8px; outline: 1px dashed #888; } }
+</style></head><body>${pages}</body></html>`;
+}
+
+function renderLabelList() {
+  const s = labelSettings();
+  $("lb-count-text").textContent = labelList.length ? `${labelList.length} barkod × ${s.copies} kopya = ${labelList.length * s.copies} etiket` : "";
+  const table = $("lb-list");
+  if (!labelList.length) {
+    table.replaceChildren(el("tr", {}, el("td", {}, "Liste boş. Yukarıdan kayıtlı tüp seçin veya yeni numara oluşturun.")));
+    return;
+  }
+  const head = el("tr", {}, ...["Barkod", "Gaz / kapasite", "Seri no", "Test", "Kaynak", ""].map((h) => el("th", {}, h)));
+  const rows = labelList.map((item, index) => {
+    const check = labelBarcodeSvg(item.code, s.w - 4, 10);
+    return el("tr", {},
+      el("td", {}, item.code, check.error ? el("div", { class: "hint", style: "color:#b91c1c" }, check.error) : check.narrow ? el("div", { class: "hint" }, "Çizgiler çok ince; daha geniş etiket veya daha kısa kod önerilir.") : null),
+      el("td", {}, item.gas || ""), el("td", {}, item.serial || ""), el("td", {}, item.test || ""), el("td", {}, item.source),
+      el("td", {}, el("button", { class: "secondary small", type: "button", onclick: () => { labelList.splice(index, 1); renderLabelList(); } }, "Çıkar")));
+  });
+  table.replaceChildren(head, ...rows);
+}
+
+function addLabels(items) {
+  const known = new Set(labelList.map((i) => i.code.toUpperCase()));
+  let added = 0;
+  for (const item of items) {
+    if (!item.code || known.has(item.code.toUpperCase())) continue;
+    known.add(item.code.toUpperCase());
+    labelList.push(item);
+    added++;
+  }
+  renderLabelList();
+  return added;
+}
+
+async function searchLabelCylinders() {
+  const ticket = newRequest("labels");
+  try {
+    const rows = await api("/panel/api/tupler?q=" + encodeURIComponent($("lb-q").value.trim()));
+    if (isStale("labels", ticket)) return;
+    labelResults = rows;
+    const all = el("input", { type: "checkbox", title: "Tümünü seç" });
+    all.addEventListener("change", () => { for (const c of $("lb-results").querySelectorAll("input[data-i]")) c.checked = all.checked; });
+    const head = el("tr", {}, el("th", {}, all), ...["Barkod", "Seri no", "Gaz / kapasite", "Test", "Durum / yer"].map((h) => el("th", {}, h)));
+    const body = rows.map((c, i) => el("tr", {},
+      el("td", {}, el("input", { type: "checkbox", "data-i": i })), el("td", {}, c.barcode || c.serialNumber), el("td", {}, c.serialNumber),
+      el("td", {}, `${c.gasType} ${c.capacity}`), el("td", {}, c.testDue || ""), el("td", {}, c.customer || c.plate || c.statusName)));
+    $("lb-results").replaceChildren(head, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6 }, "Kayıt bulunamadı."))]));
+  } catch (error) {
+    show($("lb-msg"), error.message);
+  }
+}
+
+function initLabels() {
+  loadLabelSettings();
+  for (const id of ["lb-w", "lb-h", "lb-copies", "lb-title", "lb-f-gas", "lb-f-serial", "lb-f-test", "lb-f-text"]) {
+    $(id).addEventListener("change", () => { saveLabelSettings(); renderLabelList(); });
+  }
+  $("lb-search").addEventListener("click", searchLabelCylinders);
+  $("lb-q").addEventListener("keydown", (e) => { if (e.key === "Enter") searchLabelCylinders(); });
+  $("lb-add-selected").addEventListener("click", () => {
+    const picked = [...$("lb-results").querySelectorAll("input[data-i]:checked")].map((c) => labelResults[Number(c.dataset.i)]);
+    if (!picked.length) { show($("lb-msg"), "Önce listeden tüp seçin.", "warn"); return; }
+    const added = addLabels(picked.map((c) => ({
+      code: c.barcode || c.serialNumber, gas: `${c.gasType} ${c.capacity}`.trim(), serial: c.serialNumber, test: c.testDue || "", source: "Kayıtlı tüp"
+    })));
+    show($("lb-msg"), `${added} tüp listeye eklendi` + (added < picked.length ? ` (${picked.length - added} zaten listedeydi).` : "."), "ok");
+  });
+  $("lb-next").addEventListener("click", async () => {
+    try {
+      const result = await api("/panel/api/etiket/sonraki?onek=" + encodeURIComponent($("lb-prefix").value.trim()));
+      $("lb-start").value = result.next;
+      hide($("lb-msg"));
+    } catch (error) { show($("lb-msg"), error.message); }
+  });
+  $("lb-generate").addEventListener("click", async () => {
+    try {
+      const result = await api("/panel/api/etiket/olustur", { method: "POST", body: {
+        prefix: $("lb-prefix").value.trim(), start: Number($("lb-start").value), count: Number($("lb-count").value), digits: Number($("lb-digits").value)
+      } });
+      const free = result.codes.filter((c) => !c.usedBy);
+      const used = result.codes.filter((c) => c.usedBy);
+      const added = addLabels(free.map((c) => ({ code: c.code, gas: "", serial: "", test: "", source: "Yeni numara" })));
+      const usedText = used.length ? ` Kayıtlı olduğu için eklenmeyen ${used.length} numara: ${used.slice(0, 5).map((c) => `${c.code} (${c.usedBy})`).join(", ")}${used.length > 5 ? "…" : ""}` : "";
+      show($("lb-msg"), `${added} yeni numara listeye eklendi.${usedText}`, used.length ? "warn" : "ok");
+    } catch (error) { show($("lb-msg"), error.message); }
+  });
+  $("lb-clear").addEventListener("click", () => { labelList = []; renderLabelList(); });
+  $("lb-print").addEventListener("click", async () => {
+    const s = labelSettings();
+    if (!labelList.length) { show($("lb-msg"), "Yazdırılacak etiket yok.", "warn"); return; }
+    const bad = labelList.filter((i) => labelBarcodeSvg(i.code, s.w - 4, 10).error);
+    if (bad.length) { show($("lb-msg"), `Basılamayan barkod var: ${bad.map((i) => i.code).join(", ")}. Listeden çıkarın veya etiket genişliğini artırın.`); return; }
+    const win = window.open("", "_blank", "width=520,height=640");
+    if (!win) { show($("lb-msg"), "Yazdırma penceresi açılamadı; tarayıcının açılır pencere engelini bu site için kapatın."); return; }
+    win.document.open();
+    win.document.write(labelDocument(labelList, s));
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 400);
+    show($("lb-msg"), `${labelList.length * s.copies} etiket yazdırma penceresine gönderildi. Yazıcı olarak TSC'yi seçin.`, "ok");
+    try {
+      await api("/panel/api/etiket/yazdirildi", { method: "POST", body: { labels: labelList.length * s.copies, codes: labelList.map((i) => i.code), size: `${s.w}x${s.h} mm` } });
+    } catch { /* the audit entry is best effort */ }
+  });
+  renderLabelList();
+}
+
+initLabels();
+
 start().then(() => { if ($("app").classList.contains("hidden")) showLogin(); });

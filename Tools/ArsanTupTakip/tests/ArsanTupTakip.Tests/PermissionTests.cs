@@ -53,7 +53,13 @@ internal static class PermissionTests
         Check(Perm.Effective(PanelRoles.Admin, null).Contains(Perm.VehicleDelete) && !op.Contains(Perm.VehicleDelete)
             && Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.VehicleDelete] = true }).Contains(Perm.VehicleDelete),
             "Araç silme varsayılan olarak yalnızca Yönetici'de olmalı; yönetici başkasına verebilmeli.");
+        Check(op.Contains(Perm.LabelPrint) && Perm.Effective(PanelRoles.Admin, null).Contains(Perm.LabelPrint)
+            && !Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.LabelPrint] = false }).Contains(Perm.LabelPrint)
+            && Perm.Effective(PanelRoles.Viewer, new Dictionary<string, bool> { [Perm.LabelPrint] = true }).Contains(Perm.LabelPrint)
+            && !Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.CylinderView] = false }).Contains(Perm.LabelPrint),
+            "Barkod yazdırma Yönetici ve Operatör'de varsayılan olmalı; yönetici kişiye özel ekleyip çıkarabilmeli; tüp görüntüleme olmadan çalışmamalı.");
         HashSet<string> viewer = Perm.Effective(PanelRoles.Viewer, null);
+        Check(!viewer.Contains(Perm.LabelPrint), "İzleyici varsayılan olarak barkod yazdıramamalı.");
         Check(viewer.Contains(Perm.CylinderView) && Perm.AnyMove.All(m => !viewer.Contains(m)) && !viewer.Contains(Perm.VehicleAdd), "İzleyici varsayılanı yalnızca görüntüleme olmalı.");
         Check(Perm.Effective("bilinmeyen", new Dictionary<string, bool> { [Perm.Summary] = true }).Count == 0, "Bilinmeyen rol hiçbir yetki almamalı.");
         Check(PanelRoles.Normalize("yönetici") == PanelRoles.Admin && PanelRoles.Normalize("IZLEYICI") == PanelRoles.Viewer && PanelRoles.Normalize("x") is null, "Rol adları Türkçe karakterli/karaktersiz eşleşmeli.");
