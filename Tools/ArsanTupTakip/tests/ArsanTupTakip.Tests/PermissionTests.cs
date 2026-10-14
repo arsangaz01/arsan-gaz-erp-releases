@@ -373,6 +373,7 @@ internal static class PermissionTests
             }
 
             await DriverHttpChecks(http, auth, admin);
+            await SimulationHttpChecks(http);
 
             Check(auth.CreateUser(admin, "127.0.0.1", "yeniperson", null, "Operatör", Password, true) is null, "Geçici şifreli kullanıcı açılabilmeli.");
             (string fresh, JsonElement freshAccount) = await MobileLogin(http, "yeniperson");
@@ -479,6 +480,63 @@ internal static class PermissionTests
             "Yönetici sabit aracı kaldırabilmeli.");
         Check(auth.UpdateUser(admin, ip, driver.Id, driver.DisplayName, driver.Role, true, null, "34 ABC 123") is null && WebPanelUserStore.Find(driver.Id)!.FixedPlate == "34 ABC 123"
             && Perm.Has(WebPanelUserStore.Find(driver.Id)!, Perm.CylinderAudit), "Sabit araç değişince kişiye özel yetkiler korunmalı.");
+    }
+
+    // Mobile "Kullanıcı gözünden": only a Yönetici lists users, sees one user's permissions and toggles single ones.
+    private static async Task SimulationHttpChecks(HttpClient http)
+    {
+        WebPanelUser driver = WebPanelUserStore.FindByName("sofor1")!;
+        (string adminToken, _) = await MobileLogin(http, "yonetici3");
+        (string driverToken, _) = await MobileLogin(http, "sofor1");
+
+        using (HttpResponseMessage denied = await Send(http, HttpMethod.Get, "api/simulasyon/kullanicilar", driverToken))
+        {
+            Check(denied.StatusCode == HttpStatusCode.Forbidden, "Yönetici olmayan kullanıcı listesini görememeli.");
+        }
+
+        using (HttpResponseMessage list = await Send(http, HttpMethod.Get, "api/simulasyon/kullanicilar", adminToken))
+        {
+            JsonElement users = await Json(list);
+            Check(list.StatusCode == HttpStatusCode.OK && users.EnumerateArray().Any(u => u.GetProperty("userName").GetString() == "sofor1")
+                && users.EnumerateArray().All(u => u.GetProperty("userName").GetString() != "yonetici3"), "Yönetici kendisi dışındaki kullanıcıları görmeli.");
+        }
+
+        using (HttpResponseMessage view = await Send(http, HttpMethod.Get, $"api/simulasyon/{driver.Id}", adminToken))
+        {
+            JsonElement v = await Json(view);
+            Check(view.StatusCode == HttpStatusCode.OK && v.GetProperty("role").GetString() == PanelRoles.Driver && v.GetProperty("editable").GetBoolean()
+                && v.GetProperty("permissions").EnumerateArray().Select(p => p.GetString()!).ToHashSet().SetEquals(Perm.Effective(driver)),
+                "Simülasyon kullanıcının gerçek yetkilerini göstermeli.");
+        }
+
+        using (HttpResponseMessage grant = await Send(http, HttpMethod.Post, $"api/simulasyon/{driver.Id}/yetki", adminToken, new { key = Perm.CylinderEdit, granted = true }))
+        {
+            Check(grant.StatusCode == HttpStatusCode.OK && Perm.Has(WebPanelUserStore.Find(driver.Id)!, Perm.CylinderEdit),
+                "Yönetici simülasyondan yetki ekleyebilmeli.");
+        }
+
+        using (HttpResponseMessage revoke = await Send(http, HttpMethod.Post, $"api/simulasyon/{driver.Id}/yetki", adminToken, new { key = Perm.CylinderView, granted = false }))
+        {
+            WebPanelUser now = WebPanelUserStore.Find(driver.Id)!;
+            Check(revoke.StatusCode == HttpStatusCode.OK && !Perm.Has(now, Perm.CylinderView) && !Perm.Has(now, Perm.CylinderEdit),
+                "Ön koşul çıkarılınca ona bağlı yetki de kalkmalı.");
+        }
+
+        using (HttpResponseMessage back = await Send(http, HttpMethod.Post, $"api/simulasyon/{driver.Id}/yetki", adminToken, new { key = Perm.CylinderView, granted = true }))
+        {
+            Check(back.StatusCode == HttpStatusCode.OK && Perm.Has(WebPanelUserStore.Find(driver.Id)!, Perm.CylinderView), "Kaldırılan yetki geri verilebilmeli.");
+        }
+
+        using (HttpResponseMessage driverToggle = await Send(http, HttpMethod.Post, $"api/simulasyon/{driver.Id}/yetki", driverToken, new { key = Perm.Summary, granted = true }))
+        {
+            Check(driverToggle.StatusCode == HttpStatusCode.Forbidden && !Perm.Has(WebPanelUserStore.Find(driver.Id)!, Perm.Summary),
+                "Yönetici olmayan kendi yetkisini simülasyondan değiştirememeli.");
+        }
+
+        using (HttpResponseMessage unknown = await Send(http, HttpMethod.Post, $"api/simulasyon/{driver.Id}/yetki", adminToken, new { key = "yok-boyle", granted = true }))
+        {
+            Check(unknown.StatusCode == HttpStatusCode.BadRequest, "Bilinmeyen yetki reddedilmeli.");
+        }
     }
 
     private static async Task DeletingUsers()

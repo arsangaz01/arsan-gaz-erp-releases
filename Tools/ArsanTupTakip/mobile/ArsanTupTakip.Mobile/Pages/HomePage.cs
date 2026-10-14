@@ -30,6 +30,7 @@ public sealed class HomePage : ContentPage
     private readonly Label _updateText = new() { FontSize = 14, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.WordWrap, VerticalTextAlignment = TextAlignment.Center };
     private readonly ActivityIndicator _updateBusy = new() { IsVisible = false, Color = Glow };
     private bool _checkingUpdate;
+    private readonly int _simulationVersion = ApiClient.Instance.SimulationVersion;
 
     public HomePage()
     {
@@ -123,6 +124,12 @@ public sealed class HomePage : ContentPage
         if (api.CanAny(Perm.Summary, Perm.Reports, Perm.MovementHistory))
         {
             tiles.Add(new Tile(Icons.Insights, "Raporlar", null, false, indigo, navy, () => Open("rapor", () => new SummaryPage())));
+        }
+
+        if (api.IsAdmin)
+        {
+            tiles.Add(new Tile(Icons.ManageSearch, "Kullanıcı gözünden", "Başka kullanıcının ekranını gör, yetkilerini ekle/çıkar", true,
+                Color.FromArgb("#7C3AED"), navy, () => Open("simulasyon", () => new SimulationPage())));
         }
 
         tiles.Add(new Tile(Icons.Account, "Hesap", null, false, indigo, navy, () => Open("hesap", () => new AccountPage())));
@@ -222,16 +229,72 @@ public sealed class HomePage : ContentPage
                 {
                     Header(account),
                     Body(_driver
-                        ? [_update, _updateBusy, TileGrid(tiles), _sync, _check, Footer()]
-                        : [_update, _updateBusy, _sync, TileGrid(tiles), _check, Footer()])
+                        ? [SimulationBanner(), _update, _updateBusy, TileGrid(tiles), _sync, _check, Footer()]
+                        : [SimulationBanner(), _update, _updateBusy, _sync, TileGrid(tiles), _check, Footer()])
                 }
             }
         };
     }
 
+    private View SimulationBanner()
+    {
+        if (ApiClient.Instance.Simulation is not SimulationView s)
+        {
+            return new ContentView { IsVisible = false };
+        }
+
+        int userId = s.Id;
+        return new Border
+        {
+            Padding = new Thickness(14, 12),
+            StrokeThickness = 0,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 18 },
+            BackgroundColor = Color.FromArgb("#7C3AED"),
+            Content = new VerticalStackLayout
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new Label
+                    {
+                        Text = $"Simülasyon: {s.DisplayName} ({s.User}, {s.Role}) gözünden görüyorsunuz.",
+                        FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.WordWrap
+                    },
+                    new Label
+                    {
+                        Text = "Ekranlar onun yetkileriyle görünür; yaptığınız işlemler yine sizin (Yönetici) hesabınızla kaydedilir.",
+                        FontSize = 12, TextColor = Colors.White.WithAlpha(0.85f), LineBreakMode = LineBreakMode.WordWrap
+                    },
+                    new Grid
+                    {
+                        ColumnSpacing = 10,
+                        ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star)],
+                        Children =
+                        {
+                            Ui.Secondary("Yetkileri düzenle", async (_, _) => await Open("simulasyon-" + userId, () => new SimulationPage(userId))),
+                            WithColumn(Ui.Primary("Bitir", (_, _) => { ApiClient.Instance.EndSimulation(); App.ShowMain(); }), 1)
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    private static View WithColumn(View view, int column)
+    {
+        Grid.SetColumn(view, column);
+        return view;
+    }
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        if (_simulationVersion != ApiClient.Instance.SimulationVersion)
+        {
+            App.ShowMain();
+            return;
+        }
+
         RefreshSync();
         await ServerUrlCoordinator.RefreshIfDueAsync();
         if (await RefreshAccessAsync())
@@ -249,7 +312,7 @@ public sealed class HomePage : ContentPage
     {
         // Rebuilding the home screen during a sync or an update download would cut that work off.
         if (_checkingAccess || SyncNow.IsRunning || _updateBusy.IsRunning
-            || (!force && DateTime.UtcNow - _accessCheckedUtc < AccessRefreshInterval) || ApiClient.Instance.Account is not AccountInfo before)
+            || (!force && DateTime.UtcNow - _accessCheckedUtc < AccessRefreshInterval) || ApiClient.Instance.RealAccount is not AccountInfo before)
         {
             return false;
         }

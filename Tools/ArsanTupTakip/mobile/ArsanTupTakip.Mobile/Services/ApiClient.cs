@@ -46,6 +46,19 @@ public sealed record AccountInfo(
     public bool CanAny(params string[] permissions) => permissions.Any(Can);
 }
 
+public sealed record SimulationUser(int Id, string UserName, string DisplayName, string Role, bool IsActive, string? FixedPlate)
+{
+    public string Text => $"{DisplayName} ({UserName}) · {Role}" + (IsActive ? string.Empty : " · pasif");
+}
+
+public sealed record SimulationPermission(string Key, string Label, string Description, bool Granted, bool RoleDefault);
+
+public sealed record SimulationGroup(string Name, List<SimulationPermission> Permissions);
+
+public sealed record SimulationView(
+    int Id, string User, string DisplayName, string Role, string RoleText, bool IsActive, string? FixedPlate, bool Editable,
+    List<string> Permissions, List<string> Changes, List<SimulationGroup> Groups);
+
 // Permission keys (same as the server catalog).
 public static class Perm
 {
@@ -440,15 +453,62 @@ public sealed class ApiClient
         try
         {
             string json = Preferences.Default.Get(AccountKey, string.Empty);
-            Account = json.Length == 0 ? null : JsonSerializer.Deserialize<AccountInfo>(json, Json);
+            _account = json.Length == 0 ? null : JsonSerializer.Deserialize<AccountInfo>(json, Json);
         }
         catch (JsonException)
         {
-            Account = null;
+            _account = null;
         }
     }
 
-    public AccountInfo? Account { get; private set; }
+    private AccountInfo? _account;
+
+    // While a Yönetici simulates another user, screens are drawn with that user's permissions; requests still use
+    // the Yönetici's own session. Kept in memory only, so restarting the app always ends it. The comparison is the
+    // role name the server sends ("Yönetici").
+    public SimulationView? Simulation { get; private set; }
+
+    // Raised on start, end and permission changes; the home screen compares it to redraw itself when shown again.
+    public int SimulationVersion { get; private set; }
+
+    public AccountInfo? Account => Simulation is { } s && _account is { } real
+        ? real with { User = s.User, DisplayName = s.DisplayName, Role = s.Role, RoleText = s.RoleText, Permissions = s.Permissions, MustChangePassword = false, FixedPlate = s.FixedPlate }
+        : _account;
+
+    // The signed-in user, also during a simulation.
+    public AccountInfo? RealAccount => _account;
+
+    public bool IsAdmin => _account?.Role == "Yönetici";
+
+    public void StartSimulation(SimulationView view)
+    {
+        Simulation = view;
+        SimulationVersion++;
+    }
+
+    public void EndSimulation()
+    {
+        if (Simulation is not null)
+        {
+            Simulation = null;
+            SimulationVersion++;
+        }
+    }
+
+    public Task<List<SimulationUser>> SimulationUsersAsync() => GetAsync<List<SimulationUser>>("/api/simulasyon/kullanicilar");
+
+    public Task<SimulationView> SimulationViewAsync(int userId) => GetAsync<SimulationView>("/api/simulasyon/" + userId);
+
+    public async Task<SimulationView> SetSimulationPermissionAsync(int userId, string key, bool granted)
+    {
+        SimulationView view = await PostAsync<SimulationView>($"/api/simulasyon/{userId}/yetki", new { key, granted });
+        if (Simulation?.Id == userId)
+        {
+            StartSimulation(view);
+        }
+
+        return view;
+    }
 
     public bool Can(string permission) => Account?.Can(permission) == true;
 
@@ -462,7 +522,7 @@ public sealed class ApiClient
 
     // A stored login that has not reached its 24-hour limit; the server still has the final word.
     public async Task<bool> HasSessionAsync() =>
-        !string.IsNullOrEmpty(await GetTokenAsync()) && Account is { } account && account.ExpiresUtc > DateTime.UtcNow;
+        !string.IsNullOrEmpty(await GetTokenAsync()) && _account is { } account && account.ExpiresUtc > DateTime.UtcNow;
 
     public async Task<AccountInfo> LoginAsync(string userName, string password)
     {
@@ -513,12 +573,18 @@ public sealed class ApiClient
         SecureStorage.Default.Remove(TokenKey);
         Preferences.Default.Remove(AccountKey);
         _token = null;
-        Account = null;
+        _account = null;
+        Simulation = null;
     }
 
     private void SetAccount(AccountInfo account)
     {
-        Account = account;
+        _account = account;
+        if (account.Role != "Yönetici")
+        {
+            Simulation = null;
+        }
+
         Preferences.Default.Set(AccountKey, JsonSerializer.Serialize(account, Json));
     }
 

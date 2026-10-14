@@ -64,7 +64,7 @@ public sealed class AccountPage : ContentPage
 
     private void ShowAccount()
     {
-        if (ApiClient.Instance.Account is not AccountInfo account)
+        if (ApiClient.Instance.RealAccount is not AccountInfo account)
         {
             _info.Text = "Oturum yok.";
             _permissions.Text = string.Empty;
@@ -82,7 +82,7 @@ public sealed class AccountPage : ContentPage
 
     private Task RefreshAccountAsync() => Ui.RunAsync(this, _busy, async () =>
     {
-        List<string> before = [.. ApiClient.Instance.Account?.Permissions ?? []];
+        List<string> before = [.. ApiClient.Instance.RealAccount?.Permissions ?? []];
         AccountInfo account = await ApiClient.Instance.RefreshAccountAsync();
         ShowAccount();
         if (!before.Order().SequenceEqual(account.Permissions.Order()) || account.MustChangePassword)

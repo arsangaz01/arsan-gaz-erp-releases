@@ -304,6 +304,7 @@ internal static class MobileEndpoints
             .Requires(Perm.CylinderView);
         app.MapGet("/api/musterideki-tupler", (string? musteri) => Text(() => TupReports.CylindersAtCustomersAsync(musteri))).Requires(Perm.Reports);
         StockCountEndpoints.MapMobile(app);
+        MobileSimulationEndpoints.Map(app);
     }
 
     internal static object Account(WebPanelUser user, MobileSession session) => new
