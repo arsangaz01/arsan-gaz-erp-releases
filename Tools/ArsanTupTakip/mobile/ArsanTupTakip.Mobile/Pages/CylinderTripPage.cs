@@ -51,7 +51,7 @@ public sealed class CylinderTripPage : ContentPage
         _mode.SelectedIndexChanged += (_, _) => ApplyMode();
         _trip.SelectedIndexChanged += (_, _) => RefreshVehicles();
         _groupPlate.SelectedIndexChanged += async (_, _) => await RefreshGroupsAsync();
-        _customerSearch.Completed += async (_, _) => await SearchCustomersAsync();
+        Ui.LiveSearch(_customerSearch, SearchCustomersAsync);
 
         _resultCard = Ui.Card(_result);
         _resultCard.IsVisible = false;
@@ -375,24 +375,37 @@ public sealed class CylinderTripPage : ContentPage
         }
     }
 
-    private async Task SearchCustomersAsync()
+    private async Task SearchCustomersAsync(bool live = false)
     {
         string query = (_customerSearch.Text ?? string.Empty).Trim();
-        if (query.Length < 2)
+        if (query.Length < Ui.LiveSearchMinLength)
         {
-            await DisplayAlertAsync("Müşteri", "En az 2 karakter yazın.", "Tamam");
+            if (!live)
+            {
+                await DisplayAlertAsync("Müşteri", "En az 2 karakter yazın.", "Tamam");
+            }
+
             return;
         }
 
         _busy.IsVisible = true;
         try
         {
-            _customers = await ApiClient.Instance.CustomersAsync(query);
+            var found = await ApiClient.Instance.CustomersAsync(query);
+            if (live && query != (_customerSearch.Text ?? string.Empty).Trim())
+            {
+                return;
+            }
+
+            _customers = found;
             _customer.ItemsSource = _customers.Select(c => $"{c.Name} ({c.Code})").ToList();
         }
         catch (Exception exception)
         {
-            await DisplayAlertAsync("Müşteri", exception.Message, "Tamam");
+            if (!live)
+            {
+                await DisplayAlertAsync("Müşteri", exception.Message, "Tamam");
+            }
         }
         finally
         {

@@ -27,6 +27,18 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
+// Lists refresh shortly after typing stops (Enter still works); filter selects and checkboxes refresh at once.
+function liveFilter(inputIds, changeIds, load) {
+  let timer = 0;
+  for (const id of inputIds) $(id).addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(load, 350); });
+  for (const id of changeIds) $(id).addEventListener("change", () => { clearTimeout(timer); load(); });
+}
+
+// Only the newest request of a list may draw it, so a slow earlier answer cannot overwrite a newer one.
+const listRequests = {};
+const newRequest = (name) => (listRequests[name] = (listRequests[name] || 0) + 1);
+const isStale = (name, ticket) => listRequests[name] !== ticket;
+
 function show(box, text, kind = "err") {
   box.textContent = text;
   box.className = "msg " + kind;
@@ -298,6 +310,7 @@ function openFiltered(filter) {
 
 $("f-ara").addEventListener("click", loadCylinders);
 $("f-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadCylinders(); });
+liveFilter(["f-q"], ["f-durum", "f-doluluk", "f-plaka", "f-musteri", "f-uzun", "f-pasif", "f-inceleme"], loadCylinders);
 
 async function loadCylinders() {
   const query = new URLSearchParams();
@@ -309,8 +322,10 @@ async function loadCylinders() {
   if ($("f-uzun").checked) query.set("uzun", "true");
   if ($("f-pasif").checked) query.set("pasif", "true");
   if ($("f-inceleme").checked) query.set("inceleme", "true");
+  const ticket = newRequest("cylinders");
   try {
     const rows = await api("/panel/api/tupler?" + query);
+    if (isStale("cylinders", ticket)) return;
     $("cyl-count").textContent = `${rows.length} tüp`;
     const head = el("tr", {}, ...["Seri no", "Gaz", "Kapasite", "Durum", "Dolu/Boş", "Müşteri / Plaka", "Son hareket", "Test"].map((h) => el("th", {}, h)));
     const body = rows.map((r) => el("tr", { class: "click", onclick: () => openDetail(r.id) },
@@ -342,6 +357,7 @@ function movementFilter() {
 
 $("h-ara").addEventListener("click", loadMovements);
 $("h-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadMovements(); });
+liveFilter(["h-q"], ["h-bas", "h-bit", "h-durum", "h-musteri"], loadMovements);
 $("h-csv").addEventListener("click", (e) => {
   e.preventDefault();
   window.location.href = BASE + "/panel/api/hareketler.csv?" + movementFilter();
@@ -353,8 +369,10 @@ async function loadMovements() {
     $("h-bas").value = from.toISOString().slice(0, 10);
     $("h-bit").value = new Date().toISOString().slice(0, 10);
   }
+  const ticket = newRequest("movements");
   try {
     const data = await api("/panel/api/hareketler?" + movementFilter());
+    if (isStale("movements", ticket)) return;
     $("mov-count").textContent = data.truncated
       ? `İlk ${data.limit} hareket gösteriliyor; tamamı için tarih aralığını daraltın veya Excel'e aktarın.`
       : `${data.rows.length} hareket`;
@@ -975,10 +993,13 @@ $("vehicle-form").addEventListener("submit", async (event) => {
 
 $("c-ara").addEventListener("click", loadCustomers);
 $("c-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadCustomers(); });
+liveFilter(["c-q"], [], loadCustomers);
 
 async function loadCustomers() {
+  const ticket = newRequest("customers");
   try {
     const rows = await api("/panel/api/musteriler?take=200&q=" + encodeURIComponent($("c-q").value.trim()));
+    if (isStale("customers", ticket)) return;
     $("c-count").textContent = rows.length >= 200 ? "İlk 200 kayıt gösteriliyor; aramayı daraltın." : `${rows.length} kayıt`;
     const head = el("tr", {}, ...["Müşteri", "Kod", "Şehir", "Telefon", "Müşterideki tüp"].map((h) => el("th", {}, h)));
     const body = rows.map((c) => el("tr", { class: "click", onclick: () => openCustomerCylinders(c) },
@@ -1014,6 +1035,7 @@ function stockFilter() {
 
 $("ms-ara").addEventListener("click", loadStock);
 for (const id of ["ms-q", "ms-gaz"]) $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") loadStock(); });
+liveFilter(["ms-q", "ms-gaz"], ["ms-uzun"], loadStock);
 $("ms-csv").addEventListener("click", (e) => {
   e.preventDefault();
   const query = new URLSearchParams();
@@ -1036,8 +1058,10 @@ function stockGroupTable(table, groups, longDays) {
 }
 
 async function loadStock() {
+  const ticket = newRequest("stock");
   try {
     const data = await api("/panel/api/musteri-stok?" + stockFilter());
+    if (isStale("stock", ticket)) return;
     $("ms-stats").replaceChildren(
       stat(data.customers, "Tüpü olan müşteri", "Filtreye uyan", () => {}),
       stat(data.cylinders, "Müşterideki tüp", fullEmpty(data.full, data.empty), () => openFiltered({ durum: 3 })),

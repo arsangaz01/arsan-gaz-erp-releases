@@ -39,7 +39,7 @@ public sealed class CylinderRegisterPage : ContentPage
         _fullness.SelectedIndex = 0;
         _gas.SelectedIndexChanged += (_, _) => _otherGas.IsVisible = Equals(_gas.SelectedItem, OtherGas);
         _hasTestDate.CheckedChanged += (_, e) => _testDate.IsEnabled = e.Value;
-        _customerSearch.Completed += async (_, _) => await SearchCustomersAsync();
+        Ui.LiveSearch(_customerSearch, SearchCustomersAsync);
         ShowCustomers();
 
         Grid capacityRow = new()
@@ -122,11 +122,18 @@ public sealed class CylinderRegisterPage : ContentPage
         }
     }
 
-    private Task SearchCustomersAsync() => Ui.RunAsync(this, _busy, async () =>
+    private Task SearchCustomersAsync(bool live = false) => Ui.RunAsync(this, _busy, async () =>
     {
-        _customers = await ApiClient.Instance.CustomersAsync(_customerSearch.Text ?? string.Empty);
+        string query = _customerSearch.Text ?? string.Empty;
+        var found = await ApiClient.Instance.CustomersAsync(query);
+        if (live && query != (_customerSearch.Text ?? string.Empty))
+        {
+            return;
+        }
+
+        _customers = found;
         ShowCustomers();
-        if (_customers.Count == 0)
+        if (_customers.Count == 0 && !live)
         {
             await DisplayAlertAsync("Müşteri", "Eşleşen müşteri yok.", "Tamam");
         }
@@ -134,7 +141,7 @@ public sealed class CylinderRegisterPage : ContentPage
         {
             _customer.SelectedIndex = 1;
         }
-    });
+    }, quiet: live);
 
     private async Task NewCustomerAsync()
     {

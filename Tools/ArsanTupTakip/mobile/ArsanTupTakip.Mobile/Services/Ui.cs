@@ -297,7 +297,42 @@ public static class Ui
         return view;
     }
 
-    public static async Task RunAsync(Page page, ActivityIndicator? busy, Func<Task> action)
+    public const int LiveSearchMinLength = 2;
+
+    // Searches shortly after the user stops typing; Enter still searches at once (live = false).
+    // Only typing in the box triggers it, so filling the box from code does not replace the current choice.
+    public static void LiveSearch(Entry entry, Func<bool, Task> search)
+    {
+        CancellationTokenSource? pending = null;
+        entry.TextChanged += async (_, _) =>
+        {
+            pending?.Cancel();
+            if (!entry.IsFocused || (entry.Text ?? string.Empty).Trim().Length < LiveSearchMinLength)
+            {
+                return;
+            }
+
+            CancellationTokenSource mine = pending = new CancellationTokenSource();
+            try
+            {
+                await Task.Delay(400, mine.Token);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+
+            await search(true);
+        };
+        entry.Completed += async (_, _) =>
+        {
+            pending?.Cancel();
+            await search(false);
+        };
+    }
+
+    // quiet: errors of a search started by typing are not shown; pressing Enter repeats it with messages.
+    public static async Task RunAsync(Page page, ActivityIndicator? busy, Func<Task> action, bool quiet = false)
     {
         if (busy is not null)
         {
@@ -312,13 +347,16 @@ public static class Ui
         {
             // The login screen is already open and shows the reason.
         }
-        catch (ApiException exception)
+        catch (ApiException exception) when (!quiet)
         {
             await page.DisplayAlertAsync("ArsanTüpTakip", exception.Message, "Tamam");
         }
-        catch (Exception exception)
+        catch (Exception exception) when (!quiet)
         {
             await page.DisplayAlertAsync("Hata", exception.Message, "Tamam");
+        }
+        catch (Exception) when (quiet)
+        {
         }
         finally
         {

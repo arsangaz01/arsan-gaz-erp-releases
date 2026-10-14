@@ -80,7 +80,7 @@ public sealed class CylinderPage : ContentPage
         };
         _code.Completed += async (_, _) => await OnCodeEnteredAsync();
         _batchCode.Completed += async (_, _) => await OnCodeEnteredAsync();
-        _customerSearch.Completed += async (_, _) => await SearchCustomersAsync();
+        Ui.LiveSearch(_customerSearch, SearchCustomersAsync);
         _batchMode.Toggled += (_, _) => ApplyMode();
 
         _pendingPanel = Ui.Card(new VerticalStackLayout
@@ -435,19 +435,26 @@ public sealed class CylinderPage : ContentPage
         _customer.SelectedIndex = 0;
     }
 
-    private Task SearchCustomersAsync() => Ui.RunAsync(this, _busy, async () =>
+    private Task SearchCustomersAsync(bool live = false) => Ui.RunAsync(this, _busy, async () =>
     {
-        _customers = await ApiClient.Instance.CustomersAsync(_customerSearch.Text ?? string.Empty);
+        string query = _customerSearch.Text ?? string.Empty;
+        var found = await ApiClient.Instance.CustomersAsync(query);
+        if (live && query != (_customerSearch.Text ?? string.Empty))
+        {
+            return;
+        }
+
+        _customers = found;
         _customer.ItemsSource = _customers.Select(c => c.Name + (string.IsNullOrWhiteSpace(c.City) ? string.Empty : " · " + c.City)).ToList();
         if (_customers.Count == 1)
         {
             _customer.SelectedIndex = 0;
         }
-        else if (_customers.Count == 0)
+        else if (_customers.Count == 0 && !live)
         {
             await DisplayAlertAsync("Müşteri", "Eşleşen müşteri yok.", "Tamam");
         }
-    });
+    }, quiet: live);
 
     private async Task MoveAsync(bool confirm)
     {
