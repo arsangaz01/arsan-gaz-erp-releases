@@ -6,13 +6,17 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="base-path" content="{{BASE}}">
 <title>ArsanTüpTakip</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 666 666'%3E%3Crect width='666' height='666' rx='120' fill='%23fff'/%3E%3Cg transform='translate(0 88)'%3E%3Cpath fill='%23075A9C' d='M20 470 300 18 480 300C405 264 210 356 20 470Z'/%3E%3Cpath fill='%2300AEEF' d='M20 470C125 340 325 120 630 126L535 312C382 293 184 376 20 470Z'/%3E%3Cpath fill='%23D6DADF' d='M20 470C196 380 372 290 535 312L646 470C445 402 230 412 20 470Z'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 :root { --navy:#1e3a8a; --sea:#0284c7; --sea-light:#e0f2fe; --accent:var(--sea); --accent-dark:#0369a1; --bg:#f3f4f6; --card:#fff; --line:#e5e7eb; --text:#1f2937; --muted:#6b7280; --ok:#0369a1; --warn:#475569; --bad:#1e3a8a; }
 * { box-sizing:border-box; }
 body { margin:0; font-family:"Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); font-size:15px; }
 header { background:var(--navy); color:#fff; padding:12px 20px; display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:5; flex-wrap:wrap; }
 header h1 { font-size:18px; margin:0; font-weight:600; }
-#home-link { cursor:pointer; }
+#home-link { cursor:pointer; display:flex; align-items:center; gap:10px; }
+.brand-logo { width:34px; height:34px; flex:none; background:#fff; border-radius:8px; padding:4px; display:block; }
+#login h1 .brand-logo { width:40px; height:40px; padding:0; }
+#login h1 { display:flex; align-items:center; gap:10px; }
 #home-link:hover { opacity:.85; }
 nav { display:flex; gap:4px; flex-wrap:wrap; }
 nav button { background:transparent; color:#fff; border:1px solid transparent; border-radius:8px; padding:7px 12px; cursor:pointer; font-size:14px; transition:transform .07s ease, background-color .07s ease; -webkit-tap-highlight-color:rgba(255,255,255,.2); }
@@ -153,7 +157,7 @@ tr.alarm-row td { background:#fef2f2; }
 <body>
 <div id="login" class="hidden">
   <div class="card">
-    <h1>ArsanTüpTakip</h1>
+    <h1><svg class="brand-logo" viewBox="0 0 666 490" aria-hidden="true"><path fill="#075A9C" d="M20 470 300 18 480 300C405 264 210 356 20 470Z"/><path fill="#00AEEF" d="M20 470C125 340 325 120 630 126L535 312C382 293 184 376 20 470Z"/><path fill="#D6DADF" d="M20 470C196 380 372 290 535 312L646 470C445 402 230 412 20 470Z"/></svg>ArsanTüpTakip</h1>
     <div class="muted">Yetkili kullanıcı girişi</div>
     <form id="login-form" autocomplete="on">
       <input id="login-user" name="username" autocomplete="username" placeholder="Kullanıcı adı" required maxlength="100">
@@ -166,7 +170,7 @@ tr.alarm-row td { background:#fef2f2; }
 
 <div id="app" class="hidden">
   <header>
-    <h1 id="home-link" title="Ana sayfaya dön" role="link" tabindex="0">ArsanTüpTakip</h1>
+    <h1 id="home-link" title="Ana sayfaya dön" role="link" tabindex="0"><svg class="brand-logo" viewBox="0 0 666 490" aria-hidden="true"><path fill="#075A9C" d="M20 470 300 18 480 300C405 264 210 356 20 470Z"/><path fill="#00AEEF" d="M20 470C125 340 325 120 630 126L535 312C382 293 184 376 20 470Z"/><path fill="#D6DADF" d="M20 470C196 380 372 290 535 312L646 470C445 402 230 412 20 470Z"/></svg>ArsanTüpTakip</h1>
     <nav>
       <button data-tab="ozet" data-perm="ozet">Özet</button>
       <button data-tab="tupler" data-perm="tup-goruntule">Tüpler</button>
