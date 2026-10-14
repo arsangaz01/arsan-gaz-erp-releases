@@ -80,6 +80,7 @@ async function api(path, options = {}) {
 // Hides what the signed-in role may not do; the server enforces the same rules.
 function applyPermissions() {
   for (const node of document.querySelectorAll("[data-perm]")) node.classList.toggle("hidden", !can(node.dataset.perm));
+  for (const node of document.querySelectorAll("[data-admin-only]")) node.classList.toggle("hidden", !me || me.role !== "Yönetici");
 }
 
 function roleBadge(role) { return el("span", { class: "role role-" + role }, role); }

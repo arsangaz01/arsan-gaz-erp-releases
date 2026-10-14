@@ -253,14 +253,21 @@ internal static class PermissionTests
             Check(auth.UpdateUser(admin, "127.0.0.1", viewer.Id, viewer.DisplayName, viewer.Role, true, [.. Perm.Effective(viewer), Perm.ManageUsers]) is null, "Yönetici tek yetki ekleyebilmeli.");
             using (HttpResponseMessage users = await Send(http, HttpMethod.Get, "panel/api/yonetim/kullanicilar", null, cookie: cookie))
             {
-                Check(users.StatusCode == HttpStatusCode.OK, "Eklenen yetki yeniden giriş gerekmeden geçerli olmalı.");
+                Check(users.StatusCode == HttpStatusCode.Forbidden, "Yönetim bölümü yetki verilse bile yalnızca Yönetici'ye açık olmalı.");
             }
 
-            Check(auth.UpdateUser(admin, "127.0.0.1", viewer.Id, viewer.DisplayName, viewer.Role, true, [.. Perm.Effective(WebPanelUserStore.Find(viewer.Id)!).Where(p => p != Perm.ManageUsers)]) is null,
-                "Yönetici yetkiyi geri alabilmeli.");
-            using (HttpResponseMessage users = await Send(http, HttpMethod.Get, "panel/api/yonetim/kullanicilar", null, cookie: cookie))
+            Check(auth.UpdateUser(admin, "127.0.0.1", viewer.Id, viewer.DisplayName, viewer.Role, true,
+                [.. Perm.Effective(WebPanelUserStore.Find(viewer.Id)!).Where(p => p != Perm.ManageUsers && p != Perm.CylinderView)]) is null, "Yönetici yetkiyi geri alabilmeli.");
+            using (HttpResponseMessage cylinders = await Send(http, HttpMethod.Get, "panel/api/tupler", null, cookie: cookie))
             {
-                Check(users.StatusCode == HttpStatusCode.Forbidden, "Kaldırılan yetki hemen etkisini göstermeli.");
+                Check(cylinders.StatusCode == HttpStatusCode.Forbidden, "Kaldırılan yetki hemen etkisini göstermeli.");
+            }
+
+            Check(auth.UpdateUser(admin, "127.0.0.1", viewer.Id, viewer.DisplayName, viewer.Role, true, [.. Perm.Effective(WebPanelUserStore.Find(viewer.Id)!), Perm.CylinderView]) is null,
+                "Yönetici yetkiyi yeniden verebilmeli.");
+            using (HttpResponseMessage cylinders = await Send(http, HttpMethod.Get, "panel/api/tupler", null, cookie: cookie))
+            {
+                Check(cylinders.StatusCode != HttpStatusCode.Forbidden, "Eklenen yetki yeniden giriş gerekmeden geçerli olmalı.");
             }
 
             using (HttpResponseMessage delete = await Send(http, HttpMethod.Post, $"panel/api/yonetim/kullanici/{admin.Id}/sil", null, new { onay = admin.UserName }, cookie))

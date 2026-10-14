@@ -81,6 +81,11 @@ internal static class WebPanelEndpoints
 
             context.Items["panelUser"] = user.UserName;
             context.Items["panelAccount"] = user;
+            if (user.Role != PanelRoles.Admin && (context.Request.Path.Value ?? string.Empty).Contains("/panel/api/yonetim", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.Json(new { error = "Yönetim bölümü yalnızca Yönetici içindir." }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
             return PermissionEndpointExtensions.Check(context, user) ?? await next(invocation);
         });
 
