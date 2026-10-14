@@ -10,7 +10,32 @@ internal static class FieldWorkTests
         ExchangeBalanceText();
         FillRules();
         RouteOrderAndMapLink();
-        Console.WriteLine("PASS: customer exchange balance, filling rules (customer / scrap / overdue test) and trip route order and map link (offline).");
+        LocationParsing();
+        Console.WriteLine("PASS: customer exchange balance, filling rules (customer / scrap / overdue test), trip route order and map link, customer location parsing (offline).");
+    }
+
+    private static void LocationParsing()
+    {
+        static bool Near((double Latitude, double Longitude)? found, double lat, double lng) =>
+            found is { } f && Math.Abs(f.Latitude - lat) < 0.00001 && Math.Abs(f.Longitude - lng) < 0.00001;
+
+        Assert(Near(TripPlans.Parse("37.00123, 35.32111"), 37.00123, 35.32111), "Plain coordinates with a dot.");
+        Assert(Near(TripPlans.Parse("37,00123 35,32111"), 37.00123, 35.32111), "Turkish decimal commas separated by a space.");
+        Assert(Near(TripPlans.Parse("37,00123,35,32111"), 37.00123, 35.32111), "Turkish decimal commas separated by a comma.");
+        Assert(Near(TripPlans.Parse("https://www.google.com/maps/place/Arsan+Gaz/@36.9912,35.3301,17z/data=!3m1!4b1!4m6!3m5!1s0x0:0x0!8m2!3d36.99123!4d35.33456"),
+            36.99123, 35.33456), "The place pin (!3d!4d) wins over the map centre (@).");
+        Assert(Near(TripPlans.Parse("https://www.google.com/maps/@36.9912,35.3301,17z"), 36.9912, 35.3301), "Map centre link.");
+        Assert(Near(TripPlans.Parse("https://maps.google.com/?q=36.98765,35.12345"), 36.98765, 35.12345), "q= link.");
+        Assert(Near(TripPlans.Parse("https://www.google.com/maps/search/?api=1&query=36.98765%2C35.12345"), 36.98765, 35.12345), "Encoded query= link.");
+        Assert(Near(TripPlans.Parse("https://www.google.com/maps/search/36.98765,+35.12345?entry=tts"), 36.98765, 35.12345), "/search/lat,+lng link.");
+        Assert(Near(TripPlans.Parse("37°00'04.4\"N 35°19'16.0\"E"), 37.001222, 35.321111), "Degrees, minutes, seconds.");
+        Assert(TripPlans.Parse("Atatürk Cad. No:5 Seyhan") is null && TripPlans.Parse("") is null, "Text without coordinates gives nothing.");
+        Assert(TripPlans.Parse("https://maps.app.goo.gl/AbCdEf123") is null, "A short link needs to be opened first.");
+        Assert(TripPlans.IsShortLink(new Uri("https://maps.app.goo.gl/AbCdEf123")) && !TripPlans.IsShortLink(new Uri("https://example.com/x")), "Only Google short links are followed.");
+        Assert(TripPlans.InTurkey(37.0, 35.3) && !TripPlans.InTurkey(35.3, 37.0 + 20) && !TripPlans.InTurkey(51.5, -0.1), "Turkey bounds.");
+        double d = TripPlans.DistanceMeters(37.0, 35.0, 37.0027, 35.0);
+        Assert(d > 290 && d < 310, $"About 300 m between points 0.0027° of latitude apart (was {d:0}).");
+        Assert(TripRoutes.CoordinateMapUrl(37.001234, 35.321) == "https://www.google.com/maps/dir/?api=1&destination=37.001234,35.321", "Coordinate map link.");
     }
 
     private static void ExchangeBalanceText()

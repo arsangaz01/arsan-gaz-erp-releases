@@ -82,6 +82,7 @@ public static class Perm
     public const string TripDeliver = "sefer-teslim";
     public const string TripPickup = "sefer-bos-alim";
     public const string TripRoute = "sefer-rota";
+    public const string CustomerLocation = "musteri-konum-kaydet";
     public const string TripReturn = "sefer-donus";
     public const string TripClose = "sefer-kapat";
     public const string VehicleView = "arac-goruntule";
@@ -99,7 +100,8 @@ public static class Perm
     public static readonly string[] CustomerPicker = [CustomerView, CustomerAdd, CylinderView, CylinderRegister, CylinderAudit, MovementHistory, "hareket-teslim", TripDeliver];
 }
 public sealed record TripStopItem(int Id, int Position, string Plate, int CustomerId, string CustomerName, string? Address, string? District, string? City, string? Phone,
-    bool Done, DateTime? DoneAt, int Delivered, int Collected, string? Note, string? MapUrl);
+    bool Done, DateTime? DoneAt, int Delivered, int Collected, string? Note, string? MapUrl,
+    double? Latitude = null, double? Longitude = null, int? AlertMeters = null);
 public sealed record TripStopSuggestionItem(int CustomerId, string CustomerName, string? City, string Reason);
 public sealed record FillLineItem(string Code, bool Ok, string Message, bool TestOverdue);
 public sealed record FillResponse(string Message, int Filled, List<FillLineItem> Lines, List<string> NeedsTestConfirmation);
@@ -778,6 +780,9 @@ public sealed class ApiClient
 
     public Task<string> SetTripStopDoneAsync(int tripId, int stopId, bool done) =>
         PostMessageAsync("/api/sefer/rota/tamam", new { tripId, stopId, done });
+
+    public Task<string> SaveCustomerLocationAsync(int customerId, double latitude, double longitude, double? accuracy) =>
+        PostMessageAsync("/api/musteri/" + customerId + "/konum", new { latitude, longitude, accuracy });
 
     public Task<string> PickupTripCylindersAsync(int tripId, string plate, int customerId, IReadOnlyList<string> codes, string? note) =>
         PostMessageAsync("/api/sefer/bos-alim", new { tripId, plate, customerId, codes, note });

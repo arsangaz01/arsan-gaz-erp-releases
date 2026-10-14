@@ -96,7 +96,7 @@ internal static class PermissionTests
     {
         HashSet<string> driver = Perm.Effective(PanelRoles.Driver, null);
         string[] expected = [Perm.MobileLogin, Perm.CylinderView, Perm.StockCount, Perm.TripView, Perm.TripStart, Perm.TripLoad, Perm.TripDeliver, Perm.TripPickup, Perm.TripRoute,
-            Perm.TripReturn, Perm.TripClose];
+            Perm.CustomerLocation, Perm.TripReturn, Perm.TripClose];
         Check(driver.SetEquals(expected), "Şoför varsayılanı yalnızca mobil giriş, tüp bilgisi/müşteri stoku, depo sayımı ve sefer akışı olmalı: " + string.Join(", ", driver.Order()));
         Check(!driver.Contains(Perm.PanelLogin) && !driver.Contains(Perm.ManageUsers) && !driver.Contains(Perm.ManageDevices) && !driver.Contains(Perm.AuditLog),
             "Şoför panele giremez ve yönetim yetkisi yoktur.");
@@ -545,7 +545,8 @@ internal static class PermissionTests
             {
                 (HttpMethod.Post, "api/sefer/bos-alim", new { tripId = 1, plate = "34 ABC 123", customerId = 1, codes = new[] { "X1" } }, Features.CustomerExchange),
                 (HttpMethod.Get, "api/sefer/1/rota?plaka=34%20ABC%20123", null, Features.TripRoute),
-                (HttpMethod.Post, "api/sefer/rota/ekle", new { tripId = 1, plate = "34 ABC 123", customerId = 1 }, Features.TripRoute)
+                (HttpMethod.Post, "api/sefer/rota/ekle", new { tripId = 1, plate = "34 ABC 123", customerId = 1 }, Features.TripRoute),
+                (HttpMethod.Post, "api/musteri/1/konum", new { latitude = 37.0, longitude = 35.3, accuracy = 10.0 }, Features.TripPlan)
             })
             {
                 using HttpResponseMessage off = await Send(http, method, path, token, body);
@@ -570,6 +571,25 @@ internal static class PermissionTests
         {
             Features.UseMemory(allOn);
         }
+
+        // The trip plan needs the route feature: it counts as off without it and neither can be switched out of order.
+        Dictionary<string, bool> planWithoutRoute = Features.Catalog.ToDictionary(f => f.Key, f => f.Key != Features.TripRoute);
+        Features.UseMemory(planWithoutRoute);
+        try
+        {
+            Check(!Features.IsOn(Features.TripPlan) && Features.DisabledPermissions().Contains(Perm.TripPlan) && Features.DisabledPermissions().Contains(Perm.CustomerLocation),
+                "Sefer rotası kapalıyken sefer planı da kapalı sayılmalı.");
+            planWithoutRoute[Features.TripPlan] = false;
+            Check(Features.Set(Features.TripPlan, true, "test", "127.0.0.1")?.Contains("Sefer rotası", StringComparison.Ordinal) == true,
+                "Sefer rotası açılmadan sefer planı açılamamalı.");
+        }
+        finally
+        {
+            Features.UseMemory(allOn);
+        }
+
+        Check(Features.Set(Features.TripRoute, false, "test", "127.0.0.1")?.Contains("Sefer planı", StringComparison.Ordinal) == true && Features.IsOn(Features.TripRoute),
+            "Sefer planı açıkken sefer rotası kapatılamamalı.");
 
         using (HttpResponseMessage back = await Send(http, HttpMethod.Get, "api/ben", token))
         {

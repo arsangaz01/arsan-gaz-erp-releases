@@ -11,6 +11,7 @@ internal sealed record TripStopAddRequest(int TripId, string? Plate, int Custome
 internal sealed record TripStopMoveRequest(int TripId, int StopId, int Direction);
 internal sealed record TripStopRequest(int TripId, int StopId);
 internal sealed record TripStopDoneRequest(int TripId, int StopId, bool Done, string? Note);
+internal sealed record CustomerLocationRequest(double Latitude, double Longitude, double? Accuracy);
 internal sealed record TripPickupRequest(int TripId, string? Plate, int? CustomerId, List<string?>? Codes, string? Note);
 internal sealed record TripReturnRequest(int TripId, string? Plate, List<string?>? Codes, string? Note);
 internal sealed record TripCloseRequest(int TripId);
@@ -92,6 +93,7 @@ internal static class CylinderTripEndpoints
             {
                 string? plate = DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate);
                 await new CylinderTripService().AddVehicleAsync(request.TripId, plate);
+                await ApplyPlansAsync(request.TripId, plate, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
                 return Results.Ok(new { message = $"{plate} sefere eklendi." });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -229,13 +231,34 @@ internal static class CylinderTripEndpoints
             {
                 WebPanelUser user = User(context);
                 string? plate = string.IsNullOrEmpty(user.FixedPlate) ? plaka : DriverVehicle.PlateFor(user.FixedPlate, plaka);
-                return Results.Ok(await TripRoutes.ListAsync(tripId, plate, Perm.Effective(user).Contains(Perm.CustomerView)));
+                return Results.Ok(await TripRoutes.ListAsync(tripId, plate, Perm.Effective(user).Contains(Perm.CustomerView), Features.IsOn(Features.TripPlan)));
             }
             catch (ArgumentException exception)
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
         }).Requires(Perm.TripRoute);
+
+        // Saved by a driver standing at the customer; the phone sends its own GPS fix.
+        app.MapPost("/api/musteri/{customerId:int}/konum", async (int customerId, CustomerLocationRequest request, HttpContext context) =>
+        {
+            if (request.Accuracy is > 100)
+            {
+                return Results.BadRequest(new { error = $"Konum hassasiyeti düşük (±{request.Accuracy:0} m). Açık alanda birkaç saniye bekleyip yeniden deneyin." });
+            }
+
+            try
+            {
+                string by = "Mobil (" + MobileEndpoints.DeviceName(context) + ")";
+                CustomerLocationView saved = await TripPlans.SetLocationAsync(customerId, request.Latitude, request.Longitude, by, "telefon");
+                AppLog.Write($"Müşteri #{customerId} konumu telefondan kaydedildi — {by}.");
+                return Results.Ok(new { message = "Müşterinin konumu kaydedildi.", saved.Latitude, saved.Longitude, saved.MapUrl });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(Perm.CustomerLocation);
 
         app.MapGet("/api/sefer/{tripId:int}/rota/oneriler", async (int tripId, string? plaka) =>
             Results.Ok(await TripRoutes.SuggestionsAsync(tripId, plaka, Features.IsOn(Features.CustomerPortal)))).Requires(Perm.TripRoute);
@@ -347,7 +370,30 @@ internal static class CylinderTripEndpoints
             throw new FixedVehicleBusyException(open.Id, $"Aracınız {fixedPlate} zaten açık seferde ({open.Title}). Yeni sefer açmadan bu sefere devam edin.");
         }
 
-        return (await service.StartTripAsync(plates, request.Note, createdBy), plates);
+        CylinderTrip trip = await service.StartTripAsync(plates, request.Note, createdBy);
+        await ApplyPlansAsync(trip.Id, null, createdBy);
+        return (trip, plates);
+    }
+
+    // Today's trip plans of the trip's vehicles go onto the route; a failure here never undoes the trip start.
+    internal static async Task ApplyPlansAsync(int tripId, string? plate, string by)
+    {
+        if (!Features.IsOn(Features.TripPlan))
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (string message in await TripPlans.ApplyForTripAsync(tripId, plate, by))
+            {
+                AppLog.Write($"Sefer planı sefer #{tripId} rotasına işlendi — {message} ({by}).");
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            AppLog.Write($"Sefer planı sefer #{tripId} rotasına işlenemedi: {exception.Message}");
+        }
     }
 
     internal static object ReasonCatalog() =>

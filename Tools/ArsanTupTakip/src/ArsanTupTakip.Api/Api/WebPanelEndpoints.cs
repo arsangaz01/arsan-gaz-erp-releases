@@ -768,6 +768,7 @@ internal static class WebPanelEndpoints
         StockCountEndpoints.MapPanel(api);
         LabelEndpoints.MapPanel(api);
         CustomerPortalEndpoints.MapPanel(api, auth);
+        TripPlanEndpoints.MapPanel(api);
 
         api.MapGet("/musteriler", async (string? q, int? take, HttpContext context) =>
             Results.Ok(await CustomerChoices.SearchAsync(q, Perm.Has(Account(context), Perm.CustomerView), take ?? 50)))

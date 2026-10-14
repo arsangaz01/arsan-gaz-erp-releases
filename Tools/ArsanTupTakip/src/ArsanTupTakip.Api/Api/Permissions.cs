@@ -44,6 +44,8 @@ internal static class Perm
     internal const string TripDeliver = "sefer-teslim";
     internal const string TripPickup = "sefer-bos-alim";
     internal const string TripRoute = "sefer-rota";
+    internal const string TripPlan = "sefer-plani";
+    internal const string CustomerLocation = "musteri-konum-kaydet";
     internal const string TripReturn = "sefer-donus";
     internal const string TripClose = "sefer-kapat";
     internal const string TripLossCheck = "sefer-kayip-kontrol";
@@ -66,7 +68,7 @@ internal static class Perm
 
     // Customer pickers appear in several screens; the full customer list (with phones) needs CustomerView.
     internal static readonly string[] CustomerPicker =
-        [CustomerView, CustomerAdd, CylinderView, CylinderRegister, CylinderAudit, MovementHistory, MoveDeliver, TripDeliver];
+        [CustomerView, CustomerAdd, CylinderView, CylinderRegister, CylinderAudit, MovementHistory, MoveDeliver, TripDeliver, TripPlan];
 
     private static PermissionInfo P(string key, string label, string description, params string[] requires) => new(key, label, description, requires);
 
@@ -116,6 +118,8 @@ internal static class Perm
             P(TripDeliver, "Seferde müşteriye teslim", "Seferdeki tüpleri müşteriye teslim olarak okutur.", TripView),
             P(TripPickup, "Seferde müşteriden boş alım", "Müşteriden alınan boş tüpleri okutup araca alır; teslim ve boş alımdan sonra müşteriye verilen/alınan sayısı ve müşteri bakiyesi görünür. \"Müşteride dolu/boş değişimi\" özelliği açıkken çalışır.", TripView),
             P(TripRoute, "Sefer rotası (durak sırası, yol tarifi)", "Seferdeki araç için müşteri sırasını görür ve düzenler, yol tarifini açar, önerilen müşterileri ekler. \"Sefer rotası\" özelliği açıkken çalışır.", TripView),
+            P(TripPlan, "Sefer planı (uğranacak müşteriler, uyarı mesafesi)", "Panelde Sefer Planı sekmesi: gün ve araç için uğranacak müşterileri, sırasını ve telefondaki yaklaşma uyarısının mesafesini belirler; müşteri konumunu Google Haritalar bağlantısı veya koordinatla girer. \"Sefer planı\" özelliği açıkken çalışır.", PanelLogin),
+            P(CustomerLocation, "Müşteri konumunu telefondan kaydetme", "Seferde müşterinin yanındayken rotadaki durakta \"Konumu kaydet\" ile telefonun konumunu müşterinin konumu olarak kaydeder. \"Sefer planı\" özelliği açıkken çalışır.", TripRoute),
             P(TripReturn, "Sefer dönüşü (depoya)", "Dönen aracın tüplerini depoya okutur.", TripView),
             P(TripClose, "Seferi kapatma", "Seferi kapatır. Yeni seferlerde okutulmayan her tüpe gerekçe seçilmeden kapatılamaz; gerekçeler yöneticiye bildirilir.", TripView),
             P(TripLossCheck, "Kayıp kontrolü onayı", "Okutulmayan tüplerin gerekçelerini \"kontrol edildi\" olarak işaretler ve Özet'te kontrol bekleyen sefer eksiklerini görür. Varsayılan olarak yalnızca Yönetici'de vardır.", TripView)
@@ -144,7 +148,7 @@ internal static class Perm
         PanelLogin, MobileLogin, Summary, Reports, CylinderView, CylinderRegister, CylinderEdit, CylinderDeactivate, CylinderAudit, StockCount, LabelPrint,
         MoveDeliver, MoveReturn, MoveVehicle, MoveFilling, FillRecord, MoveService, MoveScrap, MoveFullness, MoveBulk, MoveOverride,
         MovementHistory, Export, CustomerView, CustomerAdd, CustomerRequests, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute,
-        TripReturn, TripClose, VehicleView, VehicleAdd, VehicleEdit, VehicleDeactivate
+        TripPlan, CustomerLocation, TripReturn, TripClose, VehicleView, VehicleAdd, VehicleEdit, VehicleDeactivate
     ];
 
     private static readonly string[] ViewerDefaults =
@@ -153,7 +157,7 @@ internal static class Perm
     // Phone only: the trip flow (with reasons for unscanned cylinders), cylinder info, customer stock and the depot count.
     // CylinderView covers the cylinder info screen, the customer stock screen and the customer picker without phones.
     private static readonly string[] DriverDefaults =
-        [MobileLogin, CylinderView, StockCount, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute, TripReturn, TripClose];
+        [MobileLogin, CylinderView, StockCount, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute, CustomerLocation, TripReturn, TripClose];
 
     internal static IReadOnlyList<string> RoleDefaults(string? role) => role switch
     {

@@ -13,7 +13,15 @@ public sealed class CylinderTripPage : ContentPage
     // Pickup and the route are optional features: when they are off the page looks and works as before 1.4.0.
     private readonly bool _pickup = ApiClient.Instance.Can(Perm.TripPickup);
     private readonly bool _routes = ApiClient.Instance.Can(Perm.TripRoute);
+    private readonly bool _saveLocation = ApiClient.Instance.Can(Perm.CustomerLocation);
     private readonly (string Label, int Kind, string Permission)[] _modes = Modes();
+
+    // Approach warning (trip plan feature): only shown when the server sends warning distances with the route.
+    private readonly Switch _proximitySwitch = new() { IsToggled = ProximityAlerts.Enabled, VerticalOptions = LayoutOptions.Center };
+    private readonly Label _proximityInfo = Ui.Note(string.Empty);
+    private readonly VerticalStackLayout _proximityBox = new() { Spacing = 4, IsVisible = false };
+    private List<TripStopItem> _stops = [];
+    private bool _locationAsked;
 
     private static (string Label, int Kind, string Permission)[] Modes()
     {
@@ -65,6 +73,24 @@ public sealed class CylinderTripPage : ContentPage
         _groupPlate.SelectedIndexChanged += async (_, _) => await RefreshGroupsAsync();
         Ui.LiveSearch(_customerSearch, SearchCustomersAsync);
 
+        _proximityBox.Children.Add(new HorizontalStackLayout
+        {
+            Spacing = 8,
+            Children = { new Label { Text = "📳 Yaklaşma uyarısı", FontSize = 15, VerticalOptions = LayoutOptions.Center }, _proximitySwitch }
+        });
+        _proximityBox.Children.Add(_proximityInfo);
+        _proximitySwitch.Toggled += async (_, e) =>
+        {
+            ProximityAlerts.Enabled = e.Value;
+            if (!e.Value)
+            {
+                ProximityAlerts.Stop();
+            }
+
+            _locationAsked = false;
+            await UpdateProximityAsync();
+        };
+
         _resultCard = Ui.Card(_result);
         _resultCard.IsVisible = false;
         _customerSearchButton = Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync());
@@ -95,6 +121,7 @@ public sealed class CylinderTripPage : ContentPage
                     Ui.Section(
                         "Rota (müşteri sırası)",
                         _routeInfo,
+                        _proximityBox,
                         _route,
                         Ui.ActionRow(
                             Ui.Secondary("Müşteri ekle", async (_, _) => await AddStopAsync()),
@@ -598,6 +625,7 @@ public sealed class CylinderTripPage : ContentPage
         try
         {
             TripCloseResponse closed = await ApiClient.Instance.CloseTripAsync(trip.Id);
+            ProximityAlerts.Stop();
             ShowResult(closed.Message, closed.Reconcile);
             await DisplayAlertAsync(closed.Reconcile.HasAlerts ? "Sefer kapatıldı — uyarı" : "Sefer kapatıldı", closed.Message, "Tamam");
             await RefreshTripsAsync();
@@ -624,12 +652,20 @@ public sealed class CylinderTripPage : ContentPage
         {
             _routeInfo.Text = "Rota için sefer ve araç seçin.";
             _route.Children.Clear();
+            _stops = [];
+            _proximityBox.IsVisible = false;
+            if (_trips.Count == 0)
+            {
+                ProximityAlerts.Stop();
+            }
+
             return;
         }
 
         try
         {
             List<TripStopItem> stops = await ApiClient.Instance.TripRouteAsync(trip.Id, plate);
+            _stops = stops;
             _route.Children.Clear();
             int done = stops.Count(s => s.Done);
             _routeInfo.Text = stops.Count == 0
@@ -640,10 +676,125 @@ public sealed class CylinderTripPage : ContentPage
             {
                 _route.Children.Add(StopCard(trip.Id, stop, ++index, stops.Count));
             }
+
+            await UpdateProximityAsync();
         }
         catch (Exception exception)
         {
             _routeInfo.Text = "Rota alınamadı: " + exception.Message;
+        }
+    }
+
+    // Starts, updates or stops the approach warning for the undone located stops of the shown route.
+    private async Task UpdateProximityAsync()
+    {
+        bool feature = _stops.Any(s => s.AlertMeters is not null);
+        _proximityBox.IsVisible = feature;
+        if (!feature || SelectedTrip is not ActiveTripSummary trip)
+        {
+            if (!feature && SelectedTrip is not null)
+            {
+                ProximityAlerts.Stop();
+            }
+
+            return;
+        }
+
+        List<ProximityTarget> targets = _stops
+            .Where(s => !s.Done && s.Latitude is not null && s.Longitude is not null)
+            .Select(s => new ProximityTarget(s.Id, s.CustomerId, s.CustomerName, s.Latitude!.Value, s.Longitude!.Value, s.AlertMeters ?? 300))
+            .ToList();
+        int unlocated = _stops.Count(s => !s.Done && s.Latitude is null);
+        string missing = unlocated > 0 ? $" Konumu kayıtlı olmayan {unlocated} müşteride uyarı çıkmaz." : string.Empty;
+        if (!ProximityAlerts.Enabled)
+        {
+            ProximityAlerts.Stop();
+            _proximityInfo.Text = "Kapalı. Açarsanız sefer boyunca planlı müşteriye yaklaşınca telefon titreşir ve bildirim gösterir.";
+            return;
+        }
+
+        if (targets.Count == 0)
+        {
+            ProximityAlerts.Stop();
+            _proximityInfo.Text = unlocated > 0
+                ? "Rotadaki müşterilerin konumu kayıtlı değil; uyarı çıkmaz. Müşterinin yanındayken \"📍 Konumu kaydet\" ile kaydedilebilir."
+                : "Uğranmamış durak kalmadı.";
+            return;
+        }
+
+        ProximityAlerts.SetTargets(trip.Id, targets);
+        string? problem = ProximityAlerts.Running ? null : await ProximityAlerts.StartAsync(!_locationAsked);
+        _locationAsked = true;
+        int min = targets.Min(t => t.Meters);
+        int max = targets.Max(t => t.Meters);
+        _proximityInfo.Text = problem
+            ?? $"Açık: {targets.Count} müşteriye {(min == max ? $"{min} m" : $"{min}–{max} m")} kalınca telefon titreşir ve bildirim gösterir. Konumunuz sunucuya gönderilmez.{missing}";
+    }
+
+    private void OnApproached(ProximityTarget target, double distance)
+    {
+        if (_stops.FirstOrDefault(s => s.Id == target.StopId) is TripStopItem stop)
+        {
+            UseStop(stop);
+        }
+
+        _result.Text = $"📍 {target.Name} müşterisine yaklaştınız (yaklaşık {Math.Round(distance / 10) * 10:0} m). Tüpleri teslim etmeyi unutmayın."
+            + (_resultCard.IsVisible && !string.IsNullOrEmpty(_result.Text) ? Environment.NewLine + _result.Text : string.Empty);
+        _result.TextColor = Ui.Accent;
+        _resultCard.IsVisible = true;
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        ProximityAlerts.Approached -= OnApproached;
+        ProximityAlerts.Approached += OnApproached;
+        _proximitySwitch.IsToggled = ProximityAlerts.Enabled;
+    }
+
+    protected override void OnDisappearing()
+    {
+        ProximityAlerts.Approached -= OnApproached;
+        base.OnDisappearing();
+    }
+
+    // The driver stands at the customer: the phone's own GPS fix becomes the customer's location.
+    private async Task SaveLocationAsync(TripStopItem stop)
+    {
+        if (!await DisplayAlertAsync("Konumu kaydet",
+                $"Şu anki konumunuz {stop.CustomerName} müşterisinin konumu olarak kaydedilsin mi? Müşterinin kapısında / deposunda olduğunuzdan emin olun.",
+                "Kaydet", "Vazgeç"))
+        {
+            return;
+        }
+
+        _busy.IsVisible = true;
+        try
+        {
+            if (await Permissions.RequestAsync<Permissions.LocationWhenInUse>() != PermissionStatus.Granted)
+            {
+                await DisplayAlertAsync("Konum", "Konum izni verilmedi. Telefon ayarlarından ArsanTüpTakip'e konum izni verin.", "Tamam");
+                return;
+            }
+
+            Location? here = await Geolocation.Default.GetLocationAsync(new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(20)));
+            if (here is null)
+            {
+                await DisplayAlertAsync("Konum", "Konum alınamadı. Telefonun konum (GPS) ayarının açık olduğundan emin olup açık alanda tekrar deneyin.", "Tamam");
+                return;
+            }
+
+            string message = await ApiClient.Instance.SaveCustomerLocationAsync(stop.CustomerId, here.Latitude, here.Longitude, here.Accuracy);
+            await DisplayAlertAsync("Konum", message + (here.Accuracy is double accuracy ? $" (hassasiyet ±{accuracy:0} m)" : string.Empty), "Tamam");
+            await RefreshRouteAsync();
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Konum", exception.Message, "Tamam");
+        }
+        finally
+        {
+            _busy.IsVisible = false;
         }
     }
 
@@ -659,12 +810,19 @@ public sealed class CylinderTripPage : ContentPage
         };
         Label detail = Ui.Note((place.Length == 0 ? "Adres kayıtlı değil" : place)
             + (stop.Delivered + stop.Collected > 0 ? $"\nBu seferde verilen {stop.Delivered}, alınan {stop.Collected}" : string.Empty)
-            + (string.IsNullOrEmpty(stop.Note) ? string.Empty : "\nNot: " + stop.Note));
+            + (string.IsNullOrEmpty(stop.Note) ? string.Empty : "\nNot: " + stop.Note)
+            + (stop.AlertMeters is null ? string.Empty
+                : stop.Latitude is null ? "\n📍 Konum kayıtlı değil (yaklaşma uyarısı çıkmaz)" : $"\n📍 Konum kayıtlı · {stop.AlertMeters} m kala uyarı"));
 
         List<View> actions = [];
         if (stop.MapUrl is string url)
         {
             actions.Add(Ui.Compact("🧭 Yol tarifi", async (_, _) => await OpenAsync(url)));
+        }
+
+        if (_saveLocation && stop.AlertMeters is not null)
+        {
+            actions.Add(Ui.Compact(stop.Latitude is null ? "📍 Konumu kaydet" : "📍 Konumu güncelle", async (_, _) => await SaveLocationAsync(stop)));
         }
 
         if (!string.IsNullOrWhiteSpace(stop.Phone))

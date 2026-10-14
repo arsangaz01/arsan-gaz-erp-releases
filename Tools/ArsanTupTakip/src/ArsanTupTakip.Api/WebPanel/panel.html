@@ -181,6 +181,7 @@ tr.alarm-row td { background:#fef2f2; }
       <button data-tab="tupler" data-perm="tup-goruntule">Tüpler</button>
       <button data-tab="hareketler" data-perm="hareket-gecmisi">Hareketler</button>
       <button data-tab="seferler" data-perm="sefer-goruntule">Seferler</button>
+      <button data-tab="sefer-plani" data-perm="sefer-plani">Sefer Planı</button>
       <button data-tab="dolum" data-perm="dolum-kaydi">Dolum</button>
       <button data-tab="araclar" data-perm="arac-goruntule">Araç İşlemleri</button>
       <button data-tab="musteri-stok" data-perm="tup-goruntule">Müşteri Stoku</button>
@@ -383,6 +384,21 @@ tr.alarm-row td { background:#fef2f2; }
         <div class="muted" id="c-count"></div>
         <div class="table-wrap"><table id="customers"></table></div>
         <div class="hint">Elinde tüp olan müşteriler önce gelir. Bir satıra tıklayınca o müşterinin tüp stoku (gaz türü ve boyuta göre adet, gün, barkodlar) açılır.</div>
+      </div>
+    </section>
+
+    <section data-page="sefer-plani" class="hidden">
+      <div class="card">
+        <div class="toolbar">
+          <h2>Sefer planı</h2>
+          <label>Gün<input type="date" id="tp-date"></label>
+          <button class="secondary small" id="tp-list" type="button">Yenile</button>
+          <button class="primary small" id="tp-new" type="button">Yeni plan</button>
+          <span class="muted" id="tp-count"></span>
+        </div>
+        <div id="tp-msg" class="msg hidden"></div>
+        <div class="table-wrap"><table id="tp-rows"></table></div>
+        <div class="hint">Gün ve araç için uğranacak müşterileri sırasıyla seçin. O gün araç sefere çıkınca (veya sefer zaten açıksa plan kaydedilince) müşteriler aracın rotasına kendiliğinden eklenir. Şoförün telefonu, konumu kayıtlı müşteriye seçilen mesafeye kadar yaklaşınca titreşir ve bildirim gösterir; şoförün konumu sunucuya gönderilmez. Konumu olmayan müşteride uyarı çıkmaz: konumu buradan (📍) veya şoför müşterinin yanındayken telefondan kaydedebilir.</div>
       </div>
     </section>
 
@@ -783,6 +799,46 @@ tr.alarm-row td { background:#fef2f2; }
       </div>
       <button class="primary" type="submit" id="u-save">Kaydet</button>
       <div id="u-msg" class="msg hidden"></div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="tp-dialog">
+  <div class="dlg-head"><h3 id="tp-title">Yeni sefer planı</h3><button class="secondary" id="tp-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <form id="tp-form" style="display:flex;flex-direction:column;gap:10px">
+      <div class="toolbar" style="flex-wrap:wrap">
+        <label class="field">Gün<input type="date" id="tp-day" required></label>
+        <label class="field">Araç<select id="tp-plate" required></select></label>
+        <label class="field">Yaklaşma uyarısı<select id="tp-meters"></select></label>
+      </div>
+      <label class="field">Not (isteğe bağlı)<input id="tp-note" maxlength="300" autocomplete="off" placeholder="ör. öğleden önce sanayi bölgesi"></label>
+      <div class="field">Müşteri ekle
+        <div class="pw-row"><input id="tp-musteri-q" placeholder="Müşteri ara" autocomplete="off"><select id="tp-musteri"></select><button class="secondary small" id="tp-add" type="button">Ekle</button></div>
+      </div>
+      <div class="table-wrap"><table id="tp-stops"></table></div>
+      <div class="toolbar">
+        <button class="primary" type="submit" id="tp-save">Kaydet</button>
+        <button class="secondary delete-link hidden" type="button" id="tp-delete">Planı sil</button>
+        <span class="muted" id="tp-status"></span>
+      </div>
+      <div id="tp-dmsg" class="msg hidden"></div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="loc-dialog" class="narrow">
+  <div class="dlg-head"><h3 id="loc-title">Müşteri konumu</h3><button class="secondary" id="loc-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <form id="loc-form" style="display:flex;flex-direction:column;gap:10px">
+      <div id="loc-current" class="muted"></div>
+      <label class="field">Google Haritalar bağlantısı veya koordinat<textarea id="loc-text" rows="3" maxlength="2000" placeholder="https://maps.app.goo.gl/… veya 37.00123, 35.32111"></textarea></label>
+      <div class="hint">Google Haritalar'da müşterinin yerine uzun basın: üstte çıkan koordinatı kopyalayın ya da Paylaş &gt; Bağlantıyı kopyala ile gelen bağlantıyı yapıştırın.</div>
+      <div class="toolbar">
+        <button class="primary" type="submit" id="loc-save">Kaydet</button>
+        <button class="secondary delete-link" type="button" id="loc-clear">Konumu sil</button>
+      </div>
+      <div id="loc-msg" class="msg hidden"></div>
     </form>
   </div>
 </dialog>

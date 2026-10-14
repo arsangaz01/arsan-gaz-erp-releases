@@ -15,4 +15,6 @@ public sealed class CylinderTripStop
     public string AddedBy { get; set; } = string.Empty;
     public DateTime? DoneAt { get; set; }
     public string? Note { get; set; }
+    // Approach warning distance from a trip plan; null for stops the driver added (the plan default then applies).
+    public int? AlertMeters { get; set; }
 }

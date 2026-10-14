@@ -3,7 +3,8 @@ using System.Text.Json;
 
 namespace ArsanTupTakip.Api;
 
-internal sealed record FeatureInfo(string Key, string Label, string Description, string[] Permissions);
+// Needs: features that must be on for this one to work; it counts as off while any of them is off.
+internal sealed record FeatureInfo(string Key, string Label, string Description, string[] Permissions, string[]? Needs = null);
 
 // Optional features a Yönetici switches on or off for everyone (panel Yönetim > Özellikler). A switched-off feature
 // takes its permissions out of every user's effective set, so its screens disappear and its endpoints are refused,
@@ -15,6 +16,7 @@ internal static class Features
     internal const string Filling = "dolum";
     internal const string CustomerPortal = "musteri-portali";
     internal const string TripRoute = "sefer-rota";
+    internal const string TripPlan = "sefer-plani";
 
     internal static readonly FeatureInfo[] Catalog =
     [
@@ -27,6 +29,9 @@ internal static class Features
         new(TripRoute, "Sefer rotası ve yol tarifi",
             "Seferde araç başına müşteri sırası (durak listesi), Google Haritalar ile yol tarifi, arama ve sipariş zamanı gelen müşteri önerileri.",
             [Perm.TripRoute]),
+        new(TripPlan, "Sefer planı ve yaklaşma uyarısı",
+            "Panelde Sefer Planı sekmesi: Yönetici ve Operatör gün ve araç için uğranacak müşterileri ve uyarı mesafesini belirler; araç sefere çıkınca plan rotaya kendiliğinden eklenir. Müşteri konumu panelde Google Haritalar bağlantısı veya koordinatla ya da telefondan \"Konumu kaydet\" ile girilir. Seferde telefon müşteriye seçilen mesafeye kadar yaklaşınca titreşip bildirim gösterir; şoförün konumu sunucuya gönderilmez. \"Sefer rotası\" özelliği de açık olmalıdır.",
+            [Perm.TripPlan, Perm.CustomerLocation], [TripRoute]),
         new(CustomerPortal, "Müşteri portalı (müşteri girişi)",
             "Müşteriler kendi kullanıcı adı ve şifreleriyle arsantuptakip.com/tuptakip/musteri adresinden yalnızca kendi tüplerini görür, boş tüp alımı veya dolu tüp siparişi ister; talepler panelde Müşteri Talepleri sekmesine ve yöneticiye bildirim olarak düşer. Müşteri hesapları Yönetim bölümünden açılır. Kapalıyken hiçbir müşteri giriş yapamaz.",
             [Perm.CustomerRequests])
@@ -51,13 +56,17 @@ internal static class Features
         }
     }
 
-    internal static bool IsOn(string key) => Current().TryGetValue(key, out bool on) && on;
+    internal static bool IsOn(string key) => IsOn(Current(), key);
+
+    private static bool IsOn(Dictionary<string, bool> switches, string key) =>
+        switches.TryGetValue(key, out bool on) && on
+        && (!ByKey.TryGetValue(key, out FeatureInfo? feature) || (feature.Needs ?? []).All(n => switches.TryGetValue(n, out bool needOn) && needOn));
 
     // Permissions of the features that are off; Perm.Effective removes them from every user.
     internal static HashSet<string> DisabledPermissions()
     {
         Dictionary<string, bool> switches = Current();
-        return [.. Catalog.Where(f => !(switches.TryGetValue(f.Key, out bool on) && on)).SelectMany(f => f.Permissions)];
+        return [.. Catalog.Where(f => !IsOn(switches, f.Key)).SelectMany(f => f.Permissions)];
     }
 
     internal static FeatureInfo? OwnerOf(string permission) => Catalog.FirstOrDefault(f => f.Permissions.Contains(permission));
@@ -72,6 +81,22 @@ internal static class Features
         lock (Gate)
         {
             Dictionary<string, bool> switches = new(Current());
+            string? missing = on
+                ? (feature.Needs ?? []).Where(n => !(switches.TryGetValue(n, out bool v) && v)).Select(n => ByKey[n].Label).FirstOrDefault()
+                : null;
+            if (missing is not null)
+            {
+                return $"Önce \"{missing}\" özelliğini açın.";
+            }
+
+            string? dependent = on
+                ? null
+                : Catalog.Where(f => (f.Needs ?? []).Contains(key) && switches.TryGetValue(f.Key, out bool v) && v).Select(f => f.Label).FirstOrDefault();
+            if (dependent is not null)
+            {
+                return $"Önce \"{dependent}\" özelliğini kapatın.";
+            }
+
             switches[key] = on;
             if (_memory is not null)
             {

@@ -220,6 +220,7 @@ function openTab(tab) {
   if (tab === "araclar") loadVehicles();
   if (tab === "musteriler") loadCustomers();
   if (tab === "talepler") loadRequests();
+  if (tab === "sefer-plani") loadPlans();
   if (tab === "musteri-stok") loadStock();
   if (tab === "sayimlar") loadCounts();
   if (tab === "barkod") loadLabelTemplates();
@@ -549,6 +550,228 @@ async function closeRequest(r, status) {
 
 $("rq-list").addEventListener("click", () => { hide($("rq-msg")); loadRequests(); });
 $("rq-status").addEventListener("change", loadRequests);
+
+// Trip plans: the customers a vehicle visits on a day and how close the phone must come before it warns.
+const PLAN_STATUS = { bekliyor: "Bekliyor", seferde: "Seferde", kapandi: "Sefer kapandı" };
+const planCustomer = customerPicker("tp-musteri-q", "tp-musteri", null);
+let planData = null;
+let editingPlan = null;
+let planStops = [];
+
+function isoToday() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function metersLabel(m) { return m >= 1000 ? `${(m / 1000).toLocaleString("tr-TR")} km` : `${m} m`; }
+
+async function loadPlans() {
+  if (!$("tp-date").value) $("tp-date").value = isoToday();
+  const ticket = newRequest("plans");
+  try {
+    const data = await api(`/panel/api/sefer-planlari?tarih=${$("tp-date").value}`);
+    if (isStale("plans", ticket)) return;
+    planData = data;
+    $("tp-count").textContent = data.plans.length ? `${data.plans.length} plan` : "";
+    const head = el("tr", {}, ...["Araç", "Şoför", "Müşteri", "Konumu kayıtlı", "Uyarı mesafesi", "Durum", "Son değişiklik"].map((h) => el("th", {}, h)));
+    const body = data.plans.map((p) => el("tr", { class: "click" + (p.status === "kapandi" ? " off" : ""), onclick: () => openPlan(p.id) },
+      el("td", {}, el("b", {}, p.plate), p.note ? el("div", { class: "muted" }, p.note) : null),
+      el("td", {}, p.drivers.length ? p.drivers.join(", ") : el("span", { class: "muted" }, "sabit şoför yok")),
+      el("td", {}, String(p.stopCount), p.done ? el("div", { class: "muted" }, `${p.done} uğrandı`) : null),
+      el("td", { class: p.located < p.stopCount ? "warn-text" : "" }, `${p.located} / ${p.stopCount}`),
+      el("td", {}, metersLabel(p.alertMeters)),
+      el("td", {}, PLAN_STATUS[p.status] || p.status, p.tripId ? el("div", { class: "muted" }, `Sefer #${p.tripId}`) : null),
+      el("td", { class: "muted" }, `${p.updated} · ${p.updatedBy}`)));
+    $("tp-rows").replaceChildren(el("thead", {}, head),
+      el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 7, class: "muted" }, "Bu gün için plan yok. \"Yeni plan\" ile ekleyin."))])));
+  } catch (error) {
+    show($("tp-msg"), error.message);
+  }
+}
+
+async function openPlan(id) {
+  hide($("tp-dmsg"));
+  try {
+    if (!planData) await loadPlans();
+    const plan = id ? await api(`/panel/api/sefer-plani/${id}`) : null;
+    editingPlan = plan;
+    planStops = plan
+      ? plan.stops.map((s) => ({ customerId: s.customerId, name: s.customerName, place: [s.city, s.district].filter(Boolean).join(" / "), note: s.note || "", latitude: s.latitude, longitude: s.longitude, done: s.done }))
+      : [];
+    const plates = planData.vehicles.map((v) => v.plate);
+    if (plan && !plates.includes(plan.plate)) plates.unshift(plan.plate);
+    $("tp-plate").replaceChildren(el("option", { value: "" }, "Araç seçin"), ...plates.map((p) => {
+      const v = planData.vehicles.find((x) => x.plate === p);
+      return el("option", { value: p }, p + (v && (v.name || v.driverName) ? ` · ${[v.name, v.driverName].filter(Boolean).join(" · ")}` : ""));
+    }));
+    const meters = plan ? plan.alertMeters : planData.defaultMeters;
+    const choices = planData.distances.includes(meters) ? planData.distances : [...planData.distances, meters].sort((a, b) => a - b);
+    $("tp-meters").replaceChildren(...choices.map((m) => el("option", { value: m }, metersLabel(m))));
+    $("tp-meters").value = String(meters);
+    $("tp-day").value = plan ? plan.date : ($("tp-date").value || isoToday());
+    $("tp-day").min = isoToday();
+    $("tp-plate").value = plan ? plan.plate : "";
+    $("tp-note").value = plan?.note || "";
+    const onTrip = !!plan?.tripId;
+    const closed = plan?.status === "kapandi";
+    $("tp-day").disabled = onTrip;
+    $("tp-plate").disabled = onTrip;
+    $("tp-save").disabled = closed;
+    $("tp-add").disabled = closed;
+    $("tp-delete").classList.toggle("hidden", !plan);
+    $("tp-title").textContent = plan ? `Sefer planı · ${plan.plate}` : "Yeni sefer planı";
+    $("tp-status").textContent = !plan ? "" : closed ? "Seferi kapandı; plan değiştirilemez."
+      : onTrip ? `Sefer #${plan.tripId} rotasına eklendi; değişiklikler rotaya da işlenir.` : "Araç bu gün sefere çıkınca rotaya eklenecek.";
+    planCustomer.reset();
+    renderPlanStops();
+    if (!$("tp-dialog").open) $("tp-dialog").showModal();
+  } catch (error) {
+    show($("tp-msg"), error.message);
+  }
+}
+
+function renderPlanStops() {
+  const closed = editingPlan?.status === "kapandi";
+  const head = el("tr", {}, ...["#", "Müşteri", "Durak notu", "Konum", ""].map((h) => el("th", {}, h)));
+  const body = planStops.map((s, i) => {
+    const note = el("input", { value: s.note, maxlength: 200, placeholder: "ör. 5 dolu bırak", style: "width:100%" });
+    note.disabled = closed;
+    note.addEventListener("input", () => { s.note = note.value; });
+    const located = s.latitude != null;
+    return el("tr", { class: s.done ? "off" : "" },
+      el("td", {}, String(i + 1)),
+      el("td", {}, el("b", {}, s.name), s.place ? el("div", { class: "muted" }, s.place) : null, s.done ? el("div", { class: "muted" }, "✓ uğrandı") : null),
+      el("td", {}, note),
+      el("td", {}, el("button", { class: "link" + (located ? "" : " delete-link"), type: "button", onclick: () => openLocation(s) },
+        located ? "📍 Kayıtlı" : "📍 Konum yok")),
+      el("td", {}, closed ? null : el("span", {},
+        el("button", { class: "link", type: "button", title: "Yukarı", onclick: () => movePlanStop(i, -1) }, "▲"),
+        el("button", { class: "link", type: "button", title: "Aşağı", onclick: () => movePlanStop(i, 1) }, "▼"),
+        el("button", { class: "link delete-link", type: "button", onclick: () => { planStops.splice(i, 1); renderPlanStops(); } }, "Çıkar"))));
+  });
+  $("tp-stops").replaceChildren(el("thead", {}, head),
+    el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 5, class: "muted" }, "Henüz müşteri yok. Yukarıdan arayıp ekleyin."))])));
+}
+
+function movePlanStop(i, direction) {
+  const j = i + direction;
+  if (j < 0 || j >= planStops.length) return;
+  [planStops[i], planStops[j]] = [planStops[j], planStops[i]];
+  renderPlanStops();
+}
+
+$("tp-add").addEventListener("click", async () => {
+  hide($("tp-dmsg"));
+  const select = $("tp-musteri");
+  if (!select.value && planCustomer.query()) await planCustomer.search();
+  const id = Number(select.value);
+  if (!id) { show($("tp-dmsg"), "Önce müşteri arayıp seçin."); return; }
+  if (planStops.some((s) => s.customerId === id)) { show($("tp-dmsg"), "Bu müşteri zaten planda."); return; }
+  const label = select.options[select.selectedIndex].textContent;
+  let location = null;
+  try { location = (await api(`/panel/api/musteri/${id}/konum`)).location; } catch { location = null; }
+  planStops.push({ customerId: id, name: label, place: "", note: "", latitude: location?.latitude ?? null, longitude: location?.longitude ?? null, done: false });
+  planCustomer.reset();
+  renderPlanStops();
+});
+
+$("tp-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  hide($("tp-dmsg"));
+  if (!$("tp-plate").value) { show($("tp-dmsg"), "Araç seçin."); return; }
+  $("tp-save").disabled = true;
+  try {
+    const result = await api("/panel/api/sefer-plani", {
+      method: "POST",
+      body: {
+        id: editingPlan?.id ?? null,
+        tarih: $("tp-day").value,
+        plaka: $("tp-plate").value,
+        mesafe: Number($("tp-meters").value),
+        not: $("tp-note").value,
+        duraklar: planStops.map((s) => ({ musteriId: s.customerId, not: s.note }))
+      }
+    });
+    $("tp-dialog").close();
+    $("tp-date").value = $("tp-day").value;
+    show($("tp-msg"), result.message, "ok");
+    loadPlans();
+  } catch (error) {
+    show($("tp-dmsg"), error.message);
+  } finally {
+    $("tp-save").disabled = editingPlan?.status === "kapandi";
+  }
+});
+
+$("tp-delete").addEventListener("click", async () => {
+  if (!editingPlan || !window.confirm(`${editingPlan.plate} için ${editingPlan.date.split("-").reverse().join(".")} planı silinsin mi?`)) return;
+  try {
+    const result = await api(`/panel/api/sefer-plani/${editingPlan.id}/sil`, { method: "POST", body: {} });
+    $("tp-dialog").close();
+    show($("tp-msg"), result.message, "ok");
+    loadPlans();
+  } catch (error) {
+    show($("tp-dmsg"), error.message);
+  }
+});
+
+$("tp-close").addEventListener("click", () => $("tp-dialog").close());
+$("tp-new").addEventListener("click", () => { hide($("tp-msg")); openPlan(null); });
+$("tp-list").addEventListener("click", () => { hide($("tp-msg")); loadPlans(); });
+$("tp-date").addEventListener("change", loadPlans);
+
+// Customer location: a pasted Google Maps link (short links too) or coordinates; empty clears it.
+let locationStop = null;
+
+function showLocation(location) {
+  $("loc-current").replaceChildren(location
+    ? el("span", {}, `Kayıtlı konum: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} (${location.source === "telefon" ? "telefondan" : "panelden"}, ${location.updated}) `,
+      el("a", { href: location.mapUrl, target: "_blank", rel: "noopener" }, "Haritada aç"))
+    : "Kayıtlı konum yok; bu müşteride yaklaşma uyarısı çıkmaz.");
+}
+
+async function openLocation(stop) {
+  locationStop = stop;
+  hide($("loc-msg"));
+  $("loc-title").textContent = `Konum · ${stop.name}`;
+  $("loc-text").value = "";
+  $("loc-current").textContent = "Yükleniyor…";
+  $("loc-dialog").showModal();
+  try {
+    showLocation((await api(`/panel/api/musteri/${stop.customerId}/konum`)).location);
+  } catch (error) {
+    show($("loc-msg"), error.message);
+  }
+}
+
+async function saveLocation(text) {
+  hide($("loc-msg"));
+  $("loc-save").disabled = true;
+  try {
+    const result = await api(`/panel/api/musteri/${locationStop.customerId}/konum`, { method: "POST", body: { metin: text } });
+    locationStop.latitude = result.location?.latitude ?? null;
+    locationStop.longitude = result.location?.longitude ?? null;
+    showLocation(result.location);
+    $("loc-text").value = "";
+    show($("loc-msg"), result.message, "ok");
+    renderPlanStops();
+  } catch (error) {
+    show($("loc-msg"), error.message);
+  } finally {
+    $("loc-save").disabled = false;
+  }
+}
+
+$("loc-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const text = $("loc-text").value.trim();
+  if (!text) { show($("loc-msg"), "Bağlantıyı veya koordinatı yapıştırın."); return; }
+  saveLocation(text);
+});
+$("loc-clear").addEventListener("click", () => {
+  if (window.confirm(`${locationStop.name} için kayıtlı konum silinsin mi?`)) saveLocation("");
+});
+$("loc-close").addEventListener("click", () => $("loc-dialog").close());
 
 function renderMovements(table, rows, empty) {
   const head = el("tr", {}, ...["Tarih", "Tüp", "Hareket", "Durum", "Müşteri / Plaka", "Dolu/Boş", "Not"].map((h) => el("th", {}, h)));

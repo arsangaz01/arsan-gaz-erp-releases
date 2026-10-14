@@ -8,10 +8,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ArsanTupTakip.Services;
 
-// Phone is only filled for users who may see customer phones (CustomerView).
+// Phone is only filled for users who may see customer phones (CustomerView). Latitude, Longitude and AlertMeters are
+// only filled while the trip plan feature is on; the phone warns when it comes within AlertMeters of the location.
 public sealed record TripStopView(
     int Id, int Position, string Plate, int CustomerId, string CustomerName, string? Address, string? District, string? City, string? Phone,
-    bool Done, DateTime? DoneAt, int Delivered, int Collected, string? Note, string? MapUrl);
+    bool Done, DateTime? DoneAt, int Delivered, int Collected, string? Note, string? MapUrl,
+    double? Latitude = null, double? Longitude = null, int? AlertMeters = null);
 
 public sealed record TripStopSuggestion(int CustomerId, string CustomerName, string? City, string Reason);
 
@@ -33,6 +35,11 @@ public static class TripRoutes
             : "https://www.google.com/maps/dir/?api=1&destination=" + Uri.EscapeDataString(string.Join(", ", parts) + ", Türkiye");
     }
 
+    public static string CoordinateMapUrl(double latitude, double longitude) =>
+        "https://www.google.com/maps/dir/?api=1&destination="
+        + latitude.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture) + ","
+        + longitude.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
+
     // Moves the stop one step (-1 up, +1 down) and renumbers 1..n; returns the new order of ids.
     public static List<int> Move(IReadOnlyList<int> orderedIds, int stopId, int direction)
     {
@@ -48,7 +55,7 @@ public static class TripRoutes
         return ids;
     }
 
-    public static async Task<List<TripStopView>> ListAsync(int tripId, string? plate, bool withPhones)
+    public static async Task<List<TripStopView>> ListAsync(int tripId, string? plate, bool withPhones, bool withLocations = false)
     {
         string? normalized = CylinderTracking.NormalizePlate(plate);
         await using TupTakipDbContext db = new();
@@ -68,16 +75,21 @@ public static class TripRoutes
                 || (x.PickupCustomerId != null && customerIds.Contains(x.PickupCustomerId.Value))))
             .Select(x => new { x.DeliveredCustomerId, x.DeliveredAt, x.PickupCustomerId })
             .ToListAsync();
+        Dictionary<int, CustomerLocation> locations = withLocations
+            ? await db.CustomerLocations.AsNoTracking().Where(x => customerIds.Contains(x.CustomerId)).ToDictionaryAsync(x => x.CustomerId)
+            : [];
 
         return stops.Select(stop =>
         {
             Customer? customer = customers.GetValueOrDefault(stop.CustomerId);
+            CustomerLocation? location = locations.GetValueOrDefault(stop.CustomerId);
             int delivered = rows.Count(r => r.DeliveredCustomerId == stop.CustomerId && r.DeliveredAt != null);
             int collected = rows.Count(r => r.PickupCustomerId == stop.CustomerId);
             return new TripStopView(stop.Id, stop.Position, stop.Plate, stop.CustomerId, customer?.CompanyName ?? $"#{stop.CustomerId}",
                 customer?.Address, customer?.District, customer?.City, withPhones ? customer?.Phone : null,
                 stop.DoneAt is not null || delivered + collected > 0, stop.DoneAt, delivered, collected, stop.Note,
-                MapUrl(customer?.Address, customer?.District, customer?.City));
+                location is not null ? CoordinateMapUrl(location.Latitude, location.Longitude) : MapUrl(customer?.Address, customer?.District, customer?.City),
+                location?.Latitude, location?.Longitude, withLocations ? stop.AlertMeters ?? TripPlans.DefaultAlertMeters : null);
         }).ToList();
     }
 
