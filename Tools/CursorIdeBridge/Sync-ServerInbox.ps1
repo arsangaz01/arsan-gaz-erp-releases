@@ -9,6 +9,9 @@
     Telegram notification for phone requests is sent by exactly one side: the server when its bot token is
     configured (TELEGRAM 1), otherwise the PC MobileApi. Telegram-direct replies are always forwarded by the server
     (the PC never gets the .delivery.json tracking file).
+
+    The loop is also the PC-side watchdog: it restarts bridge.js and AgentWatcher (which sends every PC -> Telegram
+    message from TelegramOutbox) when they are gone.
 .PARAMETER Once
     Runs one sync pass and exits (for tests).
 .NOTES
@@ -30,7 +33,10 @@ $StateDir = Join-Path $LocalData 'ServerInboxSync'
 $LogPath = Join-Path $StateDir 'sync.log'
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 $BridgeScript = Join-Path (Split-Path $PSScriptRoot) 'CursorTelegramBridge\bridge.js'
+$WatcherExe = Join-Path (Split-Path (Split-Path $PSScriptRoot)) 'publish\current\AgentWatcher\ArsanGazERP.AgentWatcher.exe'
 $script:LastBridgeStart = [DateTime]::MinValue
+$script:WatcherMissingSince = $null
+$script:LastWatcherStart = [DateTime]::MinValue
 $script:BridgeAlerted = $false
 $script:OpenIds = @()
 New-Item -ItemType Directory -Force -Path $Inbox, $StateDir | Out-Null
@@ -136,6 +142,30 @@ function Confirm-PcWorker {
     }
 }
 
+# Only the logon startup entry launches AgentWatcher, so nothing brought it back after a crash or kill until the next
+# logon. It is restarted after 3 minutes of absence (longer than the startup entry and its own safe restart take),
+# at most every 5 minutes; not while AutoSync is swapping it and not when "Windows ile baslat" is turned off.
+function Confirm-AgentWatcher {
+    if (Get-Process -Name 'ArsanGazERP.AgentWatcher' -ErrorAction SilentlyContinue) { $script:WatcherMissingSince = $null; return }
+    if ($null -eq $script:WatcherMissingSince) { $script:WatcherMissingSince = Get-Date; return }
+    if (((Get-Date) - $script:WatcherMissingSince).TotalMinutes -lt 3) { return }
+    if (((Get-Date) - $script:LastWatcherStart).TotalMinutes -lt 5) { return }
+    $autoSync = $null
+    if ([System.Threading.Mutex]::TryOpenExisting('Local\ArsanGazERP.AutoSync', [ref]$autoSync)) { $autoSync.Dispose(); return }
+    try {
+        $settings = [IO.File]::ReadAllText((Join-Path $LocalData 'AgentWatcherData\settings.json'), $Utf8) | ConvertFrom-Json
+        if ($settings.StartWithWindows -eq $false) { return }
+    }
+    catch { }
+    $script:LastWatcherStart = Get-Date
+    if (-not (Test-Path -LiteralPath $WatcherExe)) { Write-Log "AgentWatcher not found: $WatcherExe"; return }
+    try {
+        Start-Process -FilePath $WatcherExe -ArgumentList '--background' -WorkingDirectory (Split-Path $WatcherExe) | Out-Null
+        Write-Log 'AgentWatcher was not running for 3 minutes; started it.'
+    }
+    catch { Write-Log "AgentWatcher could not be started: $($_.Exception.Message)" }
+}
+
 # A request the server took back (server Cursor agent) must not also run on the PC later.
 function Remove-ServerTakenCopies([string[]]$Listed) {
     foreach ($id in $script:OpenIds) {
@@ -217,6 +247,9 @@ try {
     if (-not $Once) { Write-Log 'Server inbox sync started.' }
     $lastError = $null
     do {
+        if (-not $Once) {
+            try { Confirm-AgentWatcher } catch { Write-Log "AgentWatcher check failed: $($_.Exception.Message)" }
+        }
         try {
             Invoke-SyncPass
             if ($lastError) { Write-Log 'Server reachable again.'; $lastError = $null }
