@@ -6,8 +6,8 @@ let options = { statuses: [], gasTypes: [], plates: [], longDays: 60 };
 let current = null;
 let me = null;
 
-// "a|b" means any of the listed permissions.
-const can = (permission) => !!me && permission.split("|").some((p) => me.permissions.includes(p));
+// "a|b" means any of the listed permissions, "a&b" all of them.
+const can = (permission) => !!me && permission.split("|").some((any) => any.split("&").every((p) => me.permissions.includes(p)));
 // Target status → permission needed to record it (same table as Perm.MoveByStatus on the server).
 const MOVE_PERMISSION = { 1: "hareket-iade", 2: "hareket-arac", 3: "hareket-teslim", 4: "hareket-dolum", 5: "hareket-servis", 6: "hareket-hurda" };
 const STALE_TEXT = "Bu kayıt başka bir kullanıcı tarafından değiştirildi, yenileyip tekrar deneyin.";
@@ -1311,12 +1311,17 @@ async function loadStock() {
   try {
     const data = await api("/panel/api/musteri-stok?" + stockFilter());
     if (isStale("stock", ticket)) return;
-    $("ms-stats").replaceChildren(
-      stat(data.customers, "Tüpü olan müşteri", "Filtreye uyan", () => {}),
-      stat(data.cylinders, "Müşterideki tüp", fullEmpty(data.full, data.empty), () => openFiltered({ durum: 3 })),
-      stat(data.longCount, `${data.longDays}+ gündür bekleyen`, "Dönmeyen tüpler", () => openFiltered({ uzun: true }), true));
-    stockGroupTable($("ms-gas"), data.gasTotals, data.longDays, openGroupDialog);
-    $("ms-count").textContent = `${data.customers} müşteri · ${data.cylinders} tüp`;
+    if (data.totals) {
+      $("ms-stats").replaceChildren(
+        stat(data.customers, "Tüpü olan müşteri", "Filtreye uyan", () => {}),
+        stat(data.cylinders, "Müşterideki tüp", fullEmpty(data.full, data.empty), () => openFiltered({ durum: 3 })),
+        stat(data.longCount, `${data.longDays}+ gündür bekleyen`, "Dönmeyen tüpler", () => openFiltered({ uzun: true }), true));
+      stockGroupTable($("ms-gas"), data.gasTotals, data.longDays, openGroupDialog);
+    } else {
+      $("ms-stats").replaceChildren();
+      $("ms-gas").replaceChildren();
+    }
+    $("ms-count").textContent = data.totals ? `${data.customers} müşteri · ${data.cylinders} tüp` : `${data.customers} müşteri`;
     const head = el("tr", {}, ...["Müşteri", "Şehir", "Tüp", "Dolu / boş", "Gaz türleri", "Son teslim", "En uzun", `${data.longDays}+ gün`].map((h) => el("th", {}, h)));
     const body = data.rows.map((c) => el("tr", { class: "click", onclick: () => openStockDialog(c.id) },
       el("td", {}, el("b", {}, c.name), el("div", { class: "muted" }, c.code + (c.customerOwned ? ` · ${c.customerOwned} müşteri malı` : ""))),

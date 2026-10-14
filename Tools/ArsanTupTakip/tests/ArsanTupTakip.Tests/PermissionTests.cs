@@ -62,6 +62,10 @@ internal static class PermissionTests
             "Barkod yazdırma Yönetici ve Operatör'de varsayılan olmalı; yönetici kişiye özel ekleyip çıkarabilmeli; tüp görüntüleme olmadan çalışmamalı.");
         HashSet<string> viewer = Perm.Effective(PanelRoles.Viewer, null);
         Check(!viewer.Contains(Perm.LabelPrint), "İzleyici varsayılan olarak barkod yazdıramamalı.");
+        Check(Perm.Effective(PanelRoles.Admin, null).Contains(Perm.CustomerStockTotals) && !op.Contains(Perm.CustomerStockTotals) && !viewer.Contains(Perm.CustomerStockTotals)
+            && op.Contains(Perm.CylinderView)
+            && Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.CustomerStockTotals] = true }).Contains(Perm.CustomerStockTotals),
+            "Müşteri stoğu toplamları varsayılan olarak yalnızca Yönetici'de olmalı (diğerleri müşteri bazında görür); yönetici kişiye verebilmeli.");
         Check(viewer.Contains(Perm.CylinderView) && Perm.AnyMove.All(m => !viewer.Contains(m)) && !viewer.Contains(Perm.VehicleAdd), "İzleyici varsayılanı yalnızca görüntüleme olmalı.");
         Check(Perm.Effective("bilinmeyen", new Dictionary<string, bool> { [Perm.Summary] = true }).Count == 0, "Bilinmeyen rol hiçbir yetki almamalı.");
         Check(PanelRoles.Normalize("yönetici") == PanelRoles.Admin && PanelRoles.Normalize("IZLEYICI") == PanelRoles.Viewer && PanelRoles.Normalize("x") is null, "Rol adları Türkçe karakterli/karaktersiz eşleşmeli.");

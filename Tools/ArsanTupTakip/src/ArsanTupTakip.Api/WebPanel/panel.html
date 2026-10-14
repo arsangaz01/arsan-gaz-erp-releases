@@ -323,11 +323,11 @@ tr.alarm-row td { background:#fef2f2; }
           <label>Gaz türü<input id="ms-gaz" list="gas-list" placeholder="Tümü"></label>
           <label><span><input type="checkbox" id="ms-uzun"> Yalnızca uzun süredir bekleyen tüpü olanlar</span></label>
           <button class="primary" id="ms-ara" type="button">Listele</button>
-          <a class="secondary" id="ms-csv" href="#" data-perm="disa-aktar">Excel'e aktar (tüp tüp, CSV)</a>
+          <a class="secondary" id="ms-csv" href="#" data-perm="disa-aktar&musteri-stok-toplam">Excel'e aktar (tüp tüp, CSV)</a>
         </div>
       </div>
-      <div class="grid" id="ms-stats"></div>
-      <div class="card" style="margin-top:16px">
+      <div class="grid" id="ms-stats" data-perm="musteri-stok-toplam"></div>
+      <div class="card" style="margin-top:16px" data-perm="musteri-stok-toplam">
         <h2>Gaz türü ve boyuta göre müşterilerdeki toplam</h2>
         <p class="muted">Bir satıra tıklayınca o grubun hangi müşteride kaç adet olduğu ve tüm tüpleri tek tek açılır.</p>
         <div class="table-wrap"><table id="ms-gas"></table></div>

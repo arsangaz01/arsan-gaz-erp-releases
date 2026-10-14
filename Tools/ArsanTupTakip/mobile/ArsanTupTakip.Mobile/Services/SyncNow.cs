@@ -1,7 +1,7 @@
 namespace ArsanTupTakip.Mobile.Services;
 
 // "Senkronize et": checks the server and the login, then sends the movements kept on the phone. The web panel reads the
-// same server database, so whatever reaches the server is visible on the web too.
+// same server database, so whatever reaches the server is visible on the web too. Ends with an update check.
 public static class SyncNow
 {
     private const string LastSyncKey = "last_sync_utc";
@@ -37,11 +37,12 @@ public static class SyncNow
             : $"Bekleyen kayıt yok · {last}";
     }
 
-    public static async Task RunAsync(Page page)
+    // Sends the waiting records, then checks for a newer app; returns the update the user chose to install now, else null.
+    public static async Task<UpdateInfo?> RunAsync(Page page, Action<string>? status = null)
     {
         if (_running)
         {
-            return;
+            return null;
         }
 
         _running = true;
@@ -55,14 +56,15 @@ public static class SyncNow
             catch (ServerUnreachableException)
             {
                 await page.DisplayAlertAsync("Senkronizasyon",
-                    "Sunucuya ulaşılamadı. " + (before > 0 ? $"{before} kayıt telefonda güvende bekliyor; bağlantı gelince tekrar deneyin." : "İnternet bağlantısını kontrol edin."), "Tamam");
-                return;
+                    "Sunucuya ulaşılamadı. " + (before > 0 ? $"{before} kayıt telefonda güvende bekliyor; bağlantı gelince tekrar deneyin." : "İnternet bağlantısını kontrol edin.")
+                    + " Güncelleme de denetlenemedi.", "Tamam");
+                return null;
             }
             catch (ApiException exception)
             {
                 await page.DisplayAlertAsync("Senkronizasyon", exception.Message
                     + (before > 0 ? $"\n\n{before} kayıt telefonda bekliyor; tekrar giriş yaptıktan sonra gönderilir." : string.Empty), "Tamam");
-                return;
+                return null;
             }
 
             (int sent, string? error, string? warning) = await OfflineMoves.FlushAsync();
@@ -95,12 +97,22 @@ public static class SyncNow
                     : sent > 0
                         ? $"{sent} hareket sunucuya gönderildi. Web panelde de görünür."
                         : "Telefonda bekleyen hareket yok; tüm kayıtlar sunucuda ve web panelde.";
-            await page.DisplayAlertAsync("Senkronizasyon", summary, "Tamam");
+            status?.Invoke("Güncelleme denetleniyor…");
+            (UpdateInfo? update, string updateText) = await UpdateCheck.CheckNowAsync();
+            summary += "\n\nGüncelleme: " + updateText;
+            if (update is null)
+            {
+                await page.DisplayAlertAsync("Senkronizasyon", summary, "Tamam");
+                return null;
+            }
+
+            return await page.DisplayAlertAsync("Senkronizasyon", summary + " Şimdi güncellensin mi?", "Güncelle", "Sonra") ? update : null;
         }
         catch (Exception exception)
         {
             CrashLog.Write(exception, "Senkronizasyon");
             await page.DisplayAlertAsync("Senkronizasyon", "Senkronizasyon tamamlanamadı: " + exception.Message, "Tamam");
+            return null;
         }
         finally
         {

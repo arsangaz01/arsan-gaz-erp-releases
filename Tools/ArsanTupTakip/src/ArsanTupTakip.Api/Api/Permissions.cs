@@ -35,6 +35,7 @@ internal static class Perm
     internal const string Export = "disa-aktar";
     internal const string CustomerView = "musteri-goruntule";
     internal const string CustomerAdd = "musteri-ekle";
+    internal const string CustomerStockTotals = "musteri-stok-toplam";
     internal const string TripView = "sefer-goruntule";
     internal const string TripStart = "sefer-baslat";
     internal const string TripLoad = "sefer-yukle";
@@ -99,7 +100,8 @@ internal static class Perm
         ]),
         new("Müşteriler", [
             P(CustomerView, "Müşterileri görüntüleme", "Müşteriler sekmesi ve müşteri telefonları. Yoksa seçim listelerinde yalnızca ad ve şehir görünür."),
-            P(CustomerAdd, "Yeni müşteri", "Yeni müşteri kaydı açabilir.")
+            P(CustomerAdd, "Yeni müşteri", "Yeni müşteri kaydı açabilir."),
+            P(CustomerStockTotals, "Müşteri stoğunda tüm müşterilerin toplamı", "Panel Müşteri Stoku sekmesinde müşterilerdeki toplam tüp sayılarını, gaz türü ve boyuta göre toplam tabloyu görür ve tüm müşterilerin stoğunu Excel'e aktarır. Yoksa yalnızca müşteri bazında sayılar görünür. Varsayılan olarak yalnızca Yönetici'de vardır.", PanelLogin, CylinderView)
         ]),
         new("Seferler", [
             P(TripView, "Seferleri görüntüleme", "Sefer listesi, sefer ayrıntısı, araç yükü ve kontrol."),

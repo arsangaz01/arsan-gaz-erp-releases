@@ -136,7 +136,7 @@ public sealed class HomePage : ContentPage
             VerticalOptions = LayoutOptions.Center,
             Children =
             {
-                new Label { Text = "Senkronize et", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White },
+                new Label { Text = "Senkronize et ve güncellemeyi denetle", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.WordWrap },
                 _syncText
             }
         }, 1, 0);
@@ -152,7 +152,7 @@ public sealed class HomePage : ContentPage
             Content = syncRow,
             GestureRecognizers = { syncTap }
         };
-        SemanticProperties.SetDescription(_sync, "Senkronize et");
+        SemanticProperties.SetDescription(_sync, "Senkronize et ve güncellemeyi denetle");
         OfflineMoves.Changed += () => MainThread.BeginInvokeOnMainThread(RefreshSync);
 
         Grid updateRow = new() { ColumnSpacing = 12, ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
@@ -294,14 +294,34 @@ public sealed class HomePage : ContentPage
 
         _syncBusy.IsVisible = _syncBusy.IsRunning = true;
         _syncText.Text = "Sunucuya bağlanılıyor…";
+        UpdateInfo? install;
         try
         {
-            await SyncNow.RunAsync(this);
+            install = await SyncNow.RunAsync(this, text => _syncText.Text = text);
         }
         finally
         {
             _syncBusy.IsVisible = _syncBusy.IsRunning = false;
             RefreshSync();
+        }
+
+        try
+        {
+            UpdateInfo? available = await UpdateCheck.GetAvailableAsync();
+            _update.IsVisible = available is not null;
+            if (available is not null)
+            {
+                _updateText.Text = $"Yeni sürüm {available.PublishedMobileVersion} (build {available.PublishedMobileBuild}) hazır. Kurmak için dokunun.";
+            }
+
+            if (install is not null && !_updateBusy.IsRunning)
+            {
+                await UpdateCheck.InstallAsync(this, _updateText, _updateBusy);
+            }
+        }
+        catch (Exception exception)
+        {
+            CrashLog.Write(exception, "Güncelleme denetimi");
         }
     }
 

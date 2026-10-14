@@ -32,6 +32,35 @@ public static class UpdateCheck
         return _available;
     }
 
+    // "Senkronize et": asks the server now (ignores the 30-minute wait). Available is the newer build whose APK is ready.
+    public static async Task<(UpdateInfo? Available, string Text)> CheckNowAsync()
+    {
+        if (ApiClient.Instance.ServerUrl.Length == 0)
+        {
+            return (null, "Güncelleme denetimi için sunucu adresi gerekli.");
+        }
+
+        string local = AppInfo.Current.VersionString;
+        int.TryParse(AppInfo.Current.BuildString, out int localBuild);
+        string mine = local + (localBuild > 0 ? $", build {localBuild}" : string.Empty);
+        try
+        {
+            UpdateInfo info = await ApiClient.Instance.GetUpdateInfoAsync();
+            _lastCheckUtc = DateTime.UtcNow;
+            bool newer = IsNewer(info);
+            _available = newer && info.ApkReady ? info : null;
+            return !newer
+                ? (null, $"Uygulama güncel ({mine}).")
+                : info.ApkReady
+                    ? (info, $"Yeni sürüm {info.PublishedMobileVersion} (build {info.PublishedMobileBuild}) hazır. Telefondaki: {mine}.")
+                    : (null, $"Yeni sürüm {info.PublishedMobileVersion} yayınlanmış ama sunucuda APK dosyası henüz yok. Telefondaki: {mine}.");
+        }
+        catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
+        {
+            return (null, "Güncelleme denetlenemedi: " + exception.Message);
+        }
+    }
+
     // Asks once per app run, and never again for a build the user put off with "Sonra".
     public static async Task PromptOnceAsync(Page page, UpdateInfo info, Label status, ActivityIndicator busy)
     {

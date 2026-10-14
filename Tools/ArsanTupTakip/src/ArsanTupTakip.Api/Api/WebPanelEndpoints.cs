@@ -381,17 +381,19 @@ internal static class WebPanelEndpoints
             DateTime today = DateTime.Today;
             int longDays = CylinderTracking.LongAtCustomerDays;
             bool phones = Perm.Has(Account(context), Perm.CustomerView);
+            bool totals = Perm.Has(Account(context), Perm.CustomerStockTotals);
             (List<CustomerStockCylinder> stock, var rows) = await StockCustomerRowsAsync(q, gaz, uzun, today, longDays);
             HashSet<int> shown = [.. rows.Select(x => x.Customer.Id)];
             return Results.Ok(new
             {
                 longDays,
                 customers = rows.Count,
-                cylinders = rows.Sum(x => x.Totals.Count),
-                full = rows.Sum(x => x.Totals.Full),
-                empty = rows.Sum(x => x.Totals.Empty),
-                longCount = rows.Sum(x => x.Totals.Long),
-                gasTotals = CustomerStock.Groups(stock.Where(c => shown.Contains(c.CustomerId)), today, longDays),
+                totals,
+                cylinders = totals ? rows.Sum(x => x.Totals.Count) : (int?)null,
+                full = totals ? rows.Sum(x => x.Totals.Full) : (int?)null,
+                empty = totals ? rows.Sum(x => x.Totals.Empty) : (int?)null,
+                longCount = totals ? rows.Sum(x => x.Totals.Long) : (int?)null,
+                gasTotals = totals ? CustomerStock.Groups(stock.Where(c => shown.Contains(c.CustomerId)), today, longDays) : null,
                 rows = rows.Select(x => new
                 {
                     x.Customer.Id,
@@ -454,13 +456,18 @@ internal static class WebPanelEndpoints
                     .OrderByDescending(c => CylinderTracking.DaysSince(c.Since, today) ?? -1)
                     .Select(c => new { row = StockRow(c, today), customerId = c.CustomerId, customer = customers[c.CustomerId].CompanyName })
             });
-        }).Requires(Perm.CylinderView);
+        }).Requires(Perm.CustomerStockTotals);
 
         api.MapGet("/musteri/{id:int}/stok", (int id, HttpContext context) => CustomerStockAsync(id, Perm.Has(Account(context), Perm.CustomerView)))
             .Requires(Perm.CylinderView);
 
-        api.MapGet("/musteri-stok.csv", async (int? musteri, string? gaz) =>
+        api.MapGet("/musteri-stok.csv", async (int? musteri, string? gaz, HttpContext context) =>
         {
+            if (musteri is null && !Perm.Has(Account(context), Perm.CustomerStockTotals))
+            {
+                return Results.Json(new { error = "Tüm müşterilerin stoğunu aktarma yetkiniz yok; bir müşteriyi açıp o müşterinin stoğunu aktarabilirsiniz." }, statusCode: 403);
+            }
+
             DateTime today = DateTime.Today;
             List<CustomerStockCylinder> stock = FilterGas(await CustomerStock.LoadAsync(musteri), gaz);
             Dictionary<int, Customer> customers = await StockCustomersAsync(stock.Select(c => c.CustomerId));
