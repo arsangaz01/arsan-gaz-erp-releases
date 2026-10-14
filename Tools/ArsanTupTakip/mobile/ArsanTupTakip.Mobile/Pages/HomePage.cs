@@ -14,6 +14,10 @@ public sealed class HomePage : ContentPage
     private readonly Dictionary<string, Page> _pages = [];
     private readonly Border _pending;
     private readonly Label _pendingText = new() { FontSize = 13, TextColor = Colors.White, VerticalTextAlignment = TextAlignment.Center };
+    private readonly Border _update;
+    private readonly Label _updateText = new() { FontSize = 14, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.WordWrap, VerticalTextAlignment = TextAlignment.Center };
+    private readonly ActivityIndicator _updateBusy = new() { IsVisible = false, Color = Glow };
+    private bool _checkingUpdate;
 
     public HomePage()
     {
@@ -78,6 +82,29 @@ public sealed class HomePage : ContentPage
             GestureRecognizers = { pendingTap }
         };
 
+        Grid updateRow = new() { ColumnSpacing = 12, ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
+        updateRow.Add(Ui.IconLabel(Icons.SystemUpdate, Colors.White, 26), 0, 0);
+        updateRow.Add(_updateText, 1, 0);
+        TapGestureRecognizer updateTap = new();
+        updateTap.Tapped += async (_, _) =>
+        {
+            if (!_updateBusy.IsRunning)
+            {
+                await UpdateCheck.InstallAsync(this, _updateText, _updateBusy);
+            }
+        };
+        _update = new Border
+        {
+            Padding = new Thickness(16, 12),
+            StrokeThickness = 0,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 18 },
+            Background = new LinearGradientBrush([new GradientStop(Color.FromArgb("#B45309"), 0), new GradientStop(Color.FromArgb("#F59E0B"), 1)], new Point(0, 0), new Point(1, 1)),
+            IsVisible = false,
+            Content = updateRow,
+            GestureRecognizers = { updateTap }
+        };
+        SemanticProperties.SetDescription(_update, "Güncelleme");
+
         Content = new ScrollView
         {
             Content = new VerticalStackLayout
@@ -91,7 +118,7 @@ public sealed class HomePage : ContentPage
                     {
                         Padding = new Thickness(14, 0),
                         Spacing = 12,
-                        Children = { _pending, TileGrid(tiles), Footer() }
+                        Children = { _update, _updateBusy, _pending, TileGrid(tiles), Footer() }
                     }
                 }
             }
@@ -105,6 +132,41 @@ public sealed class HomePage : ContentPage
         _pending.IsVisible = pending > 0;
         _pendingText.Text = $"📶 Gönderilmeyi bekleyen {pending} tüp hareketi var. Göndermek için dokunun.";
         await ServerUrlCoordinator.RefreshIfDueAsync();
+        await RefreshUpdateAsync();
+    }
+
+    // Also called when the app comes back to the foreground: a signed-in user may never see the login screen again.
+    public async Task RefreshUpdateAsync()
+    {
+        if (_checkingUpdate || _updateBusy.IsRunning)
+        {
+            return;
+        }
+
+        _checkingUpdate = true;
+        try
+        {
+            UpdateInfo? info = await UpdateCheck.GetAvailableAsync();
+            _update.IsVisible = info is not null;
+            if (info is null)
+            {
+                return;
+            }
+
+            _updateText.Text = $"Yeni sürüm {info.PublishedMobileVersion} (build {info.PublishedMobileBuild}) hazır. Kurmak için dokunun.";
+            if (Navigation.NavigationStack.LastOrDefault() == this)
+            {
+                await UpdateCheck.PromptOnceAsync(this, info, _updateText, _updateBusy);
+            }
+        }
+        catch (Exception exception)
+        {
+            CrashLog.Write(exception, "Güncelleme denetimi");
+        }
+        finally
+        {
+            _checkingUpdate = false;
+        }
     }
 
     private static View Header(AccountInfo? account)

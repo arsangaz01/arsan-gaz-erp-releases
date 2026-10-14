@@ -43,6 +43,12 @@ public partial class App : Application
 		{
 			ApiClient.Instance.ClearSession();
 			ShowLogin("Oturum süresi doldu (giriş 24 saat geçerlidir). Kullanıcı adı ve şifrenizle yeniden giriş yapın.");
+			return;
+		}
+
+		if (_window?.Page is NavigationPage { RootPage: HomePage home })
+		{
+			await home.RefreshUpdateAsync();
 		}
 	}
 

@@ -26,4 +26,5 @@ public static class Icons
     public const string Error = "\ue000";
     public const string Warehouse = "\uebb8";
     public const string Inventory = "\ue1a1";
+    public const string SystemUpdate = "\ue62a";
 }
