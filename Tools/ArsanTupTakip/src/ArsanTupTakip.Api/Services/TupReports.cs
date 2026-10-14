@@ -36,7 +36,9 @@ public static class TupReports
         DateTime testLimit = DateTime.Today.AddDays(30);
         DateTime since = DateTime.Today.AddDays(-30);
         text.AppendLine($"{CylinderTracking.LongAtCustomerDays} günden uzun süredir müşteride: {await db.Cylinders.CountAsync(x => x.IsActive && x.Status == CylinderStatus.Customer && x.LastMovementAt != null && x.LastMovementAt < longLimit)}");
-        text.AppendLine($"Testi 30 gün içinde dolacak veya geçmiş tüp: {await db.Cylinders.CountAsync(x => x.IsActive && x.TestDueDate != null && x.TestDueDate <= testLimit)}");
+        DateTime today = DateTime.Today;
+        text.AppendLine($"Test tarihi geçmiş tüp: {await db.Cylinders.CountAsync(x => x.IsActive && x.TestDueDate != null && x.TestDueDate < today)}");
+        text.AppendLine($"Testi 30 gün içinde dolacak tüp: {await db.Cylinders.CountAsync(x => x.IsActive && x.TestDueDate != null && x.TestDueDate >= today && x.TestDueDate <= testLimit)}");
         text.AppendLine($"Son 30 günde tüp hareketi: {await db.CylinderMovements.CountAsync(x => x.MovementDate >= since)}");
         return text.ToString();
     }
@@ -167,24 +169,41 @@ public static class TupReports
     public static async Task<string> TestDueAsync(int days)
     {
         days = Math.Clamp(days, 1, 365);
-        DateTime limit = DateTime.Today.AddDays(days);
+        DateTime today = DateTime.Today;
+        DateTime limit = today.AddDays(days);
         await using TupTakipDbContext db = new();
-        var rows = await db.Cylinders.AsNoTracking()
-            .Where(x => x.IsActive && x.TestDueDate != null && x.TestDueDate <= limit)
-            .OrderBy(x => x.TestDueDate).Take(200)
-            .Select(x => new { x.SerialNumber, x.GasType, x.TestDueDate, x.Status, Customer = x.CurrentCustomer != null ? x.CurrentCustomer.CompanyName : null })
-            .ToListAsync();
-        List<string> lines = rows.Select(x =>
+        IQueryable<Cylinder> active = db.Cylinders.AsNoTracking().Where(x => x.IsActive && x.TestDueDate != null);
+        // Upcoming tests first; then the most recently expired ones, because very old dates are usually stale records.
+        var upcoming = await TestRows(active.Where(x => x.TestDueDate >= today && x.TestDueDate <= limit).OrderBy(x => x.TestDueDate).Take(150)).ToListAsync();
+        int overdueCount = await active.CountAsync(x => x.TestDueDate < today);
+        var overdue = await TestRows(active.Where(x => x.TestDueDate < today).OrderByDescending(x => x.TestDueDate).Take(100)).ToListAsync();
+
+        string Line(DateTime? value, string serial, string gas, CylinderStatus status, string? customer)
         {
-            DateTime due = x.TestDueDate!.Value.Date;
-            int left = (due - DateTime.Today).Days;
+            DateTime due = value!.Value.Date;
+            int left = (due - today).Days;
             string timing = left < 0 ? $"{-left} gün geçti" : left == 0 ? "bugün" : $"{left} gün kaldı";
-            return $"- {x.SerialNumber} ({x.GasType}) · test: {due:dd.MM.yyyy} ({timing}) · {CylinderTracking.StatusName((int)x.Status)}{(x.Customer is null ? "" : " · " + x.Customer)}";
-        }).ToList();
-        return lines.Count == 0
+            return $"- {serial} ({gas}) · test: {due:dd.MM.yyyy} ({timing}) · {CylinderTracking.StatusName((int)status)}{(customer is null ? "" : " · " + customer)}";
+        }
+
+        List<string> lines = [upcoming.Count == 0
             ? $"Önümüzdeki {days} gün içinde testi dolacak tüp yok (test tarihi girilmemiş tüpler dahil edilmez)."
-            : string.Join(Environment.NewLine, lines);
+            : $"Önümüzdeki {days} gün içinde testi dolacak: {upcoming.Count} tüp"];
+        lines.AddRange(upcoming.Select(x => Line(x.TestDueDate, x.SerialNumber, x.GasType, x.Status, x.Customer)));
+        if (overdueCount > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add($"Test tarihi geçmiş: {overdueCount} tüp" + (overdueCount > overdue.Count ? $" (en son geçen {overdue.Count} tanesi; tamamı web panelde Tüpler › Test tarihi: Geçmiş)" : string.Empty));
+            lines.AddRange(overdue.Select(x => Line(x.TestDueDate, x.SerialNumber, x.GasType, x.Status, x.Customer)));
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
+
+    private static IQueryable<TestDueRow> TestRows(IQueryable<Cylinder> query) =>
+        query.Select(x => new TestDueRow(x.SerialNumber, x.GasType, x.TestDueDate, x.Status, x.CurrentCustomer != null ? x.CurrentCustomer.CompanyName : null));
+
+    private sealed record TestDueRow(string SerialNumber, string GasType, DateTime? TestDueDate, CylinderStatus Status, string? Customer);
 
     public static async Task<string> ReorderForecastsAsync()
     {

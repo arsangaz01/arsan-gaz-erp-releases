@@ -25,6 +25,7 @@ internal static class WebPanelEndpoints
     private const int MaxExportRows = 20_000;
     private const int MaxCylinderRows = 5000;
     private const int MaxDetailMovements = 500;
+    private const int TestSoonDays = 30;
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
 
     public static void Map(WebApplication app)
@@ -232,12 +233,13 @@ internal static class WebPanelEndpoints
             int weekMoves = await db.CylinderMovements.AsNoTracking().CountAsync(m => m.MovementDate >= today.AddDays(-6));
             int inactive = await db.Cylinders.AsNoTracking().CountAsync(c => !c.IsActive && !c.NeedsReview);
             int review = await db.Cylinders.AsNoTracking().CountAsync(c => c.NeedsReview);
-            int testSoon = await db.Cylinders.AsNoTracking().CountAsync(c => c.IsActive && c.TestDueDate != null && c.TestDueDate <= today.AddDays(30));
+            int testOverdue = await db.Cylinders.AsNoTracking().CountAsync(c => c.IsActive && c.TestDueDate != null && c.TestDueDate < today);
+            int testSoon = await db.Cylinders.AsNoTracking().CountAsync(c => c.IsActive && c.TestDueDate != null && c.TestDueDate >= today && c.TestDueDate <= today.AddDays(TestSoonDays));
             List<object> recent = (await MovementQuery(db).Take(10).ToListAsync()).Select(MovementRow).ToList();
-            return Results.Ok(new { overview, todayMoves, weekMoves, inactive, review, testSoon, recent });
+            return Results.Ok(new { overview, todayMoves, weekMoves, inactive, review, testOverdue, testSoon, testSoonDays = TestSoonDays, recent });
         }).Requires(Perm.Summary);
 
-        api.MapGet("/tupler", async (string? q, int? durum, string? plaka, int? musteri, string? doluluk, bool? uzun, bool? pasif, bool? inceleme) =>
+        api.MapGet("/tupler", async (string? q, int? durum, string? plaka, int? musteri, string? doluluk, bool? uzun, bool? pasif, bool? inceleme, string? test) =>
         {
             await using TupTakipDbContext db = new();
             IQueryable<Cylinder> query = db.Cylinders.AsNoTracking().Include(c => c.CurrentCustomer);
@@ -268,6 +270,16 @@ internal static class WebPanelEndpoints
                 DateTime limit = DateTime.Today.AddDays(-CylinderTracking.LongAtCustomerDays);
                 query = query.Where(c => c.Status == CylinderStatus.Customer && c.LastMovementAt != null && c.LastMovementAt < limit);
             }
+
+            DateTime testToday = DateTime.Today;
+            DateTime testSoon = testToday.AddDays(TestSoonDays);
+            query = test switch
+            {
+                "gecmis" => query.Where(c => c.TestDueDate != null && c.TestDueDate < testToday),
+                "yakin" => query.Where(c => c.TestDueDate != null && c.TestDueDate >= testToday && c.TestDueDate <= testSoon),
+                "yok" => query.Where(c => c.TestDueDate == null),
+                _ => query
+            };
 
             string term = (q ?? string.Empty).Trim();
             List<Cylinder> rows = await (term.Length == 0 ? query.OrderBy(c => c.SerialNumber).Take(MaxCylinderRows) : query.OrderBy(c => c.SerialNumber)).ToListAsync();

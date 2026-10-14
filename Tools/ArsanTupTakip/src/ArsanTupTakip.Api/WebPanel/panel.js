@@ -277,7 +277,8 @@ async function loadSummary() {
       const split = s.full + s.empty > 0 ? `dolu ${s.full} · boş ${s.empty}` : "dolu/boş bilgisi yok";
       stats.push(stat(s.total, s.name, split, () => openFiltered({ durum: s.status })));
     }
-    if (data.testSoon > 0) stats.push(stat(data.testSoon, "Test tarihi 30 gün içinde", "veya geçmiş", () => openFiltered({}), true));
+    if (data.testOverdue > 0) stats.push(stat(data.testOverdue, "Test tarihi geçmiş", "Teste gönderilmesi gereken", () => openFiltered({ test: "gecmis" }), true));
+    if (data.testSoon > 0) stats.push(stat(data.testSoon, `Test tarihi ${data.testSoonDays} gün içinde`, "Yaklaşan testler", () => openFiltered({ test: "yakin" }), true));
     if (data.inactive > 0) stats.push(stat(data.inactive, "Pasif tüp", "Kullanım dışı kayıtlar", () => openFiltered({ pasif: true })));
     if (data.review > 0) stats.push(stat(data.review, "İnceleme bekleyen tüp", "Eski sistemden eksik bilgiyle aktarılan", () => openFiltered({ inceleme: true }), true));
     $("stats").replaceChildren(...stats);
@@ -302,6 +303,7 @@ function openFiltered(filter) {
   cylinderCustomer.reset();
   if (filter.customer) cylinderCustomer.choose(filter.customer);
   $("f-doluluk").value = "";
+  $("f-test").value = filter.test ?? "";
   $("f-uzun").checked = !!filter.uzun;
   $("f-pasif").checked = !!filter.pasif;
   $("f-inceleme").checked = !!filter.inceleme;
@@ -310,7 +312,7 @@ function openFiltered(filter) {
 
 $("f-ara").addEventListener("click", loadCylinders);
 $("f-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadCylinders(); });
-liveFilter(["f-q"], ["f-durum", "f-doluluk", "f-plaka", "f-musteri", "f-uzun", "f-pasif", "f-inceleme"], loadCylinders);
+liveFilter(["f-q"], ["f-durum", "f-doluluk", "f-test", "f-plaka", "f-musteri", "f-uzun", "f-pasif", "f-inceleme"], loadCylinders);
 
 async function loadCylinders() {
   const query = new URLSearchParams();
@@ -319,6 +321,7 @@ async function loadCylinders() {
   if ($("f-plaka").value) query.set("plaka", $("f-plaka").value);
   if ($("f-musteri").value) query.set("musteri", $("f-musteri").value);
   if ($("f-doluluk").value) query.set("doluluk", $("f-doluluk").value);
+  if ($("f-test").value) query.set("test", $("f-test").value);
   if ($("f-uzun").checked) query.set("uzun", "true");
   if ($("f-pasif").checked) query.set("pasif", "true");
   if ($("f-inceleme").checked) query.set("inceleme", "true");
