@@ -43,6 +43,11 @@ AgentWatcher çalışıyorsa mesaj birkaç saniye içinde iletilir.
   Önerileri tek tek değerlendir: ERP'ye uygun, kanıtlı ve düşük riskli olanları kodla, derle ve testleri çalıştır;
   zayıf, spekülatif veya kapsam dışı olanları gerekçesiyle ele. Değerlendirmeyi Telegram'a gönder. Yayınlamak için
   ERP'nin kapatılması gerekiyorsa önce onay iste.
+- İzleyici sohbete bağlı bir arka plan kabuğudur; Cursor sohbet değişince veya yeniden yüklenince onu kapatabilir. Bu yüzden
+ her turun başında `%LOCALAPPDATA%\ArsanGazERP\AgentWatcherData\CopilotInbox\ide-session-status.json` dosyasına bak:
+ `updatedUtc` 15 saniyeden eskiyse veya `pid` çalışmıyorsa `ide-watch.ps1`'i bu sohbette arka planda yeniden başlat
+ (notify kalıbı `AGENT_LOOP_WAKE_ide_(request|report)`). Canlı bir izleyici varsa ikincisini başlatma. İzleyici yokken
+ istekler hiç beklemeden köprüye (bridge.js) geçer; yani Telegram kopmaz, yalnızca işi yapan taraf değişir.
 - Sohbet kapalıyken istekleri `Tools/CursorTelegramBridge/bridge.js` (ayrı bir Cursor ajanı) işler. Ne yaptığını görmek için
   `cursor-journal.md` dosyasının sonunu oku.
 
