@@ -1367,10 +1367,17 @@ async function loadCounts() {
       stat(open ? open.counted : "-", open ? "Açık sayım: okutulan" : "Açık sayım yok", open ? `${open.started} · ${open.startedBy}` : "Mobilde Depo Sayımı ile başlatın", () => open && openCountDialog(open.id)),
       stat(last ? last.missing : "-", "Son sayımda eksik", last ? last.closed : "Bitmiş sayım yok", () => last && openCountDialog(last.id, "missing"), !!last && last.missing > 0),
       stat(last ? last.extra : "-", "Son sayımda fazla", last ? `${last.matched} eşleşen · ${last.unknown} tanınmayan` : "", () => last && openCountDialog(last.id, "extra"), !!last && last.extra > 0));
-    const head = el("tr", {}, ...["Başlangıç", "Durum", "Yapan", "Kayıtta depoda", "Okutulan", "Eşleşen", "Eksik", "Fazla", "Tanınmayan", "Not", "Dışa aktar"].map((h) => el("th", {}, h)));
-    const exportLink = (id, kind, text) => el("a", { href: `${BASE}/panel/api/sayim/${id}/${kind}`, onclick: (e) => e.stopPropagation(), ...(kind === "pdf" ? { target: "_blank", rel: "noopener" } : {}) }, text);
+    const latest = last || open;
+    for (const [id, kind] of [["sc-xlsx", "excel"], ["sc-pdf", "pdf"]]) {
+      $(id).classList.toggle("hidden", !latest);
+      if (latest) $(id).href = `${BASE}/panel/api/sayim/${latest.id}/${kind}`;
+    }
+    $("sc-export-note").textContent = latest ? `${latest === open ? "Açık sayım" : "Son biten sayım"} · ${latest.started}` : "";
+    const head = el("tr", {}, ...["Başlangıç", "Dışa aktar", "Durum", "Yapan", "Kayıtta depoda", "Okutulan", "Eşleşen", "Eksik", "Fazla", "Tanınmayan", "Not"].map((h) => el("th", {}, h)));
+    const exportLink = (id, kind, text) => el("a", { class: "secondary small", href: `${BASE}/panel/api/sayim/${id}/${kind}`, onclick: (e) => e.stopPropagation(), ...(kind === "pdf" ? { target: "_blank", rel: "noopener" } : {}) }, text);
     const body = data.counts.map((c) => el("tr", { class: "click", onclick: () => openCountDialog(c.id) },
       el("td", {}, el("b", {}, c.started), el("div", { class: "muted" }, c.location)),
+      el("td", {}, exportLink(c.id, "excel", "Excel"), " ", exportLink(c.id, "pdf", "PDF")),
       el("td", {}, c.open ? el("span", { class: "badge b2" }, "Devam ediyor") : el("span", {}, "Bitti", el("div", { class: "muted" }, c.closed))),
       el("td", {}, c.startedBy, c.closedBy && c.closedBy !== c.startedBy ? el("div", { class: "muted" }, "Bitiren: " + c.closedBy) : null),
       el("td", {}, String(c.expected)),
@@ -1379,8 +1386,7 @@ async function loadCounts() {
       el("td", { class: c.missing ? "bad-text" : "muted" }, String(c.missing)),
       el("td", { class: c.extra ? "warn-text" : "muted" }, String(c.extra)),
       el("td", { class: c.unknown ? "warn-text" : "muted" }, String(c.unknown)),
-      el("td", { class: "muted" }, c.note || ""),
-      el("td", {}, exportLink(c.id, "excel", "Excel"), " · ", exportLink(c.id, "pdf", "PDF"))));
+      el("td", { class: "muted" }, c.note || "")));
     $("sc-counts").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 11, class: "muted" }, "Henüz depo sayımı yapılmadı. Mobil uygulamada Depo Sayımı ekranından başlatın."))])));
     const aHead = el("tr", {}, ...["Tarih", "Müşteri", "Kayıtta", "Bulunan", "Eksik", "Fazla", "Tanınmayan", "Yapan"].map((h) => el("th", {}, h)));
     const list = (items) => items.length ? el("div", { class: "muted" }, items.join(", ")) : null;
