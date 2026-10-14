@@ -684,7 +684,7 @@ public sealed class ApiClient
             using HttpRequestMessage request = Build(server);
             response = await _http.SendAsync(request);
         }
-        catch (HttpRequestException exception)
+        catch (Exception exception) when (exception is HttpRequestException or WebException or IOException)
         {
             await ServerUrlCoordinator.TryRecoverAfterFailureAsync();
             if (string.Equals(server, ServerUrl, StringComparison.OrdinalIgnoreCase))
@@ -697,7 +697,7 @@ public sealed class ApiClient
                 using HttpRequestMessage retry = Build(ServerUrl);
                 response = await _http.SendAsync(retry);
             }
-            catch (Exception retryException) when (retryException is HttpRequestException or TaskCanceledException)
+            catch (Exception retryException) when (retryException is HttpRequestException or WebException or IOException or TaskCanceledException)
             {
                 throw new ServerUnreachableException("Sunucuya yeni adresten de ulaşılamadı. (" + retryException.Message + ")");
             }

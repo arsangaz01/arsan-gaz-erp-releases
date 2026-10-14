@@ -27,4 +27,5 @@ public static class Icons
     public const string Warehouse = "\uebb8";
     public const string Inventory = "\ue1a1";
     public const string SystemUpdate = "\ue62a";
+    public const string Sync = "\ue627";
 }

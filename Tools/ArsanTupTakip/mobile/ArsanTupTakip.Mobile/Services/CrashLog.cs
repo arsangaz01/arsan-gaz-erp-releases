@@ -4,8 +4,16 @@ public static class CrashLog
 {
     private static string FilePath => Path.Combine(FileSystem.AppDataDirectory, "last-crash.txt");
 
+    // Sources that mean the app really crashed; anything else was caught and only shown on the next start.
+    private static readonly HashSet<string> FatalSources = ["UnhandledException", "Android", "MainActivity"];
+
     public static void Write(object? error, string source)
     {
+        if (!FatalSources.Contains(source) && error is Exception exception && IsConnectionError(exception))
+        {
+            return;
+        }
+
         try
         {
             string text = $"{DateTime.Now:dd.MM.yyyy HH:mm:ss} · {source} · {AppInfo.Current.VersionString} (build {AppInfo.Current.BuildString})\n{error}";
@@ -14,6 +22,21 @@ public static class CrashLog
         catch
         {
         }
+    }
+
+    // No internet, DNS failure, timeout: the phone was offline, not a bug worth an error screen.
+    public static bool IsConnectionError(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is ServerUnreachableException or HttpRequestException or System.Net.WebException or TaskCanceledException
+                or System.Net.Sockets.SocketException or Java.Net.UnknownHostException or Java.Net.SocketTimeoutException or Java.Net.ConnectException)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static string? TakeLast()

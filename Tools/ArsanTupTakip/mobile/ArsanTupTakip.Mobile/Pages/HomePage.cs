@@ -12,8 +12,9 @@ public sealed class HomePage : ContentPage
     private sealed record Tile(string Glyph, string Title, string? Subtitle, bool Wide, Color From, Color To, Func<Task> Open);
 
     private readonly Dictionary<string, Page> _pages = [];
-    private readonly Border _pending;
-    private readonly Label _pendingText = new() { FontSize = 13, TextColor = Colors.White, VerticalTextAlignment = TextAlignment.Center };
+    private readonly Border _sync;
+    private readonly Label _syncText = new() { FontSize = 12, TextColor = Colors.White.WithAlpha(0.85f), LineBreakMode = LineBreakMode.WordWrap };
+    private readonly ActivityIndicator _syncBusy = new() { IsVisible = false, IsRunning = false, Color = Colors.White, WidthRequest = 22, HeightRequest = 22 };
     private readonly Border _update;
     private readonly Label _updateText = new() { FontSize = 14, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.WordWrap, VerticalTextAlignment = TextAlignment.Center };
     private readonly ActivityIndicator _updateBusy = new() { IsVisible = false, Color = Glow };
@@ -75,18 +76,36 @@ public sealed class HomePage : ContentPage
         tiles.Add(new Tile(Icons.Account, "Hesap", null, false, indigo, navy, () => Open("hesap", () => new AccountPage())));
         tiles.Add(new Tile(Icons.Logout, "Çıkış", null, false, Color.FromArgb("#4B5563"), Color.FromArgb("#1F2937"), LogoutAsync));
 
-        TapGestureRecognizer pendingTap = new();
-        pendingTap.Tapped += async (_, _) => await Open("tup", () => new CylinderPage());
-        _pending = new Border
+        Grid syncRow = new()
         {
-            Padding = new Thickness(14, 10),
-            StrokeThickness = 0,
-            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
-            BackgroundColor = Color.FromArgb("#B45309"),
-            IsVisible = false,
-            Content = _pendingText,
-            GestureRecognizers = { pendingTap }
+            ColumnSpacing = 12,
+            ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)]
         };
+        syncRow.Add(Ui.IconLabel(Icons.Sync, Colors.White, 26), 0, 0);
+        syncRow.Add(new VerticalStackLayout
+        {
+            Spacing = 2,
+            VerticalOptions = LayoutOptions.Center,
+            Children =
+            {
+                new Label { Text = "Senkronize et", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White },
+                _syncText
+            }
+        }, 1, 0);
+        syncRow.Add(_syncBusy, 2, 0);
+        TapGestureRecognizer syncTap = new();
+        syncTap.Tapped += async (_, _) => await SyncAsync();
+        _sync = new Border
+        {
+            Padding = new Thickness(16, 12),
+            StrokeThickness = 0,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 18 },
+            BackgroundColor = Color.FromArgb("#0F766E"),
+            Content = syncRow,
+            GestureRecognizers = { syncTap }
+        };
+        SemanticProperties.SetDescription(_sync, "Senkronize et");
+        OfflineMoves.Changed += () => MainThread.BeginInvokeOnMainThread(RefreshSync);
 
         Grid updateRow = new() { ColumnSpacing = 12, ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
         updateRow.Add(Ui.IconLabel(Icons.SystemUpdate, Colors.White, 26), 0, 0);
@@ -124,7 +143,7 @@ public sealed class HomePage : ContentPage
                     {
                         Padding = new Thickness(14, 0),
                         Spacing = 12,
-                        Children = { _update, _updateBusy, _pending, TileGrid(tiles), Footer() }
+                        Children = { _update, _updateBusy, _sync, TileGrid(tiles), Footer() }
                     }
                 }
             }
@@ -134,11 +153,35 @@ public sealed class HomePage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        int pending = OfflineMoves.Pending.Count;
-        _pending.IsVisible = pending > 0;
-        _pendingText.Text = $"📶 Gönderilmeyi bekleyen {pending} tüp hareketi var. Göndermek için dokunun.";
+        RefreshSync();
         await ServerUrlCoordinator.RefreshIfDueAsync();
         await RefreshUpdateAsync();
+    }
+
+    private void RefreshSync()
+    {
+        _syncText.Text = SyncNow.StatusText();
+        _sync.BackgroundColor = OfflineMoves.Pending.Count > 0 ? Color.FromArgb("#B45309") : Color.FromArgb("#0F766E");
+    }
+
+    private async Task SyncAsync()
+    {
+        if (_syncBusy.IsRunning)
+        {
+            return;
+        }
+
+        _syncBusy.IsVisible = _syncBusy.IsRunning = true;
+        _syncText.Text = "Sunucuya bağlanılıyor…";
+        try
+        {
+            await SyncNow.RunAsync(this);
+        }
+        finally
+        {
+            _syncBusy.IsVisible = _syncBusy.IsRunning = false;
+            RefreshSync();
+        }
     }
 
     // Also called when the app comes back to the foreground: a signed-in user may never see the login screen again.
