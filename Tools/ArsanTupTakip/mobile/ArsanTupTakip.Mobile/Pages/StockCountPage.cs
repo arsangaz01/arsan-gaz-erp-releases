@@ -156,7 +156,10 @@ public sealed class StockCountPage : ContentPage
         _code.Text = string.Empty;
         try
         {
-            await SendAsync(code);
+            if ((await SendAsync(code)).StartsWith('❌'))
+            {
+                ErrorBuzz();
+            }
         }
         catch (SessionExpiredException)
         {
@@ -187,7 +190,7 @@ public sealed class StockCountPage : ContentPage
             }
 
             Show(response.Count);
-            SetLast(response.Message, response.Outcome switch { "matched" => Good, "duplicate" => Ui.Muted, "extra" => Warn, _ => Bad });
+            SetLast(response.Message, response.Outcome switch { "matched" => Good, "duplicate" => Ui.Muted, _ => Bad });
             if (OfflineCountScans.PendingFor(count.Id) > 0)
             {
                 _ = FlushAsync(quiet: true);
@@ -349,6 +352,17 @@ public sealed class StockCountPage : ContentPage
         });
     }
 
+    private static void ErrorBuzz()
+    {
+        try
+        {
+            Vibration.Default.Vibrate(TimeSpan.FromMilliseconds(600));
+        }
+        catch (Exception exception) when (exception is FeatureNotSupportedException or PermissionException)
+        {
+        }
+    }
+
     private void SetLast(string text, Color color)
     {
         _last.Text = text;
@@ -400,7 +414,16 @@ public sealed class StockCountPage : ContentPage
 
         StockCountInfo c = _count;
         _status.Text = $"Sayım #{c.Id} · {c.Location} · başlatan {c.StartedBy} · {c.Started}";
-        _totals.Text = $"Okutulan {c.Counted} · eşleşen {c.Matched} · fazla {c.Extra} · tanınmayan {c.Unknown}\nKayıtta depoda {c.Expected} · henüz okutulmayan {c.Missing}";
+        _totals.Text = $"Eşleşen {c.Matched} / kayıtta depoda {c.Expected} · henüz okutulmayan {c.Missing}"
+            + (c.Extra + c.Unknown > 0 ? $"\n❌ Hatalı okutma: stokta olmayan {c.Extra} · tanınmayan barkod {c.Unknown}" : string.Empty);
+        if (c.Extra + c.Unknown > 0)
+        {
+            _totals.TextColor = Bad;
+        }
+        else
+        {
+            _totals.ClearValue(Label.TextColorProperty);
+        }
         _groups.Children.Clear();
         foreach (StockCountGroupInfo g in c.Groups)
         {
@@ -417,31 +440,46 @@ public sealed class StockCountPage : ContentPage
         _recent.Text = lines.Count == 0 ? "Henüz okutma yok." : string.Join("\n", lines);
     }
 
-    private static View GroupRow(StockCountGroupInfo g)
+    // Big number = matched / in the warehouse by the records; cylinders that are not in the depot stock are errors, not stock.
+    private View GroupRow(StockCountGroupInfo g)
     {
-        Color color = g.Counted == g.Expected && g.Extra == 0 ? Good : g.Counted < g.Expected ? Warn : Bad;
+        Color color = g.Extra > 0 ? Bad : g.Matched == g.Expected ? Good : Warn;
         Grid row = new()
         {
             ColumnSpacing = 10,
-            ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)]
+            ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto)]
         };
+        Label detail = Ui.Note($"eşleşen {g.Matched} · okutulmayan {g.Missing} · dolu {g.Full} · boş {g.Empty}"
+            + (g.Extra > 0 ? $" · ❌ stokta olmayan {g.Extra}" : string.Empty));
         row.Add(new VerticalStackLayout
         {
             Spacing = 2,
             Children =
             {
                 new Label { Text = g.Title, FontSize = 15, FontFamily = "OpenSansSemibold" },
-                Ui.Note($"eşleşen {g.Matched} · fazla {g.Extra} · okutulmayan {g.Missing} · dolu {g.Full} · boş {g.Empty}")
+                detail
             }
         }, 0, 0);
         row.Add(new Label
         {
-            Text = $"{g.Counted} / {g.Expected}",
+            Text = $"{g.Matched} / {g.Expected}",
             FontSize = 22,
             FontFamily = "OpenSansSemibold",
             TextColor = color,
             VerticalTextAlignment = TextAlignment.Center
         }, 1, 0);
+        row.Add(new Label { Text = "›", FontSize = 28, TextColor = Ui.Muted, VerticalTextAlignment = TextAlignment.Center }, 2, 0);
+
+        TapGestureRecognizer tap = new();
+        tap.Tapped += async (_, _) =>
+        {
+            if (_count is StockCountInfo count && Navigation.NavigationStack.LastOrDefault() == this)
+            {
+                await Navigation.PushAsync(new StockCountGroupPage(count.Id, g.Title, g.GasType, g.Capacity));
+            }
+        };
+        row.GestureRecognizers.Add(tap);
+        SemanticProperties.SetDescription(row, g.Title + " barkodları");
         return row;
     }
 }

@@ -22,6 +22,9 @@ public sealed record StockCountComparison(
 
 public sealed record UnknownScan(string Code, DateTime ScannedAt, string ScannedBy);
 
+// The cylinders behind one gas/size row of a count: tapped on the phone to see which barcodes are still unscanned.
+public sealed record StockCountGroupDetail(StockCountGroup? Group, IReadOnlyList<CountCylinder> Matched, IReadOnlyList<CountCylinder> Missing, IReadOnlyList<CountCylinder> Extra);
+
 public sealed record StockCountReport(
     int Id,
     string Location,
@@ -87,6 +90,14 @@ public static class StockCounting
             .ToList();
 
         return new StockCountComparison(groups, Sorted(matched), Sorted(missing), Sorted(extra));
+    }
+
+    public static StockCountGroupDetail Group(StockCountComparison comparison, string? gasType, string? capacity)
+    {
+        string key = GroupKey(gasType, capacity);
+        List<CountCylinder> Of(IReadOnlyList<CountCylinder> list) => list.Where(x => GroupKey(x.GasType, x.Capacity) == key).ToList();
+        return new StockCountGroupDetail(comparison.Groups.FirstOrDefault(g => GroupKey(g.GasType, g.Capacity) == key),
+            Of(comparison.Matched), Of(comparison.Missing), Of(comparison.Extra));
     }
 
     public static string GroupKey(string? gasType, string? capacity) =>
@@ -204,14 +215,15 @@ public sealed class StockCountService
 
         StockCountReport report = await ReportAsync(db, count.Id);
         StockCountGroup? row = group is null ? null : report.Comparison.Groups.FirstOrDefault(x => x.Title == group);
-        string tally = row is null ? string.Empty : $" · {row.Title}: {row.Counted} sayıldı / kayıtta {row.Expected}";
+        string tally = row is null ? string.Empty : $" · {row.Title}: {row.Matched} eşleşti / kayıtta {row.Expected}";
         (string outcome, string message) = (cylinder, duplicate) switch
         {
             (null, true) => ("duplicate", $"{value}: bu tanınmayan kod zaten okutuldu."),
-            (null, false) => ("unknown", $"{value}: sistemde böyle bir tüp yok (tanınmayan barkod olarak not edildi)."),
-            (_, true) => ("duplicate", $"{cylinder.SerialNumber} zaten sayıldı, tekrar sayılmadı{tally}"),
-            _ when cylinder.Status == CylinderStatus.Warehouse => ("matched", $"✅ {cylinder.SerialNumber} sayıldı{tally}"),
-            _ => ("extra", $"⚠ {cylinder.SerialNumber} sayıldı ama kayıtta {StockCounting.Place((int)cylinder.Status, cylinder.CurrentCustomer?.CompanyName, cylinder.VehiclePlate)}{tally}")
+            (null, false) => ("unknown", $"❌ HATA: {value} sistemde kayıtlı değil (tanınmayan barkod olarak not edildi)."),
+            (_, true) => ("duplicate", $"{cylinder.SerialNumber} zaten okutuldu, tekrar sayılmadı{tally}"),
+            _ when cylinder.Status == CylinderStatus.Warehouse => ("matched", $"✅ EŞLEŞTİ: {cylinder.SerialNumber}{tally}"),
+            _ => ("extra", $"❌ HATA: {cylinder.SerialNumber} depo stokunda yok, kayıtta {StockCounting.Place((int)cylinder.Status, cylinder.CurrentCustomer?.CompanyName, cylinder.VehiclePlate)}. "
+                + $"Stoka sayılmadı; raporda \"stokta olmayan\" listesine yazıldı. Tüp buradaysa hareketini düzeltin.{(row is null ? string.Empty : $" · {row.Title}")}")
         };
         return new StockCountScanResult(outcome, message, group, report);
     }
@@ -254,6 +266,12 @@ public sealed class StockCountService
         count.UnknownCount = live.Unknown.Count;
         await db.SaveChangesAsync();
         return await ReportAsync(db, count.Id);
+    }
+
+    public async Task<StockCountGroupDetail?> GroupAsync(int countId, string? gasType, string? capacity)
+    {
+        StockCountReport? report = await GetAsync(countId);
+        return report is null ? null : StockCounting.Group(report.Comparison, gasType, capacity);
     }
 
     public async Task<StockCountReport?> GetAsync(int countId)

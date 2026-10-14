@@ -66,6 +66,14 @@ internal static class StockCountTests
         Assert(result.Groups[2].Counted == 0 && result.Groups[2].Missing == 1, "A group with nothing scanned still shows its missing cylinders.");
         Assert(StockCounting.Compare([], []).Groups.Count == 0, "An empty count has no groups.");
         Assert(StockCounting.GroupKey(" argon ", "50 Litre") == StockCounting.GroupKey("ARGON", "50 litre"), "Group keys ignore case and spaces.");
+
+        StockCountGroupDetail detail = StockCounting.Group(result, argon50.GasType, argon50.Capacity);
+        Assert(detail.Group == argon50, "Group detail finds the row the phone tapped.");
+        Assert(detail.Matched.Select(x => x.Id).SequenceEqual([1]) && detail.Missing.Select(x => x.Id).SequenceEqual([2]) && detail.Extra.Select(x => x.Id).SequenceEqual([9]),
+            "Group detail lists only that gas/size: matched, still unscanned and not-in-stock cylinders.");
+        Assert(StockCounting.Group(result, "argon", "50 litre").Missing.Count == 1, "Group detail ignores case.");
+        StockCountGroupDetail none = StockCounting.Group(result, "AZOT", "10 Litre");
+        Assert(none.Group is null && none.Matched.Count + none.Missing.Count + none.Extra.Count == 0, "An unknown group is empty.");
     }
 
     private static void NamesPlaces()

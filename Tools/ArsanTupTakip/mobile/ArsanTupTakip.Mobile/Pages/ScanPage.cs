@@ -115,7 +115,7 @@ public sealed class ScanPage : ContentPage
                 try
                 {
                     _counter.Text = await _live!(code);
-                    Buzz();
+                    Buzz(error: _counter.Text.StartsWith('❌'));
                 }
                 catch (Exception exception)
                 {
@@ -325,11 +325,12 @@ public sealed class ScanPage : ContentPage
         }
     }
 
-    private static void Buzz()
+    // A rejected scan (e.g. a barcode that is not in the depot stock) vibrates long so it is noticed without looking.
+    private static void Buzz(bool error = false)
     {
         try
         {
-            Vibration.Default.Vibrate(TimeSpan.FromMilliseconds(80));
+            Vibration.Default.Vibrate(TimeSpan.FromMilliseconds(error ? 600 : 80));
         }
         catch (Exception exception) when (exception is FeatureNotSupportedException or PermissionException)
         {

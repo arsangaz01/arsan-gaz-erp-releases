@@ -190,6 +190,10 @@ public sealed record StockCountCylinderInfo(int Id, string SerialNumber, string 
 
 public sealed record StockCountUnknownInfo(string Code, string At, string ScannedBy);
 
+public sealed record StockCountGroupCylinder(int Id, string SerialNumber, string Barcode, string GasType, string Capacity, string Fullness, string Place, string? At, string? ScannedBy);
+
+public sealed record StockCountGroupDetailInfo(string Title, List<StockCountGroupCylinder> Matched, List<StockCountGroupCylinder> Missing, List<StockCountGroupCylinder> Extra);
+
 public sealed record StockCountInfo(
     int Id,
     string Location,
@@ -617,6 +621,9 @@ public sealed class ApiClient
 
     public Task<StockCountScanResponse> ScanStockCountAsync(int id, string code, DateTime? at = null) =>
         PostAsync<StockCountScanResponse>($"/api/depo-sayim/{id}/okut", new { code, at });
+
+    public Task<StockCountGroupDetailInfo> StockCountGroupAsync(int id, string gasType, string capacity) =>
+        GetAsync<StockCountGroupDetailInfo>($"/api/depo-sayim/{id}/grup?gaz={Uri.EscapeDataString(gasType)}&boyut={Uri.EscapeDataString(capacity)}");
 
     public Task<List<StockCountListInfo>> StockCountsAsync() => GetAsync<List<StockCountListInfo>>("/api/depo-sayim/liste");
 

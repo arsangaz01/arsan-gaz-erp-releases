@@ -37,6 +37,20 @@ internal static class StockCountEndpoints
             return new { outcome = result.Outcome, message = result.Message, group = result.Group, count = Json(result.Report, lists: false) };
         })).Requires(Perm.StockCount);
 
+        app.MapGet("/api/depo-sayim/{id:int}/grup", async (int id, string? gaz, string? boyut) =>
+        {
+            StockCountGroupDetail? detail = await new StockCountService().GroupAsync(id, gaz, boyut);
+            return detail is null
+                ? Results.NotFound(new { error = "Sayım bulunamadı." })
+                : Results.Ok(new
+                {
+                    title = detail.Group?.Title ?? StockCounting.GroupTitle(gaz, boyut),
+                    matched = detail.Matched.Select(Cylinder),
+                    missing = detail.Missing.Select(Cylinder),
+                    extra = detail.Extra.Select(Cylinder)
+                });
+        }).Requires(Perm.StockCount);
+
         app.MapPost("/api/depo-sayim/{id:int}/geri-al", (int id, StockCountScanRequest request) => Run(async () =>
         {
             StockCountReport report = await new StockCountService().UndoAsync(id, request.Code);
