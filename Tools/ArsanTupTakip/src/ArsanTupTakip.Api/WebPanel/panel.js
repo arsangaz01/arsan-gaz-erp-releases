@@ -266,6 +266,7 @@ async function loadSummary() {
     }
     if (data.testSoon > 0) stats.push(stat(data.testSoon, "Test tarihi 30 gün içinde", "veya geçmiş", () => openFiltered({}), true));
     if (data.inactive > 0) stats.push(stat(data.inactive, "Pasif tüp", "Kullanım dışı kayıtlar", () => openFiltered({ pasif: true })));
+    if (data.review > 0) stats.push(stat(data.review, "İnceleme bekleyen tüp", "Eski sistemden eksik bilgiyle aktarılan", () => openFiltered({ inceleme: true }), true));
     $("stats").replaceChildren(...stats);
 
     $("vehicles").replaceChildren(...(o.vehicles.length === 0
@@ -290,6 +291,7 @@ function openFiltered(filter) {
   $("f-doluluk").value = "";
   $("f-uzun").checked = !!filter.uzun;
   $("f-pasif").checked = !!filter.pasif;
+  $("f-inceleme").checked = !!filter.inceleme;
   openTab("tupler");
 }
 
@@ -305,12 +307,15 @@ async function loadCylinders() {
   if ($("f-doluluk").value) query.set("doluluk", $("f-doluluk").value);
   if ($("f-uzun").checked) query.set("uzun", "true");
   if ($("f-pasif").checked) query.set("pasif", "true");
+  if ($("f-inceleme").checked) query.set("inceleme", "true");
   try {
     const rows = await api("/panel/api/tupler?" + query);
     $("cyl-count").textContent = `${rows.length} tüp`;
     const head = el("tr", {}, ...["Seri no", "Gaz", "Kapasite", "Durum", "Dolu/Boş", "Müşteri / Plaka", "Son hareket", "Test"].map((h) => el("th", {}, h)));
     const body = rows.map((r) => el("tr", { class: "click", onclick: () => openDetail(r.id) },
-      el("td", {}, el("b", {}, r.serialNumber), r.barcode !== r.serialNumber ? el("div", { class: "muted" }, r.barcode) : null),
+      el("td", {}, el("b", {}, (r.needsReview ? "⚠ " : "") + r.serialNumber),
+        r.manufacturerSerial ? el("div", { class: "muted" }, "Üretici seri: " + r.manufacturerSerial)
+          : r.barcode !== r.serialNumber ? el("div", { class: "muted" }, r.barcode) : null),
       el("td", {}, r.gasType),
       el("td", {}, r.capacity),
       el("td", {}, badge(r.status, r.statusName)),
@@ -387,6 +392,14 @@ async function openDetail(id) {
     ["Son hareket", c.lastMovement ? `${c.lastMovement}${c.daysThere !== null ? ` (${c.daysThere} gün önce)` : ""}` : "-"],
     ["Test tarihi", c.testDue ? c.testDue.split("-").reverse().join(".") : "-"], ["Kayıt", c.isActive ? `Aktif · ${c.created}` : "Pasif"]
   ];
+  if (c.manufacturerSerial) info.splice(2, 0, ["Üretici seri no", c.manufacturerSerial]);
+  if (c.owner) info.push(["Tüpün sahibi", "Müşteri malı · " + c.owner]);
+  if (c.productName) info.push(["Ürün (eski sistem)", c.productName]);
+  if (c.manufactureDate) info.push(["İmalat tarihi", c.manufactureDate]);
+  if (c.lastTestDate) info.push(["Son test", c.lastTestDate]);
+  if (c.legacy) info.push(["Eski sistem kaydı", c.legacy]);
+  if (c.needsReview || c.reviewNote) info.push([c.needsReview ? "⚠ İnceleme" : "İnceleme notu", c.reviewNote || "-"]);
+  if (c.movementCount > c.movements.length) info.push(["Hareket sayısı", `${c.movementCount} (son ${c.movements.length} tanesi aşağıda)`]);
   $("d-info").replaceChildren(...info.map(([k, v]) => el("div", {}, el("span", {}, k), v)));
   $("e-gas").value = c.gasType;
   $("e-cap").value = String(c.capacity).replace(".", ",");
@@ -703,9 +716,9 @@ function renderGroups(container, groups, empty) {
 }
 
 function groupTable(g) {
-  const head = el("tr", {}, ...["Barkod / seri no", "Kapasite", "Dolu/Boş", "Durum", "Müşteri / plaka", "Yükleme", "Son hareket", "Test"].map((h) => el("th", {}, h)));
+  const head = el("tr", {}, ...["Seri no / barkod", "Kapasite", "Dolu/Boş", "Durum", "Müşteri / plaka", "Yükleme", "Son hareket", "Test"].map((h) => el("th", {}, h)));
   const rows = g.cylinders.map((c) => el("tr", { class: "click" + (c.alarm ? " alarm-row" : ""), onclick: () => openDetail(c.cylinderId) },
-    el("td", {}, el("b", {}, c.barcode), c.barcode !== c.serialNumber ? el("div", { class: "muted" }, c.serialNumber) : null),
+    el("td", {}, el("b", {}, c.serialNumber), c.barcode !== c.serialNumber ? el("div", { class: "muted" }, c.barcode) : null),
     el("td", {}, c.capacity),
     el("td", {}, c.fullness),
     el("td", { class: c.alarm ? "alarm" : "" }, c.state, el("div", { class: "muted" }, c.statusName)),

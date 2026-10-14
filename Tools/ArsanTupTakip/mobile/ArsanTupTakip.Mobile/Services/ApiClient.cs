@@ -116,7 +116,10 @@ public sealed record CylinderStatusInfo(
     string? LastMovementType,
     string? TestDue,
     bool TestOverdue,
-    bool IsActive);
+    bool IsActive,
+    string? ManufacturerSerial = null,
+    string? ProductName = null,
+    bool NeedsReview = false);
 
 public sealed record CylinderBulkResult(string Code, bool Ok, string Message);
 public sealed record CylinderBulkResponse(string Message, int Ok, int Failed, List<CylinderBulkResult> Results);
@@ -194,7 +197,7 @@ public sealed record LoadCylinder(
     string State,
     bool Alarm)
 {
-    public string Title => (Alarm ? "⚠ " : string.Empty) + Barcode + (Barcode == SerialNumber ? string.Empty : $" (seri {SerialNumber})");
+    public string Title => (Alarm ? "⚠ " : string.Empty) + SerialNumber;
 
     public string Subtitle => string.Join(Environment.NewLine, new[]
     {

@@ -16,4 +16,5 @@ public sealed class CylinderMovement
  public string? Description { get; set; }
  public DateTime MovementDate { get; set; } = DateTime.UtcNow;
  public string? PerformedBy { get; set; }
+ public long? LegacyId { get; set; }
 }

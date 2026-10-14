@@ -23,6 +23,8 @@ internal static class WebPanelEndpoints
 {
     private const int MaxMovementRows = 500;
     private const int MaxExportRows = 20_000;
+    private const int MaxCylinderRows = 5000;
+    private const int MaxDetailMovements = 500;
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
 
     public static void Map(WebApplication app)
@@ -228,16 +230,18 @@ internal static class WebPanelEndpoints
             DateTime today = DateTime.Today;
             int todayMoves = await db.CylinderMovements.AsNoTracking().CountAsync(m => m.MovementDate >= today);
             int weekMoves = await db.CylinderMovements.AsNoTracking().CountAsync(m => m.MovementDate >= today.AddDays(-6));
-            int inactive = await db.Cylinders.AsNoTracking().CountAsync(c => !c.IsActive);
+            int inactive = await db.Cylinders.AsNoTracking().CountAsync(c => !c.IsActive && !c.NeedsReview);
+            int review = await db.Cylinders.AsNoTracking().CountAsync(c => c.NeedsReview);
             int testSoon = await db.Cylinders.AsNoTracking().CountAsync(c => c.IsActive && c.TestDueDate != null && c.TestDueDate <= today.AddDays(30));
             List<object> recent = (await MovementQuery(db).Take(10).ToListAsync()).Select(MovementRow).ToList();
-            return Results.Ok(new { overview, todayMoves, weekMoves, inactive, testSoon, recent });
+            return Results.Ok(new { overview, todayMoves, weekMoves, inactive, review, testSoon, recent });
         }).Requires(Perm.Summary);
 
-        api.MapGet("/tupler", async (string? q, int? durum, string? plaka, int? musteri, string? doluluk, bool? uzun, bool? pasif) =>
+        api.MapGet("/tupler", async (string? q, int? durum, string? plaka, int? musteri, string? doluluk, bool? uzun, bool? pasif, bool? inceleme) =>
         {
             await using TupTakipDbContext db = new();
-            IQueryable<Cylinder> query = db.Cylinders.AsNoTracking().Include(c => c.CurrentCustomer).Where(c => c.IsActive == (pasif != true));
+            IQueryable<Cylinder> query = db.Cylinders.AsNoTracking().Include(c => c.CurrentCustomer);
+            query = inceleme == true ? query.Where(c => c.NeedsReview) : query.Where(c => c.IsActive == (pasif != true));
             if (durum is int status && Enum.IsDefined((CylinderStatus)status))
             {
                 query = query.Where(c => c.Status == (CylinderStatus)status);
@@ -265,17 +269,20 @@ internal static class WebPanelEndpoints
                 query = query.Where(c => c.Status == CylinderStatus.Customer && c.LastMovementAt != null && c.LastMovementAt < limit);
             }
 
-            List<Cylinder> rows = await query.OrderBy(c => c.SerialNumber).Take(5000).ToListAsync();
             string term = (q ?? string.Empty).Trim();
+            List<Cylinder> rows = await (term.Length == 0 ? query.OrderBy(c => c.SerialNumber).Take(MaxCylinderRows) : query.OrderBy(c => c.SerialNumber)).ToListAsync();
             DateTime today = DateTime.Today;
             return Results.Ok(rows
-                .Where(c => term.Length == 0 || Contains(c.SerialNumber, term) || Contains(c.Barcode, term) || Contains(c.GasType, term)
+                .Where(c => term.Length == 0 || Contains(c.SerialNumber, term) || Contains(c.Barcode, term) || Contains(c.ManufacturerSerial, term) || Contains(c.GasType, term)
                     || Contains(c.CurrentCustomer?.CompanyName, term) || Contains(c.VehiclePlate, term))
+                .Take(MaxCylinderRows)
                 .Select(c => new
                 {
                     c.Id,
                     c.SerialNumber,
                     c.Barcode,
+                    c.ManufacturerSerial,
+                    c.NeedsReview,
                     c.GasType,
                     Capacity = $"{c.Capacity.ToString("0.##", Turkish)} {c.CapacityUnit}",
                     Status = (int)c.Status,
@@ -293,19 +300,29 @@ internal static class WebPanelEndpoints
         api.MapGet("/tup/{id:int}", async (int id) =>
         {
             await using TupTakipDbContext db = new();
-            Cylinder? c = await db.Cylinders.AsNoTracking().Include(x => x.CurrentCustomer).FirstOrDefaultAsync(x => x.Id == id);
+            Cylinder? c = await db.Cylinders.AsNoTracking().Include(x => x.CurrentCustomer).Include(x => x.OwnerCustomer).FirstOrDefaultAsync(x => x.Id == id);
             if (c is null)
             {
                 return Results.NotFound(new { error = "Tüp bulunamadı." });
             }
 
+            int movementCount = await db.CylinderMovements.AsNoTracking().CountAsync(m => m.CylinderId == id);
             List<CylinderMovement> movements = await db.CylinderMovements.AsNoTracking().Include(m => m.Customer)
-                .Where(m => m.CylinderId == id).OrderByDescending(m => m.MovementDate).ThenByDescending(m => m.Id).ToListAsync();
+                .Where(m => m.CylinderId == id).OrderByDescending(m => m.MovementDate).ThenByDescending(m => m.Id).Take(MaxDetailMovements).ToListAsync();
             return Results.Ok(new
             {
                 c.Id,
                 c.SerialNumber,
                 c.Barcode,
+                c.ManufacturerSerial,
+                Owner = c.OwnerCustomer?.CompanyName,
+                c.ProductName,
+                ManufactureDate = c.ManufactureDate?.ToString("dd.MM.yyyy", Turkish),
+                LastTestDate = c.LastTestDate?.ToString("dd.MM.yyyy", Turkish),
+                Legacy = c.LegacyId is null ? null : $"{c.LegacySource} #{c.LegacyId}",
+                c.NeedsReview,
+                c.ReviewNote,
+                MovementCount = movementCount,
                 c.GasType,
                 c.Capacity,
                 c.CapacityUnit,
@@ -568,6 +585,12 @@ internal static class WebPanelEndpoints
             cylinder.CapacityUnit = unit;
             cylinder.TestDueDate = request.TestDueDate?.Date;
             cylinder.IsActive = request.IsActive;
+            if (cylinder.NeedsReview && request.IsActive)
+            {
+                cylinder.NeedsReview = false;
+                cylinder.ReviewNote = $"{cylinder.ReviewNote} · İncelendi ve aktif edildi: {Account(context).UserName} {DateTime.Now:dd.MM.yyyy HH:mm}".Trim(' ', '·');
+            }
+
             await db.SaveChangesAsync();
             WebPanelAudit.Write(Account(context).UserName, "Tüp düzenlendi", cylinder.SerialNumber, request.IsActive ? null : "pasife alındı", WebPanelAuth.ClientIp(context));
             return Results.Ok(new { message = $"{cylinder.SerialNumber} güncellendi." + (request.IsActive ? string.Empty : " Tüp pasife alındı; listelerde görünmez.") });

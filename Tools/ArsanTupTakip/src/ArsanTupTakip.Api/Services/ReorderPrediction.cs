@@ -30,6 +30,9 @@ public static class ReorderPrediction
     // Fewer delivery days than this give an interval that is mostly noise.
     public const int MinimumDeliveryDays = 3;
 
+    // Older deliveries say little about today's ordering rhythm and would make the query scan years of history.
+    public const int HistoryDays = 730;
+
     public static List<ReorderForecast> Compute(IEnumerable<CustomerDelivery> deliveries, DateTime today)
     {
         List<ReorderForecast> forecasts = [];

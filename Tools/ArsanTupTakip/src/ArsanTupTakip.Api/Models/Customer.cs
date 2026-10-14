@@ -15,6 +15,11 @@ public sealed class Customer
  public string? TaxOffice { get; set; }
  public string? TaxNumber { get; set; }
  public bool IsActive { get; set; } = true;
+ public string? Phone2 { get; set; }
+ public string? CustomerType { get; set; }
+ public string? Note { get; set; }
+ public int? LegacyId { get; set; }
+ public string? LegacySource { get; set; }
  public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
  public DateTime? UpdatedAt { get; set; }
  public uint Version { get; set; }

@@ -169,7 +169,10 @@ internal static class MobileEndpoints
                 LastMovementType = last is null ? null : $"{last.MovementType} ({CylinderTracking.StatusName((int)last.FromStatus)} → {CylinderTracking.StatusName((int)last.ToStatus)})",
                 TestDue = c.TestDueDate?.ToString("dd.MM.yyyy", Turkish),
                 TestOverdue = c.TestDueDate != null && c.TestDueDate < today,
-                c.IsActive
+                c.IsActive,
+                c.ManufacturerSerial,
+                c.ProductName,
+                c.NeedsReview
             });
         }).Requires(Perm.CylinderView);
 

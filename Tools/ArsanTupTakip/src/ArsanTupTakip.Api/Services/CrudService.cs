@@ -192,17 +192,32 @@ public sealed class CrudService
 
         await using TupTakipDbContext db = new();
         string key = value.ToLower();
-        return await db.Cylinders.AsNoTracking().Include(x => x.CurrentCustomer).FirstOrDefaultAsync(x => x.Barcode == value || x.SerialNumber == value)
+        Cylinder? match = await db.Cylinders.AsNoTracking().Include(x => x.CurrentCustomer).FirstOrDefaultAsync(x => x.Barcode == value || x.SerialNumber == value)
             ?? await db.Cylinders.AsNoTracking().Include(x => x.CurrentCustomer).FirstOrDefaultAsync(x => x.Barcode.ToLower() == key || x.SerialNumber.ToLower() == key);
+        if (match != null)
+        {
+            return match;
+        }
+
+        // Manufacturer serials are not unique (different makers reuse numbers); only an unambiguous one identifies a cylinder.
+        List<Cylinder> byMaker = await db.Cylinders.AsNoTracking().Include(x => x.CurrentCustomer)
+            .Where(x => x.ManufacturerSerial != null && x.ManufacturerSerial.ToLower() == key).Take(2).ToListAsync();
+        return byMaker.Count == 1 ? byMaker[0] : null;
     }
 
     public async Task<List<ReorderForecast>> ReorderForecastsAsync()
     {
         await using TupTakipDbContext db = new();
-        List<CustomerDelivery> deliveries = await db.CylinderMovements.AsNoTracking()
-            .Where(x => x.ToStatus == CylinderStatus.Customer && x.CustomerId != null)
-            .Select(x => new CustomerDelivery(x.CustomerId!.Value, x.Customer!.CompanyName, x.MovementDate))
+        DateTime since = DateTime.Today.AddDays(-ReorderPrediction.HistoryDays);
+        var days = await db.CylinderMovements.AsNoTracking()
+            .Where(x => x.ToStatus == CylinderStatus.Customer && x.CustomerId != null && x.MovementDate >= since)
+            .GroupBy(x => new { CustomerId = x.CustomerId!.Value, x.MovementDate.Date })
+            .Select(g => new { g.Key.CustomerId, g.Key.Date })
             .ToListAsync();
+        Dictionary<int, string> names = await db.Customers.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.CompanyName);
+        List<CustomerDelivery> deliveries = days
+            .Select(x => new CustomerDelivery(x.CustomerId, names.GetValueOrDefault(x.CustomerId, string.Empty), x.Date))
+            .ToList();
         return ReorderPrediction.Compute(deliveries, DateTime.Today);
     }
 

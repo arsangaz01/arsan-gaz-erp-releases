@@ -205,8 +205,9 @@ public sealed class CylinderInfoPage : ContentPage
             Spacing = 2,
             Children =
             {
-                new Label { Text = info.Barcode, FontSize = 20, FontFamily = "OpenSansSemibold" },
-                Ui.Note(info.Barcode == info.SerialNumber ? "Seri no aynı" : "Seri no: " + info.SerialNumber),
+                new Label { Text = info.SerialNumber, FontSize = 20, FontFamily = "OpenSansSemibold" },
+                Ui.Note(info.ManufacturerSerial is { Length: > 0 } maker ? "Üretici seri no: " + maker
+                    : info.Barcode == info.SerialNumber ? "Barkod aynı" : "Barkod: " + info.Barcode),
                 new Label
                 {
                     Text = info.StatusName + (info.IsActive ? string.Empty : " · pasif"),
@@ -240,6 +241,11 @@ public sealed class CylinderInfoPage : ContentPage
         {
             rows.Children.Add(Row(Icons.Event, "Test / son kullanma tarihi", info.TestDue + (info.TestOverdue ? " · süresi geçmiş!" : string.Empty),
                 info.TestOverdue ? Color.FromArgb("#DC2626") : Ui.Accent));
+        }
+
+        if (info.NeedsReview)
+        {
+            rows.Children.Add(Row(Icons.Event, "Uyarı", "Eski sistemden eksik bilgiyle aktarıldı; yönetici incelemesi bekliyor.", Color.FromArgb("#D97706")));
         }
 
         _result.Children.Add(Ui.Card(head));

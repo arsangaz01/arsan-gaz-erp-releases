@@ -51,6 +51,23 @@ public static class TupReports
 
         StringBuilder text = new();
         text.AppendLine($"Seri no: {cylinder.SerialNumber} · barkod: {cylinder.Barcode}");
+        if (!string.IsNullOrEmpty(cylinder.ManufacturerSerial))
+        {
+            text.AppendLine($"Üretici seri no: {cylinder.ManufacturerSerial}{(string.IsNullOrEmpty(cylinder.ProductName) ? "" : " · " + cylinder.ProductName)}");
+        }
+
+        if (cylinder.OwnerCustomerId is int ownerId)
+        {
+            await using TupTakipDbContext owners = new();
+            string? owner = await owners.Customers.AsNoTracking().Where(x => x.Id == ownerId).Select(x => x.CompanyName).FirstOrDefaultAsync();
+            text.AppendLine($"Tüpün sahibi: müşteri malı · {owner ?? "#" + ownerId}");
+        }
+
+        if (cylinder.NeedsReview)
+        {
+            text.AppendLine($"⚠ İnceleme bekliyor: {cylinder.ReviewNote}");
+        }
+
         text.AppendLine($"Gaz: {cylinder.GasType} · kapasite: {cylinder.Capacity.ToString("0.##", Turkish)} {cylinder.CapacityUnit}");
         text.AppendLine($"Durum: {CylinderTracking.StatusName((int)cylinder.Status)}{(cylinder.VehiclePlate is null ? "" : " · plaka: " + cylinder.VehiclePlate)}{(cylinder.CurrentCustomer is null ? "" : " · müşteri: " + cylinder.CurrentCustomer.CompanyName)}");
         text.AppendLine($"Dolu/boş: {CylinderTracking.FullnessName(cylinder.IsFull)}");

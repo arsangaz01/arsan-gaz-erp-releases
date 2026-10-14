@@ -35,6 +35,29 @@ public static class TupTakipDatabase
             response text NULL,
             CONSTRAINT pk_request_keys PRIMARY KEY (user_id, request_key)
         );
+        ALTER TABLE tuptakip.cylinders
+            ADD COLUMN IF NOT EXISTS ownercustomerid integer NULL REFERENCES tuptakip.customers (id) ON DELETE SET NULL,
+            ADD COLUMN IF NOT EXISTS manufacturerserial text NULL,
+            ADD COLUMN IF NOT EXISTS productname text NULL,
+            ADD COLUMN IF NOT EXISTS manufacturedate timestamp without time zone NULL,
+            ADD COLUMN IF NOT EXISTS lasttestdate timestamp without time zone NULL,
+            ADD COLUMN IF NOT EXISTS legacyid integer NULL,
+            ADD COLUMN IF NOT EXISTS legacysource text NULL,
+            ADD COLUMN IF NOT EXISTS needsreview boolean NOT NULL DEFAULT false,
+            ADD COLUMN IF NOT EXISTS reviewnote text NULL;
+        ALTER TABLE tuptakip.customers
+            ADD COLUMN IF NOT EXISTS phone2 text NULL,
+            ADD COLUMN IF NOT EXISTS customertype text NULL,
+            ADD COLUMN IF NOT EXISTS note text NULL,
+            ADD COLUMN IF NOT EXISTS legacyid integer NULL,
+            ADD COLUMN IF NOT EXISTS legacysource text NULL;
+        ALTER TABLE tuptakip.cylindermovements
+            ADD COLUMN IF NOT EXISTS legacyid bigint NULL;
+        CREATE INDEX IF NOT EXISTS ix_cylinders_ownercustomerid ON tuptakip.cylinders (ownercustomerid);
+        CREATE INDEX IF NOT EXISTS ix_cylinders_manufacturerserial ON tuptakip.cylinders (lower(manufacturerserial));
+        CREATE INDEX IF NOT EXISTS ix_cylinders_needsreview ON tuptakip.cylinders (needsreview) WHERE needsreview;
+        CREATE INDEX IF NOT EXISTS ix_cylindermovements_movementtype ON tuptakip.cylindermovements (movementtype);
+        CREATE INDEX IF NOT EXISTS ix_cylindermovements_cylinderid_date ON tuptakip.cylindermovements (cylinderid, movementdate DESC, id DESC);
         DO $$
         DECLARE item record;
         BEGIN
@@ -154,6 +177,7 @@ public sealed class TupTakipDbContext : DbContext
         b.Entity<Cylinder>().HasIndex(x => x.Status);
         b.Entity<Cylinder>().Property(x => x.Capacity).HasPrecision(18, 4);
         b.Entity<Cylinder>().HasOne(x => x.CurrentCustomer).WithMany(x => x.Cylinders).HasForeignKey(x => x.CurrentCustomerId).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<Cylinder>().HasOne(x => x.OwnerCustomer).WithMany().HasForeignKey(x => x.OwnerCustomerId).OnDelete(DeleteBehavior.SetNull);
         b.Entity<CylinderMovement>().HasOne(x => x.Cylinder).WithMany(x => x.Movements).HasForeignKey(x => x.CylinderId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<CylinderMovement>().HasIndex(x => x.MovementDate);
         b.Entity<CylinderAudit>().HasIndex(x => new { x.CustomerId, x.AuditedAt });
