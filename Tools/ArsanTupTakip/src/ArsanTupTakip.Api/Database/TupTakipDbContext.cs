@@ -89,6 +89,15 @@ public static class TupTakipDatabase
         CREATE UNIQUE INDEX IF NOT EXISTS ix_stockcountitems_countid_code ON tuptakip.stockcountitems (countid, code);
         CREATE INDEX IF NOT EXISTS ix_stockcounts_startedat ON tuptakip.stockcounts (startedat);
         CREATE UNIQUE INDEX IF NOT EXISTS ix_stockcounts_open_location ON tuptakip.stockcounts (location) WHERE closedat IS NULL;
+        ALTER TABLE tuptakip.cylindertrips
+            ADD COLUMN IF NOT EXISTS requirereasons boolean NOT NULL DEFAULT false;
+        ALTER TABLE tuptakip.cylindertripcylinders
+            ADD COLUMN IF NOT EXISTS missingreason text NULL,
+            ADD COLUMN IF NOT EXISTS missingnote text NULL,
+            ADD COLUMN IF NOT EXISTS reasonat timestamp without time zone NULL,
+            ADD COLUMN IF NOT EXISTS reasonby text NULL,
+            ADD COLUMN IF NOT EXISTS checkedat timestamp without time zone NULL,
+            ADD COLUMN IF NOT EXISTS checkedby text NULL;
         DO $$
         DECLARE item record;
         BEGIN

@@ -114,6 +114,8 @@ fi
 mv "$app_dir.new" "$app_dir"
 
 echo "== systemd servisi"
+# Servis bot bildirim kutusuna yazabilmek için tuptakipq grubunda çalışır; grup yoksa servis başlamaz.
+getent group tuptakipq >/dev/null || groupadd --system tuptakipq
 install -m 644 -o root -g root "$pkg/deploy/arsantuptakip-api.service" /etc/systemd/system/arsantuptakip-api.service
 systemctl daemon-reload
 systemctl enable arsantuptakip-api >/dev/null 2>&1

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ArsanTupTakip.Api;
+using ArsanTupTakip.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -70,7 +71,10 @@ internal static class PermissionTests
         Check(!revoked.Contains(Perm.MoveScrap) && !revoked.Contains(Perm.MoveDeliver) && !revoked.Contains(Perm.CylinderEdit) && revoked.Contains(Perm.CylinderRegister),
             "Kaldırılan yetkiye bağlı yetkiler de kalkmalı, bağımsız olanlar kalmalı.");
         HashSet<string> tripless = Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.TripView] = false });
-        Check(!tripless.Contains(Perm.TripStart) && !tripless.Contains(Perm.TripClose), "Sefer görüntüleme kalkınca sefer işlemleri de kalkmalı.");
+        Check(!tripless.Contains(Perm.TripStart) && !tripless.Contains(Perm.TripClose) && !tripless.Contains(Perm.TripLossCheck), "Sefer görüntüleme kalkınca sefer işlemleri de kalkmalı.");
+        Check(Perm.Effective(PanelRoles.Admin, null).Contains(Perm.TripLossCheck) && !op.Contains(Perm.TripLossCheck) && !viewer.Contains(Perm.TripLossCheck)
+            && Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.TripLossCheck] = true }).Contains(Perm.TripLossCheck),
+            "Kayıp kontrolü onayı varsayılan olarak yalnızca Yönetici'de olmalı; yönetici başkasına verebilmeli.");
 
         HashSet<string> wanted = Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.MoveScrap] = false, [Perm.AuditLog] = true });
         foreach (string role in new[] { PanelRoles.Operator, PanelRoles.Viewer })
@@ -220,6 +224,29 @@ internal static class PermissionTests
                 Check(anonymous.StatusCode == HttpStatusCode.Unauthorized && (await Json(anonymous)).GetProperty("loginRequired").GetBoolean(), "Anahtarsız istek 401 ve giriş istemeli.");
             }
 
+            foreach ((HttpMethod method, string path) in new[]
+            {
+                (HttpMethod.Get, "api/sefer/gerekceler"), (HttpMethod.Get, "api/sefer/1/eksikler"), (HttpMethod.Post, "api/sefer/gerekce"),
+                (HttpMethod.Get, "panel/api/sefer-eksikler"), (HttpMethod.Get, "panel/api/sefer-gerekceler"),
+                (HttpMethod.Post, "panel/api/sefer/1/gerekce"), (HttpMethod.Post, "panel/api/sefer/1/gerekce-kontrol")
+            })
+            {
+                using HttpResponseMessage closed = await Send(http, method, path, null, method == HttpMethod.Post ? new { } : null);
+                Check(closed.StatusCode == HttpStatusCode.Unauthorized, $"Oturumsuz {path} 401 dönmeli.");
+            }
+
+            using (HttpResponseMessage reasons = await Send(http, HttpMethod.Get, "api/sefer/gerekceler", token))
+            {
+                JsonElement list = await Json(reasons);
+                Check(reasons.StatusCode == HttpStatusCode.OK && list.GetArrayLength() == TripMissingReasons.All.Count
+                    && list.EnumerateArray().Any(r => r.GetProperty("asksCustomer").GetBoolean()), "Sefer görüntüleyen mobil kullanıcı gerekçe listesini almalı.");
+            }
+
+            using (HttpResponseMessage noReason = await Send(http, HttpMethod.Post, "api/sefer/gerekce", token, new { tripId = 1, cylinderIds = new[] { 1 }, reason = "kayip", note = "x" }))
+            {
+                Check(noReason.StatusCode == HttpStatusCode.Forbidden, "Sefer teslim/dönüş/kapatma yetkisi olmayan gerekçe yazamamalı.");
+            }
+
             string[] tokens = [.. (await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => MobileLogin(http, "sorumlu")))).Select(x => x.Token)];
             Check(tokens.Distinct().Count() == 5, "Aynı anda yapılan 5 mobil giriş ayrı anahtar almalı.");
             foreach (string each in tokens.Append(token))
@@ -253,6 +280,11 @@ internal static class PermissionTests
             using (HttpResponseMessage vehicle = await Send(http, HttpMethod.Post, "panel/api/arac", null, new { plate = "34 TST 01" }, cookie))
             {
                 Check(vehicle.StatusCode == HttpStatusCode.Forbidden, "Araç ekleme yetkisi olmayan panelde araç ekleyememeli.");
+            }
+
+            using (HttpResponseMessage lossCheck = await Send(http, HttpMethod.Post, "panel/api/sefer/1/gerekce-kontrol", null, new { cylinderIds = new[] { 1 }, undo = false }, cookie))
+            {
+                Check(lossCheck.StatusCode == HttpStatusCode.Forbidden, "Kayıp kontrolü onayı yetkisi olmayan \"kontrol edildi\" işaretleyememeli.");
             }
 
             WebPanelUser viewer = WebPanelUserStore.FindByName("saha1")!;

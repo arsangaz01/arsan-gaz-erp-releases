@@ -9,9 +9,13 @@ internal sealed record TripLoadRequest(int TripId, string? Plate, List<string?>?
 internal sealed record TripDeliverRequest(int TripId, int? CustomerId, List<string?>? Codes, string? Note);
 internal sealed record TripReturnRequest(int TripId, string? Plate, List<string?>? Codes, string? Note);
 internal sealed record TripCloseRequest(int TripId);
+internal sealed record TripReasonRequest(int TripId, List<int>? CylinderIds, string? Reason, string? Note, int? CustomerId = null);
 
 internal static class CylinderTripEndpoints
 {
+    // Whoever scans on a trip may explain why a cylinder was not scanned.
+    internal static readonly string[] ReasonWriters = [Perm.TripDeliver, Perm.TripReturn, Perm.TripClose];
+
     public static void Map(WebApplication app)
     {
         app.MapGet("/api/sefer/aktif", async () => Results.Ok(await new CylinderTripService().ActiveTripsAsync())).Requires(Perm.TripView);
@@ -106,11 +110,12 @@ internal static class CylinderTripEndpoints
             }
         }).Requires(Perm.TripView);
 
-        app.MapPost("/api/sefer/kapat", async (TripCloseRequest request) =>
+        app.MapPost("/api/sefer/kapat", async (TripCloseRequest request, HttpContext context) =>
         {
             try
             {
-                TripCloseResult result = await new CylinderTripService().CloseTripAsync(request.TripId);
+                TripCloseResult result = await new CylinderTripService().CloseTripAsync(request.TripId, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                NotifyManagers(result);
                 return Results.Ok(new
                 {
                     result.Message,
@@ -118,11 +123,73 @@ internal static class CylinderTripEndpoints
                     reconcile = TripReconcileDto(result.Reconcile)
                 });
             }
+            catch (TripReasonsRequiredException exception)
+            {
+                return ReasonsRequired(exception);
+            }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
         }).Requires(Perm.TripClose);
+
+        app.MapGet("/api/sefer/gerekceler", () => Results.Ok(ReasonCatalog())).Requires(Perm.TripView);
+
+        // Open (neither delivered nor returned) cylinders of a trip with their written reasons; the driver explains them here.
+        app.MapGet("/api/sefer/{tripId:int}/eksikler", async (int tripId) =>
+        {
+            TripDetail? detail = await new CylinderTripService().TripDetailAsync(tripId);
+            if (detail is null)
+            {
+                return Results.NotFound(new { error = "Sefer bulunamadı." });
+            }
+
+            return Results.Ok(detail.Cylinders.Where(c => c.DeliveredAt is null && c.ReturnedAt is null).Select(c => new
+            {
+                c.CylinderId,
+                c.SerialNumber,
+                c.GasType,
+                c.Plate,
+                c.Missing,
+                c.Reason,
+                c.ReasonLabel,
+                c.Note,
+                c.ReasonBy,
+                Checked = c.CheckedAt is not null
+            }));
+        }).Requires(Perm.TripView);
+
+        app.MapPost("/api/sefer/gerekce", async (TripReasonRequest request, HttpContext context) =>
+        {
+            try
+            {
+                TripReasonResult result = await new CylinderTripService().ExplainMissingAsync(
+                    request.TripId, request.CylinderIds ?? [], request.Reason, request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")", request.CustomerId);
+                return Results.Ok(new { message = ReasonMessage(result, "tüpe gerekçe yazıldı."), result.Updated, result.Messages });
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(ReasonWriters);
+    }
+
+    internal static object ReasonCatalog() =>
+        TripMissingReasons.All.Select(r => new { key = r.Key, label = r.Label, noteRequired = r.NoteRequired, asksCustomer = r.AsksCustomer });
+
+    internal static string ReasonMessage(TripReasonResult result, string done) =>
+        $"{result.Updated} {done}" + (result.Messages.Count > 0 ? "\n" + string.Join("\n", result.Messages) : string.Empty);
+
+    internal static IResult ReasonsRequired(TripReasonsRequiredException exception) =>
+        Results.BadRequest(new { error = exception.Message, reasonsRequired = true, missing = exception.Serials });
+
+    // The unscanned cylinders of a closed trip go to the managers (never to customers).
+    internal static void NotifyManagers(TripCloseResult result)
+    {
+        if (result.ManagerNotice is string text)
+        {
+            ManagerNotices.Send($"sefer-kayip-{result.TripId}", text);
+        }
     }
 
     private static object TripReconcileDto(TripReconcileResult reconcile) => new
@@ -132,6 +199,7 @@ internal static class CylinderTripEndpoints
         notDeliveredNotReturned = reconcile.NotDeliveredNotReturned,
         shortagesByGas = reconcile.ShortagesByGas.Select(x => new { gasType = x.GasType, count = x.Count }),
         unexpectedReturnCodes = reconcile.UnexpectedReturnCodes,
-        loadedButNotAccountedFor = reconcile.LoadedButNotAccountedFor
+        loadedButNotAccountedFor = reconcile.LoadedButNotAccountedFor,
+        unexplainedMissing = reconcile.UnexplainedMissing
     };
 }

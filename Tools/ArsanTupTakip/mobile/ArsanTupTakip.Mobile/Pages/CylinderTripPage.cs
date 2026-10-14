@@ -66,7 +66,7 @@ public sealed class CylinderTripPage : ContentPage
                 Spacing = 14,
                 Children =
                 {
-                    Ui.Note("\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteriye teslim ve depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir."),
+                    Ui.Note("\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteriye teslim ve depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir. Sefer kapatılırken okutulmayan her tüp için gerekçe seçilir; gerekçeler yöneticiye bildirilir (müşteriye mesaj gitmez)."),
                     Ui.Primary("🚚 Sefer Başlat", async (_, _) => await StartTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripStart)),
                     Ui.Section(
                         "Seferdeki araçlar",
@@ -101,6 +101,8 @@ public sealed class CylinderTripPage : ContentPage
                         _groupsTotal,
                         _groups,
                         Ui.Secondary("Listeyi yenile", async (_, _) => await RefreshGroupsAsync())),
+                    Ui.Secondary("Okutulmayan tüplere gerekçe yaz", async (_, _) => await ExplainMissingAsync(false))
+                        .ShowIf(ApiClient.Instance.Can(Perm.TripDeliver) || ApiClient.Instance.Can(Perm.TripReturn) || ApiClient.Instance.Can(Perm.TripClose)),
                     Ui.Secondary("Seferi kapat", async (_, _) => await CloseTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripClose))
                 }
             }
@@ -512,8 +514,14 @@ public sealed class CylinderTripPage : ContentPage
             return;
         }
 
-        bool ok = await DisplayAlertAsync("Seferi kapat", $"{SelectedTrip.Title} kapatılsın mı? Eksik okutmalar raporlanır.", "Kapat", "İptal");
+        ActiveTripSummary trip = SelectedTrip;
+        bool ok = await DisplayAlertAsync("Seferi kapat", $"{trip.Title} kapatılsın mı? Okutulmayan tüpler gerekçeleriyle yöneticiye bildirilir.", "Kapat", "İptal");
         if (!ok)
+        {
+            return;
+        }
+
+        if (trip.RequireReasons && !await ExplainMissingAsync(true))
         {
             return;
         }
@@ -521,13 +529,9 @@ public sealed class CylinderTripPage : ContentPage
         _busy.IsVisible = true;
         try
         {
-            TripCloseResponse closed = await ApiClient.Instance.CloseTripAsync(SelectedTrip.Id);
+            TripCloseResponse closed = await ApiClient.Instance.CloseTripAsync(trip.Id);
             ShowResult(closed.Message, closed.Reconcile);
-            if (closed.Reconcile.HasAlerts)
-            {
-                await DisplayAlertAsync("Sefer kapatıldı — uyarı", closed.Reconcile.Message, "Tamam");
-            }
-
+            await DisplayAlertAsync(closed.Reconcile.HasAlerts ? "Sefer kapatıldı — uyarı" : "Sefer kapatıldı", closed.Message, "Tamam");
             await RefreshTripsAsync();
         }
         catch (Exception exception)
@@ -537,6 +541,177 @@ public sealed class CylinderTripPage : ContentPage
         finally
         {
             _busy.IsVisible = false;
+        }
+    }
+
+    private sealed record CylinderChoice(string Text, IReadOnlyList<TripOpenCylinder> Cylinders);
+
+    // Asks a reason for every cylinder that was loaded but neither delivered nor scanned back. With forClose it loops
+    // until nothing is left unexplained and returns false if the user gives up (the server refuses the close anyway).
+    private async Task<bool> ExplainMissingAsync(bool forClose)
+    {
+        if (SelectedTrip is not ActiveTripSummary trip)
+        {
+            await DisplayAlertAsync("Sefer", "Aktif sefer seçin.", "Tamam");
+            return false;
+        }
+
+        List<TripMissingReasonItem> reasons;
+        try
+        {
+            _busy.IsVisible = true;
+            reasons = await ApiClient.Instance.TripMissingReasonsAsync();
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Gerekçe", exception.Message, "Tamam");
+            return false;
+        }
+        finally
+        {
+            _busy.IsVisible = false;
+        }
+
+        while (true)
+        {
+            List<TripOpenCylinder> open;
+            try
+            {
+                _busy.IsVisible = true;
+                open = await ApiClient.Instance.TripOpenCylindersAsync(trip.Id);
+            }
+            catch (Exception exception)
+            {
+                await DisplayAlertAsync("Gerekçe", exception.Message, "Tamam");
+                return false;
+            }
+            finally
+            {
+                _busy.IsVisible = false;
+            }
+
+            List<TripOpenCylinder> unexplained = open.Where(c => string.IsNullOrEmpty(c.Reason)).ToList();
+            if (forClose && unexplained.Count == 0)
+            {
+                return true;
+            }
+
+            if (open.Count == 0)
+            {
+                await DisplayAlertAsync("Gerekçe", "Bu seferde teslim veya dönüş okutması eksik tüp yok.", "Tamam");
+                return true;
+            }
+
+            List<CylinderChoice> choices = [];
+            if (unexplained.Count > 1)
+            {
+                choices.Add(new CylinderChoice($"Gerekçesiz {unexplained.Count} tüpün tümü", unexplained));
+            }
+
+            choices.AddRange(open.Select(c => new CylinderChoice(
+                $"{c.SerialNumber} · {c.GasType} · {c.Plate} · " + (c.ReasonLabel ?? "gerekçe yok"), [c])));
+            string title = forClose
+                ? $"Kapatmadan önce {unexplained.Count} tüp için gerekçe seçin"
+                : $"Okutulmayan tüpler ({unexplained.Count} gerekçesiz)";
+            string? picked = await DisplayActionSheetAsync(title, forClose ? "Vazgeç (sefer kapanmaz)" : "Bitti", null, choices.Select(c => c.Text).ToArray());
+            CylinderChoice? choice = choices.FirstOrDefault(c => c.Text == picked);
+            if (choice is null)
+            {
+                return !forClose;
+            }
+
+            await ExplainAsync(trip.Id, choice.Cylinders, reasons);
+        }
+    }
+
+    private async Task ExplainAsync(int tripId, IReadOnlyList<TripOpenCylinder> cylinders, List<TripMissingReasonItem> reasons)
+    {
+        string? label = await DisplayActionSheetAsync(
+            cylinders.Count == 1 ? cylinders[0].SerialNumber + " neden okutulmadı?" : cylinders.Count + " tüp neden okutulmadı?",
+            "Vazgeç", null, reasons.Select(r => r.Label).ToArray());
+        TripMissingReasonItem? reason = reasons.FirstOrDefault(r => r.Label == label);
+        if (reason is null)
+        {
+            return;
+        }
+
+        int? customerId = null;
+        string? note = null;
+        if (reason.AsksCustomer)
+        {
+            CustomerItem? customer = await PickCustomerAsync();
+            customerId = customer?.Id;
+        }
+
+        if (customerId is null || !reason.AsksCustomer)
+        {
+            string prompt = reason.AsksCustomer
+                ? "Müşteri seçilmedi. Müşteri adını veya ayrıntıyı yazın."
+                : reason.NoteRequired ? "Açıklama yazın (araç, yer veya ayrıntı)." : "İsterseniz açıklama yazın (boş bırakılabilir).";
+            note = await DisplayPromptAsync(reason.Label, prompt, "Kaydet", "Vazgeç", maxLength: 500);
+            if (note is null)
+            {
+                return;
+            }
+        }
+
+        _busy.IsVisible = true;
+        try
+        {
+            string message = await ApiClient.Instance.ExplainTripMissingAsync(tripId, cylinders.Select(c => c.CylinderId).ToList(), reason.Key, note, customerId);
+            _result.Text = message;
+            _result.TextColor = Ui.Muted;
+            _resultCard.IsVisible = true;
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Gerekçe", exception.Message, "Tamam");
+        }
+        finally
+        {
+            _busy.IsVisible = false;
+        }
+    }
+
+    private async Task<CustomerItem?> PickCustomerAsync()
+    {
+        while (true)
+        {
+            string? query = await DisplayPromptAsync("Müşteri", "Tüpün kaldığı müşteriyi arayın (en az 2 harf). Boş bırakırsanız adı elle yazarsınız.", "Ara", "Elle yaz");
+            query = query?.Trim();
+            if (string.IsNullOrEmpty(query))
+            {
+                return null;
+            }
+
+            if (query.Length < Ui.LiveSearchMinLength)
+            {
+                continue;
+            }
+
+            List<CustomerItem> found;
+            try
+            {
+                _busy.IsVisible = true;
+                found = await ApiClient.Instance.CustomersAsync(query);
+            }
+            catch (Exception exception)
+            {
+                await DisplayAlertAsync("Müşteri", exception.Message, "Tamam");
+                return null;
+            }
+            finally
+            {
+                _busy.IsVisible = false;
+            }
+
+            List<string> items = found.Select(c => $"{c.Name} ({c.Code})").ToList();
+            string? picked = await DisplayActionSheetAsync(found.Count == 0 ? "Müşteri bulunamadı" : "Müşteri seçin", "Yeniden ara", null, items.ToArray());
+            int index = picked is null ? -1 : items.IndexOf(picked);
+            if (index >= 0)
+            {
+                return found[index];
+            }
         }
     }
 }

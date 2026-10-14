@@ -41,6 +41,7 @@ internal static class Perm
     internal const string TripDeliver = "sefer-teslim";
     internal const string TripReturn = "sefer-donus";
     internal const string TripClose = "sefer-kapat";
+    internal const string TripLossCheck = "sefer-kayip-kontrol";
     internal const string VehicleView = "arac-goruntule";
     internal const string VehicleAdd = "arac-ekle";
     internal const string VehicleEdit = "arac-duzenle";
@@ -106,7 +107,8 @@ internal static class Perm
             P(TripLoad, "Araca yükleme (sefer)", "Seferdeki araca tüp okutup yükler.", TripView),
             P(TripDeliver, "Seferde müşteriye teslim", "Seferdeki tüpleri müşteriye teslim olarak okutur.", TripView),
             P(TripReturn, "Sefer dönüşü (depoya)", "Dönen aracın tüplerini depoya okutur.", TripView),
-            P(TripClose, "Seferi kapatma", "Seferi kapatır; okutulmayan tüpler eksik raporlanır.", TripView)
+            P(TripClose, "Seferi kapatma", "Seferi kapatır. Yeni seferlerde okutulmayan her tüpe gerekçe seçilmeden kapatılamaz; gerekçeler yöneticiye bildirilir.", TripView),
+            P(TripLossCheck, "Kayıp kontrolü onayı", "Okutulmayan tüplerin gerekçelerini \"kontrol edildi\" olarak işaretler ve Özet'te kontrol bekleyen sefer eksiklerini görür. Varsayılan olarak yalnızca Yönetici'de vardır.", TripView)
         ]),
         new("Araçlar", [
             P(VehicleView, "Araçları görüntüleme", "Araç listesi, araçtaki tüpler ve sefer geçmişi."),

@@ -230,7 +230,8 @@ public sealed record ActiveTripSummary(
     List<TripVehicleSummary> Vehicles,
     int LoadedTotal,
     int DeliveredTotal,
-    int ReturnedTotal);
+    int ReturnedTotal,
+    bool RequireReasons = false);
 
 public sealed record TripGasShortage(string GasType, int Count);
 
@@ -247,6 +248,11 @@ public sealed record TripStartResponse(int Id, string Title, DateTime StartedAt,
 public sealed record TripLoadResponse(string Message, int Added, int Skipped, List<string> Messages);
 
 public sealed record TripCloseResponse(string Message, int TripId, TripReconcileResponse Reconcile);
+
+public sealed record TripMissingReasonItem(string Key, string Label, bool NoteRequired, bool AsksCustomer = false);
+
+public sealed record TripOpenCylinder(
+    int CylinderId, string SerialNumber, string GasType, string Plate, bool Missing, string? Reason, string? ReasonLabel, string? Note, string? ReasonBy, bool Checked);
 
 public sealed record VehicleItem(
     int Id,
@@ -669,6 +675,13 @@ public sealed class ApiClient
 
     public Task<TripCloseResponse> CloseTripAsync(int tripId) =>
         PostAsync<TripCloseResponse>("/api/sefer/kapat", new { tripId });
+
+    public Task<List<TripMissingReasonItem>> TripMissingReasonsAsync() => GetAsync<List<TripMissingReasonItem>>("/api/sefer/gerekceler");
+
+    public Task<List<TripOpenCylinder>> TripOpenCylindersAsync(int tripId) => GetAsync<List<TripOpenCylinder>>("/api/sefer/" + tripId + "/eksikler");
+
+    public Task<string> ExplainTripMissingAsync(int tripId, IReadOnlyList<int> cylinderIds, string reason, string? note, int? customerId = null) =>
+        PostMessageAsync("/api/sefer/gerekce", new { tripId, cylinderIds, reason, note, customerId });
 
     public Task<TripLoadView> TripLoadAsync(int tripId, string? plate) =>
         GetAsync<TripLoadView>("/api/sefer/" + tripId + "/yuk" + (string.IsNullOrEmpty(plate) ? string.Empty : "?plaka=" + Uri.EscapeDataString(plate)));

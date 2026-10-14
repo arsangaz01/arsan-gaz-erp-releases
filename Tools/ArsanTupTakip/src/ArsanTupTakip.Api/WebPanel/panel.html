@@ -264,7 +264,18 @@ tr.alarm-row td { background:#fef2f2; }
         </div>
         <div class="muted" id="s-count"></div>
         <div class="table-wrap"><table id="trips"></table></div>
-        <div class="hint">"Sefer başlat" ile kayıtlı araçlardan seçerek sefer açılır (mobil uygulamadaki "Sefer" sekmesinden de açılabilir). Sefere tıklayınca araca yükleme (barkod okuyucu veya elle) yapılır ve yük gaz türüne göre listelenir; bir gaz türüne tıklayınca o türdeki tüplerin barkodları ve ayrıntıları açılır. Araç dönünce tüpler mobil uygulamadan tekrar okutulur. Araç döndüğü (veya sefer kapandığı) hâlde müşteriye teslim ya da depoya dönüş okutması olmayan tüpler kırmızı ile "eksik" gösterilir. Seferde yüklenmediği hâlde dönüşte okutulan tüpler de ayrıntıda kırmızı listelenir.</div>
+        <div class="hint">"Sefer başlat" ile kayıtlı araçlardan seçerek sefer açılır (mobil uygulamadaki "Sefer" sekmesinden de açılabilir). Sefere tıklayınca araca yükleme (barkod okuyucu veya elle) yapılır ve yük gaz türüne göre listelenir; bir gaz türüne tıklayınca o türdeki tüplerin barkodları ve ayrıntıları açılır. Araç dönünce tüpler mobil uygulamadan tekrar okutulur. Araç döndüğü (veya sefer kapandığı) hâlde müşteriye teslim ya da depoya dönüş okutması olmayan tüpler kırmızı ile "eksik" gösterilir. Seferde yüklenmediği hâlde dönüşte okutulan tüpler de ayrıntıda kırmızı listelenir. Yeni seferler, okutulmayan her tüpe gerekçe seçilmeden kapatılamaz.</div>
+      </div>
+      <div class="card">
+        <div class="toolbar">
+          <h2>Kayıp kontrolü: okutulmayan tüpler</h2>
+          <label class="field">Son<select id="sm-gun"><option value="7">7 gün</option><option value="30">30 gün</option><option value="60" selected>60 gün</option><option value="180">180 gün</option><option value="365">1 yıl</option></select></label>
+          <label class="field"><input type="checkbox" id="sm-tumu"> Kontrol edilenleri de göster</label>
+          <button class="secondary small" id="sm-yenile" type="button">Yenile</button>
+        </div>
+        <div class="muted" id="sm-count"></div>
+        <div class="table-wrap"><table id="sm-table"></table></div>
+        <div class="hint">Sefere yüklenip müşteriye teslim edilmemiş ve depoya geri okutulmamış tüpler. Yeni seferler, her eksik tüpe gerekçe seçilmeden kapatılamaz; kapanışta okutulmayan tüpler ve gerekçeleri yöneticiye Telegram (@TuptakipArsanbot) ile bildirilir (müşteriye hiçbir mesaj gitmez). Önce gerekçesi seçilmemişler, sonra kontrol bekleyenler listelenir. "Şu an" sütunu tüpün sistemdeki son yerini, "Sonradan okutuldu" ise seferden sonra başka bir hareketle bulunduğunu gösterir. Gerekçe yazmak ve "kontrol edildi" işaretlemek için satıra tıklayıp seferi açın.</div>
       </div>
     </section>
 
@@ -498,6 +509,20 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="hint">Bir gaz türüne tıklayınca o türdeki tüplerin barkodları ve ayrıntıları açılır; tüpe tıklayınca hareket geçmişi görünür.</div>
     </div>
     <div class="card"><h2>Araçlar</h2><div class="table-wrap"><table id="t-vehicles"></table></div></div>
+    <div class="card hidden" id="t-missing-card">
+      <h2>Okutulmayan tüpler: gerekçe ve kontrol</h2>
+      <div class="table-wrap"><table id="t-missing"></table></div>
+      <div class="form-grid" data-perm="sefer-teslim|sefer-donus|sefer-kapat">
+        <label>Gerekçe<select id="t-reason"></select></label>
+        <label>Açıklama<input id="t-reason-note" maxlength="500" placeholder="Araç, yer veya ayrıntı"></label>
+      </div>
+      <div class="actions">
+        <button class="primary" id="t-reason-save" type="button" data-perm="sefer-teslim|sefer-donus|sefer-kapat">Seçilenlere gerekçe yaz</button>
+        <button class="secondary" id="t-reason-check" type="button" data-perm="sefer-kayip-kontrol">Seçilenleri kontrol edildi işaretle</button>
+        <button class="secondary" id="t-reason-uncheck" type="button" data-perm="sefer-kayip-kontrol">Kontrolü geri al</button>
+      </div>
+      <div class="hint">Her eksik tüp için "nerede / neden okutulmadı" seçin; gerekçesi seçilmemiş tüp varken sefer kapatılamaz. Gerekçe yalnızca açıklamadır; tüpün yerini değiştirmez. Tüp bulunursa mobil uygulamadan teslim veya depo dönüşü olarak okutun; o zaman eksik listesinden kendiliğinden düşer. Gerekçe değiştirilirse önceki kontrol kaldırılır.</div>
+    </div>
     <div class="card"><h2>Yüklenen tüpler</h2><div class="table-wrap"><table id="t-cylinders"></table></div></div>
     <div class="card hidden" id="t-unexpected-card"><h2>Yüklenmediği hâlde dönüşte okutulan tüpler</h2><div class="table-wrap"><table id="t-unexpected"></table></div></div>
   </div>

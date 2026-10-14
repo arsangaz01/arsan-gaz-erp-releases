@@ -18,11 +18,10 @@ public sealed record ActiveTripSummary(
     IReadOnlyList<TripVehicleSummary> Vehicles,
     int LoadedTotal,
     int DeliveredTotal,
-    int ReturnedTotal);
+    int ReturnedTotal,
+    bool RequireReasons = false);
 
 public sealed record TripLoadResult(int Added, int Skipped, IReadOnlyList<string> Messages);
-
-public sealed record TripCloseResult(int TripId, TripReconcileResult Reconcile, string Message);
 
 // Web panel views. Missing = neither delivered nor returned although its vehicle came back (or the trip was closed);
 // OnVehicle = the same while the vehicle is still out, which is not an error yet.
@@ -42,10 +41,23 @@ public sealed record TripListItem(
     int Returned,
     int OnVehicle,
     int Missing,
-    IReadOnlyList<TripGasShortage> MissingByGas);
+    IReadOnlyList<TripGasShortage> MissingByGas,
+    int MissingUnexplained = 0,
+    int MissingUnchecked = 0,
+    bool RequireReasons = false);
 
 public sealed record TripCylinderView(
-    int CylinderId, string SerialNumber, string GasType, string Plate, DateTime LoadedAt, DateTime? DeliveredAt, DateTime? ReturnedAt, bool Missing);
+    int CylinderId, string SerialNumber, string GasType, string Plate, DateTime LoadedAt, DateTime? DeliveredAt, DateTime? ReturnedAt, bool Missing,
+    string? Reason = null, string? ReasonLabel = null, string? Note = null, DateTime? ReasonAt = null, string? ReasonBy = null,
+    DateTime? CheckedAt = null, string? CheckedBy = null);
+
+public sealed record TripReasonResult(int Updated, IReadOnlyList<string> Messages);
+
+// One missing cylinder in the loss control list, with where the cylinder is now and whether it was scanned after the trip.
+public sealed record TripMissingItem(
+    int TripId, string TripTitle, bool TripActive, DateTime TripStartedAt, int CylinderId, string SerialNumber, string GasType, string Plate,
+    DateTime LoadedAt, string? Reason, string? ReasonLabel, string? Note, DateTime? ReasonAt, string? ReasonBy, DateTime? CheckedAt, string? CheckedBy,
+    string CurrentStatus, string? CurrentCustomer, string? CurrentPlate, DateTime? LastMovementAt, bool SeenAfterTrip);
 
 public sealed record TripUnexpectedReturn(int CylinderId, string SerialNumber, string GasType, string? Plate, DateTime At);
 
@@ -100,7 +112,8 @@ public sealed class CylinderTripService
             .ThenBy(x => x.GasType, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.SerialNumber, StringComparer.OrdinalIgnoreCase)
             .Select(x => new TripCylinderView(x.CylinderId, x.SerialNumber, x.GasType, x.VehiclePlate, x.LoadedAt, x.DeliveredAt, x.ReturnedAt,
-                IsMissing(x, returnedPlates)))
+                IsMissing(x, returnedPlates), x.MissingReason, x.MissingReason is null ? null : TripMissingReasons.Label(x.MissingReason),
+                x.MissingNote, x.ReasonAt, x.ReasonBy, x.CheckedAt, x.CheckedBy))
             .ToList();
 
         // Return scans of cylinders that were never loaded on this trip are only kept as movements ("Sefer #id · plate · depo dönüşü").
@@ -190,9 +203,165 @@ public sealed class CylinderTripService
             .OrderByDescending(x => x.Count)
             .ToList();
 
+        List<CylinderTripCylinder> missingRows = trip.Cylinders.Where(x => IsMissing(x, returnedPlates)).ToList();
         return new TripListItem(trip.Id, trip.Title, trip.Status == CylinderTripStatus.Active, trip.StartedAt, trip.ClosedAt, trip.Note, trip.CreatedBy,
             vehicles, trip.Cylinders.Count, trip.Cylinders.Count(x => x.DeliveredAt is not null), trip.Cylinders.Count(x => x.ReturnedAt is not null),
-            vehicles.Sum(x => x.OnVehicle), vehicles.Sum(x => x.Missing), missingByGas);
+            vehicles.Sum(x => x.OnVehicle), vehicles.Sum(x => x.Missing), missingByGas,
+            missingRows.Count(x => x.MissingReason is null), missingRows.Count(x => x.MissingReason is not null && x.CheckedAt is null),
+            trip.RequireReasons);
+    }
+
+    // Writes where / why loaded cylinders were neither delivered nor scanned back at the depot. Works on active and
+    // closed trips; changing the reason clears an earlier check so the new explanation is reviewed again.
+    public async Task<TripReasonResult> ExplainMissingAsync(
+        int tripId, IEnumerable<int> cylinderIds, string? reasonKey, string? note, string? performedBy, int? customerId = null)
+    {
+        string? customerName = null;
+        await using TupTakipDbContext db = new();
+        if (customerId is int pickedCustomer && pickedCustomer > 0)
+        {
+            customerName = await db.Customers.AsNoTracking().Where(x => x.Id == pickedCustomer).Select(x => x.CompanyName).FirstOrDefaultAsync()
+                ?? throw new ArgumentException($"Müşteri bulunamadı: {pickedCustomer}.");
+        }
+
+        (TripMissingReason reason, string? cleanNote) = TripMissingReasons.Validate(reasonKey, note, customerName);
+        HashSet<int> ids = cylinderIds.ToHashSet();
+        if (ids.Count == 0)
+        {
+            throw new ArgumentException("Gerekçe yazılacak tüp seçin.");
+        }
+
+        if (!await db.CylinderTrips.AnyAsync(x => x.Id == tripId))
+        {
+            throw new InvalidOperationException($"Sefer bulunamadı: {tripId}.");
+        }
+
+        List<CylinderTripCylinder> rows = await db.CylinderTripCylinders.Where(x => x.TripId == tripId && ids.Contains(x.CylinderId)).ToListAsync();
+        List<string> messages = [];
+        int updated = 0;
+        DateTime now = DateTime.Now;
+        foreach (int id in ids.Where(id => rows.All(r => r.CylinderId != id)))
+        {
+            messages.Add($"Tüp #{id}: bu sefere yüklenmemiş.");
+        }
+
+        foreach (CylinderTripCylinder row in rows)
+        {
+            if (!IsOpen(row))
+            {
+                messages.Add($"{row.SerialNumber}: teslim veya dönüş okutması var; gerekçe gerekmez.");
+                continue;
+            }
+
+            bool changed = row.MissingReason != reason.Key || row.MissingNote != cleanNote;
+            row.MissingReason = reason.Key;
+            row.MissingNote = cleanNote;
+            row.ReasonAt = now;
+            row.ReasonBy = performedBy;
+            if (changed)
+            {
+                row.CheckedAt = null;
+                row.CheckedBy = null;
+            }
+
+            updated++;
+        }
+
+        await db.SaveChangesAsync();
+        return new TripReasonResult(updated, messages);
+    }
+
+    // A manager confirms (or withdraws the confirmation of) the written reasons. Only explained rows can be checked.
+    public async Task<TripReasonResult> CheckMissingAsync(int tripId, IEnumerable<int> cylinderIds, string? checkedBy, bool undo = false)
+    {
+        HashSet<int> ids = cylinderIds.ToHashSet();
+        if (ids.Count == 0)
+        {
+            throw new ArgumentException("Kontrol edilecek tüp seçin.");
+        }
+
+        await using TupTakipDbContext db = new();
+        List<CylinderTripCylinder> rows = await db.CylinderTripCylinders.Where(x => x.TripId == tripId && ids.Contains(x.CylinderId)).ToListAsync();
+        List<string> messages = [];
+        int updated = 0;
+        DateTime now = DateTime.Now;
+        foreach (CylinderTripCylinder row in rows)
+        {
+            if (undo)
+            {
+                if (row.CheckedAt is not null)
+                {
+                    row.CheckedAt = null;
+                    row.CheckedBy = null;
+                    updated++;
+                }
+
+                continue;
+            }
+
+            if (row.MissingReason is null)
+            {
+                messages.Add($"{row.SerialNumber}: önce gerekçe yazılmalı.");
+                continue;
+            }
+
+            if (row.CheckedAt is null)
+            {
+                row.CheckedAt = now;
+                row.CheckedBy = checkedBy;
+                updated++;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        return new TripReasonResult(updated, messages);
+    }
+
+    // Loss control list across trips: every cylinder that came back unscanned in the last <days> days, unchecked first.
+    public async Task<List<TripMissingItem>> MissingReportAsync(int days = 60, bool includeChecked = false)
+    {
+        DateTime since = DateTime.Today.AddDays(-Math.Clamp(days, 1, 3650));
+        await using TupTakipDbContext db = new();
+        List<CylinderTrip> trips = await db.CylinderTrips.AsNoTracking().Include(x => x.Vehicles).Include(x => x.Cylinders)
+            .Where(x => x.StartedAt >= since)
+            .ToListAsync();
+
+        List<(CylinderTrip Trip, CylinderTripCylinder Row)> missing = trips
+            .SelectMany(t =>
+            {
+                HashSet<string> returnedPlates = ReturnedPlates(t);
+                return t.Cylinders.Where(r => IsMissing(r, returnedPlates)).Select(r => (t, r));
+            })
+            .Where(x => includeChecked || x.r.CheckedAt is null)
+            .ToList();
+
+        List<int> ids = missing.Select(x => x.Row.CylinderId).Distinct().ToList();
+        Dictionary<int, Cylinder> cylinders = await db.Cylinders.AsNoTracking().Include(x => x.CurrentCustomer)
+            .Where(x => ids.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id);
+        Dictionary<int, DateTime> lastMovement = (await db.CylinderMovements.AsNoTracking()
+                .Where(x => ids.Contains(x.CylinderId))
+                .GroupBy(x => x.CylinderId)
+                .Select(g => new { Id = g.Key, At = g.Max(x => x.MovementDate) })
+                .ToListAsync())
+            .ToDictionary(x => x.Id, x => x.At);
+
+        return missing
+            .Select(x =>
+            {
+                Cylinder? cylinder = cylinders.GetValueOrDefault(x.Row.CylinderId);
+                DateTime? last = lastMovement.TryGetValue(x.Row.CylinderId, out DateTime at) ? at : null;
+                return new TripMissingItem(x.Trip.Id, x.Trip.Title, x.Trip.Status == CylinderTripStatus.Active, x.Trip.StartedAt,
+                    x.Row.CylinderId, x.Row.SerialNumber, x.Row.GasType, x.Row.VehiclePlate, x.Row.LoadedAt,
+                    x.Row.MissingReason, x.Row.MissingReason is null ? null : TripMissingReasons.Label(x.Row.MissingReason), x.Row.MissingNote,
+                    x.Row.ReasonAt, x.Row.ReasonBy, x.Row.CheckedAt, x.Row.CheckedBy,
+                    cylinder is null ? "-" : CylinderTracking.StatusName((int)cylinder.Status), cylinder?.CurrentCustomer?.CompanyName,
+                    cylinder?.VehiclePlate, last, last is DateTime l && l > x.Row.LoadedAt);
+            })
+            .OrderBy(x => x.Reason is null ? 0 : x.CheckedAt is null ? 1 : 2)
+            .ThenByDescending(x => x.TripStartedAt)
+            .ThenBy(x => x.SerialNumber, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public async Task<CylinderTrip> StartTripAsync(IEnumerable<string?>? plates, string? note, string? createdBy)
@@ -211,7 +380,8 @@ public sealed class CylinderTripService
             StartedAt = now,
             Status = CylinderTripStatus.Active,
             Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
-            CreatedBy = createdBy
+            CreatedBy = createdBy,
+            RequireReasons = true
         };
         db.CylinderTrips.Add(trip);
         await db.SaveChangesAsync();
@@ -388,22 +558,26 @@ public sealed class CylinderTripService
             .Where(x => x.TripId == tripId)
             .ToListAsync();
 
-        List<TripCylinderSnapshot> snapshots = rows.Select(x => new TripCylinderSnapshot(
-            x.CylinderId, x.SerialNumber, x.GasType, x.VehiclePlate, x.DeliveredAt, x.ReturnedAt)).ToList();
-
         Dictionary<string, int> codeMap = await AllCodeMapAsync(db);
-        return CylinderTripTracking.Reconcile(snapshots, returnScanCodes ?? [], codeMap, plate);
+        return CylinderTripTracking.Reconcile(rows.Select(Snapshot), returnScanCodes ?? [], codeMap, plate);
     }
 
-    public async Task<TripCloseResult> CloseTripAsync(int tripId)
+    private static TripCylinderSnapshot Snapshot(CylinderTripCylinder x) =>
+        new(x.CylinderId, x.SerialNumber, x.GasType, x.VehiclePlate, x.DeliveredAt, x.ReturnedAt, x.MissingReason);
+
+    public async Task<TripCloseResult> CloseTripAsync(int tripId, string? closedBy = null)
     {
         await using TupTakipDbContext db = new();
-        CylinderTrip trip = await db.CylinderTrips.Include(x => x.Vehicles).FirstOrDefaultAsync(x => x.Id == tripId)
+        CylinderTrip trip = await db.CylinderTrips.Include(x => x.Vehicles).Include(x => x.Cylinders).FirstOrDefaultAsync(x => x.Id == tripId)
             ?? throw new InvalidOperationException($"Sefer bulunamadı: {tripId}.");
         if (trip.Status == CylinderTripStatus.Closed)
         {
             throw new InvalidOperationException("Sefer zaten kapatılmış.");
         }
+
+        CylinderTripTracking.EnsureCanClose(trip.RequireReasons, trip.Cylinders.Select(Snapshot));
+        List<CylinderTripCylinder> open = trip.Cylinders.Where(IsOpen)
+            .OrderBy(x => x.VehiclePlate, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.SerialNumber, StringComparer.OrdinalIgnoreCase).ToList();
 
         trip.Status = CylinderTripStatus.Closed;
         trip.ClosedAt = DateTime.Now;
@@ -413,11 +587,25 @@ public sealed class CylinderTripService
         }
 
         await db.SaveChangesAsync();
+
+        List<string> plates = open.Select(x => x.VehiclePlate).Distinct().ToList();
+        Dictionary<string, string?> drivers = (await db.Vehicles.AsNoTracking().Where(x => plates.Contains(x.Plate)).ToListAsync())
+            .GroupBy(x => x.Plate, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().DriverName, StringComparer.OrdinalIgnoreCase);
+        List<TripMissingNotice> missing = open.Select(x => new TripMissingNotice(
+            x.SerialNumber, x.GasType, x.VehiclePlate, drivers.GetValueOrDefault(x.VehiclePlate),
+            x.MissingReason, x.MissingReason is null ? null : TripMissingReasons.Label(x.MissingReason), x.MissingNote, x.ReasonBy)).ToList();
+
         TripReconcileResult reconcile = await ReconcileTripAsync(tripId);
         string message = reconcile.HasAlerts
             ? "Sefer kapatıldı. " + reconcile.AlertText
             : "Sefer kapatıldı; eksik okutma uyarısı yok.";
-        return new TripCloseResult(tripId, reconcile, message);
+        if (missing.Count > 0)
+        {
+            message += Environment.NewLine + "Okutulmayan tüpler ve gerekçeleri yöneticiye bildirildi.";
+        }
+
+        return new TripCloseResult(tripId, reconcile, message, trip.Title, closedBy, missing);
     }
 
     private static ActiveTripSummary TripSummary(CylinderTrip trip)
@@ -448,7 +636,8 @@ public sealed class CylinderTripService
             vehicles,
             trip.Cylinders.Count,
             trip.Cylinders.Count(x => x.DeliveredAt is not null),
-            trip.Cylinders.Count(x => x.ReturnedAt is not null));
+            trip.Cylinders.Count(x => x.ReturnedAt is not null),
+            trip.RequireReasons);
     }
 
     private static IEnumerable<string> NormalizePlates(IEnumerable<string?>? plates)
