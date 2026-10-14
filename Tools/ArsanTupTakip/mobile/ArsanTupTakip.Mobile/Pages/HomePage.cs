@@ -116,6 +116,11 @@ public sealed class HomePage : ContentPage
                 () => Open("depo-sayim", () => new StockCountPage())));
         }
 
+        if (api.Can(Perm.FillRecord))
+        {
+            tiles.Add(new Tile(Icons.Tank, "Dolum", "Doldurulan tüpleri lot no ile okut", false, Color.FromArgb("#0E7490"), navy, () => Open("dolum", () => new FillPage())));
+        }
+
         if (api.Can(Perm.CylinderAudit))
         {
             tiles.Add(new Tile(Icons.FactCheck, "Müşteride Sayım", null, false, indigo, navy, () => Open("sayim", () => new CylinderAuditPage())));

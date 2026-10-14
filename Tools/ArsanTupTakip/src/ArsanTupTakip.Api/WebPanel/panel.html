@@ -177,6 +177,7 @@ tr.alarm-row td { background:#fef2f2; }
       <button data-tab="tupler" data-perm="tup-goruntule">Tüpler</button>
       <button data-tab="hareketler" data-perm="hareket-gecmisi">Hareketler</button>
       <button data-tab="seferler" data-perm="sefer-goruntule">Seferler</button>
+      <button data-tab="dolum" data-perm="dolum-kaydi">Dolum</button>
       <button data-tab="araclar" data-perm="arac-goruntule">Araç İşlemleri</button>
       <button data-tab="musteri-stok" data-perm="tup-goruntule">Müşteri Stoku</button>
       <button data-tab="musteriler" data-perm="musteri-goruntule">Müşteriler</button>
@@ -208,7 +209,7 @@ tr.alarm-row td { background:#fef2f2; }
     <section data-page="tupler" class="hidden">
       <div class="card">
         <div class="filters">
-          <label>Ara<input id="f-q" placeholder="Seri no, barkod, gaz, müşteri, plaka"></label>
+          <label>Ara<input id="dl-q" placeholder="Seri no, barkod, gaz, müşteri, plaka"></label>
           <label>Durum<select id="f-durum"><option value="">Tümü</option></select></label>
           <label>Dolu/Boş<select id="f-doluluk"><option value="">Tümü</option><option value="dolu">Dolu</option><option value="bos">Boş</option><option value="bilinmiyor">Bilinmiyor</option></select></label>
           <label>Test tarihi<select id="f-test"><option value="">Tümü</option><option value="gecmis">Geçmiş</option><option value="yakin">30 gün içinde</option><option value="yok">Girilmemiş</option></select></label>
@@ -245,6 +246,33 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="card">
         <div class="muted" id="mov-count"></div>
         <div class="table-wrap"><table id="movements"></table></div>
+      </div>
+    </section>
+
+    <section data-page="dolum" class="hidden">
+      <div class="card">
+        <h2>Dolum kaydet</h2>
+        <p class="muted">Doldurulan tüplerin barkod veya seri numaralarını alt alta yazın ya da okuyucuyla okutun. Tüpler depoda <b>dolu</b> olur; kim, ne zaman, hangi parti/lot ile doldurdu kaydedilir. Müşteride görünen tüp doldurulamaz (önce boş alım/dönüş okutulmalı). Periyodik testi geçmiş tüp yalnızca aşağıdaki onayla doldurulur.</p>
+        <div class="filters">
+          <label>Parti / lot no<input id="dl-lot" maxlength="60" placeholder="ör. OKS-2610-01"></label>
+          <label>Not<input id="dl-note" maxlength="300" placeholder="isteğe bağlı"></label>
+        </div>
+        <textarea id="dl-codes" rows="5" placeholder="Barkod veya seri no (her satıra bir tane)"></textarea>
+        <div class="toolbar">
+          <label class="check"><input type="checkbox" id="dl-overdue"> Testi geçmiş tüpleri de doldur (sorumluluğu onaylıyorum)</label>
+          <span class="muted" id="dl-count"></span>
+          <button class="primary" id="dl-save" type="button">Dolumu kaydet</button>
+        </div>
+        <div class="msg hidden" id="dl-msg"></div>
+      </div>
+      <div class="card">
+        <div class="filters">
+          <label>Dönem<select id="dl-days"><option value="1">Bugün</option><option value="7">Son 7 gün</option><option value="30" selected>Son 30 gün</option><option value="90">Son 90 gün</option><option value="365">Son 1 yıl</option></select></label>
+          <label>Ara<input id="dl-q" placeholder="Seri no, lot, gaz, dolduran"></label>
+          <button class="primary" id="dl-list" type="button">Listele</button>
+        </div>
+        <div class="muted" id="dl-list-count"></div>
+        <div class="table-wrap"><table id="dl-rows"></table></div>
       </div>
     </section>
 
@@ -540,6 +568,7 @@ tr.alarm-row td { background:#fef2f2; }
       </div>
       <div class="hint">Her eksik tüp için "nerede / neden okutulmadı" seçin; gerekçesi seçilmemiş tüp varken sefer kapatılamaz. Gerekçe yalnızca açıklamadır; tüpün yerini değiştirmez. Tüp bulunursa mobil uygulamadan teslim veya depo dönüşü olarak okutun; o zaman eksik listesinden kendiliğinden düşer. Gerekçe değiştirilirse önceki kontrol kaldırılır.</div>
     </div>
+    <div class="card hidden" id="t-customers-card"><h2>Müşteri değişimleri (verilen dolu / alınan boş)</h2><div class="table-wrap"><table id="t-customers"></table></div></div>
     <div class="card"><h2>Yüklenen tüpler</h2><div class="table-wrap"><table id="t-cylinders"></table></div></div>
     <div class="card hidden" id="t-unexpected-card"><h2>Yüklenmediği hâlde dönüşte okutulan tüpler</h2><div class="table-wrap"><table id="t-unexpected"></table></div></div>
   </div>

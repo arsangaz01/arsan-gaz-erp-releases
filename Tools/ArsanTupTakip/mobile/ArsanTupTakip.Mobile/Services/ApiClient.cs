@@ -68,6 +68,7 @@ public static class Perm
     public const string CylinderRegister = "tup-kayit";
     public const string CylinderAudit = "tup-sayim";
     public const string StockCount = "depo-sayim";
+    public const string FillRecord = "dolum-kaydi";
     public const string MoveFullness = "hareket-dolu-bos";
     public const string MoveBulk = "hareket-toplu";
     public const string MoveOverride = "hareket-cakisma";
@@ -95,6 +96,12 @@ public static class Perm
 
     public static readonly string[] CustomerPicker = [CustomerView, CustomerAdd, CylinderView, CylinderRegister, CylinderAudit, MovementHistory, "hareket-teslim", TripDeliver];
 }
+public sealed record TripStopItem(int Id, int Position, string Plate, int CustomerId, string CustomerName, string? Address, string? District, string? City, string? Phone,
+    bool Done, DateTime? DoneAt, int Delivered, int Collected, string? Note, string? MapUrl);
+public sealed record TripStopSuggestionItem(int CustomerId, string CustomerName, string? City, string Reason);
+public sealed record FillLineItem(string Code, bool Ok, string Message, bool TestOverdue);
+public sealed record FillResponse(string Message, int Filled, List<FillLineItem> Lines, List<string> NeedsTestConfirmation);
+public sealed record FillItem(int Id, int CylinderId, string SerialNumber, string GasType, string FilledAt, string FilledBy, string? LotNumber, string? Note, bool TestOverdue);
 public sealed record CylinderStatusCount(int Status, string Name, int Total, int Full, int Empty);
 public sealed record CylinderPlateCount(string Plate, int Count);
 public sealed record CylinderOverview(List<CylinderStatusCount> Statuses, List<CylinderPlateCount> Vehicles, int LongAtCustomer, int LongAtCustomerDays);
@@ -746,6 +753,32 @@ public sealed class ApiClient
 
     public Task<string> DeliverTripCylindersAsync(int tripId, int customerId, IReadOnlyList<string> codes, string? note) =>
         PostMessageAsync("/api/sefer/teslim", new { tripId, customerId, codes, note });
+
+    public Task<FillResponse> FillAsync(IReadOnlyList<string> codes, string? lot, string? note, bool allowOverdueTest) =>
+        PostAsync<FillResponse>("/api/dolum", new { codes, lot, note, allowOverdueTest }, Guid.NewGuid().ToString("N"));
+
+    public Task<List<FillItem>> RecentFillsAsync() => GetAsync<List<FillItem>>("/api/dolum/son?gun=1");
+
+    public Task<List<TripStopItem>> TripRouteAsync(int tripId, string plate) =>
+        GetAsync<List<TripStopItem>>("/api/sefer/" + tripId + "/rota?plaka=" + Uri.EscapeDataString(plate));
+
+    public Task<List<TripStopSuggestionItem>> TripStopSuggestionsAsync(int tripId, string plate) =>
+        GetAsync<List<TripStopSuggestionItem>>("/api/sefer/" + tripId + "/rota/oneriler?plaka=" + Uri.EscapeDataString(plate));
+
+    public Task<string> AddTripStopAsync(int tripId, string plate, int customerId) =>
+        PostMessageAsync("/api/sefer/rota/ekle", new { tripId, plate, customerId });
+
+    public Task<string> MoveTripStopAsync(int tripId, int stopId, int direction) =>
+        PostMessageAsync("/api/sefer/rota/sira", new { tripId, stopId, direction });
+
+    public Task<string> RemoveTripStopAsync(int tripId, int stopId) =>
+        PostMessageAsync("/api/sefer/rota/sil", new { tripId, stopId });
+
+    public Task<string> SetTripStopDoneAsync(int tripId, int stopId, bool done) =>
+        PostMessageAsync("/api/sefer/rota/tamam", new { tripId, stopId, done });
+
+    public Task<string> PickupTripCylindersAsync(int tripId, string plate, int customerId, IReadOnlyList<string> codes, string? note) =>
+        PostMessageAsync("/api/sefer/bos-alim", new { tripId, plate, customerId, codes, note });
 
     public Task<TripReconcileResponse> ReturnTripCylindersAsync(int tripId, string plate, IReadOnlyList<string> codes, string? note) =>
         PostAsync<TripReconcileResponse>("/api/sefer/donus", new { tripId, plate, codes, note });

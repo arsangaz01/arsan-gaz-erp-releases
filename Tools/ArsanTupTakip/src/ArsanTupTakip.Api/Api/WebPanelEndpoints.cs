@@ -558,8 +558,10 @@ internal static class WebPanelEndpoints
                     ReasonAt = c.ReasonAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
                     c.ReasonBy,
                     CheckedAt = c.CheckedAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
-                    c.CheckedBy
+                    c.CheckedBy,
+                    c.Pickup
                 }),
+                customers = detail.Customers ?? [],
                 unexpected = detail.UnexpectedReturns.Select(u => new
                 {
                     u.CylinderId,
@@ -570,6 +572,28 @@ internal static class WebPanelEndpoints
                 })
             });
         }).Requires(Perm.TripView);
+
+        api.MapPost("/dolum", async (FillRequest request, HttpContext context) =>
+        {
+            try
+            {
+                string user = (string)context.Items["panelUser"]!;
+                FillResult result = await CylinderFills.FillAsync(request.Codes ?? [], request.Lot, request.Note, $"Web panel ({user})", request.AllowOverdueTest);
+                if (result.Filled > 0)
+                {
+                    WebPanelAudit.Write(user, "Dolum kaydı", $"{result.Filled} tüp", CylinderFills.CleanLot(request.Lot) ?? "lot yok", WebPanelAuth.ClientIp(context));
+                }
+
+                return Results.Ok(FillEndpoints.Dto(result));
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(Perm.FillRecord);
+
+        api.MapGet("/dolumlar", async (int? gun, string? q) => Results.Ok((await CylinderFills.ListAsync(gun ?? 30, q)).Select(FillEndpoints.Row)))
+            .Requires(Perm.FillRecord);
 
         api.MapGet("/sefer/{id:int}/yuk", async (int id, string? plaka) => await VehicleEndpoints.TripLoadAsync(id, plaka)).Requires(Perm.TripView);
 
@@ -893,7 +917,8 @@ internal static class WebPanelEndpoints
             v.Delivered,
             ReturnedCount = v.Returned,
             v.OnVehicle,
-            v.Missing
+            v.Missing,
+            v.PickedUp
         }),
         t.Loaded,
         t.Delivered,
@@ -903,7 +928,8 @@ internal static class WebPanelEndpoints
         MissingByGas = t.MissingByGas.Select(g => new { g.GasType, g.Count }),
         t.MissingUnexplained,
         t.MissingUnchecked,
-        t.RequireReasons
+        t.RequireReasons,
+        t.PickedUp
     };
 
     private static string LocalText(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy HH:mm", Turkish);

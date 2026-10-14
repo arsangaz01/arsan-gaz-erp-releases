@@ -26,6 +26,7 @@ internal static class Perm
     internal const string MoveReturn = "hareket-iade";
     internal const string MoveVehicle = "hareket-arac";
     internal const string MoveFilling = "hareket-dolum";
+    internal const string FillRecord = "dolum-kaydi";
     internal const string MoveService = "hareket-servis";
     internal const string MoveScrap = "hareket-hurda";
     internal const string MoveFullness = "hareket-dolu-bos";
@@ -92,6 +93,7 @@ internal static class Perm
             P(MoveFilling, "Dolum", "Tüpü dolumda olarak kaydeder.", CylinderView),
             P(MoveService, "Servis", "Tüpü serviste olarak kaydeder.", CylinderView),
             P(MoveScrap, "Hurda", "Tüpü hurdaya ayrıldı olarak kaydeder.", CylinderView),
+            P(FillRecord, "Dolum kaydı", "Mobilde Dolum ekranı: doldurulan tüpleri parti/lot numarasıyla okutur, tüp depoda dolu olur; panelde Dolum kayıtları listesini görür. Testi geçmiş tüp ancak ayrıca onaylanarak doldurulur.", CylinderView),
             P(MoveFullness, "Dolu / boş seçimi", "Harekette dolu/boş bilgisini elle seçebilir; yoksa otomatik belirlenir."),
             P(MoveBulk, "Toplu hareket", "Mobilde birden çok tüpe aynı hareketi tek seferde uygular."),
             P(MoveOverride, "Başka müşterideki tüpü yine de kaydetme", "Tüp sistemde başka müşteride görünse bile hareketi onaylayıp kaydedebilir."),
@@ -134,7 +136,7 @@ internal static class Perm
     private static readonly string[] OperatorDefaults =
     [
         PanelLogin, MobileLogin, Summary, Reports, CylinderView, CylinderRegister, CylinderEdit, CylinderDeactivate, CylinderAudit, StockCount, LabelPrint,
-        MoveDeliver, MoveReturn, MoveVehicle, MoveFilling, MoveService, MoveScrap, MoveFullness, MoveBulk, MoveOverride,
+        MoveDeliver, MoveReturn, MoveVehicle, MoveFilling, FillRecord, MoveService, MoveScrap, MoveFullness, MoveBulk, MoveOverride,
         MovementHistory, Export, CustomerView, CustomerAdd, TripView, TripStart, TripLoad, TripDeliver, TripReturn, TripClose,
         VehicleView, VehicleAdd, VehicleEdit, VehicleDeactivate
     ];

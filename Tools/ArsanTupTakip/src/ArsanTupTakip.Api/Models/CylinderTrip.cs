@@ -47,6 +47,9 @@ public sealed class CylinderTripCylinder
     public string GasType { get; set; } = string.Empty;
     public DateTime LoadedAt { get; set; } = DateTime.Now;
     public DateTime? DeliveredAt { get; set; }
+    public int? DeliveredCustomerId { get; set; }
+    // Set when the row is an empty collected from this customer during the trip (not loaded at the depot).
+    public int? PickupCustomerId { get; set; }
     public DateTime? ReturnedAt { get; set; }
     // Why a cylinder that was neither delivered nor returned is missing (key of TripMissingReasons), and who confirmed it.
     public string? MissingReason { get; set; }

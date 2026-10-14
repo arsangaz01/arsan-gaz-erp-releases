@@ -216,6 +216,7 @@ function openTab(tab) {
   if (tab === "tupler") loadCylinders();
   if (tab === "hareketler") loadMovements();
   if (tab === "seferler") loadTrips();
+  if (tab === "dolum") loadFills();
   if (tab === "araclar") loadVehicles();
   if (tab === "musteriler") loadCustomers();
   if (tab === "musteri-stok") loadStock();
@@ -461,6 +462,51 @@ async function loadMovements() {
     show($("global-msg"), error.message);
   }
 }
+
+// Filling: codes typed or scanned into the box become full in the depot with a lot number; the list shows past fills.
+const fillCodes = () => [...new Set($("dl-codes").value.split(/[\s,;]+/).map((c) => c.trim()).filter(Boolean))];
+$("dl-codes").addEventListener("input", () => { const n = fillCodes().length; $("dl-count").textContent = n ? `${n} tüp` : ""; });
+
+$("dl-save").addEventListener("click", async () => {
+  const codes = fillCodes();
+  if (!codes.length) { show($("dl-msg"), "En az bir barkod veya seri no yazın."); return; }
+  $("dl-save").disabled = true;
+  try {
+    const result = await api("/panel/api/dolum", { method: "POST", body: { codes, lot: $("dl-lot").value, note: $("dl-note").value, allowOverdueTest: $("dl-overdue").checked } });
+    const failed = result.lines.filter((l) => !l.ok);
+    const lines = [result.message, ...failed.map((l) => l.message)];
+    if (result.needsTestConfirmation.length) lines.push("Testi geçmiş tüpleri yine de doldurmak için onay kutusunu işaretleyip yeniden kaydedin.");
+    show($("dl-msg"), lines.join("\n"), failed.length ? "warn" : "ok");
+    $("dl-codes").value = failed.map((l) => l.code).join("\n");
+    $("dl-count").textContent = failed.length ? `${failed.length} tüp` : "";
+    $("dl-overdue").checked = false;
+    loadFills();
+  } catch (error) {
+    show($("dl-msg"), error.message);
+  } finally {
+    $("dl-save").disabled = false;
+  }
+});
+
+async function loadFills() {
+  const ticket = newRequest("fills");
+  try {
+    const rows = await api(`/panel/api/dolumlar?gun=${$("dl-days").value}&q=${encodeURIComponent($("dl-q").value.trim())}`);
+    if (isStale("fills", ticket)) return;
+    $("dl-list-count").textContent = `${rows.length} dolum kaydı` + (rows.length >= 500 ? " (ilk 500; aramayı daraltın)" : "");
+    const head = el("tr", {}, ...["Tarih", "Tüp", "Parti / lot", "Dolduran", "Not", "Test"].map((h) => el("th", {}, h)));
+    const body = rows.map((f) => el("tr", { class: "click" + (f.testOverdue ? " alarm-row" : ""), onclick: () => openDetail(f.cylinderId) },
+      el("td", {}, f.filledAt), el("td", {}, el("b", {}, f.serialNumber), el("div", { class: "muted" }, f.gasType)),
+      el("td", {}, f.lotNumber || "-"), el("td", {}, f.filledBy), el("td", { class: "muted" }, f.note || ""),
+      el("td", { class: f.testOverdue ? "alarm" : "muted" }, f.testOverdue ? "⚠ testi geçmişti, onayla" : "uygun")));
+    $("dl-rows").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6, class: "muted" }, "Bu dönemde dolum kaydı yok."))])));
+  } catch (error) {
+    show($("global-msg"), error.message);
+  }
+}
+
+$("dl-list").addEventListener("click", loadFills);
+$("dl-days").addEventListener("change", loadFills);
 
 function renderMovements(table, rows, empty) {
   const head = el("tr", {}, ...["Tarih", "Tüp", "Hareket", "Durum", "Müşteri / Plaka", "Dolu/Boş", "Not"].map((h) => el("th", {}, h)));
@@ -872,7 +918,7 @@ async function openTrip(id, keepMessage = false) {
   const info = [
     ["Durum", t.active ? "Seferde (açık)" : "Kapandı"], ["Başlangıç", t.started], ["Bitiş", t.closed || "-"],
     ["Açan", t.createdBy || "-"], ["Not", t.note || "-"],
-    ["Yüklenen", t.loaded], ["Müşteriye teslim", t.delivered], ["Depoya dönen", t.returned], ["Araçta (yolda)", t.onVehicle], ["Eksik", t.missing]
+    ["Yüklenen", t.loaded], ["Müşteriye teslim", t.delivered], ["Müşteriden alınan boş", t.pickedUp || 0], ["Depoya dönen", t.returned], ["Araçta (yolda)", t.onVehicle], ["Eksik", t.missing]
   ];
   $("t-info").replaceChildren(...info.map(([k, v]) => el("div", {}, el("span", {}, k), String(v))));
 
@@ -886,12 +932,25 @@ async function openTrip(id, keepMessage = false) {
 
   const cHead = el("tr", {}, ...["Seri no", "Gaz", "Plaka", "Yükleme", "Durum"].map((h) => el("th", {}, h)));
   const cBody = data.cylinders.map((c) => el("tr", { class: "click" + (c.missing ? " alarm-row" : ""), onclick: () => openDetail(c.cylinderId) },
-    el("td", {}, el("b", {}, c.serialNumber)), el("td", {}, c.gasType), el("td", {}, c.plate), el("td", {}, c.loaded),
+    el("td", {}, el("b", {}, c.serialNumber)), el("td", {}, c.gasType), el("td", {}, c.plate), el("td", {}, (c.pickup ? "Müşteriden boş alındı " : "") + c.loaded),
     el("td", { class: c.missing ? "alarm" : "" },
       c.delivered ? "Müşteriye teslim " + c.delivered : c.returned ? "Depoya döndü " + c.returned : c.missing ? "⚠ Eksik: okutulmadı" : "Araçta",
       !c.delivered && !c.returned && c.reasonLabel ? el("div", { class: "muted" }, "Gerekçe: " + c.reasonLabel + (c.checkedAt ? " ✔" : "")) : null)));
   $("t-cylinders").replaceChildren(el("thead", {}, cHead), el("tbody", {}, ...(cBody.length ? cBody : [el("tr", {}, el("td", { colspan: 5, class: "muted" }, "Bu sefere tüp yüklenmemiş."))])));
   renderTripMissing(data.cylinders);
+
+  const customers = data.customers || [];
+  $("t-customers-card").classList.toggle("hidden", customers.length === 0);
+  const kHead = el("tr", {}, ...["Müşteri", "Verilen", "Alınan", "Fark", "Müşteride şimdi"].map((h) => el("th", {}, h)));
+  const kBody = customers.map((k) => {
+    const net = k.delivered - k.collected;
+    const unknown = k.holds - k.holdsFull - k.holdsEmpty;
+    return el("tr", {},
+      el("td", {}, el("b", {}, k.customerName)), el("td", {}, String(k.delivered)), el("td", {}, String(k.collected)),
+      el("td", { class: net !== 0 ? "warn-text" : "muted" }, net === 0 ? "denk" : net > 0 ? `müşteride +${net}` : `${-net} fazla alındı`),
+      el("td", {}, `${k.holds} tüp (${k.holdsFull} dolu, ${k.holdsEmpty} boş${unknown > 0 ? `, ${unknown} belirsiz` : ""})`));
+  });
+  $("t-customers").replaceChildren(el("thead", {}, kHead), el("tbody", {}, ...kBody));
 
   $("t-unexpected-card").classList.toggle("hidden", data.unexpected.length === 0);
   const uHead = el("tr", {}, ...["Seri no", "Gaz", "Plaka", "Okutma"].map((h) => el("th", {}, h)));

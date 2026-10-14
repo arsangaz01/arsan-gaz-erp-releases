@@ -12,6 +12,7 @@ try
     VehicleTrackingTests.Run();
     StockCountTests.Run();
     LabelCodesTests.Run();
+    FieldWorkTests.Run();
     ApiLogicTests.Run();
     PermissionTests.Run();
     ConcurrencyTests.Run();

@@ -7,6 +7,11 @@ internal sealed record TripStartRequest(string? Note, List<string?>? Plates);
 internal sealed record TripVehicleRequest(int TripId, string? Plate);
 internal sealed record TripLoadRequest(int TripId, string? Plate, List<string?>? Codes);
 internal sealed record TripDeliverRequest(int TripId, int? CustomerId, List<string?>? Codes, string? Note);
+internal sealed record TripStopAddRequest(int TripId, string? Plate, int CustomerId);
+internal sealed record TripStopMoveRequest(int TripId, int StopId, int Direction);
+internal sealed record TripStopRequest(int TripId, int StopId);
+internal sealed record TripStopDoneRequest(int TripId, int StopId, bool Done, string? Note);
+internal sealed record TripPickupRequest(int TripId, string? Plate, int? CustomerId, List<string?>? Codes, string? Note);
 internal sealed record TripReturnRequest(int TripId, string? Plate, List<string?>? Codes, string? Note);
 internal sealed record TripCloseRequest(int TripId);
 internal sealed record TripReasonRequest(int TripId, List<int>? CylinderIds, string? Reason, string? Note, int? CustomerId = null);
@@ -119,11 +124,39 @@ internal static class CylinderTripEndpoints
         {
             try
             {
-                List<CylinderBulkResult> results = await new CylinderTripService().DeliverCylindersAsync(
+                CylinderTripService service = new();
+                List<CylinderBulkResult> results = await service.DeliverCylindersAsync(
                     request.TripId, request.Codes ?? [], request.CustomerId, request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
                 int ok = results.Count(r => r.Ok);
                 string failures = string.Join("\n", results.Where(r => !r.Ok).Select(r => $"{r.Code}: {r.Message}"));
-                return Results.Ok(new { message = $"{ok}/{results.Count} tüp teslim kaydedildi." + (failures.Length > 0 ? "\n" + failures : string.Empty) });
+                CustomerTripBalance balance = await service.CustomerBalanceAsync(request.TripId, request.CustomerId!.Value);
+                return Results.Ok(new
+                {
+                    message = $"{ok}/{results.Count} tüp teslim kaydedildi." + (failures.Length > 0 ? "\n" + failures : string.Empty) + "\n" + balance.Text,
+                    balance
+                });
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(Perm.TripDeliver);
+
+        // Empties collected at the customer: onto the vehicle and the trip, then the customer's exchange balance.
+        app.MapPost("/api/sefer/bos-alim", async (TripPickupRequest request, HttpContext context) =>
+        {
+            try
+            {
+                TripPickupResult result = await new CylinderTripService().PickupCylindersAsync(
+                    request.TripId, DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate), request.CustomerId, request.Codes ?? [],
+                    request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                int ok = result.Results.Count(r => r.Ok);
+                string details = string.Join("\n", result.Results.Where(r => !r.Ok || r.Message.Contains('⚠')).Select(r => r.Ok ? r.Message : $"{r.Code}: {r.Message}"));
+                return Results.Ok(new
+                {
+                    message = $"{ok}/{result.Results.Count} boş tüp araca alındı." + (details.Length > 0 ? "\n" + details : string.Empty) + "\n" + result.Balance.Text,
+                    balance = result.Balance
+                });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
@@ -181,6 +214,49 @@ internal static class CylinderTripEndpoints
             }
         }).Requires(Perm.TripClose);
 
+        // Route (visiting order) of a trip vehicle. A driver with a fixed vehicle sees and edits only that vehicle's stops.
+        app.MapGet("/api/sefer/{tripId:int}/rota", async (int tripId, string? plaka, HttpContext context) =>
+        {
+            try
+            {
+                WebPanelUser user = User(context);
+                string? plate = string.IsNullOrEmpty(user.FixedPlate) ? plaka : DriverVehicle.PlateFor(user.FixedPlate, plaka);
+                return Results.Ok(await TripRoutes.ListAsync(tripId, plate, Perm.Effective(user).Contains(Perm.CustomerView)));
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(Perm.TripView);
+
+        app.MapGet("/api/sefer/{tripId:int}/rota/oneriler", async (int tripId, string? plaka) =>
+            Results.Ok(await TripRoutes.SuggestionsAsync(tripId, plaka))).Requires(Perm.TripView);
+
+        app.MapPost("/api/sefer/rota/ekle", async (TripStopAddRequest request, HttpContext context) =>
+            await RouteAsync(async () => await TripRoutes.AddAsync(request.TripId, DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate),
+                request.CustomerId, "Mobil (" + MobileEndpoints.DeviceName(context) + ")"))).Requires(RouteEditors);
+
+        app.MapPost("/api/sefer/rota/sira", async (TripStopMoveRequest request, HttpContext context) =>
+            await RouteAsync(async () =>
+            {
+                await TripRoutes.MoveAsync(request.TripId, request.StopId, request.Direction, OwnPlate(context));
+                return "Sıra güncellendi.";
+            })).Requires(RouteEditors);
+
+        app.MapPost("/api/sefer/rota/sil", async (TripStopRequest request, HttpContext context) =>
+            await RouteAsync(async () =>
+            {
+                await TripRoutes.RemoveAsync(request.TripId, request.StopId, OwnPlate(context));
+                return "Durak rotadan çıkarıldı.";
+            })).Requires(RouteEditors);
+
+        app.MapPost("/api/sefer/rota/tamam", async (TripStopDoneRequest request, HttpContext context) =>
+            await RouteAsync(async () =>
+            {
+                await TripRoutes.SetDoneAsync(request.TripId, request.StopId, request.Done, request.Note, OwnPlate(context));
+                return request.Done ? "Durak tamamlandı olarak işaretlendi." : "Durak yeniden açıldı.";
+            })).Requires(RouteEditors);
+
         app.MapGet("/api/sefer/gerekceler", () => Results.Ok(ReasonCatalog())).Requires(Perm.TripView);
 
         // Open (neither delivered nor returned) cylinders of a trip with their written reasons; the driver explains them here.
@@ -223,6 +299,22 @@ internal static class CylinderTripEndpoints
     }
 
     private static WebPanelUser User(HttpContext context) => (WebPanelUser)context.Items["panelAccount"]!;
+
+    internal static readonly string[] RouteEditors = [Perm.TripStart, Perm.TripDeliver];
+
+    private static string? OwnPlate(HttpContext context) => User(context).FixedPlate is { Length: > 0 } plate ? plate : null;
+
+    private static async Task<IResult> RouteAsync(Func<Task<string>> action)
+    {
+        try
+        {
+            return Results.Ok(new { message = await action() });
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
 
     // Shared by the phone and the panel. A user with a fixed vehicle always starts with that vehicle only, and not while
     // it is still out on an open trip (the phone then continues that trip).
