@@ -73,7 +73,7 @@ public static class FollowUpReminder
             .SetSmallIcon(Resource.Mipmap.appicon)
             .SetContentTitle(title)
             .SetContentText(text)
-            .SetStyle(new NotificationCompat.BigTextStyle().BigText(text + "\nTakip sekmesinden açabilirsiniz."))
+            .SetStyle(new NotificationCompat.BigTextStyle().BigText(text + "\nAna menüdeki Takip kutucuğundan açabilirsiniz."))
             .SetContentIntent(tap)
             .SetAutoCancel(true)
             .Build()!;

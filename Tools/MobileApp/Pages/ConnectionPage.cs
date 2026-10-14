@@ -13,7 +13,7 @@ public sealed class ConnectionPage : ContentPage
 
     public ConnectionPage()
     {
-        Title = "Bağlantı";
+        Title = "Hesap ve Bağlantı";
         Ui.ApplyPageChrome(this);
         _server = Ui.TextField("https://arsantuptakip.com", Keyboard.Url);
         _state.FontSize = 14;
@@ -142,7 +142,7 @@ public sealed class ConnectionPage : ContentPage
                 int dismissed = Preferences.Default.Get(DismissedUpdateBuildKey, 0);
                 if (info.PublishedMobileBuild <= dismissed)
                 {
-                    _update.Text += " Bağlantı sekmesinden \"Güncelle\" ile kurabilirsiniz.";
+                    _update.Text += " Hesap ve Bağlantı ekranından \"Güncelle\" ile kurabilirsiniz.";
                 }
                 else
                 {
@@ -263,13 +263,15 @@ public sealed class ConnectionPage : ContentPage
         }));
     }
 
-    private async Task LogoutAsync()
+    private Task LogoutAsync() => ConfirmLogoutAsync(this);
+
+    internal static async Task ConfirmLogoutAsync(Page page)
     {
         int pending = OfflineMoves.Pending.Count;
         string question = pending > 0
             ? $"{pending} çevrimdışı hareket henüz gönderilmedi. Çıkış yaparsanız bir sonraki girişte gönderilir. Yine de çıkılsın mı?"
             : "Bu telefondaki oturum kapatılsın mı?";
-        if (!await DisplayAlertAsync("Çıkış", question, "Çıkış yap", "Vazgeç"))
+        if (!await page.DisplayAlertAsync("Çıkış", question, "Çıkış yap", "Vazgeç"))
         {
             return;
         }

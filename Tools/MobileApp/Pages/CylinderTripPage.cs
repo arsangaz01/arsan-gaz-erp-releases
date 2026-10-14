@@ -334,7 +334,7 @@ public sealed class CylinderTripPage : ContentPage
             _busy.IsVisible = false;
             if (vehicles.Count == 0)
             {
-                await DisplayAlertAsync("Sefer", "Eklenebilecek boşta araç yok. Yeni araç için \"Araç\" sekmesini kullanın.", "Tamam");
+                await DisplayAlertAsync("Sefer", "Eklenebilecek boşta araç yok. Yeni araç için ana menüdeki \"Araç İşlemleri\"ni kullanın.", "Tamam");
                 return;
             }
 

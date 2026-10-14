@@ -219,6 +219,70 @@ internal static class MobileEndpoints
                 });
         }).Requires(PanelPermissions.CylinderView);
 
+        // Read-only status card for the "Tüp Bilgisi" screen; the customer name is shown only with customer view permission.
+        app.MapGet("/api/tup/bilgi", async (string? kod, HttpContext context) =>
+        {
+            string code = (kod ?? string.Empty).Trim();
+            if (code.Length == 0)
+            {
+                return Results.BadRequest(new { error = "Barkod veya seri numarası girin." });
+            }
+
+            Cylinder? cylinder = await new CrudService().FindCylinderByCodeAsync(code);
+            if (cylinder is null)
+            {
+                return Results.NotFound(new { error = $"'{code}' barkodlu veya seri numaralı tüp bulunamadı." });
+            }
+
+            await using ArsanGazDbContext db = new();
+            CylinderMovement? last = await db.CylinderMovements.AsNoTracking()
+                .Where(m => m.CylinderId == cylinder.Id)
+                .OrderByDescending(m => m.MovementDate).ThenByDescending(m => m.Id)
+                .FirstOrDefaultAsync();
+            CylinderTripCylinder? trip = cylinder.Status == CylinderStatus.Vehicle
+                ? await db.CylinderTripCylinders.AsNoTracking().Include(t => t.Trip)
+                    .Where(t => t.CylinderId == cylinder.Id && t.Trip.Status == CylinderTripStatus.Active && t.DeliveredAt == null && t.ReturnedAt == null)
+                    .OrderByDescending(t => t.LoadedAt)
+                    .FirstOrDefaultAsync()
+                : null;
+
+            bool showCustomer = PanelRoles.Has(Account(context), PanelPermissions.CustomerView);
+            string? customer = showCustomer ? cylinder.CurrentCustomer?.CompanyName : null;
+            string location = cylinder.Status switch
+            {
+                CylinderStatus.Customer => customer is null
+                    ? (showCustomer ? "Müşteride" : "Müşteride (müşteri adını görme yetkiniz yok)")
+                    : "Müşteride: " + customer,
+                CylinderStatus.Vehicle => "Araçta" + (string.IsNullOrWhiteSpace(cylinder.VehiclePlate) ? string.Empty : ": " + cylinder.VehiclePlate),
+                _ => CylinderTracking.StatusName((int)cylinder.Status)
+            };
+            DateTime today = DateTime.Today;
+            return Results.Ok(new
+            {
+                cylinder.SerialNumber,
+                cylinder.Barcode,
+                cylinder.GasType,
+                Capacity = $"{cylinder.Capacity.ToString("0.##", Turkish)} {cylinder.CapacityUnit}",
+                Status = (int)cylinder.Status,
+                StatusName = CylinderTracking.StatusName((int)cylinder.Status),
+                cylinder.IsFull,
+                Fullness = CylinderTracking.FullnessName(cylinder.IsFull),
+                Location = location,
+                Customer = customer,
+                Plate = cylinder.VehiclePlate,
+                Trip = trip is null ? null : $"{trip.Trip.Title} (yükleme {trip.LoadedAt.ToString("dd.MM.yyyy HH:mm", Turkish)})",
+                DaysThere = CylinderTracking.DaysSince(cylinder.LastMovementAt, today),
+                LastMovementDate = (last?.MovementDate ?? cylinder.LastMovementAt)?.ToString("dd.MM.yyyy HH:mm", Turkish),
+                LastMovementType = last is null
+                    ? null
+                    : $"{last.MovementType} ({CylinderTracking.StatusName((int)last.FromStatus)} → {CylinderTracking.StatusName((int)last.ToStatus)})",
+                TestDue = cylinder.TestDueDate?.ToString("dd.MM.yyyy", Turkish),
+                TestOverdue = cylinder.TestDueDate is DateTime due && due.Date < today,
+                TestDays = cylinder.TestDueDate is DateTime dueDate ? (dueDate.Date - today).Days : (int?)null,
+                cylinder.IsActive
+            });
+        }).Requires(PanelPermissions.CylinderView);
+
         app.MapPost("/api/tup/hareket", async (MoveRequest request, HttpContext context) =>
         {
             CrudService crud = new();

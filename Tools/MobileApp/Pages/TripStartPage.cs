@@ -25,7 +25,7 @@ public sealed class TripStartPage : ContentPage
                 Spacing = 14,
                 Children =
                 {
-                    Ui.Note("Sefere çıkacak araçları işaretleyin. Listede olmayan araç için önce \"Araç\" sekmesinden araç ekleyin. Sefer başlayınca tüpleri araca yükleme okutmasına geçilir."),
+                    Ui.Note("Sefere çıkacak araçları işaretleyin. Listede olmayan araç için önce ana menüdeki \"Araç İşlemleri\"nden araç ekleyin. Sefer başlayınca tüpleri araca yükleme okutmasına geçilir."),
                     Ui.Section("Araçlar", _vehicles),
                     Ui.Section("Not", _note),
                     Ui.Primary("🚚 Seferi başlat", async (_, _) => await StartAsync()),

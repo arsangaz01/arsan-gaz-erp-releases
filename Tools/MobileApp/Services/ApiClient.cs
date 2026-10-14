@@ -27,6 +27,27 @@ public sealed record CrmItem(int Id, string Name, string? City, string? Sector, 
 }
 
 public sealed record CylinderInfo(int Id, string Barcode, string SerialNumber, int Status, string StatusName, string? Customer, string Detail);
+public sealed record CylinderCard(
+    string SerialNumber,
+    string Barcode,
+    string GasType,
+    string Capacity,
+    int Status,
+    string StatusName,
+    bool? IsFull,
+    string Fullness,
+    string Location,
+    string? Customer,
+    string? Plate,
+    string? Trip,
+    int? DaysThere,
+    string? LastMovementDate,
+    string? LastMovementType,
+    string? TestDue,
+    bool TestOverdue,
+    int? TestDays,
+    bool IsActive);
+
 public sealed record CylinderStatusCount(int Status, string Name, int Total, int Full, int Empty);
 public sealed record CylinderPlateCount(string Plate, int Count);
 public sealed record CylinderOverview(List<CylinderStatusCount> Statuses, List<CylinderPlateCount> Vehicles, int LongAtCustomer, int LongAtCustomerDays);
@@ -563,6 +584,9 @@ public sealed class ApiClient
     public async Task<CylinderInfo> CylinderAsync(string code) =>
         await GetAsync<CylinderInfo>("/api/tup?kod=" + Uri.EscapeDataString(code));
 
+    public Task<CylinderCard> CylinderCardAsync(string code) =>
+        GetAsync<CylinderCard>("/api/tup/bilgi?kod=" + Uri.EscapeDataString(code));
+
     // requestId: the offline queue keeps one per scan so a resend after a lost answer is not saved twice.
     public Task<string> MoveCylinderAsync(string code, int status, int? customerId, string? note, string? plate = null, bool? isFull = null, bool confirmCustomerChange = false, string? requestId = null) =>
         PostMessageAsync("/api/tup/hareket", new { code, status, customerId, note, plate, isFull, confirmCustomerChange }, requestId);
@@ -696,7 +720,7 @@ public sealed class ApiClient
         string server = ServerUrl;
         if (server.Length == 0)
         {
-            throw new ApiException("Sunucu adresi girilmemiş. Bağlantı sekmesinden adresi girin.");
+            throw new ApiException("Sunucu adresi girilmemiş. ana menüdeki Hesap ve Bağlantı ekranından adresi girin.");
         }
 
         string token = await GetTokenAsync() ?? throw new ApiException("Giriş yapılmamış. Kullanıcı adı ve şifrenizle giriş yapın.");
@@ -790,7 +814,7 @@ public sealed class ApiClient
         string server = ServerUrl;
         if (server.Length == 0)
         {
-            throw new ApiException("Sunucu adresi girilmemiş. Bağlantı sekmesinden adresi girin.");
+            throw new ApiException("Sunucu adresi girilmemiş. ana menüdeki Hesap ve Bağlantı ekranından adresi girin.");
         }
 
         string? key = method == HttpMethod.Post ? idempotencyKey ?? Guid.NewGuid().ToString("N") : null;

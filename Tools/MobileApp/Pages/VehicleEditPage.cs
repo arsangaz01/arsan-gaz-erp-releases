@@ -40,7 +40,7 @@ public sealed class VehicleEditPage : ContentPage
                 Children =
                 {
                     Ui.Note(existing is null
-                        ? "Kaydedilen araçlar Sefer sekmesinde \"Sefer Başlat\" ile seçilebilir. Plaka kayıttan sonra değiştirilemez."
+                        ? "Kaydedilen araçlar Sefer ekranında \"Sefer Başlat\" ile seçilebilir. Plaka kayıttan sonra değiştirilemez."
                         : "Plaka değiştirilemez (seferler ve tüp hareketleri plakaya bağlı). Farklı plaka için yeni araç ekleyip bunu pasife alın."),
                     Ui.Section("Araç", _plate, _name, _type, _driver, _capacity, _note),
                     Ui.Primary("Kaydet", async (_, _) => await SaveAsync()),

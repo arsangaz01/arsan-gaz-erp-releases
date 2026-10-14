@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(228 236) scale(0.39) translate(-333 -244)">
+        <path fill="#075A9C" d="M20 470 300 18 480 300C405 264 210 356 20 470Z"/>
+        <path fill="#00AEEF" d="M20 470C125 340 325 120 630 126L535 312C382 293 184 376 20 470Z"/>
+        <path fill="#D6DADF" d="M20 470C196 380 372 290 535 312L646 470C445 402 230 412 20 470Z"/>
+    </g>
+</svg>
