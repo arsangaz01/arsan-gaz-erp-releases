@@ -303,6 +303,7 @@ internal static class MobileEndpoints
             WebPanelEndpoints.CustomerStockAsync(id, Perm.Has((WebPanelUser)context.Items["panelAccount"]!, Perm.CustomerView)))
             .Requires(Perm.CylinderView);
         app.MapGet("/api/musterideki-tupler", (string? musteri) => Text(() => TupReports.CylindersAtCustomersAsync(musteri))).Requires(Perm.Reports);
+        StockCountEndpoints.MapMobile(app);
     }
 
     internal static object Account(WebPanelUser user, MobileSession session) => new

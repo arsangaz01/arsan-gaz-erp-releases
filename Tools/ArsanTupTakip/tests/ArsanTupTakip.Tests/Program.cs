@@ -10,6 +10,7 @@ try
     ReorderPredictionTests.Run();
     CustomerStockTests.Run();
     VehicleTrackingTests.Run();
+    StockCountTests.Run();
     ApiLogicTests.Run();
     PermissionTests.Run();
     ConcurrencyTests.Run();

@@ -179,6 +179,7 @@ tr.alarm-row td { background:#fef2f2; }
       <button data-tab="araclar" data-perm="arac-goruntule">Araç İşlemleri</button>
       <button data-tab="musteri-stok" data-perm="tup-goruntule">Müşteri Stoku</button>
       <button data-tab="musteriler" data-perm="musteri-goruntule">Müşteriler</button>
+      <button data-tab="sayimlar" data-perm="depo-sayim|tup-sayim|raporlar">Sayım Raporları</button>
       <button data-tab="yeni" data-perm="tup-kayit">Yeni tüp</button>
       <button data-tab="yonetim" data-admin-only>Yönetim</button>
     </nav>
@@ -336,6 +337,19 @@ tr.alarm-row td { background:#fef2f2; }
         <div class="muted" id="c-count"></div>
         <div class="table-wrap"><table id="customers"></table></div>
         <div class="hint">Elinde tüp olan müşteriler önce gelir. Bir satıra tıklayınca o müşterinin tüp stoku (gaz türü ve boyuta göre adet, gün, barkodlar) açılır.</div>
+      </div>
+    </section>
+
+    <section data-page="sayimlar" class="hidden">
+      <div class="grid" id="sc-stats"></div>
+      <div class="card" style="margin-top:16px">
+        <div class="toolbar"><h2>Ana depo sayımları</h2><button class="secondary small" id="sc-refresh" type="button">Yenile</button></div>
+        <div class="table-wrap"><table id="sc-counts"></table></div>
+        <div class="hint">Sayım mobil uygulamada "Depo Sayımı" ekranından yapılır: her okutulan tüp gaz türü ve boyutuna göre sayılır, aynı tüp iki kez sayılmaz. Eşleşen: kayıtta depoda görünen ve okutulan tüp. Eksik: kayıtta depoda görünüp okutulmayan tüp. Fazla: okutulan ama kayıtta başka yerde (müşteride, araçta, dolumda…) görünen tüp. Sayım bitirilince o anki depo listesi dondurulur; rapor sonradan değişmez. Sayım tüplerin durumunu değiştirmez. Bir satıra tıklayınca ayrıntılı karşılaştırma açılır.</div>
+      </div>
+      <div class="card">
+        <h2>Müşteride sayımlar</h2>
+        <div class="table-wrap"><table id="sc-audits"></table></div>
       </div>
     </section>
 
@@ -530,6 +544,26 @@ tr.alarm-row td { background:#fef2f2; }
     <div class="card">
       <div class="toolbar"><h2 id="gd-cyl-title">Tüpler</h2><input id="gd-q" placeholder="Müşteri, barkod, seri no ara" style="min-width:220px"></div>
       <div class="table-wrap"><table id="gd-cylinders"></table></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="count-dialog">
+  <div class="dlg-head"><h3 id="cd-title">Depo sayımı</h3><button class="secondary" id="cd-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <div id="cd-msg" class="msg hidden"></div>
+    <div class="card">
+      <div class="toolbar"><h2>Sayım</h2><button class="secondary small" id="cd-refresh" type="button">Yenile</button><button class="danger" id="cd-close-count" type="button" data-perm="depo-sayim">Sayımı bitir</button></div>
+      <div class="kv" id="cd-info"></div>
+    </div>
+    <div class="card"><h2>Gaz türü ve boyuta göre karşılaştırma</h2><p class="muted">Bir satıra tıklayınca aşağıdaki liste yalnızca o grubu gösterir; tekrar tıklayınca tümü gelir.</p><div class="table-wrap"><table id="cd-groups"></table></div></div>
+    <div class="card">
+      <div class="toolbar">
+        <h2 id="cd-list-title">Tüpler</h2>
+        <select id="cd-kind"><option value="missing">Eksik (depoda olmalıydı, okutulmadı)</option><option value="extra">Fazla (kayıtta başka yerde)</option><option value="matched">Eşleşen</option><option value="unknown">Tanınmayan barkod</option></select>
+        <input id="cd-q" placeholder="Barkod, seri no, gaz ara" style="min-width:200px">
+      </div>
+      <div class="table-wrap"><table id="cd-list"></table></div>
     </div>
   </div>
 </dialog>

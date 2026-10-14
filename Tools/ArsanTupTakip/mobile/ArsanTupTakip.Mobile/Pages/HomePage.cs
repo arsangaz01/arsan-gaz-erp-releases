@@ -63,6 +63,12 @@ public sealed class HomePage : ContentPage
             tiles.Add(new Tile(Icons.Car, "Araçlar", null, false, indigo, navy, () => Open("arac", () => new VehiclePage())));
         }
 
+        if (api.Can(Perm.StockCount))
+        {
+            tiles.Add(new Tile(Icons.Warehouse, "Depo Sayımı", "Okut, gaz ve boyuta göre say", true, Color.FromArgb("#0F766E"), navy,
+                () => Open("depo-sayim", () => new StockCountPage())));
+        }
+
         if (api.Can(Perm.CylinderAudit))
         {
             tiles.Add(new Tile(Icons.FactCheck, "Müşteride Sayım", null, false, indigo, navy, () => Open("sayim", () => new CylinderAuditPage())));

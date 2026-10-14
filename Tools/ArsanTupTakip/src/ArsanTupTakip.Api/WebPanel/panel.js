@@ -219,6 +219,7 @@ function openTab(tab) {
   if (tab === "araclar") loadVehicles();
   if (tab === "musteriler") loadCustomers();
   if (tab === "musteri-stok") loadStock();
+  if (tab === "sayimlar") loadCounts();
   if (tab === "yonetim") loadAdmin();
 }
 
@@ -1348,6 +1349,166 @@ $("sd-list").addEventListener("click", () => {
 $("sd-csv").addEventListener("click", (e) => {
   e.preventDefault();
   if (stockCustomer) window.location.href = BASE + "/panel/api/musteri-stok.csv?musteri=" + stockCustomer.id;
+});
+
+// ---- Count reports -------------------------------------------------------------------------------
+
+let countReport = null;
+let countPick = null;
+
+async function loadCounts() {
+  const ticket = newRequest("counts");
+  try {
+    const data = await api("/panel/api/sayimlar");
+    if (isStale("counts", ticket)) return;
+    const open = data.counts.find((c) => c.open);
+    const last = data.counts.find((c) => !c.open);
+    $("sc-stats").replaceChildren(
+      stat(open ? open.counted : "-", open ? "Açık sayım: okutulan" : "Açık sayım yok", open ? `${open.started} · ${open.startedBy}` : "Mobilde Depo Sayımı ile başlatın", () => open && openCountDialog(open.id)),
+      stat(last ? last.missing : "-", "Son sayımda eksik", last ? last.closed : "Bitmiş sayım yok", () => last && openCountDialog(last.id, "missing"), !!last && last.missing > 0),
+      stat(last ? last.extra : "-", "Son sayımda fazla", last ? `${last.matched} eşleşen · ${last.unknown} tanınmayan` : "", () => last && openCountDialog(last.id, "extra"), !!last && last.extra > 0));
+    const head = el("tr", {}, ...["Başlangıç", "Durum", "Yapan", "Kayıtta depoda", "Okutulan", "Eşleşen", "Eksik", "Fazla", "Tanınmayan", "Not"].map((h) => el("th", {}, h)));
+    const body = data.counts.map((c) => el("tr", { class: "click", onclick: () => openCountDialog(c.id) },
+      el("td", {}, el("b", {}, c.started), el("div", { class: "muted" }, c.location)),
+      el("td", {}, c.open ? el("span", { class: "badge b2" }, "Devam ediyor") : el("span", {}, "Bitti", el("div", { class: "muted" }, c.closed))),
+      el("td", {}, c.startedBy, c.closedBy && c.closedBy !== c.startedBy ? el("div", { class: "muted" }, "Bitiren: " + c.closedBy) : null),
+      el("td", {}, String(c.expected)),
+      el("td", {}, el("b", {}, String(c.counted))),
+      el("td", {}, String(c.matched)),
+      el("td", { class: c.missing ? "bad-text" : "muted" }, String(c.missing)),
+      el("td", { class: c.extra ? "warn-text" : "muted" }, String(c.extra)),
+      el("td", { class: c.unknown ? "warn-text" : "muted" }, String(c.unknown)),
+      el("td", { class: "muted" }, c.note || "")));
+    $("sc-counts").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 10, class: "muted" }, "Henüz depo sayımı yapılmadı. Mobil uygulamada Depo Sayımı ekranından başlatın."))])));
+    const aHead = el("tr", {}, ...["Tarih", "Müşteri", "Kayıtta", "Bulunan", "Eksik", "Fazla", "Tanınmayan", "Yapan"].map((h) => el("th", {}, h)));
+    const list = (items) => items.length ? el("div", { class: "muted" }, items.join(", ")) : null;
+    const aBody = data.audits.map((a) => el("tr", {},
+      el("td", {}, a.at),
+      el("td", {}, el("b", {}, a.customerName), a.note ? el("div", { class: "muted" }, a.note) : null),
+      el("td", {}, String(a.expected)),
+      el("td", {}, String(a.found)),
+      el("td", { class: a.missing.length ? "bad-text" : "muted" }, String(a.missing.length), list(a.missing)),
+      el("td", { class: a.unexpected.length ? "warn-text" : "muted" }, String(a.unexpected.length), list(a.unexpected)),
+      el("td", { class: a.unknown.length ? "warn-text" : "muted" }, String(a.unknown.length), list(a.unknown)),
+      el("td", { class: "muted" }, a.performedBy || "")));
+    $("sc-audits").replaceChildren(el("thead", {}, aHead), el("tbody", {}, ...(aBody.length ? aBody : [el("tr", {}, el("td", { colspan: 8, class: "muted" }, "Müşteride sayım kaydı yok."))])));
+  } catch (error) {
+    show($("global-msg"), error.message);
+  }
+}
+
+async function openCountDialog(id, kind = null) {
+  hide($("cd-msg"));
+  try {
+    countReport = await api(`/panel/api/sayim/${id}`);
+  } catch (error) {
+    show($("global-msg"), error.message);
+    return;
+  }
+  if (kind) $("cd-kind").value = kind;
+  else if (!$("count-dialog").open) $("cd-kind").value = countReport.missing ? "missing" : countReport.extra ? "extra" : "matched";
+  if (!$("count-dialog").open) { countPick = null; $("cd-q").value = ""; }
+  renderCount();
+  if (!$("count-dialog").open) $("count-dialog").showModal();
+}
+
+function renderCount() {
+  const r = countReport;
+  if (!r) return;
+  $("cd-title").textContent = `${r.location} sayımı · ${r.started}` + (r.open ? " (devam ediyor)" : "");
+  $("cd-close-count").classList.toggle("hidden", !r.open || !can("depo-sayim"));
+  const info = [
+    ["Başlatan", `${r.startedBy} · ${r.started}`],
+    ["Durum", r.open ? "Devam ediyor (kayıttaki depo listesi canlı)" : `Bitti · ${r.closed} · ${r.closedBy || ""}`],
+    [r.open ? "Şu an kayıtta depoda" : "Kayıtta depoda (bitişte)", String(r.expected)],
+    ["Okutulan tüp", String(r.counted)], ["Eşleşen", String(r.matched)], ["Eksik", String(r.missing)],
+    ["Fazla / yer uyuşmazlığı", String(r.extra)], ["Tanınmayan barkod", String(r.unknown)]
+  ];
+  if (r.note) info.push(["Not", r.note]);
+  $("cd-info").replaceChildren(...info.map(([k, v]) => el("div", {}, el("span", {}, k), v)));
+  const head = el("tr", {}, ...["Gaz türü", "Boyut", "Kayıtta depoda", "Sayılan", "Eşleşen", "Eksik", "Fazla", "Dolu / boş (sayılan)", "Fark"].map((h) => el("th", {}, h)));
+  const body = r.groups.map((g) => {
+    const diff = g.counted - g.expected;
+    return el("tr", { class: "click" + (countPick === g.title ? " selected" : ""), onclick: () => { countPick = countPick === g.title ? null : g.title; renderCount(); } },
+      el("td", {}, el("b", {}, g.gasType)),
+      el("td", {}, g.capacity || "-"),
+      el("td", {}, String(g.expected)),
+      el("td", {}, el("b", {}, String(g.counted))),
+      el("td", {}, String(g.matched)),
+      el("td", { class: g.missing ? "bad-text" : "muted" }, String(g.missing)),
+      el("td", { class: g.extra ? "warn-text" : "muted" }, String(g.extra)),
+      el("td", {}, fullEmpty(g.full, g.empty)),
+      el("td", { class: diff < 0 ? "bad-text" : diff > 0 ? "warn-text" : "muted" }, diff > 0 ? `+${diff}` : String(diff)));
+  });
+  $("cd-groups").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 9, class: "muted" }, "Kayıtta depoda tüp yok ve hiç tüp okutulmadı."))])));
+  renderCountList();
+}
+
+function renderCountList() {
+  const r = countReport;
+  if (!r) return;
+  const kind = $("cd-kind").value;
+  const term = $("cd-q").value.trim().toLocaleLowerCase("tr-TR");
+  const label = $("cd-kind").selectedOptions[0].textContent;
+  if (kind === "unknown") {
+    const rows = r.unknownCodes.filter((u) => !term || u.code.toLocaleLowerCase("tr-TR").includes(term));
+    $("cd-list-title").textContent = `${label} · ${rows.length}`;
+    const head = el("tr", {}, ...["Okutulan kod", "Zaman", "Okutan"].map((h) => el("th", {}, h)));
+    const body = rows.map((u) => el("tr", {}, el("td", {}, el("b", {}, u.code)), el("td", {}, u.at), el("td", { class: "muted" }, u.scannedBy)));
+    $("cd-list").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 3, class: "muted" }, "Tanınmayan barkod yok."))])));
+    return;
+  }
+  const source = { missing: r.missingList, extra: r.extraList, matched: r.matchedList }[kind] || [];
+  const rows = source
+    .filter((c) => !countPick || c.group === countPick)
+    .filter((c) => !term || [c.serialNumber, c.barcode, c.gasType, c.place].some((v) => v && v.toLocaleLowerCase("tr-TR").includes(term)));
+  $("cd-list-title").textContent = `${label}${countPick ? " · " + countPick : ""} · ${rows.length} tüp`;
+  const head = el("tr", {}, ...["Seri no / barkod", "Gaz", "Boyut", "Dolu/Boş", kind === "extra" ? "Kayıtta nerede (okutulurken)" : "Yer", "Okutulma"].map((h) => el("th", {}, h)));
+  const sections = new Map();
+  for (const c of rows) {
+    if (!sections.has(c.group)) sections.set(c.group, []);
+    sections.get(c.group).push(c);
+  }
+  const body = [...sections.entries()].flatMap(([group, list]) => [
+    el("tr", { class: "group-head" }, el("td", { colspan: 6 }, `${group} · ${list.length} adet`)),
+    ...list.map((c) => el("tr", { class: "click", onclick: () => openDetail(c.id) },
+      el("td", {}, el("b", {}, c.serialNumber), c.barcode !== c.serialNumber ? el("div", { class: "muted" }, c.barcode) : null),
+      el("td", {}, c.gasType),
+      el("td", {}, c.capacity),
+      el("td", {}, c.fullness),
+      el("td", { class: kind === "extra" ? "warn-text" : "" }, c.place),
+      el("td", { class: "muted" }, c.at ? `${c.at} · ${c.scannedBy || ""}` : "-")))]);
+  const empty = { missing: "Eksik tüp yok.", extra: "Fazla tüp yok.", matched: "Eşleşen tüp yok." }[kind];
+  $("cd-list").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6, class: "muted" }, term || countPick ? "Filtreye uyan tüp yok." : empty))])));
+}
+
+$("sc-refresh").addEventListener("click", loadCounts);
+$("cd-close").addEventListener("click", () => $("count-dialog").close());
+$("cd-refresh").addEventListener("click", () => countReport && openCountDialog(countReport.id));
+$("cd-kind").addEventListener("change", renderCountList);
+$("cd-q").addEventListener("input", renderCountList);
+$("cd-close-count").addEventListener("click", async () => {
+  const r = countReport;
+  if (!r || !r.open) return;
+  if (!confirm(`${r.location} sayımı bitirilsin mi?\n\n${r.counted} tüp okutuldu, şu an ${r.missing} eksik, ${r.extra} fazla görünüyor. Bitirince depo listesi dondurulur ve bu sayıma okutma yapılamaz.`)) return;
+  const button = $("cd-close-count");
+  button.disabled = true;
+  try {
+    const result = await api(`/panel/api/sayim/${r.id}/bitir`, { method: "POST" });
+    if (result.count) {
+      countReport = result.count;
+      renderCount();
+      show($("cd-msg"), result.message, "ok");
+    } else {
+      $("count-dialog").close();
+      show($("global-msg"), result.message, "ok");
+    }
+    loadCounts();
+  } catch (error) {
+    show($("cd-msg"), error.message);
+  } finally {
+    button.disabled = false;
+  }
 });
 
 // ---- Administration ------------------------------------------------------------------------------

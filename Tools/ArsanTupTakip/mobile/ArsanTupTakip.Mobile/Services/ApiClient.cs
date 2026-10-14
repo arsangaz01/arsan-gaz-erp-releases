@@ -41,6 +41,7 @@ public static class Perm
     public const string CylinderView = "tup-goruntule";
     public const string CylinderRegister = "tup-kayit";
     public const string CylinderAudit = "tup-sayim";
+    public const string StockCount = "depo-sayim";
     public const string MoveFullness = "hareket-dolu-bos";
     public const string MoveBulk = "hareket-toplu";
     public const string MoveOverride = "hareket-cakisma";
@@ -182,6 +183,35 @@ public sealed record CylinderStatusInfo(
 public sealed record CylinderBulkResult(string Code, bool Ok, string Message);
 public sealed record CylinderBulkResponse(string Message, int Ok, int Failed, List<CylinderBulkResult> Results);
 public sealed record CylinderAuditResponse(string Message, int Expected, int Found, List<string> Missing, List<string> Unexpected, List<string> Unknown);
+
+public sealed record StockCountGroupInfo(string Title, string GasType, string Capacity, int Expected, int Counted, int Matched, int Missing, int Extra, int Full, int Empty);
+
+public sealed record StockCountCylinderInfo(int Id, string SerialNumber, string Barcode, string Group, string Fullness, string Place, string? At);
+
+public sealed record StockCountUnknownInfo(string Code, string At, string ScannedBy);
+
+public sealed record StockCountInfo(
+    int Id,
+    string Location,
+    string Started,
+    string StartedBy,
+    bool Open,
+    int Expected,
+    int Counted,
+    int Matched,
+    int Missing,
+    int Extra,
+    int Unknown,
+    string Text,
+    List<StockCountGroupInfo> Groups,
+    List<StockCountCylinderInfo> Recent,
+    List<StockCountUnknownInfo> UnknownCodes);
+
+public sealed record StockCountActiveResponse(StockCountInfo? Count);
+
+public sealed record StockCountResponse(string Message, StockCountInfo? Count);
+
+public sealed record StockCountScanResponse(string Outcome, string Message, string? Group, StockCountInfo Count);
 
 public sealed record TripVehicleSummary(string Plate, int LoadedCount, bool OnTrip, DateTime? ReturnedAt);
 
@@ -576,6 +606,20 @@ public sealed class ApiClient
 
     public Task<CylinderAuditResponse> AuditCustomerAsync(int customerId, IReadOnlyList<string> codes, string? note) =>
         PostAsync<CylinderAuditResponse>("/api/tup/sayim", new { customerId, codes, note });
+
+    public Task<StockCountActiveResponse> ActiveStockCountAsync() => GetAsync<StockCountActiveResponse>("/api/depo-sayim/aktif");
+
+    public Task<StockCountResponse> StartStockCountAsync(string? note) =>
+        PostAsync<StockCountResponse>("/api/depo-sayim/baslat", new { note });
+
+    public Task<StockCountScanResponse> ScanStockCountAsync(int id, string code) =>
+        PostAsync<StockCountScanResponse>($"/api/depo-sayim/{id}/okut", new { code });
+
+    public Task<StockCountResponse> UndoStockCountAsync(int id, string code) =>
+        PostAsync<StockCountResponse>($"/api/depo-sayim/{id}/geri-al", new { code });
+
+    public Task<StockCountResponse> CloseStockCountAsync(int id) =>
+        PostAsync<StockCountResponse>($"/api/depo-sayim/{id}/bitir", new { });
 
     public Task<List<ActiveTripSummary>> ActiveTripsAsync() => GetAsync<List<ActiveTripSummary>>("/api/sefer/aktif");
 
