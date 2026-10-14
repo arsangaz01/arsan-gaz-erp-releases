@@ -112,6 +112,20 @@ SELECT DISTINCT p.Plate, 1, datetime('now', 'localtime') FROM (
             command.CommandText = AuditTableSql;
             await command.ExecuteNonQueryAsync(cancellationToken);
 
+            HashSet<string> tripColumns = await ColumnsAsync(connection, "CylinderTripCylinders", cancellationToken);
+            foreach ((string column, string definition) in new[]
+            {
+                ("MissingReason", "TEXT NULL"), ("MissingNote", "TEXT NULL"), ("ReasonAt", "TEXT NULL"),
+                ("ReasonBy", "TEXT NULL"), ("CheckedAt", "TEXT NULL"), ("CheckedBy", "TEXT NULL"),
+                ("IsPickup", "INTEGER NOT NULL DEFAULT 0"), ("PickupCustomer", "TEXT NULL")
+            })
+            {
+                await AddColumnAsync(connection, tripColumns, "CylinderTripCylinders", column, definition, cancellationToken);
+            }
+
+            await AddColumnAsync(connection, await ColumnsAsync(connection, "CylinderTrips", cancellationToken), "CylinderTrips",
+                "RequireReasons", "INTEGER NOT NULL DEFAULT 0", cancellationToken);
+
             // Two users loading the same cylinder onto a trip at once must not create two rows. Skipped (and retried at
             // the next start) while old duplicate rows exist, so existing data is never deleted.
             await using SqliteCommand unique = connection.CreateCommand();

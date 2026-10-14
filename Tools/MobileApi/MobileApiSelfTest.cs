@@ -44,6 +44,7 @@ internal static class MobileApiSelfTest
             Run("Her uç nokta bir yetkiye bağlı", EndpointCoverage);
             await RunAsync("Tekrarlanan okutma bir kez uygulanır", IdempotencyAsync);
             await RunAsync("Aynı tüpe eşzamanlı hareket", ConcurrentMovesAsync);
+            await RunAsync("Sefer akışı: dolu yükleme, boş alma, dönüş, gerekçeli kapanış ve bildirim", TripFlowAsync);
         }
         finally
         {
@@ -500,9 +501,160 @@ internal static class MobileApiSelfTest
             }
 
             Check(rejected, "aynı tüp aynı sefere iki kez yüklenebildi");
+
+            // A trip from before mandatory reasons (RequireReasons = false) still closes with unexplained cylinders.
+            CylinderTripService trips = new();
+            Check((await trips.MissingReportAsync()).All(m => m.TripId != trip.Id), "açık seferde araç dönmeden tüp eksik sayıldı");
+            await trips.CloseTripAsync(trip.Id);
+            List<TripMissingItem> report = await trips.MissingReportAsync();
+            Check(report.Any(m => m.TripId == trip.Id && m.Reason is null), "kapanan seferde okutulmayan tüp kayıp listesine düşmedi");
+            bool noteRequired = false;
+            try
+            {
+                await trips.ExplainMissingAsync(trip.Id, [cylinderId], "kayip", null, "self-test");
+            }
+            catch (ArgumentException)
+            {
+                noteRequired = true;
+            }
+
+            Check(noteRequired, "\"kayıp\" gerekçesi açıklamasız kaydedildi");
+            Check((await trips.CheckMissingAsync(trip.Id, [cylinderId], "yonetici")).Updated == 0, "gerekçesiz tüp kontrol edildi sayıldı");
+            Check((await trips.ExplainMissingAsync(trip.Id, [cylinderId], "kayip", "depoda arandı", "sofor")).Updated == 1, "gerekçe kaydedilmedi");
+            Check((await trips.ReconcileTripAsync(trip.Id)).UnexplainedMissing.Count == 0, "gerekçeli tüp hâlâ gerekçesiz görünüyor");
+            Check((await trips.CheckMissingAsync(trip.Id, [cylinderId], "yonetici")).Updated == 1, "gerekçe kontrol edilemedi");
+            Check((await trips.MissingReportAsync()).All(m => m.TripId != trip.Id), "kontrol edilen tüp varsayılan listede kaldı");
+            TripMissingItem? checkedItem = (await trips.MissingReportAsync(includeChecked: true)).FirstOrDefault(m => m.TripId == trip.Id);
+            Check(checkedItem is { Reason: "kayip", Note: "depoda arandı", ReasonBy: "sofor", CheckedBy: "yonetici" }, "gerekçe/kontrol bilgisi okunamadı");
+            await trips.ExplainMissingAsync(trip.Id, [cylinderId], "arac-icinde", null, "sofor");
+            Check((await trips.MissingReportAsync()).Any(m => m.TripId == trip.Id && m.CheckedAt is null), "gerekçe değişince eski kontrol kalktı sayılmadı");
         }
 
         Console.WriteLine($"     ({ok} hareket uygulandı, {stale} çakışma reddedildi)");
+    }
+
+    private static async Task TripFlowAsync()
+    {
+        await using (ArsanGazDbContext db = new())
+        {
+            await db.Database.EnsureCreatedAsync();
+        }
+
+        await CylinderSchemaService.EnsureAsync();
+        const string plate = "34 AKS 01";
+        int customerId;
+        await using (ArsanGazDbContext db = new())
+        {
+            Customer customer = new() { Code = "AKS", CompanyName = "Akış Müşteri", Phone = "05551112233" };
+            db.Customers.Add(customer);
+            db.Vehicles.Add(new Vehicle { Plate = plate, DriverName = "Ali Sürücü", IsActive = true, CreatedAt = DateTime.Now });
+            await db.SaveChangesAsync();
+            customerId = customer.Id;
+            foreach ((string serial, bool? full) in new[] { ("AK-F1", (bool?)true), ("AK-F2", true), ("AK-F3", true), ("AK-F4", true), ("AK-E1", false), ("AK-U1", null) })
+            {
+                db.Cylinders.Add(new Cylinder { SerialNumber = serial, Barcode = serial, GasType = "Oksijen", Capacity = 40, IsFull = full });
+            }
+
+            foreach (string serial in new[] { "AK-C1", "AK-C2" })
+            {
+                db.Cylinders.Add(new Cylinder { SerialNumber = serial, Barcode = serial, GasType = "Argon", Capacity = 40, IsFull = true, Status = CylinderStatus.Customer, CurrentCustomerId = customerId });
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        CylinderTripService trips = new();
+        CylinderTrip trip = await trips.StartTripAsync([plate], null, "self-test");
+        Check(trip.RequireReasons, "yeni seferde gerekçe zorunluluğu açık değil");
+
+        TripLoadResult load = await trips.LoadCylindersAsync(trip.Id, plate, ["AK-F1", "AK-F2", "AK-F3", "AK-F4", "AK-E1", "AK-U1", "AK-C1"], "sofor");
+        Check(load.Added == 5, $"dolu yükleme sayısı {load.Added}");
+        Check(load.RefusedCodes.Contains("AK-E1"), "boş tüp yüklemesi reddedilmedi");
+        Check(load.RefusedCodes.Contains("AK-C1"), "müşterideki tüp dolu diye yüklendi");
+
+        List<CylinderBulkResult> delivered = await trips.DeliverCylindersAsync(trip.Id, ["AK-F1"], customerId, null, "sofor");
+        Check(delivered.All(x => x.Ok), "teslim kaydedilemedi");
+
+        TripLoadResult pickup = await trips.PickupEmptiesAsync(trip.Id, plate, ["AK-C1", "AK-C2", "AK-F3"], "sofor");
+        Check(pickup.Added == 2, $"müşteriden boş alma sayısı {pickup.Added}");
+
+        TripReturnResult back = await trips.ReturnCylindersAsync(trip.Id, plate, ["AK-F2", "AK-C1"], null, "sofor");
+        Check(back is { Full: 1, Empty: 1 }, $"dönüş dolu/boş ayrımı hatalı ({back.Full} dolu, {back.Empty} boş)");
+        await using (ArsanGazDbContext db = new())
+        {
+            Dictionary<string, Cylinder> byCode = await db.Cylinders.AsNoTracking().Where(c => c.SerialNumber.StartsWith("AK-")).ToDictionaryAsync(c => c.SerialNumber);
+            Check(byCode["AK-F2"] is { Status: CylinderStatus.Warehouse, IsFull: true }, "satılmayan dolu depoya dolu girmedi");
+            Check(byCode["AK-C1"] is { Status: CylinderStatus.Warehouse, IsFull: false }, "müşteriden alınan boş depoya boş girmedi");
+            Check(byCode["AK-F1"] is { Status: CylinderStatus.Customer, CurrentCustomerId: not null }, "teslim edilen tüp müşteride değil");
+            Check(byCode["AK-U1"].IsFull == true, "doluluğu bilinmeyen yüklenen tüp dolu kaydedilmedi");
+            Check(byCode["AK-E1"].Status == CylinderStatus.Warehouse, "reddedilen boş tüp depodan çıktı");
+        }
+
+        TripReconcileResult reconcile = await trips.ReconcileTripAsync(trip.Id);
+        Check(reconcile.NotDeliveredNotReturned.OrderBy(x => x).SequenceEqual(["AK-C2", "AK-F3", "AK-F4", "AK-U1"]),
+            "eksik listesi hatalı: " + string.Join(", ", reconcile.NotDeliveredNotReturned));
+        Check(reconcile.MissingEmpties.SequenceEqual(["AK-C2"]), "depoya okutulmayan boş eksik sayılmadı");
+
+        TripReasonsRequiredException? refusedClose = null;
+        try
+        {
+            await trips.CloseTripAsync(trip.Id, "yonetici");
+        }
+        catch (TripReasonsRequiredException exception)
+        {
+            refusedClose = exception;
+        }
+
+        Check(refusedClose is { Serials.Count: 4 }, "gerekçesiz eksik tüpler varken sefer kapandı");
+
+        Dictionary<string, int> ids;
+        await using (ArsanGazDbContext db = new())
+        {
+            ids = await db.Cylinders.AsNoTracking().Where(c => c.SerialNumber.StartsWith("AK-")).ToDictionaryAsync(c => c.SerialNumber, c => c.Id);
+        }
+
+        bool customerNeeded = false;
+        try
+        {
+            await trips.ExplainMissingAsync(trip.Id, [ids["AK-F3"]], "musteride-okutulmadi", null, "sofor");
+        }
+        catch (ArgumentException)
+        {
+            customerNeeded = true;
+        }
+
+        Check(customerNeeded, "\"müşteriye teslim edildi\" gerekçesi müşterisiz kaydedildi");
+        await trips.ExplainMissingAsync(trip.Id, [ids["AK-F3"]], "musteride-okutulmadi", null, "sofor", customerId);
+        await trips.ExplainMissingAsync(trip.Id, [ids["AK-F4"]], "arac-icinde", null, "sofor");
+        await trips.ExplainMissingAsync(trip.Id, [ids["AK-C2"]], "musteride-kaldi", "müşteri boşu vermedi", "sofor");
+        Check((await trips.ExplainMissingAsync(trip.Id, [ids["AK-F2"]], "kayip", "x", "sofor")).Updated == 0, "depoya dönen tüpe gerekçe yazıldı");
+        try
+        {
+            await trips.CloseTripAsync(trip.Id, "yonetici");
+            Check(false, "bir tüp gerekçesizken sefer kapandı");
+        }
+        catch (TripReasonsRequiredException exception)
+        {
+            Check(exception.Serials.SequenceEqual(["AK-U1"]), "kalan gerekçesiz tüp yanlış: " + string.Join(", ", exception.Serials));
+        }
+
+        await trips.ExplainMissingAsync(trip.Id, [ids["AK-U1"]], "kayip", "depoda arandı", "sofor");
+        while (TelegramNotifier.Captured.TryDequeue(out _))
+        {
+        }
+
+        TripCloseResult closed = await trips.CloseTripAsync(trip.Id, "Web panel (yonetici)");
+        Check(closed.MissingCylinders.Count == 4, "kapanışta eksik tüp listesi hatalı");
+        CylinderTripEndpoints.NotifyManagers(closed);
+        string? notice = TelegramNotifier.Captured.FirstOrDefault(t => t.Contains($"#{trip.Id}"));
+        Check(notice is not null, "yöneticiye sefer bildirimi oluşmadı");
+        foreach (string expected in new[] { plate, "Ali Sürücü", "AK-F3", "Müşteri: Akış Müşteri", "Kayıp / bulunamadı", "depoda arandı", "müşteriden boş alındı", "Web panel (yonetici)" })
+        {
+            Check(notice!.Contains(expected), "bildirimde eksik bilgi: " + expected);
+        }
+
+        Check(!notice!.Contains("05551112233"), "bildirimde müşteri telefonu var");
+        Check((await trips.MissingReportAsync()).Count(m => m.TripId == trip.Id) == 4, "kayıp kontrol listesinde sefer eksikleri yok");
     }
 
     private static void SqliteCleanup()

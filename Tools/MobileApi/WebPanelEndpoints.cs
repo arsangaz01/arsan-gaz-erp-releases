@@ -15,6 +15,8 @@ internal sealed record PanelEditRequest(string? GasType, decimal Capacity, strin
 internal sealed record PanelUserCreateRequest(string? KullaniciAdi, string? AdSoyad, string? Rol, string? Sifre, bool SifreDegistirsin = true);
 internal sealed record PanelUserUpdateRequest(string? AdSoyad, string? Rol, bool Aktif);
 internal sealed record PanelTripLoadRequest(string? Plate, List<string?>? Codes);
+internal sealed record PanelTripReasonRequest(List<int>? CylinderIds, string? Reason, string? Note);
+internal sealed record PanelTripCheckRequest(List<int>? CylinderIds, bool Undo);
 internal sealed record PanelUserPasswordRequest(string? Sifre, bool SifreDegistirsin = true);
 internal sealed record PanelPermissionsRequest(List<string>? Izinler, bool Sifirla = false);
 internal sealed record PanelUserDeleteRequest(string? Onay);
@@ -444,7 +446,16 @@ internal static class WebPanelEndpoints
                     Loaded = c.LoadedAt.ToString("dd.MM.yyyy HH:mm", Turkish),
                     Delivered = c.DeliveredAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
                     Returned = c.ReturnedAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
-                    c.Missing
+                    c.Missing,
+                    c.Reason,
+                    c.ReasonLabel,
+                    c.Note,
+                    ReasonAt = c.ReasonAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
+                    c.ReasonBy,
+                    CheckedAt = c.CheckedAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
+                    c.CheckedBy,
+                    c.IsPickup,
+                    c.PickupCustomer
                 }),
                 unexpected = detail.UnexpectedReturns.Select(u => new
                 {
@@ -491,15 +502,82 @@ internal static class WebPanelEndpoints
         {
             try
             {
-                TripCloseResult result = await new CylinderTripService().CloseTripAsync(id);
+                TripCloseResult result = await new CylinderTripService().CloseTripAsync(id, $"Web panel ({context.Items["panelUser"]})");
                 WebPanelAudit.Write((string)context.Items["panelUser"]!, "Sefer kapatıldı", $"Sefer #{id}", result.Reconcile.HasAlerts ? result.Reconcile.AlertText : null, WebPanelAuth.ClientIp(context));
+                CylinderTripEndpoints.NotifyManagers(result);
                 return Results.Ok(new { message = result.Message, hasAlerts = result.Reconcile.HasAlerts });
+            }
+            catch (TripReasonsRequiredException exception)
+            {
+                return CylinderTripEndpoints.ReasonsRequired(exception);
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
         }).Requires(PanelPermissions.TripClose);
+
+        api.MapGet("/sefer-gerekceler", () => Results.Ok(CylinderTripEndpoints.ReasonCatalog())).Requires(PanelPermissions.TripView);
+
+        api.MapPost("/sefer/{id:int}/gerekce", async (int id, PanelTripReasonRequest request, HttpContext context) =>
+        {
+            try
+            {
+                string user = (string)context.Items["panelUser"]!;
+                TripReasonResult result = await new CylinderTripService().ExplainMissingAsync(id, request.CylinderIds ?? [], request.Reason, request.Note, $"Web panel ({user})");
+                WebPanelAudit.Write(user, "Sefer eksik gerekçesi", $"Sefer #{id}",
+                    $"{TripMissingReasons.Label(request.Reason)} · {result.Updated} tüp" + (string.IsNullOrWhiteSpace(request.Note) ? string.Empty : " · " + request.Note.Trim()),
+                    WebPanelAuth.ClientIp(context));
+                return Results.Ok(new { message = CylinderTripEndpoints.ReasonMessage(result, "tüpe gerekçe yazıldı."), result.Updated, result.Messages });
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(PanelPermissions.TripDeliver);
+
+        api.MapPost("/sefer/{id:int}/gerekce-kontrol", async (int id, PanelTripCheckRequest request, HttpContext context) =>
+        {
+            try
+            {
+                string user = (string)context.Items["panelUser"]!;
+                TripReasonResult result = await new CylinderTripService().CheckMissingAsync(id, request.CylinderIds ?? [], $"Web panel ({user})", request.Undo);
+                WebPanelAudit.Write(user, request.Undo ? "Sefer eksik kontrolü geri alındı" : "Sefer eksik gerekçesi kontrol edildi", $"Sefer #{id}",
+                    $"{result.Updated} tüp", WebPanelAuth.ClientIp(context));
+                return Results.Ok(new { message = CylinderTripEndpoints.ReasonMessage(result, request.Undo ? "tüpün kontrolü geri alındı." : "tüp kontrol edildi."), result.Updated, result.Messages });
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(PanelPermissions.TripClose);
+
+        api.MapGet("/sefer-eksikler", async (int? gun, bool? tumu) =>
+            Results.Ok((await new CylinderTripService().MissingReportAsync(gun ?? 60, tumu == true)).Select(m => new
+            {
+                m.TripId,
+                m.TripTitle,
+                m.TripActive,
+                TripStarted = m.TripStartedAt.ToString("dd.MM.yyyy HH:mm", Turkish),
+                m.CylinderId,
+                m.SerialNumber,
+                m.GasType,
+                m.Plate,
+                Loaded = m.LoadedAt.ToString("dd.MM.yyyy HH:mm", Turkish),
+                m.Reason,
+                m.ReasonLabel,
+                m.Note,
+                ReasonAt = m.ReasonAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
+                m.ReasonBy,
+                CheckedAt = m.CheckedAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
+                m.CheckedBy,
+                m.CurrentStatus,
+                m.CurrentCustomer,
+                m.CurrentPlate,
+                LastMovement = m.LastMovementAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
+                m.SeenAfterTrip,
+                m.IsPickup
+            }))).Requires(PanelPermissions.TripView);
 
         api.MapGet("/araclar", async (bool? pasif) => Results.Ok((await new VehicleService().ListAsync(pasif == true)).Select(VehicleEndpoints.VehicleRow))).Requires(PanelPermissions.VehicleView);
 
@@ -663,7 +741,11 @@ internal static class WebPanelEndpoints
         t.Returned,
         t.OnVehicle,
         t.Missing,
-        MissingByGas = t.MissingByGas.Select(g => new { g.GasType, g.Count })
+        MissingByGas = t.MissingByGas.Select(g => new { g.GasType, g.Count }),
+        t.MissingUnexplained,
+        t.MissingUnchecked,
+        t.PickedUp,
+        t.RequireReasons
     };
 
     private static string LocalText(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy HH:mm", Turkish);

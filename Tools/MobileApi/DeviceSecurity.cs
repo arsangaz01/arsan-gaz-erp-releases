@@ -262,13 +262,16 @@ internal static class TelegramNotifier
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
 
-    // Set by --self-test so test logins never reach the real chat.
+    // Set by --self-test so test logins never reach the real chat; the texts are kept in Captured instead.
     internal static bool Disabled { get; set; }
+
+    internal static System.Collections.Concurrent.ConcurrentQueue<string> Captured { get; } = new();
 
     public static void Send(string text)
     {
         if (Disabled)
         {
+            Captured.Enqueue(text);
             return;
         }
 

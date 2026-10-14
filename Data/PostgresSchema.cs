@@ -37,6 +37,15 @@ CREATE TABLE IF NOT EXISTS CylinderTripCylinders (
  DeliveredAt timestamp without time zone NULL,
  ReturnedAt timestamp without time zone NULL
 );
+ALTER TABLE CylinderTripCylinders ADD COLUMN IF NOT EXISTS MissingReason text NULL;
+ALTER TABLE CylinderTripCylinders ADD COLUMN IF NOT EXISTS MissingNote text NULL;
+ALTER TABLE CylinderTripCylinders ADD COLUMN IF NOT EXISTS ReasonAt timestamp without time zone NULL;
+ALTER TABLE CylinderTripCylinders ADD COLUMN IF NOT EXISTS ReasonBy text NULL;
+ALTER TABLE CylinderTripCylinders ADD COLUMN IF NOT EXISTS CheckedAt timestamp without time zone NULL;
+ALTER TABLE CylinderTripCylinders ADD COLUMN IF NOT EXISTS CheckedBy text NULL;
+ALTER TABLE CylinderTripCylinders ADD COLUMN IF NOT EXISTS IsPickup boolean NOT NULL DEFAULT FALSE;
+ALTER TABLE CylinderTripCylinders ADD COLUMN IF NOT EXISTS PickupCustomer text NULL;
+ALTER TABLE CylinderTrips ADD COLUMN IF NOT EXISTS RequireReasons boolean NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS ix_cylindertripcylinders_tripid_cylinderid ON CylinderTripCylinders(TripId, CylinderId);
 CREATE INDEX IF NOT EXISTS ix_cylindertripcylinders_cylinderid ON CylinderTripCylinders(CylinderId);
 CREATE TABLE IF NOT EXISTS Vehicles (

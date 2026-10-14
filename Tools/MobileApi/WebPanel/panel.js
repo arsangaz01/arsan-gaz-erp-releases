@@ -253,6 +253,16 @@ async function loadSummary() {
     }
     if (data.testSoon > 0) stats.push(stat(data.testSoon, "Test tarihi 30 gün içinde", "veya geçmiş", () => openFiltered({}), true));
     if (data.inactive > 0) stats.push(stat(data.inactive, "Pasif tüp", "Kullanım dışı kayıtlar", () => openFiltered({ pasif: true })));
+    // Manager notice: unscanned trip cylinders whose reasons nobody has checked yet.
+    if (can("sefer-kapat") && can("sefer-goruntule")) {
+      try {
+        const missing = await api("/panel/api/sefer-eksikler?gun=60");
+        if (missing.length) {
+          const unexplained = missing.filter((m) => !m.reason).length;
+          stats.unshift(stat(missing.length, "Sefer eksiği kontrol bekliyor", `${missing.length - unexplained} gerekçeli · ${unexplained} gerekçesiz (Seferler > Kayıp kontrolü)`, () => openTab("seferler"), true));
+        }
+      } catch { /* the summary still shows without the trip notice */ }
+    }
     $("stats").replaceChildren(...stats);
 
     $("vehicles").replaceChildren(...(o.vehicles.length === 0
@@ -580,27 +590,138 @@ async function loadTrips() {
     }
     $("s-active").replaceChildren(...(cards.length ? cards : [el("div", { class: "muted" }, "Şu an aktif sefer yok.")]));
 
-    const alarms = active.filter((t) => t.missing > 0).map((t) => `${t.title}: ${t.missing} tüp okutulmadı (${gasText(t.missingByGas)})`);
+    const alarms = active.filter((t) => t.missing > 0).map((t) => `${t.title}: ${t.missing} tüp okutulmadı (${gasText(t.missingByGas)})`
+      + (t.missingUnexplained ? ` · ${t.missingUnexplained} gerekçesiz` : ""));
     if (alarms.length) { $("s-alarm").textContent = "⚠ Dönen araçlarda eksik okutma var:\n" + alarms.join("\n"); $("s-alarm").classList.remove("hidden"); }
     else $("s-alarm").classList.add("hidden");
 
     $("s-count").textContent = `${rows.length} sefer` + (rows.length >= 100 ? " (son 100)" : "");
-    const head = el("tr", {}, ...["Sefer", "Başlangıç / bitiş", "Araçlar", "Yüklenen", "Teslim", "Depoya dönen", "Araçta", "Durum", "Eksik (gaz türü)"].map((h) => el("th", {}, h)));
+    const head = el("tr", {}, ...["Sefer", "Başlangıç / bitiş", "Araçlar", "Dolu yüklenen", "Teslim", "Depoya dönen", "Araçta", "Durum", "Eksik (gaz türü)"].map((h) => el("th", {}, h)));
     const body = rows.map((t) => el("tr", { class: "click" + (t.missing ? " alarm-row" : ""), onclick: () => openTrip(t.id) },
       el("td", {}, el("b", {}, t.title), t.note ? el("div", { class: "muted" }, t.note) : null),
       el("td", {}, t.started, el("div", { class: "muted" }, t.closed ? "Kapandı " + t.closed : "Açık")),
       el("td", {}, el("div", { class: "trip-vehicles" }, ...t.vehicles.map((v) => el("span", { class: "badge" + (v.missing ? " trip-alarm" : v.onTrip ? " trip-active" : "") }, v.plate)))),
-      el("td", {}, String(t.loaded)),
+      el("td", {}, String(t.loaded), t.pickedUp ? el("div", { class: "muted" }, `+${t.pickedUp} boş alındı`) : null),
       el("td", {}, String(t.delivered)),
       el("td", {}, String(t.returned)),
       el("td", {}, String(t.onVehicle)),
       el("td", {}, tripStatus(t)),
-      el("td", { class: t.missing ? "alarm" : "muted" }, t.missing ? gasText(t.missingByGas) : "-")));
+      el("td", { class: t.missing ? "alarm" : "muted" }, t.missing ? gasText(t.missingByGas) : "-",
+        t.missing ? el("div", { class: t.missingUnexplained ? "alarm" : "muted" },
+          t.missingUnexplained ? `${t.missingUnexplained} gerekçesiz` : t.missingUnchecked ? `${t.missingUnchecked} kontrol bekliyor` : "Gerekçeli, kontrol edildi") : null)));
     $("trips").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 9, class: "muted" }, "Kayıtlı sefer yok."))])));
   } catch (error) {
     show($("global-msg"), error.message);
   }
+  loadMissingReport();
 }
+
+// ---- Loss control: unscanned cylinders, their reasons and the manager check ------------------------
+
+let missingReasons = null;
+// Serial numbers the server refused to close the trip for; shown in the reason card even while the vehicle is on the road.
+let closeBlocked = new Set();
+
+async function ensureReasons() {
+  if (!missingReasons) missingReasons = await api("/panel/api/sefer-gerekceler");
+  if (!$("t-reason").options.length) {
+    $("t-reason").replaceChildren(el("option", { value: "" }, "Nerede / neden okutulmadı?"),
+      ...missingReasons.map((r) => el("option", { value: r.key }, r.label + (r.asksCustomer ? " (müşteri adı gerekli)" : r.noteRequired ? " (açıklama gerekli)" : ""))));
+  }
+}
+
+function pickupText(c) {
+  return c.isPickup ? "Müşteriden boş alındı" + (c.pickupCustomer ? ` (${c.pickupCustomer})` : "") : "Depodan dolu yüklendi";
+}
+
+$("t-reason").addEventListener("change", () => {
+  const reason = (missingReasons || []).find((r) => r.key === $("t-reason").value);
+  $("t-reason-note").placeholder = reason && reason.asksCustomer ? "Müşteri adı (ve varsa ayrıntı)" : "Araç, yer veya ayrıntı";
+});
+
+function reasonCell(c) {
+  if (!c.reason) return el("td", { class: "alarm" }, "Gerekçe yok");
+  return el("td", {}, el("b", {}, c.reasonLabel), c.note ? el("div", {}, c.note) : null,
+    el("div", { class: "muted" }, [c.reasonBy, c.reasonAt].filter(Boolean).join(" · ")));
+}
+
+function checkCell(c) {
+  if (c.checkedAt) return el("td", {}, "✔ " + c.checkedAt, el("div", { class: "muted" }, c.checkedBy || ""));
+  return el("td", { class: c.reason ? "" : "muted" }, c.reason ? "Kontrol bekliyor" : "-");
+}
+
+$("sm-yenile").addEventListener("click", loadMissingReport);
+$("sm-gun").addEventListener("change", loadMissingReport);
+$("sm-tumu").addEventListener("change", loadMissingReport);
+
+async function loadMissingReport() {
+  try {
+    const rows = await api(`/panel/api/sefer-eksikler?gun=${$("sm-gun").value}` + ($("sm-tumu").checked ? "&tumu=true" : ""));
+    const unexplained = rows.filter((r) => !r.reason).length;
+    const waiting = rows.filter((r) => r.reason && !r.checkedAt).length;
+    $("sm-count").textContent = rows.length
+      ? `${rows.length} tüp · ${unexplained} gerekçesiz · ${waiting} kontrol bekliyor`
+      : "Bu aralıkta açıklama veya kontrol bekleyen okutulmamış tüp yok.";
+    const head = el("tr", {}, ...["Seri no", "Gaz", "Sefer / plaka", "Gerekçe", "Kontrol", "Şu an"].map((h) => el("th", {}, h)));
+    const body = rows.map((r) => el("tr", { class: "click" + (r.reason ? "" : " alarm-row"), onclick: () => openTrip(r.tripId) },
+      el("td", {}, el("b", {}, r.serialNumber)),
+      el("td", {}, r.gasType),
+      el("td", {}, r.tripTitle, el("div", { class: "muted" }, `${r.plate} · ${r.tripActive ? "açık" : "kapandı"} · ${r.isPickup ? "müşteriden boş alındı" : "dolu yüklendi"}`)),
+      reasonCell(r),
+      checkCell(r),
+      el("td", {}, r.currentStatus + (r.currentCustomer ? " · " + r.currentCustomer : r.currentPlate ? " · " + r.currentPlate : ""),
+        r.seenAfterTrip ? el("div", { class: "muted" }, "Sonradan okutuldu " + (r.lastMovement || "")) : null)));
+    $("sm-table").replaceChildren(el("thead", {}, head), el("tbody", {}, ...body));
+  } catch (error) {
+    $("sm-count").textContent = "Kayıp kontrol listesi alınamadı: " + error.message;
+  }
+}
+
+function renderTripMissing(cylinders) {
+  const rows = cylinders.filter((c) => !c.delivered && !c.returned && (c.missing || c.reason || closeBlocked.has(c.serialNumber)));
+  $("t-missing-card").classList.toggle("hidden", rows.length === 0);
+  if (!rows.length) return;
+  ensureReasons().catch((error) => show($("t-msg"), error.message));
+  const all = el("input", { type: "checkbox", title: "Tümünü seç" });
+  all.addEventListener("change", () => { for (const box of $("t-missing").querySelectorAll("tbody input")) box.checked = all.checked; });
+  const head = el("tr", {}, el("th", {}, all), ...["Seri no", "Gaz", "Plaka", "Nereden", "Gerekçe", "Kontrol"].map((h) => el("th", {}, h)));
+  const body = rows.map((c) => el("tr", { class: c.reason ? "" : "alarm-row" },
+    el("td", {}, el("input", { type: "checkbox", "data-id": c.cylinderId })),
+    el("td", {}, el("b", {}, c.serialNumber)), el("td", {}, c.gasType), el("td", {}, c.plate), el("td", {}, pickupText(c)),
+    reasonCell(c), checkCell(c)));
+  $("t-missing").replaceChildren(el("thead", {}, head), el("tbody", {}, ...body));
+}
+
+function selectedMissing() {
+  return [...$("t-missing").querySelectorAll("tbody input:checked")].map((box) => Number(box.dataset.id));
+}
+
+async function submitMissing(path, body, button) {
+  const cylinderIds = selectedMissing();
+  if (!cylinderIds.length) { show($("t-msg"), "Önce listeden tüp seçin."); return false; }
+  button.disabled = true;
+  try {
+    const result = await api(`/panel/api/sefer/${currentTrip.id}/${path}`, { method: "POST", body: { cylinderIds, ...body } });
+    await openTrip(currentTrip.id, true);
+    show($("t-msg"), result.message, result.messages && result.messages.length ? "warn" : "ok");
+    loadTrips();
+    return true;
+  } catch (error) {
+    show($("t-msg"), error.message);
+    return false;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$("t-reason-save").addEventListener("click", () => {
+  const reason = $("t-reason").value;
+  if (!reason) { show($("t-msg"), "Bir gerekçe seçin."); return; }
+  submitMissing("gerekce", { reason, note: $("t-reason-note").value.trim() || null }, $("t-reason-save"))
+    .then((ok) => { if (ok) $("t-reason-note").value = ""; });
+});
+$("t-reason-check").addEventListener("click", () => submitMissing("gerekce-kontrol", { undo: false }, $("t-reason-check")));
+$("t-reason-uncheck").addEventListener("click", () => submitMissing("gerekce-kontrol", { undo: true }, $("t-reason-uncheck")));
 
 let currentTrip = null;
 
@@ -614,6 +735,7 @@ async function openTrip(id, keepMessage = false) {
   }
   const t = data.trip;
   const sameTrip = currentTrip && currentTrip.id === t.id;
+  if (!sameTrip) closeBlocked = new Set();
   currentTrip = t;
   if (!keepMessage) hide($("t-msg"));
   $("t-load-card").classList.toggle("hidden", !(t.active && can("sefer-yukle|sefer-kapat")));
@@ -630,13 +752,15 @@ async function openTrip(id, keepMessage = false) {
   $("t-title").textContent = `${t.title} · #${t.id}`;
   const alarms = [];
   if (t.missing) alarms.push(`⚠ ${t.missing} tüp okutulmadı (müşteriye teslim veya depoya dönüş yok): ${gasText(t.missingByGas)}`);
+  if (t.missingUnexplained) alarms.push(`⚠ ${t.missingUnexplained} okutulmayan tüpün gerekçesi seçilmemiş` + (t.active && t.requireReasons ? "; gerekçeler seçilmeden sefer kapatılamaz." : "."));
+  if (t.missingUnchecked) alarms.push(`${t.missingUnchecked} gerekçe yönetici kontrolü bekliyor.`);
   if (data.unexpected.length) alarms.push(`⚠ ${data.unexpected.length} tüp bu sefere yüklenmediği hâlde dönüşte okutuldu.`);
   $("t-alarm").textContent = alarms.join("\n");
   $("t-alarm").classList.toggle("hidden", alarms.length === 0);
   const info = [
     ["Durum", t.active ? "Seferde (açık)" : "Kapandı"], ["Başlangıç", t.started], ["Bitiş", t.closed || "-"],
     ["Açan", t.createdBy || "-"], ["Not", t.note || "-"],
-    ["Yüklenen", t.loaded], ["Müşteriye teslim", t.delivered], ["Depoya dönen", t.returned], ["Araçta (yolda)", t.onVehicle], ["Eksik", t.missing]
+    ["Dolu yüklenen", t.loaded], ["Müşteriden boş alınan", t.pickedUp || 0], ["Müşteriye teslim", t.delivered], ["Depoya dönen", t.returned], ["Araçta (yolda)", t.onVehicle], ["Eksik", t.missing]
   ];
   $("t-info").replaceChildren(...info.map(([k, v]) => el("div", {}, el("span", {}, k), String(v))));
 
@@ -650,10 +774,15 @@ async function openTrip(id, keepMessage = false) {
 
   const cHead = el("tr", {}, ...["Seri no", "Gaz", "Plaka", "Yükleme", "Durum"].map((h) => el("th", {}, h)));
   const cBody = data.cylinders.map((c) => el("tr", { class: "click" + (c.missing ? " alarm-row" : ""), onclick: () => openDetail(c.cylinderId) },
-    el("td", {}, el("b", {}, c.serialNumber)), el("td", {}, c.gasType), el("td", {}, c.plate), el("td", {}, c.loaded),
+    el("td", {}, el("b", {}, c.serialNumber)), el("td", {}, c.gasType), el("td", {}, c.plate),
+    el("td", {}, c.loaded, el("div", { class: "muted" }, pickupText(c))),
     el("td", { class: c.missing ? "alarm" : "" },
-      c.delivered ? "Müşteriye teslim " + c.delivered : c.returned ? "Depoya döndü " + c.returned : c.missing ? "⚠ Eksik: okutulmadı" : "Araçta")));
+      c.delivered ? "Müşteriye teslim " + c.delivered
+        : c.returned ? `Depoya ${c.isPickup ? "boş" : "dolu"} döndü ` + c.returned
+        : c.missing ? "⚠ Eksik: okutulmadı" : "Araçta",
+      !c.delivered && !c.returned && c.reasonLabel ? el("div", { class: "muted" }, "Gerekçe: " + c.reasonLabel + (c.checkedAt ? " ✔" : "")) : null)));
   $("t-cylinders").replaceChildren(el("thead", {}, cHead), el("tbody", {}, ...(cBody.length ? cBody : [el("tr", {}, el("td", { colspan: 5, class: "muted" }, "Bu sefere tüp yüklenmemiş."))])));
+  renderTripMissing(data.cylinders);
 
   $("t-unexpected-card").classList.toggle("hidden", data.unexpected.length === 0);
   const uHead = el("tr", {}, ...["Seri no", "Gaz", "Plaka", "Okutma"].map((h) => el("th", {}, h)));
@@ -750,10 +879,17 @@ $("t-close-trip").addEventListener("click", async () => {
   if (!currentTrip || !window.confirm(`${currentTrip.title} kapatılsın mı? Teslim veya dönüş okutulmamış tüpler eksik olarak raporlanır.`)) return;
   try {
     const result = await api(`/panel/api/sefer/${currentTrip.id}/kapat`, { method: "POST" });
+    closeBlocked = new Set();
     await openTrip(currentTrip.id, true);
     show($("t-msg"), result.message, result.hasAlerts ? "warn" : "ok");
     loadTrips();
   } catch (error) {
+    if (error.data && error.data.reasonsRequired) {
+      // Show every unexplained cylinder in the reason card (also those whose vehicle is still marked on the road).
+      closeBlocked = new Set(error.data.missing || []);
+      await openTrip(currentTrip.id, true);
+      $("t-missing-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
     show($("t-msg"), error.message);
   }
 });

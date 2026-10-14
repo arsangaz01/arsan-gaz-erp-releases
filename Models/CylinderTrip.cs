@@ -18,6 +18,8 @@ public sealed class CylinderTrip
     public DateTime? ClosedAt { get; set; }
     public string? Note { get; set; }
     public string? CreatedBy { get; set; }
+    // Set on trips started since reasons became mandatory; older open trips can still be closed without them.
+    public bool RequireReasons { get; set; }
     public ICollection<CylinderTripVehicle> Vehicles { get; set; } = new List<CylinderTripVehicle>();
     public ICollection<CylinderTripCylinder> Cylinders { get; set; } = new List<CylinderTripCylinder>();
 }
@@ -45,4 +47,14 @@ public sealed class CylinderTripCylinder
     public DateTime LoadedAt { get; set; } = DateTime.Now;
     public DateTime? DeliveredAt { get; set; }
     public DateTime? ReturnedAt { get; set; }
+    // An empty taken from a customer during the trip (LoadedAt is the pickup time) instead of a full loaded at the depot.
+    public bool IsPickup { get; set; }
+    public string? PickupCustomer { get; set; }
+    // Why a cylinder that was neither delivered nor returned is missing (key of TripMissingReasons), and who confirmed it.
+    public string? MissingReason { get; set; }
+    public string? MissingNote { get; set; }
+    public DateTime? ReasonAt { get; set; }
+    public string? ReasonBy { get; set; }
+    public DateTime? CheckedAt { get; set; }
+    public string? CheckedBy { get; set; }
 }
