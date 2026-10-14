@@ -212,7 +212,11 @@ tr.alarm-row td { background:#fef2f2; }
         </div>
       </div>
       <div class="card">
-        <div class="muted" id="cyl-count"></div>
+        <div class="toolbar">
+          <div class="muted" id="cyl-count"></div>
+          <label>Görünüm<select id="f-gorunum"><option value="grup">Gaz türü ve boyuta göre gruplu</option><option value="liste">Düz liste</option></select></label>
+          <button class="secondary small" id="cyl-toggle-all" type="button">Tümünü aç</button>
+        </div>
         <div class="table-wrap"><table id="cylinders"></table></div>
       </div>
     </section>

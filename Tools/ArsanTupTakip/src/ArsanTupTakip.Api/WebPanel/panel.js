@@ -329,25 +329,75 @@ async function loadCylinders() {
   try {
     const rows = await api("/panel/api/tupler?" + query);
     if (isStale("cylinders", ticket)) return;
-    $("cyl-count").textContent = `${rows.length} tüp`;
-    const head = el("tr", {}, ...["Seri no", "Gaz", "Kapasite", "Durum", "Dolu/Boş", "Müşteri / Plaka", "Son hareket", "Test"].map((h) => el("th", {}, h)));
-    const body = rows.map((r) => el("tr", { class: "click", onclick: () => openDetail(r.id) },
-      el("td", {}, el("b", {}, (r.needsReview ? "⚠ " : "") + r.serialNumber),
-        r.manufacturerSerial ? el("div", { class: "muted" }, "Üretici seri: " + r.manufacturerSerial)
-          : r.barcode !== r.serialNumber ? el("div", { class: "muted" }, r.barcode) : null),
-      el("td", {}, r.gasType),
-      el("td", {}, r.capacity),
-      el("td", {}, badge(r.status, r.statusName)),
-      el("td", {}, r.fullness),
-      el("td", {}, r.customer || r.plate || "-"),
-      el("td", {}, r.lastMovement || "-", r.daysThere !== null && r.status === 3
-        ? el("div", { class: r.daysThere >= options.longDays ? "warn-text" : "muted" }, `${r.daysThere} gündür müşteride`) : null),
-      el("td", { class: r.testOverdue ? "bad-text" : "" }, r.testDue || "-")));
-    $("cylinders").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 8, class: "muted" }, "Bu filtreye uyan tüp yok."))])));
+    cylinderRows = rows;
+    renderCylinders();
   } catch (error) {
     show($("global-msg"), error.message);
   }
 }
+
+let cylinderRows = [];
+const openCylinderGroups = new Set();
+const capacityValue = (text) => parseFloat(String(text || "").replace(",", ".")) || 0;
+const cylinderGroupKey = (r) => `${(r.gasType || "").trim().toLocaleUpperCase("tr-TR")}|${r.capacity}`;
+
+function cylinderRow(r) {
+  return el("tr", { class: "click", onclick: () => openDetail(r.id) },
+    el("td", {}, el("b", {}, (r.needsReview ? "⚠ " : "") + r.serialNumber),
+      r.manufacturerSerial ? el("div", { class: "muted" }, "Üretici seri: " + r.manufacturerSerial)
+        : r.barcode !== r.serialNumber ? el("div", { class: "muted" }, r.barcode) : null),
+    el("td", {}, r.gasType),
+    el("td", {}, r.capacity),
+    el("td", {}, badge(r.status, r.statusName)),
+    el("td", {}, r.fullness),
+    el("td", {}, r.customer || r.plate || "-"),
+    el("td", {}, r.lastMovement || "-", r.daysThere !== null && r.status === 3
+      ? el("div", { class: r.daysThere >= options.longDays ? "warn-text" : "muted" }, `${r.daysThere} gündür müşteride`) : null),
+    el("td", { class: r.testOverdue ? "bad-text" : "" }, r.testDue || "-"));
+}
+
+// Gas type A→Z, then size small→large; each group is one clickable row that opens its cylinders.
+function cylinderGroups(rows) {
+  const groups = new Map();
+  for (const r of rows) {
+    const key = cylinderGroupKey(r);
+    if (!groups.has(key)) groups.set(key, { key, gasType: (r.gasType || "").trim() || "Belirsiz", capacity: r.capacity, rows: [] });
+    groups.get(key).rows.push(r);
+  }
+  return [...groups.values()].sort((a, b) => a.gasType.localeCompare(b.gasType, "tr-TR") || capacityValue(a.capacity) - capacityValue(b.capacity));
+}
+
+function renderCylinders() {
+  const rows = cylinderRows;
+  const grouped = $("f-gorunum").value === "grup";
+  const groups = grouped ? cylinderGroups(rows) : [];
+  $("cyl-count").textContent = grouped ? `${rows.length} tüp · ${groups.length} grup` : `${rows.length} tüp`;
+  $("cyl-toggle-all").classList.toggle("hidden", !grouped || groups.length === 0);
+  const allOpen = groups.length > 0 && groups.every((g) => openCylinderGroups.has(g.key));
+  $("cyl-toggle-all").textContent = allOpen ? "Tümünü kapat" : "Tümünü aç";
+  const head = el("tr", {}, ...["Seri no", "Gaz", "Kapasite", "Durum", "Dolu/Boş", "Müşteri / Plaka", "Son hareket", "Test"].map((h) => el("th", {}, h)));
+  const body = !grouped ? rows.map(cylinderRow) : groups.flatMap((g) => {
+    const open = openCylinderGroups.has(g.key);
+    const full = g.rows.filter((r) => r.fullness === "Dolu").length;
+    const empty = g.rows.filter((r) => r.fullness === "Boş").length;
+    const statuses = new Map();
+    for (const r of g.rows) statuses.set(r.statusName, (statuses.get(r.statusName) || 0) + 1);
+    const header = el("tr", { class: "click group-head", onclick: () => { if (open) openCylinderGroups.delete(g.key); else openCylinderGroups.add(g.key); renderCylinders(); } },
+      el("td", { colspan: 8 }, `${open ? "▼" : "▶"} ${g.gasType} ${g.capacity} · ${g.rows.length} adet · ${fullEmpty(full, empty)}`,
+        el("div", { class: "muted" }, [...statuses].map(([name, count]) => `${name}: ${count}`).join(" · "))));
+    return open ? [header, ...g.rows.map(cylinderRow)] : [header];
+  });
+  $("cylinders").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 8, class: "muted" }, "Bu filtreye uyan tüp yok."))])));
+}
+
+$("f-gorunum").addEventListener("change", renderCylinders);
+$("cyl-toggle-all").addEventListener("click", () => {
+  const groups = cylinderGroups(cylinderRows);
+  const allOpen = groups.every((g) => openCylinderGroups.has(g.key));
+  openCylinderGroups.clear();
+  if (!allOpen) for (const g of groups) openCylinderGroups.add(g.key);
+  renderCylinders();
+});
 
 function movementFilter() {
   const query = new URLSearchParams();
