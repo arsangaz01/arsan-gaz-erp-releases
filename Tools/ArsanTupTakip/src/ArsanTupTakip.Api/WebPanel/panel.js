@@ -112,7 +112,11 @@ function showLogin(message) {
 async function start() {
   try {
     me = await api("/panel/api/ben");
-    $("who").replaceChildren(me.displayName && me.displayName !== me.user ? `${me.displayName} (${me.user})` : me.user, roleBadge(me.role));
+    const badge = roleBadge(me.role);
+    const plain = (text) => String(text || "").toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ı/g, "i");
+    const name = me.displayName && me.displayName !== me.user ? `${me.displayName} (${me.user})` : me.user;
+    if (plain(name) === plain(badge.textContent)) $("who").replaceChildren(badge);
+    else $("who").replaceChildren(name, badge);
     applyPermissions();
     $("login").classList.add("hidden");
     $("app").classList.remove("hidden");
