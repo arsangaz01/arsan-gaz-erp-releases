@@ -13,7 +13,8 @@ internal static class PanelRoles
     internal const string Admin = "Yönetici";
     internal const string Operator = "Operatör";
     internal const string Viewer = "İzleyici";
-    internal static readonly string[] All = [Admin, Operator, Viewer];
+    internal const string Driver = "Şoför";
+    internal static readonly string[] All = [Admin, Operator, Viewer, Driver];
 
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
 
@@ -22,6 +23,7 @@ internal static class PanelRoles
         Admin => "Her şey, her zaman: tüm işlemler, kullanıcı/yetki ve cihaz yönetimi, denetim kaydı. Yöneticinin yetkileri kısıtlanamaz.",
         Operator => "Varsayılan: tüp, hareket, sefer, araç ve müşteri işlemleri, raporlar, Excel; yönetim yok. Tek tek değiştirilebilir.",
         Viewer => "Varsayılan: yalnızca görüntüleme, raporlar ve Excel; kayıt değiştiremez. Tek tek yetki eklenebilir.",
+        Driver => "Yalnızca mobil: sevkiyat (sefer başlat, yükle, teslim, dönüş, kapat, eksik tüp gerekçesi), tüp bilgisi, müşteri stok bilgisi ve depo sayımı. Panel girişi, tüp kaydı, hareket, araç, rapor ve yönetim yok. Sabit aracı varsa sefer o araçla başlar. Tek tek yetki eklenip çıkarılabilir.",
         _ => string.Empty
     };
 
@@ -36,6 +38,7 @@ internal static class PanelRoles
             "YONETICI" or "ADMIN" => Admin,
             "OPERATOR" => Operator,
             "IZLEYICI" or "VIEWER" => Viewer,
+            "SOFOR" or "DRIVER" => Driver,
             _ => null
         };
     }
@@ -57,6 +60,9 @@ internal sealed class WebPanelUser
     public string? LastLoginIp { get; set; }
     public DateTime? PasswordChangedAt { get; set; }
     public bool MustChangePassword { get; set; }
+
+    // Normalized plate of the vehicle this user always drives; trips of the user start with it and no other vehicle.
+    public string? FixedPlate { get; set; }
 
     // Raised on deactivation, role change and password change; sessions carrying an older value are refused.
     public int SecurityStamp { get; set; }

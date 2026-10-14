@@ -13,8 +13,8 @@ internal sealed record PanelPasswordRequest(string? Mevcut, string? Yeni, string
 internal sealed record PanelMoveRequest(CylinderStatus Status, int? CustomerId, string? Plate, bool? IsFull, string? Note, bool Confirm = false, uint? Version = null);
 internal sealed record VehicleDeleteRequest(string? Onay, uint? Version = null);
 internal sealed record PanelEditRequest(string? GasType, decimal Capacity, string? CapacityUnit, DateTime? TestDueDate, bool IsActive, uint? Version = null);
-internal sealed record PanelUserCreateRequest(string? KullaniciAdi, string? AdSoyad, string? Rol, string? Sifre, bool SifreDegistirsin = true, List<string>? Yetkiler = null);
-internal sealed record PanelUserUpdateRequest(string? AdSoyad, string? Rol, bool Aktif, List<string>? Yetkiler = null);
+internal sealed record PanelUserCreateRequest(string? KullaniciAdi, string? AdSoyad, string? Rol, string? Sifre, bool SifreDegistirsin = true, List<string>? Yetkiler = null, string? SabitPlaka = null);
+internal sealed record PanelUserUpdateRequest(string? AdSoyad, string? Rol, bool Aktif, List<string>? Yetkiler = null, string? SabitPlaka = null);
 internal sealed record PanelTripLoadRequest(string? Plate, List<string?>? Codes);
 internal sealed record PanelTripReasonRequest(List<int>? CylinderIds, string? Reason, string? Note);
 internal sealed record PanelTripCheckRequest(List<int>? CylinderIds, bool Undo);
@@ -141,6 +141,7 @@ internal static class WebPanelEndpoints
                         u.Role,
                         u.IsActive,
                         u.MustChangePassword,
+                        u.FixedPlate,
                         Created = LocalText(u.CreatedAt),
                         u.CreatedBy,
                         LastLogin = u.LastLoginAt is DateTime last ? LocalText(last) : null,
@@ -156,15 +157,17 @@ internal static class WebPanelEndpoints
                 }));
         }).Requires(Perm.ManageUsers);
 
-        api.MapPost("/yonetim/kullanici", (PanelUserCreateRequest request, HttpContext context) =>
+        api.MapPost("/yonetim/kullanici", async (PanelUserCreateRequest request, HttpContext context) =>
         {
-            string? error = auth.CreateUser(Account(context), WebPanelAuth.ClientIp(context), request.KullaniciAdi, request.AdSoyad, request.Rol, request.Sifre, request.SifreDegistirsin, request.Yetkiler);
+            string? error = await FixedPlateProblemAsync(request.SabitPlaka, null)
+                ?? auth.CreateUser(Account(context), WebPanelAuth.ClientIp(context), request.KullaniciAdi, request.AdSoyad, request.Rol, request.Sifre, request.SifreDegistirsin, request.Yetkiler, request.SabitPlaka);
             return error is null ? Results.Ok(new { message = $"{request.KullaniciAdi?.Trim()} kullanıcısı oluşturuldu." }) : Results.BadRequest(new { error });
         }).Requires(Perm.ManageUsers);
 
-        api.MapPost("/yonetim/kullanici/{id:int}", (int id, PanelUserUpdateRequest request, HttpContext context) =>
+        api.MapPost("/yonetim/kullanici/{id:int}", async (int id, PanelUserUpdateRequest request, HttpContext context) =>
         {
-            string? error = auth.UpdateUser(Account(context), WebPanelAuth.ClientIp(context), id, request.AdSoyad, request.Rol, request.Aktif, request.Yetkiler);
+            string? error = await FixedPlateProblemAsync(request.SabitPlaka, WebPanelUserStore.Find(id)?.FixedPlate)
+                ?? auth.UpdateUser(Account(context), WebPanelAuth.ClientIp(context), id, request.AdSoyad, request.Rol, request.Aktif, request.Yetkiler, request.SabitPlaka);
             return error is null ? Results.Ok(new { message = "Kullanıcı güncellendi. Yetkileri veya durumu değiştiyse açık oturumları yeni yetkilerle devam eder ya da kapatılır." }) : Results.BadRequest(new { error });
         }).Requires(Perm.ManageUsers);
 
@@ -567,8 +570,8 @@ internal static class WebPanelEndpoints
         {
             try
             {
-                CylinderTrip trip = await new CylinderTripService().StartTripAsync(request.Plates, request.Note, $"Web panel ({context.Items["panelUser"]})");
-                WebPanelAudit.Write((string)context.Items["panelUser"]!, "Sefer başlatıldı", trip.Title, string.Join(", ", request.Plates ?? []), WebPanelAuth.ClientIp(context));
+                (CylinderTrip trip, IReadOnlyList<string?>? plates) = await CylinderTripEndpoints.StartAsync(Account(context), request, $"Web panel ({context.Items["panelUser"]})");
+                WebPanelAudit.Write((string)context.Items["panelUser"]!, "Sefer başlatıldı", trip.Title, string.Join(", ", plates ?? []), WebPanelAuth.ClientIp(context));
                 return Results.Ok(new { trip.Id, trip.Title, message = $"{trip.Title} başlatıldı." });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -581,8 +584,9 @@ internal static class WebPanelEndpoints
         {
             try
             {
-                TripLoadResult result = await new CylinderTripService().LoadCylindersAsync(id, request.Plate, request.Codes ?? [], $"Web panel ({context.Items["panelUser"]})");
-                string message = $"{result.Added} tüp {request.Plate} aracına yüklendi." + (result.Skipped > 0 ? $" {result.Skipped} atlandı:\n" + string.Join("\n", result.Messages) : string.Empty);
+                string? plate = DriverVehicle.PlateFor(Account(context).FixedPlate, request.Plate);
+                TripLoadResult result = await new CylinderTripService().LoadCylindersAsync(id, plate, request.Codes ?? [], $"Web panel ({context.Items["panelUser"]})");
+                string message = $"{result.Added} tüp {plate} aracına yüklendi." + (result.Skipped > 0 ? $" {result.Skipped} atlandı:\n" + string.Join("\n", result.Messages) : string.Empty);
                 return Results.Ok(new { message, result.Added, result.Skipped, result.Messages });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -839,6 +843,30 @@ internal static class WebPanelEndpoints
     }
 
     private static WebPanelUser Account(HttpContext context) => (WebPanelUser)context.Items["panelAccount"]!;
+
+    // A newly chosen fixed vehicle must be a registered active vehicle; keeping the current one is always allowed.
+    private static async Task<string?> FixedPlateProblemAsync(string? requested, string? current)
+    {
+        string? plate;
+        try
+        {
+            plate = CylinderTracking.NormalizePlate(requested);
+        }
+        catch (ArgumentException exception)
+        {
+            return "Sabit araç: " + exception.Message;
+        }
+
+        if (plate is null || plate == current)
+        {
+            return null;
+        }
+
+        await using TupTakipDbContext db = new();
+        return await db.Vehicles.AsNoTracking().AnyAsync(v => v.Plate == plate && v.IsActive)
+            ? null
+            : $"Sabit araç: {plate} kayıtlı aktif bir araç değil. Önce Araçlar sekmesinden ekleyin veya aktif edin.";
+    }
 
     private static object TripRow(TripListItem t) => new
     {

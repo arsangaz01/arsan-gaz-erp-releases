@@ -104,6 +104,7 @@ button.small:active:not(:disabled), a.small:active { transform:scale(0.97); }
 .role-Yönetici { background:#dbeafe; color:var(--navy); border:1px solid #93c5fd; }
 .role-Operatör { background:#e0f2fe; color:#0369a1; border:1px solid #7dd3fc; }
 .role-İzleyici { background:#f3f4f6; color:#4b5563; border:1px solid var(--line); }
+.role-Şoför { background:#ecfdf5; color:#047857; border:1px solid #6ee7b7; }
 .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:#9ca3af; }
 .dot.on { background:var(--sea); }
 tr.off td { color:#a8a29e; }
@@ -706,6 +707,8 @@ tr.alarm-row td { background:#fef2f2; }
       <label class="field">Ad soyad<input id="u-display" maxlength="80" autocomplete="off"></label>
       <label class="field">Yetki düzeyi<select id="u-role"></select></label>
       <div class="muted" id="u-role-desc"></div>
+      <label class="field">Sabit araç (şoför)<select id="u-plate"></select></label>
+      <div class="muted">Seçilirse bu kullanıcı mobilde seferi doğrudan bu araçla başlatır; başka araç seçemez. Boş bırakılırsa araç seçimi serbesttir.</div>
       <div class="field" id="u-pass-wrap">İlk şifre (en az 8 karakter, harf ve rakam)
         <div class="pw-row"><input id="u-pass" type="text" minlength="8" maxlength="200" autocomplete="new-password"><button class="secondary small" id="u-gen" type="button">Şifre üret</button></div>
       </div>

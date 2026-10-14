@@ -1693,7 +1693,7 @@ function renderUsers() {
   const head = el("tr", {}, ...["Kullanıcı", "Rol ve yetkiler", "Durum", "Son giriş", "Açık oturum", "Oluşturan", ""].map((h) => el("th", {}, h)));
   const body = users.map((u) => el("tr", { class: u.isActive ? "" : "off" },
     el("td", {}, el("b", {}, u.displayName), u.isSelf ? el("span", { class: "muted" }, " (siz)") : null, el("div", { class: "muted" }, u.userName)),
-    el("td", {}, roleBadge(u.role), permissionDiffText(u)),
+    el("td", {}, roleBadge(u.role), u.fixedPlate ? el("div", { class: "muted" }, "Sabit araç: " + u.fixedPlate) : null, permissionDiffText(u)),
     el("td", {}, el("span", { class: "dot" + (u.isActive ? " on" : "") }), u.isActive ? "Aktif" : "Pasif",
       u.mustChangePassword ? el("div", { class: "warn-text muted" }, "Şifre değiştirmesi bekleniyor") : null),
     el("td", {}, u.lastLogin || "Hiç giriş yapmadı", u.lastLoginIp ? el("div", { class: "muted" }, u.lastLoginIp) : null),
@@ -1766,6 +1766,15 @@ function fillRoles(selected) {
   $("u-role").replaceChildren(...me.roles.map((r) => el("option", { value: r.name }, r.name)));
   $("u-role").value = selected;
   showRoleDescription();
+}
+
+// Active registered vehicles; the current fixed vehicle stays selectable even if it was deactivated since.
+async function fillPlates(selected) {
+  let plates = [];
+  try { plates = (await api("/panel/api/araclar")).map((v) => v.plate); } catch { plates = []; }
+  if (selected && !plates.includes(selected)) plates.unshift(selected);
+  $("u-plate").replaceChildren(el("option", { value: "" }, "Sabit araç yok"), ...plates.map((p) => el("option", { value: p }, p)));
+  $("u-plate").value = selected || "";
 }
 
 function showRoleDescription() {
@@ -1863,9 +1872,10 @@ $("u-close").addEventListener("click", () => $("user-dialog").close());
 $("r-close").addEventListener("click", () => $("reset-dialog").close());
 $("u-new").addEventListener("click", () => openUserDialog(null));
 
-function openUserDialog(u) {
+async function openUserDialog(u) {
   editingUser = u;
   $("user-form").reset();
+  await fillPlates(u ? u.fixedPlate : null);
   hide($("u-msg"));
   $("u-title").textContent = u ? `Kullanıcıyı düzenle: ${u.userName}` : "Yeni kullanıcı";
   $("u-name").value = u ? u.userName : "";
@@ -1896,12 +1906,12 @@ $("user-form").addEventListener("submit", async (event) => {
     const yetkiler = $("u-role").value === "Yönetici" ? null : selectedPermissions();
     if (editingUser) {
       result = await api(`/panel/api/yonetim/kullanici/${editingUser.id}`, {
-        method: "POST", body: { adSoyad: $("u-display").value.trim(), rol: $("u-role").value, aktif: editingUser.isSelf ? true : $("u-active").checked, yetkiler }
+        method: "POST", body: { adSoyad: $("u-display").value.trim(), rol: $("u-role").value, aktif: editingUser.isSelf ? true : $("u-active").checked, yetkiler, sabitPlaka: $("u-plate").value }
       });
     } else {
       result = await api("/panel/api/yonetim/kullanici", {
         method: "POST",
-        body: { kullaniciAdi: $("u-name").value.trim(), adSoyad: $("u-display").value.trim(), rol: $("u-role").value, sifre: $("u-pass").value, sifreDegistirsin: $("u-must").checked, yetkiler }
+        body: { kullaniciAdi: $("u-name").value.trim(), adSoyad: $("u-display").value.trim(), rol: $("u-role").value, sifre: $("u-pass").value, sifreDegistirsin: $("u-must").checked, yetkiler, sabitPlaka: $("u-plate").value || null }
       });
     }
     $("user-dialog").close();

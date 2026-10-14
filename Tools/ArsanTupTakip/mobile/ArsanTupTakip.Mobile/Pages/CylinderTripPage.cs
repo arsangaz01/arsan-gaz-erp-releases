@@ -73,7 +73,7 @@ public sealed class CylinderTripPage : ContentPage
                         _overview,
                         Ui.ActionRow(
                             Ui.Secondary("Yenile", async (_, _) => await RefreshTripsAsync()),
-                            Ui.Secondary("Sefere araç ekle", async (_, _) => await AddVehicleAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripStart)))),
+                            Ui.Secondary("Sefere araç ekle", async (_, _) => await AddVehicleAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripStart) && FixedPlate is null))),
                     Ui.Section(
                         "Sefer ve araç",
                         _trip,
@@ -112,6 +112,9 @@ public sealed class CylinderTripPage : ContentPage
         ApplyMode();
         _ = RefreshTripsAsync();
     }
+
+    // The signed-in driver's fixed vehicle: trips start with it directly and it is preselected for loading and return.
+    private static string? FixedPlate => ApiClient.Instance.Account?.FixedPlate is { Length: > 0 } plate ? plate : null;
 
     private ActiveTripSummary? SelectedTrip => _trip.SelectedIndex >= 0 && _trip.SelectedIndex < _trips.Count ? _trips[_trip.SelectedIndex] : null;
 
@@ -200,6 +203,11 @@ public sealed class CylinderTripPage : ContentPage
             }
 
             int wanted = selectTripId is int id ? _trips.FindIndex(t => t.Id == id) : -1;
+            if (wanted < 0 && _trip.SelectedIndex < 0 && FixedPlate is string own)
+            {
+                wanted = _trips.FindIndex(t => t.Vehicles.Any(v => string.Equals(v.Plate, own, StringComparison.OrdinalIgnoreCase)));
+            }
+
             if (wanted >= 0)
             {
                 _trip.SelectedIndex = wanted;
@@ -257,7 +265,7 @@ public sealed class CylinderTripPage : ContentPage
             return;
         }
 
-        string? previous = SelectedPlate;
+        string? previous = SelectedPlate ?? FixedPlate;
         List<string> plates = SelectedTrip.Vehicles.Select(v => v.Plate).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         _vehicle.ItemsSource = plates;
         int keep = previous is null ? -1 : plates.FindIndex(p => string.Equals(p, previous, StringComparison.OrdinalIgnoreCase));
@@ -310,9 +318,38 @@ public sealed class CylinderTripPage : ContentPage
         }
     }
 
-    private async Task StartTripAsync()
+    // A driver with a fixed vehicle skips the vehicle choice: the trip starts with that vehicle after one confirmation.
+    public async Task StartTripAsync()
     {
-        (TripStartResponse Trip, string? FirstPlate)? started = await TripStartPage.OpenAsync(Navigation);
+        (TripStartResponse Trip, string? FirstPlate)? started;
+        if (FixedPlate is string own)
+        {
+            if (!await DisplayAlertAsync("Sevkiyat başlat", $"{own} aracınızla yeni sefer başlatılsın mı?", "Başlat", "Vazgeç"))
+            {
+                return;
+            }
+
+            try
+            {
+                _busy.IsVisible = true;
+                started = (await ApiClient.Instance.StartTripAsync(null, [own]), own);
+            }
+            catch (Exception exception)
+            {
+                await DisplayAlertAsync("Sevkiyat", exception.Message, "Tamam");
+                await RefreshTripsAsync();
+                return;
+            }
+            finally
+            {
+                _busy.IsVisible = false;
+            }
+        }
+        else
+        {
+            started = await TripStartPage.OpenAsync(Navigation);
+        }
+
         if (started is null)
         {
             return;

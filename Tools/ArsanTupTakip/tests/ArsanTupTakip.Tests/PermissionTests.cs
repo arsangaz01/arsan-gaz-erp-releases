@@ -22,13 +22,14 @@ internal static class PermissionTests
         IdempotencyMiddleware.Store = new MemoryRequestKeyStore();
         CatalogIsConsistent();
         RoleDefaultsAndOverrides();
+        DriverRoleAndFixedVehicle();
         UserManagementRules();
         SessionLifetimesAreAbsolute().GetAwaiter().GetResult();
         ParallelLoginsStayIndependent().GetAwaiter().GetResult();
         WrongPasswordsLockTheAddress().GetAwaiter().GetResult();
         HttpChecks().GetAwaiter().GetResult();
         DeletingUsers().GetAwaiter().GetResult();
-        Console.WriteLine("PASS: yetki kataloğu, rol varsayılanları, kullanıcıya özel yetkiler, son yönetici koruması, kullanıcı silme, oturum süreleri (panel 24 saat, mobil 24 saat), eşzamanlı girişler ve sunucu tarafı yetki denetimi.");
+        Console.WriteLine("PASS: yetki kataloğu, rol varsayılanları, şoför rolü ve sabit araç kuralı, kullanıcıya özel yetkiler, son yönetici koruması, kullanıcı silme, oturum süreleri (panel 24 saat, mobil 24 saat), eşzamanlı girişler ve sunucu tarafı yetki denetimi.");
     }
 
     private static void CatalogIsConsistent()
@@ -84,6 +85,55 @@ internal static class PermissionTests
         }
 
         Check(Perm.Diff(PanelRoles.Operator, Perm.RoleDefaults(PanelRoles.Operator)).Count == 0, "Rol varsayılanı seçiliyse fark saklanmamalı.");
+    }
+
+    private static void DriverRoleAndFixedVehicle()
+    {
+        HashSet<string> driver = Perm.Effective(PanelRoles.Driver, null);
+        string[] expected = [Perm.MobileLogin, Perm.CylinderView, Perm.StockCount, Perm.TripView, Perm.TripStart, Perm.TripLoad, Perm.TripDeliver, Perm.TripReturn, Perm.TripClose];
+        Check(driver.SetEquals(expected), "Şoför varsayılanı yalnızca mobil giriş, tüp bilgisi/müşteri stoku, depo sayımı ve sefer akışı olmalı: " + string.Join(", ", driver.Order()));
+        Check(!driver.Contains(Perm.PanelLogin) && !driver.Contains(Perm.ManageUsers) && !driver.Contains(Perm.ManageDevices) && !driver.Contains(Perm.AuditLog),
+            "Şoför panele giremez ve yönetim yetkisi yoktur.");
+        Check(!driver.Contains(Perm.CylinderRegister) && !driver.Contains(Perm.CylinderEdit) && !driver.Contains(Perm.CylinderAudit) && Perm.AnyMove.All(m => !driver.Contains(m))
+            && !driver.Contains(Perm.VehicleAdd) && !driver.Contains(Perm.VehicleView) && !driver.Contains(Perm.Reports) && !driver.Contains(Perm.Summary)
+            && !driver.Contains(Perm.Export) && !driver.Contains(Perm.LabelPrint) && !driver.Contains(Perm.CustomerView) && !driver.Contains(Perm.TripLossCheck),
+            "Şoförde tüp kaydı, hareket, müşteride sayım, araç, rapor, Excel, barkod ve müşteri telefonları olmamalı.");
+        Check(CylinderTripEndpoints.ReasonWriters.Any(driver.Contains), "Şoför okutulmayan tüplere gerekçe yazabilmeli (sefer kapanışı için).");
+        Check(Perm.CustomerPicker.Any(driver.Contains), "Şoför müşteri seçebilmeli (teslim ve müşteri stoku).");
+        Check(PanelRoles.Normalize("SOFOR") == PanelRoles.Driver && PanelRoles.Normalize("şoför") == PanelRoles.Driver && PanelRoles.Normalize("Şoför") == PanelRoles.Driver,
+            "Şoför rol adı Türkçe karakterli/karaktersiz eşleşmeli.");
+        Check(PanelRoles.Description(PanelRoles.Driver).Length > 0 && PanelRoles.All.Contains(PanelRoles.Driver), "Şoför rolü listede ve açıklamalı olmalı.");
+
+        HashSet<string> plus = Perm.Effective(PanelRoles.Driver, Perm.Diff(PanelRoles.Driver, [.. driver, Perm.CylinderAudit]));
+        HashSet<string> minus = Perm.Effective(PanelRoles.Driver, Perm.Diff(PanelRoles.Driver, driver.Where(p => p != Perm.StockCount)));
+        Check(plus.Contains(Perm.CylinderAudit) && !minus.Contains(Perm.StockCount) && minus.Contains(Perm.TripStart),
+            "Yönetici şoföre tek tek yetki ekleyip çıkarabilmeli.");
+
+        Check(DriverVehicle.StartPlates("34 ABC 123", null) is ["34 ABC 123"] && DriverVehicle.StartPlates("34 ABC 123", ["34abc123"]) is ["34 ABC 123"],
+            "Sabit araçlı şoförün seferi araç seçmeden sabit araçla başlamalı.");
+        Check(Throws(() => DriverVehicle.StartPlates("34 ABC 123", ["06 XY 99"])), "Sabit araçlı şoför başka araçla sefer başlatamamalı.");
+        Check(Throws(() => DriverVehicle.StartPlates("34 ABC 123", ["34 ABC 123", "06 XY 99"])), "Sabit araçlı şoför sefere ikinci araç ekleyememeli.");
+        Check(DriverVehicle.PlateFor("34 ABC 123", null) == "34 ABC 123" && Throws(() => DriverVehicle.PlateFor("34 ABC 123", "06 XY 99")),
+            "Yükleme/dönüşte plaka verilmezse sabit araç kullanılmalı, başka plaka reddedilmeli.");
+        Check(DriverVehicle.StartPlates(null, ["06 XY 99", "34 ABC 123"])!.Count == 2 && DriverVehicle.PlateFor(null, "06 XY 99") == "06 XY 99",
+            "Sabit aracı olmayan kullanıcı eskisi gibi araç seçebilmeli.");
+        ActiveTripSummary open = new(5, "Sefer", DateTime.Now, null, [new TripVehicleSummary("34 ABC 123", 3, true, null)], 3, 0, 0);
+        ActiveTripSummary returned = new(6, "Sefer", DateTime.Now, null, [new TripVehicleSummary("34 ABC 123", 3, false, DateTime.Now)], 3, 0, 3);
+        Check(DriverVehicle.OpenTrip([open], "34 ABC 123")?.Id == 5 && DriverVehicle.OpenTrip([returned], "34 ABC 123") is null && DriverVehicle.OpenTrip([open], "06 XY 99") is null,
+            "Sabit araç açık seferdeyken ikinci sefer açılmamalı; araç döndüyse açılabilmeli.");
+    }
+
+    private static bool Throws(Action action)
+    {
+        try
+        {
+            action();
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
     }
 
     private static void UserManagementRules()
@@ -318,6 +368,8 @@ internal static class PermissionTests
                 Check(noCsrf.StatusCode == HttpStatusCode.Forbidden, "CSRF başlığı olmayan panel isteği reddedilmeli.");
             }
 
+            await DriverHttpChecks(http, auth, admin);
+
             Check(auth.CreateUser(admin, "127.0.0.1", "yeniperson", null, "Operatör", Password, true) is null, "Geçici şifreli kullanıcı açılabilmeli.");
             (string fresh, JsonElement freshAccount) = await MobileLogin(http, "yeniperson");
             Check(freshAccount.GetProperty("mustChangePassword").GetBoolean(), "Geçici şifreli girişte şifre değişikliği istenmeli.");
@@ -350,6 +402,79 @@ internal static class PermissionTests
             await app.StopAsync();
             await app.DisposeAsync();
         }
+    }
+
+    // A Şoför account (like depo1..depo6): phone only, a fixed vehicle, and every screen outside its four jobs refused
+    // by the server; the Yönetici turns single permissions on and off and the phone sees them on the next /api/ben.
+    private static async Task DriverHttpChecks(HttpClient http, WebPanelAuth auth, WebPanelUser admin)
+    {
+        const string ip = "127.0.0.1";
+        Check(auth.CreateUser(admin, ip, "sofor1", "Depo 1", "SOFOR", Password, false, null, "34abc123") is null, "Şoför hesabı sabit araçla açılabilmeli.");
+        WebPanelUser driver = WebPanelUserStore.FindByName("sofor1")!;
+        Check(driver.Role == PanelRoles.Driver && driver.FixedPlate == "34 ABC 123", "Şoför rolü ve sabit plaka (normalize) kaydedilmeli.");
+        Check(auth.CreateUser(admin, ip, "sofor2", null, "Şoför", Password, false, null, "plaka-degil") is not null, "Geçersiz sabit plaka reddedilmeli.");
+
+        using (HttpResponseMessage panel = await http.PostAsJsonAsync("panel/giris", new { kullanici = "sofor1", sifre = Password }))
+        {
+            Check(panel.StatusCode == HttpStatusCode.Unauthorized && (await Json(panel)).GetProperty("error").GetString()!.Contains("Web paneline", StringComparison.Ordinal),
+                "Şoför web paneline giriş yapamamalı.");
+        }
+
+        (string token, JsonElement account) = await MobileLogin(http, "sofor1");
+        Check(account.GetProperty("role").GetString() == PanelRoles.Driver && account.GetProperty("fixedPlate").GetString() == "34 ABC 123",
+            "Mobil giriş şoför rolünü ve sabit aracı döndürmeli.");
+        Check(account.GetProperty("permissions").EnumerateArray().Select(p => p.GetString()!).ToHashSet().SetEquals(Perm.RoleDefaults(PanelRoles.Driver)),
+            "Mobil giriş şoförün varsayılan yetkilerini döndürmeli.");
+
+        foreach ((HttpMethod method, string path, object? body) in new (HttpMethod, string, object?)[]
+        {
+            (HttpMethod.Post, "api/tup/hareket", new { code = "X1", status = 3 }), (HttpMethod.Post, "api/tup/toplu-hareket", new { codes = new[] { "X1" }, status = 1 }),
+            (HttpMethod.Post, "api/tup/yeni", new { serialNumber = "X" }), (HttpMethod.Post, "api/tup/sayim", new { customerId = 1 }),
+            (HttpMethod.Get, "api/ozet", null), (HttpMethod.Get, "api/tup/durum", null), (HttpMethod.Get, "api/hareketler", null), (HttpMethod.Get, "api/tahmin", null),
+            (HttpMethod.Get, "api/musterideki-tupler", null), (HttpMethod.Post, "api/musteri", new { name = "X" }),
+            (HttpMethod.Post, "api/arac-kayit", new { plate = "34 TST 02" }), (HttpMethod.Get, "api/arac-kayit/1", null),
+            (HttpMethod.Get, "api/depo-sayim/1/excel", null), (HttpMethod.Get, "api/depo-sayim/1/pdf", null)
+        })
+        {
+            using HttpResponseMessage denied = await Send(http, method, path, token, body);
+            Check(denied.StatusCode == HttpStatusCode.Forbidden, $"Şoför {path} uç noktasına erişememeli ({(int)denied.StatusCode}).");
+        }
+
+        using (HttpResponseMessage reasons = await Send(http, HttpMethod.Get, "api/sefer/gerekceler", token))
+        {
+            Check(reasons.StatusCode == HttpStatusCode.OK, "Şoför sefer gerekçe listesini alabilmeli.");
+        }
+
+        using (HttpResponseMessage other = await Send(http, HttpMethod.Post, "api/sefer/baslat", token, new { plates = new[] { "06 XY 99" } }))
+        {
+            Check(other.StatusCode == HttpStatusCode.BadRequest && (await Json(other)).GetProperty("error").GetString()!.Contains("Sabit aracınız", StringComparison.Ordinal),
+                "Sabit araçlı şoför sunucuda da başka araçla sefer başlatamamalı.");
+        }
+
+        using (HttpResponseMessage otherLoad = await Send(http, HttpMethod.Post, "api/sefer/yukle", token, new { tripId = 1, plate = "06 XY 99", codes = new[] { "X1" } }))
+        {
+            Check(otherLoad.StatusCode == HttpStatusCode.BadRequest, "Sabit araçlı şoför başka araca yükleme yapamamalı.");
+        }
+
+        List<string> granted = [.. Perm.Effective(driver), Perm.CylinderAudit];
+        Check(auth.UpdateUser(admin, ip, driver.Id, driver.DisplayName, driver.Role, true, granted.Where(p => p != Perm.StockCount).ToList()) is null,
+            "Yönetici şoföre müşteride sayım ekleyip depo sayımını kaldırabilmeli.");
+        using (HttpResponseMessage me = await Send(http, HttpMethod.Get, "api/ben", token))
+        {
+            HashSet<string> now = [.. (await Json(me)).GetProperty("permissions").EnumerateArray().Select(p => p.GetString()!)];
+            Check(me.StatusCode == HttpStatusCode.OK && now.Contains(Perm.CylinderAudit) && !now.Contains(Perm.StockCount),
+                "Telefon yeniden giriş yapmadan /api/ben ile değişen yetkileri görmeli.");
+        }
+
+        using (HttpResponseMessage count = await Send(http, HttpMethod.Get, "api/depo-sayim/aktif", token))
+        {
+            Check(count.StatusCode == HttpStatusCode.Forbidden, "Kaldırılan depo sayımı yetkisi telefonda hemen reddedilmeli.");
+        }
+
+        Check(auth.UpdateUser(admin, ip, driver.Id, driver.DisplayName, driver.Role, true, null, "") is null && WebPanelUserStore.Find(driver.Id)!.FixedPlate is null,
+            "Yönetici sabit aracı kaldırabilmeli.");
+        Check(auth.UpdateUser(admin, ip, driver.Id, driver.DisplayName, driver.Role, true, null, "34 ABC 123") is null && WebPanelUserStore.Find(driver.Id)!.FixedPlate == "34 ABC 123"
+            && Perm.Has(WebPanelUserStore.Find(driver.Id)!, Perm.CylinderAudit), "Sabit araç değişince kişiye özel yetkiler korunmalı.");
     }
 
     private static async Task DeletingUsers()

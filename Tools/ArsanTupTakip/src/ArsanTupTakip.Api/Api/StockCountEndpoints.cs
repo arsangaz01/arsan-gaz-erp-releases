@@ -67,8 +67,9 @@ internal static class StockCountEndpoints
 
         app.MapGet("/api/depo-sayim/liste", async () =>
             Results.Ok((await new StockCountService().ListAsync(30)).Select(ListRow))).Requires(Perm.StockCount, Perm.Reports);
-        app.MapGet("/api/depo-sayim/{id:int}/excel", (int id) => ExportAsync(id, excel: true)).Requires(Perm.StockCount, Perm.Reports);
-        app.MapGet("/api/depo-sayim/{id:int}/pdf", (int id) => ExportAsync(id, excel: false)).Requires(Perm.StockCount, Perm.Reports);
+        // Counting alone (e.g. the Şoför role) does not include downloading the reports.
+        app.MapGet("/api/depo-sayim/{id:int}/excel", (int id) => ExportAsync(id, excel: true)).Requires(Perm.Reports, Perm.Export);
+        app.MapGet("/api/depo-sayim/{id:int}/pdf", (int id) => ExportAsync(id, excel: false)).Requires(Perm.Reports, Perm.Export);
     }
 
     public static void MapPanel(RouteGroupBuilder api)

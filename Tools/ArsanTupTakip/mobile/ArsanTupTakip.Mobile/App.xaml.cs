@@ -46,7 +46,7 @@ public partial class App : Application
 			return;
 		}
 
-		if (_window?.Page is NavigationPage { RootPage: HomePage home })
+		if (_window?.Page is NavigationPage { RootPage: HomePage home } && !await home.RefreshAccessAsync(force: true))
 		{
 			await home.RefreshUpdateAsync();
 		}

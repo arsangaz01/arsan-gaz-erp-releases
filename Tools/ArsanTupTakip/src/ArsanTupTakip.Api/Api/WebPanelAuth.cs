@@ -231,12 +231,18 @@ internal sealed class WebPanelAuth
     // Administrator actions. Each returns null on success or the message to show.
     // A user manager who is not a Yönetici cannot touch Yönetici accounts, cannot create or promote one, cannot change
     // the own role or permissions and cannot grant a permission they do not have themselves.
-    internal string? CreateUser(WebPanelUser actor, string ip, string? userName, string? displayName, string? role, string? password, bool mustChange, IReadOnlyList<string>? permissions = null)
+    internal string? CreateUser(WebPanelUser actor, string ip, string? userName, string? displayName, string? role, string? password, bool mustChange,
+        IReadOnlyList<string>? permissions = null, string? fixedPlate = null)
     {
         string name = (userName ?? string.Empty).Trim();
         if (WebPanelUserStore.UserNameProblem(name) is string nameProblem)
         {
             return nameProblem;
+        }
+
+        if (CleanPlate(fixedPlate, out string? plate) is string plateProblem)
+        {
+            return plateProblem;
         }
 
         if (PanelRoles.Normalize(role) is not string normalizedRole)
@@ -276,7 +282,8 @@ internal sealed class WebPanelAuth
                 DisplayName = display,
                 Role = normalizedRole,
                 CreatedBy = actor.UserName,
-                MustChangePassword = mustChange
+                MustChangePassword = mustChange,
+                FixedPlate = plate
             };
             WebPanelUserStore.SetPassword(created, password!);
             users.Add(created);
@@ -289,16 +296,25 @@ internal sealed class WebPanelAuth
         }
 
         PermissionOverrides.Replace(createdId, overrides, actor.UserName);
-        Notify(actor, ip, "Kullanıcı oluşturuldu", name, $"{display}, {normalizedRole}" + OverrideText(overrides) + (mustChange ? ", ilk girişte şifre değiştirecek" : string.Empty));
+        Notify(actor, ip, "Kullanıcı oluşturuldu", name, $"{display}, {normalizedRole}" + OverrideText(overrides)
+            + (plate is null ? string.Empty : $", sabit araç {plate}") + (mustChange ? ", ilk girişte şifre değiştirecek" : string.Empty));
         return null;
     }
 
     // permissions null = leave the per-user permissions as they are (a role change resets them to the new role).
-    internal string? UpdateUser(WebPanelUser actor, string ip, int id, string? displayName, string? role, bool active, IReadOnlyList<string>? permissions = null)
+    // fixedPlate null = leave the fixed vehicle as it is, empty = remove it.
+    internal string? UpdateUser(WebPanelUser actor, string ip, int id, string? displayName, string? role, bool active,
+        IReadOnlyList<string>? permissions = null, string? fixedPlate = null)
     {
         if (PanelRoles.Normalize(role) is not string normalizedRole)
         {
             return "Geçerli bir yetki düzeyi seçin.";
+        }
+
+        string? plate = null;
+        if (fixedPlate is not null && CleanPlate(fixedPlate, out plate) is string plateProblem)
+        {
+            return plateProblem;
         }
 
         WebPanelUser? existing = WebPanelUserStore.Find(id);
@@ -369,6 +385,12 @@ internal sealed class WebPanelAuth
                 changes.Add(active ? "aktif edildi" : "pasife alındı");
                 target.IsActive = active;
                 target.SecurityStamp++;
+            }
+
+            if (fixedPlate is not null && plate != target.FixedPlate)
+            {
+                changes.Add(plate is null ? "sabit araç kaldırıldı" : $"sabit araç: {plate}");
+                target.FixedPlate = plate;
             }
 
             return null;
@@ -508,6 +530,20 @@ internal sealed class WebPanelAuth
     {
         AppLog.Write($"Web paneli yönetimi: {action} {target} ({detail}) — {actor.UserName}, {ip}.");
         WebPanelAudit.Write(actor.UserName, action, target, detail, ip);
+    }
+
+    private static string? CleanPlate(string? fixedPlate, out string? plate)
+    {
+        try
+        {
+            plate = ArsanTupTakip.Services.CylinderTracking.NormalizePlate(fixedPlate);
+            return null;
+        }
+        catch (ArgumentException exception)
+        {
+            plate = null;
+            return "Sabit araç: " + exception.Message;
+        }
     }
 
     private static string CleanDisplayName(string? displayName, string fallback)

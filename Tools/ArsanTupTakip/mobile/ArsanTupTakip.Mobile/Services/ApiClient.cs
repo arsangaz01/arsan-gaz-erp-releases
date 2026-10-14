@@ -26,8 +26,21 @@ public sealed record AccountInfo(
     List<string> Permissions,
     bool MustChangePassword,
     DateTime ExpiresUtc,
-    string Device)
+    string Device,
+    string? FixedPlate = null)
 {
+    public const string DriverRole = "Şoför";
+
+    // Driver layout on the home screen: the Şoför role, or someone who may run trips but neither register cylinders,
+    // record movements nor manage vehicles.
+    public bool IsDriver => Role == DriverRole
+        || (Can(Perm.TripStart) && !CanAny([Perm.CylinderRegister, Perm.VehicleAdd, Perm.Summary, Perm.Reports, .. Perm.AnyMove]));
+
+    // Same role and permissions (ignoring order) and the same fixed vehicle.
+    public bool SameAccess(AccountInfo other) =>
+        Role == other.Role && FixedPlate == other.FixedPlate && MustChangePassword == other.MustChangePassword
+        && Permissions.Order(StringComparer.Ordinal).SequenceEqual(other.Permissions.Order(StringComparer.Ordinal));
+
     public bool Can(string permission) => Permissions.Contains(permission);
 
     public bool CanAny(params string[] permissions) => permissions.Any(Can);
@@ -46,6 +59,7 @@ public static class Perm
     public const string MoveBulk = "hareket-toplu";
     public const string MoveOverride = "hareket-cakisma";
     public const string MovementHistory = "hareket-gecmisi";
+    public const string Export = "disa-aktar";
     public const string CustomerView = "musteri-goruntule";
     public const string CustomerAdd = "musteri-ekle";
     public const string TripView = "sefer-goruntule";

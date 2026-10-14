@@ -31,6 +31,8 @@ public sealed class StockCountPage : ContentPage
     private string? _lastCode;
     private bool _sending;
 
+    private static bool CanExport => ApiClient.Instance.CanAny(Perm.Reports, Perm.Export);
+
     public StockCountPage()
     {
         Title = "Depo sayımı";
@@ -54,7 +56,7 @@ public sealed class StockCountPage : ContentPage
             _totals,
             Ui.ActionRow(
                 Ui.Secondary("📊 Excel", async (_, _) => await ExportAsync(_count?.Id, excel: true)),
-                Ui.Secondary("📄 PDF", async (_, _) => await ExportAsync(_count?.Id, excel: false))),
+                Ui.Secondary("📄 PDF", async (_, _) => await ExportAsync(_count?.Id, excel: false))).ShowIf(CanExport),
             Ui.Primary("✅ Sayımı bitir", async (_, _) => await CloseAsync()));
         _resultSection = Ui.Section("Gaz türü ve boyuta göre (sayılan / kayıtta depoda)", _groups);
 
@@ -74,7 +76,7 @@ public sealed class StockCountPage : ContentPage
                     Ui.Section("Son okutulanlar", _recent),
                     Ui.Section("Raporlar",
                         Ui.Note("Bitmiş ve devam eden sayımların raporunu Excel veya PDF olarak indirip paylaşın (WhatsApp, e-posta, Drive...). Aynı raporlar web panelde Sayım Raporları sekmesindedir."),
-                        Ui.Secondary("📄 Sayım raporları (Excel / PDF)", async (_, _) => await HistoryAsync()))
+                        Ui.Secondary("📄 Sayım raporları (Excel / PDF)", async (_, _) => await HistoryAsync())).ShowIf(CanExport)
                 }
             }
         };

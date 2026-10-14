@@ -140,11 +140,17 @@ internal static class Perm
     private static readonly string[] ViewerDefaults =
         [PanelLogin, MobileLogin, Summary, Reports, CylinderView, MovementHistory, Export, CustomerView, TripView, VehicleView];
 
+    // Phone only: the trip flow (with reasons for unscanned cylinders), cylinder info, customer stock and the depot count.
+    // CylinderView covers the cylinder info screen, the customer stock screen and the customer picker without phones.
+    private static readonly string[] DriverDefaults =
+        [MobileLogin, CylinderView, StockCount, TripView, TripStart, TripLoad, TripDeliver, TripReturn, TripClose];
+
     internal static IReadOnlyList<string> RoleDefaults(string? role) => role switch
     {
         PanelRoles.Admin => All,
         PanelRoles.Operator => OperatorDefaults,
         PanelRoles.Viewer => ViewerDefaults,
+        PanelRoles.Driver => DriverDefaults,
         _ => []
     };
 

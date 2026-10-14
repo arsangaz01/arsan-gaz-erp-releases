@@ -11,6 +11,48 @@ internal sealed record TripReturnRequest(int TripId, string? Plate, List<string?
 internal sealed record TripCloseRequest(int TripId);
 internal sealed record TripReasonRequest(int TripId, List<int>? CylinderIds, string? Reason, string? Note, int? CustomerId = null);
 
+internal sealed class FixedVehicleBusyException(int tripId, string message) : InvalidOperationException(message)
+{
+    internal int TripId { get; } = tripId;
+}
+
+// A user with a fixed vehicle (WebPanelUser.FixedPlate, e.g. the depo1..depo6 drivers) works with that vehicle only:
+// trips start with it automatically and other plates are refused for starting, adding, loading and returning.
+internal static class DriverVehicle
+{
+    internal static IReadOnlyList<string?>? StartPlates(string? fixedPlate, IReadOnlyList<string?>? requested)
+    {
+        if (string.IsNullOrEmpty(fixedPlate))
+        {
+            return requested;
+        }
+
+        foreach (string? raw in requested ?? [])
+        {
+            PlateFor(fixedPlate, raw);
+        }
+
+        return [fixedPlate];
+    }
+
+    // The plate to use: the fixed vehicle when none is given, otherwise the given plate if it is allowed.
+    internal static string? PlateFor(string? fixedPlate, string? plate)
+    {
+        if (string.IsNullOrEmpty(fixedPlate))
+        {
+            return plate;
+        }
+
+        string? normalized = CylinderTracking.NormalizePlate(plate);
+        return normalized is null || normalized == fixedPlate
+            ? fixedPlate
+            : throw new ArgumentException($"Sabit aracınız {fixedPlate}; {normalized} aracıyla işlem yapamazsınız.");
+    }
+
+    internal static ActiveTripSummary? OpenTrip(IEnumerable<ActiveTripSummary> trips, string fixedPlate) =>
+        trips.FirstOrDefault(t => t.Vehicles.Any(v => v.OnTrip && string.Equals(v.Plate, fixedPlate, StringComparison.OrdinalIgnoreCase)));
+}
+
 internal static class CylinderTripEndpoints
 {
     // Whoever scans on a trip may explain why a cylinder was not scanned.
@@ -24,9 +66,14 @@ internal static class CylinderTripEndpoints
         {
             try
             {
-                CylinderTrip trip = await new CylinderTripService().StartTripAsync(
-                    request.Plates, request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
-                return Results.Ok(new { trip.Id, trip.Title, trip.StartedAt, message = $"{trip.Title} başlatıldı." });
+                (CylinderTrip trip, IReadOnlyList<string?>? plates) = await StartAsync(
+                    User(context), request, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                string? plate = plates?.Count == 1 ? plates[0] : null;
+                return Results.Ok(new { trip.Id, trip.Title, trip.StartedAt, plate, message = $"{trip.Title} başlatıldı." + (plate is null ? string.Empty : $" Araç: {plate}.") });
+            }
+            catch (FixedVehicleBusyException busy)
+            {
+                return Results.BadRequest(new { error = busy.Message, tripId = busy.TripId });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
@@ -38,8 +85,9 @@ internal static class CylinderTripEndpoints
         {
             try
             {
-                await new CylinderTripService().AddVehicleAsync(request.TripId, request.Plate);
-                return Results.Ok(new { message = $"{request.Plate} sefere eklendi." });
+                string? plate = DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate);
+                await new CylinderTripService().AddVehicleAsync(request.TripId, plate);
+                return Results.Ok(new { message = $"{plate} sefere eklendi." });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
@@ -52,7 +100,7 @@ internal static class CylinderTripEndpoints
             try
             {
                 TripLoadResult result = await new CylinderTripService().LoadCylindersAsync(
-                    request.TripId, request.Plate, request.Codes ?? [], "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                    request.TripId, DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate), request.Codes ?? [], "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
                 return Results.Ok(new
                 {
                     message = $"{result.Added} tüp sefere yüklendi." + (result.Skipped > 0 ? $" {result.Skipped} atlandı." : string.Empty),
@@ -88,7 +136,7 @@ internal static class CylinderTripEndpoints
             try
             {
                 TripReconcileResult reconcile = await new CylinderTripService().ReturnCylindersAsync(
-                    request.TripId, request.Plate, request.Codes ?? [], request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                    request.TripId, DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate), request.Codes ?? [], request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
                 return Results.Ok(TripReconcileDto(reconcile));
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -172,6 +220,22 @@ internal static class CylinderTripEndpoints
                 return Results.BadRequest(new { error = exception.Message });
             }
         }).Requires(ReasonWriters);
+    }
+
+    private static WebPanelUser User(HttpContext context) => (WebPanelUser)context.Items["panelAccount"]!;
+
+    // Shared by the phone and the panel. A user with a fixed vehicle always starts with that vehicle only, and not while
+    // it is still out on an open trip (the phone then continues that trip).
+    internal static async Task<(CylinderTrip Trip, IReadOnlyList<string?>? Plates)> StartAsync(WebPanelUser user, TripStartRequest request, string createdBy)
+    {
+        CylinderTripService service = new();
+        IReadOnlyList<string?>? plates = DriverVehicle.StartPlates(user.FixedPlate, request.Plates);
+        if (user.FixedPlate is string fixedPlate && DriverVehicle.OpenTrip(await service.ActiveTripsAsync(), fixedPlate) is ActiveTripSummary open)
+        {
+            throw new FixedVehicleBusyException(open.Id, $"Aracınız {fixedPlate} zaten açık seferde ({open.Title}). Yeni sefer açmadan bu sefere devam edin.");
+        }
+
+        return (await service.StartTripAsync(plates, request.Note, createdBy), plates);
     }
 
     internal static object ReasonCatalog() =>

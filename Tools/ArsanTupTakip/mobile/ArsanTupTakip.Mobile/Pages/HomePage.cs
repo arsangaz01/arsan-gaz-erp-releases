@@ -9,9 +9,16 @@ public sealed class HomePage : ContentPage
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
     private static readonly Color Glow = Color.FromArgb("#5EEAD4");
 
-    private sealed record Tile(string Glyph, string Title, string? Subtitle, bool Wide, Color From, Color To, Func<Task> Open);
+    private sealed record Tile(string Glyph, string Title, string? Subtitle, bool Wide, Color From, Color To, Func<Task> Open, Label? TitleLabel = null);
+
+    private static readonly TimeSpan AccessRefreshInterval = TimeSpan.FromSeconds(30);
+    private static DateTime _accessCheckedUtc;
 
     private readonly Dictionary<string, Page> _pages = [];
+    private readonly bool _driver;
+    private readonly Label _tripTitle = new() { Text = "Sevkiyat başlat" };
+    private bool _hasOpenTrip;
+    private bool _checkingAccess;
     private readonly Border _sync;
     private readonly Label _syncText = new() { FontSize = 12, TextColor = Colors.White.WithAlpha(0.85f), LineBreakMode = LineBreakMode.WordWrap };
     private readonly ActivityIndicator _syncBusy = new() { IsVisible = false, IsRunning = false, Color = Colors.White, WidthRequest = 22, HeightRequest = 22 };
@@ -27,19 +34,54 @@ public sealed class HomePage : ContentPage
         Ui.ApplyPageChrome(this);
         ApiClient api = ApiClient.Instance;
         AccountInfo? account = api.Account;
+        _accessCheckedUtc = DateTime.UtcNow;
 
         List<Tile> tiles = [];
         Color navy = Ui.Navy;
         Color indigo = Ui.Indigo;
-        if (api.CanAny([Perm.CylinderView, Perm.CylinderRegister, Perm.CylinderAudit, .. Perm.AnyMove]))
+        _driver = account?.IsDriver == true;
+        if (_driver)
         {
-            tiles.Add(new Tile(Icons.QrScanner, "Tüp İşlemleri", "Okut, sorgula, hareket kaydet", true, Color.FromArgb("#0F766E"), Color.FromArgb("#134E4A"),
-                () => Open("tup", () => new CylinderPage())));
-        }
+            // Drivers: the four daily jobs first, in this order; every tile still needs its permission, so a permission
+            // removed in the panel hides its tile and one granted there shows the regular tile further down.
+            string? plate = account?.FixedPlate;
+            if (api.Can(Perm.TripView))
+            {
+                tiles.Add(new Tile(Icons.Shipping, "Sevkiyat başlat", plate is null ? "Sefer, yükleme, teslim, dönüş" : $"Araç: {plate}", true,
+                    Color.FromArgb("#B45309"), Color.FromArgb("#78350F"), OpenTripAsync, _tripTitle));
+            }
 
-        if (api.Can(Perm.CylinderView))
+            if (api.Can(Perm.CylinderView))
+            {
+                tiles.Add(new Tile(Icons.ManageSearch, "Tüp bilgisi", "Barkodu okut: tüp nerede, dolu mu", true, Color.FromArgb("#0F766E"), Color.FromArgb("#134E4A"),
+                    () => Open("bilgi", () => new CylinderInfoPage())));
+                tiles.Add(new Tile(Icons.Inventory, "Müşteri stok bilgisi", "Müşterideki tüpler: adet, gün, barkod", true, indigo, navy,
+                    () => Open("stok", () => new CustomerStockPage())));
+            }
+
+            if (api.Can(Perm.StockCount))
+            {
+                tiles.Add(new Tile(Icons.Warehouse, "Sayım", "Depodaki tüpleri okutarak say", true, Color.FromArgb("#312E81"), navy,
+                    () => Open("depo-sayim", () => new StockCountPage())));
+            }
+
+            if (api.CanAny([Perm.CylinderRegister, .. Perm.AnyMove]))
+            {
+                tiles.Add(new Tile(Icons.QrScanner, "Tüp İşlemleri", "Okut, sorgula, hareket kaydet", false, indigo, navy, () => Open("tup", () => new CylinderPage())));
+            }
+        }
+        else
         {
-            tiles.Add(new Tile(Icons.ManageSearch, "Tüp Bilgisi", null, false, indigo, navy, () => Open("bilgi", () => new CylinderInfoPage())));
+            if (api.CanAny([Perm.CylinderView, Perm.CylinderRegister, Perm.CylinderAudit, .. Perm.AnyMove]))
+            {
+                tiles.Add(new Tile(Icons.QrScanner, "Tüp İşlemleri", "Okut, sorgula, hareket kaydet", true, Color.FromArgb("#0F766E"), Color.FromArgb("#134E4A"),
+                    () => Open("tup", () => new CylinderPage())));
+            }
+
+            if (api.Can(Perm.CylinderView))
+            {
+                tiles.Add(new Tile(Icons.ManageSearch, "Tüp Bilgisi", null, false, indigo, navy, () => Open("bilgi", () => new CylinderInfoPage())));
+            }
         }
 
         if (api.Can(Perm.Summary))
@@ -47,13 +89,13 @@ public sealed class HomePage : ContentPage
             tiles.Add(new Tile(Icons.Dashboard, "Tüp Durumu", null, false, indigo, navy, () => Open("durum", () => new CylinderStatusPage())));
         }
 
-        if (api.Can(Perm.CylinderView))
+        if (!_driver && api.Can(Perm.CylinderView))
         {
             tiles.Add(new Tile(Icons.Inventory, "Müşteri Stoku", "Müşterideki tüpler: adet, gün, barkod", true, Color.FromArgb("#0F766E"), navy,
                 () => Open("stok", () => new CustomerStockPage())));
         }
 
-        if (api.Can(Perm.TripView))
+        if (!_driver && api.Can(Perm.TripView))
         {
             tiles.Add(new Tile(Icons.Shipping, "Sefer", "Yükle, teslim et, dönüş", true, Color.FromArgb("#312E81"), navy, () => Open("sefer", () => new CylinderTripPage())));
         }
@@ -63,7 +105,7 @@ public sealed class HomePage : ContentPage
             tiles.Add(new Tile(Icons.Car, "Araçlar", null, false, indigo, navy, () => Open("arac", () => new VehiclePage())));
         }
 
-        if (api.Can(Perm.StockCount))
+        if (!_driver && api.Can(Perm.StockCount))
         {
             tiles.Add(new Tile(Icons.Warehouse, "Depo Sayımı", "Okut, gaz ve boyuta göre say", true, Color.FromArgb("#0F766E"), navy,
                 () => Open("depo-sayim", () => new StockCountPage())));
@@ -149,7 +191,7 @@ public sealed class HomePage : ContentPage
                     {
                         Padding = new Thickness(14, 0),
                         Spacing = 12,
-                        Children = { _update, _updateBusy, _sync, TileGrid(tiles), Footer() }
+                        Children = { _update, _updateBusy, _driver ? TileGrid(tiles) : _sync, _driver ? _sync : TileGrid(tiles), Footer() }
                     }
                 }
             }
@@ -161,7 +203,80 @@ public sealed class HomePage : ContentPage
         base.OnAppearing();
         RefreshSync();
         await ServerUrlCoordinator.RefreshIfDueAsync();
+        if (await RefreshAccessAsync())
+        {
+            return;
+        }
+
+        await RefreshTripTileAsync();
         await RefreshUpdateAsync();
+    }
+
+    // Also called when the app comes back to the foreground. Permissions or the fixed vehicle changed in the panel
+    // rebuild the home screen at once (tiles appear or disappear); returns true when it was rebuilt.
+    public async Task<bool> RefreshAccessAsync(bool force = false)
+    {
+        if (_checkingAccess || (!force && DateTime.UtcNow - _accessCheckedUtc < AccessRefreshInterval) || ApiClient.Instance.Account is not AccountInfo before)
+        {
+            return false;
+        }
+
+        _checkingAccess = true;
+        try
+        {
+            AccountInfo now = await ApiClient.Instance.RefreshAccountAsync();
+            _accessCheckedUtc = DateTime.UtcNow;
+            if (now.SameAccess(before))
+            {
+                return false;
+            }
+
+            App.ShowMain();
+            return true;
+        }
+        catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
+        {
+            // Offline or the session ended (the login screen is shown by ApiClient); keep the current tiles.
+            return false;
+        }
+        finally
+        {
+            _checkingAccess = false;
+        }
+    }
+
+    // "Sevkiyat başlat" becomes "Sevkiyata devam" while the driver's vehicle (or, without one, any trip) is still open.
+    private async Task RefreshTripTileAsync()
+    {
+        if (!_driver || !ApiClient.Instance.Can(Perm.TripView))
+        {
+            return;
+        }
+
+        try
+        {
+            string? plate = ApiClient.Instance.Account?.FixedPlate;
+            List<ActiveTripSummary> trips = await ApiClient.Instance.ActiveTripsAsync();
+            _hasOpenTrip = plate is null
+                ? trips.Count > 0
+                : trips.Any(t => t.Vehicles.Any(v => string.Equals(v.Plate, plate, StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
+        {
+            _hasOpenTrip = false;
+        }
+
+        _tripTitle.Text = _hasOpenTrip ? "Sevkiyata devam" : "Sevkiyat başlat";
+    }
+
+    private async Task OpenTripAsync()
+    {
+        await Open("sefer", () => new CylinderTripPage());
+        if (!_hasOpenTrip && ApiClient.Instance.Can(Perm.TripStart) && _pages.GetValueOrDefault("sefer") is CylinderTripPage page
+            && Navigation.NavigationStack.LastOrDefault() == page)
+        {
+            await page.StartTripAsync();
+        }
     }
 
     private void RefreshSync()
@@ -287,7 +402,20 @@ public sealed class HomePage : ContentPage
             Children =
             {
                 new Label { Text = account?.DisplayName ?? "-", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.TailTruncation },
-                new Label { Text = account?.RoleText ?? string.Empty, FontSize = 12, TextColor = Glow }
+                new Label
+                {
+                    Text = account?.IsDriver == true ? account.Role : account?.RoleText ?? string.Empty,
+                    FontSize = 12,
+                    TextColor = Glow
+                },
+                new Label
+                {
+                    Text = "🚚 Araç: " + account?.FixedPlate,
+                    FontSize = 16,
+                    FontFamily = "OpenSansSemibold",
+                    TextColor = Colors.White,
+                    IsVisible = !string.IsNullOrEmpty(account?.FixedPlate)
+                }
             }
         }, 1, 0);
         grid.Add(user, 0, 2);
@@ -379,15 +507,12 @@ public sealed class HomePage : ContentPage
             VerticalOptions = LayoutOptions.Center,
             Content = Ui.IconLabel(tile.Glyph, Glow, wide ? 32 : 36)
         };
-        Label title = new()
-        {
-            Text = tile.Title,
-            FontSize = wide ? 18 : 15,
-            FontFamily = "OpenSansSemibold",
-            TextColor = Colors.White,
-            HorizontalTextAlignment = wide ? TextAlignment.Start : TextAlignment.Center,
-            LineBreakMode = LineBreakMode.WordWrap
-        };
+        Label title = tile.TitleLabel ?? new Label { Text = tile.Title };
+        title.FontSize = wide ? 18 : 15;
+        title.FontFamily = "OpenSansSemibold";
+        title.TextColor = Colors.White;
+        title.HorizontalTextAlignment = wide ? TextAlignment.Start : TextAlignment.Center;
+        title.LineBreakMode = LineBreakMode.WordWrap;
 
         View content;
         if (wide)

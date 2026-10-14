@@ -314,6 +314,7 @@ internal static class MobileEndpoints
         roleText = PanelRoles.Description(user.Role),
         permissions = Perm.Effective(user).Order(StringComparer.Ordinal).ToArray(),
         mustChangePassword = user.MustChangePassword,
+        fixedPlate = user.FixedPlate,
         expiresUtc = session.ExpiresUtc,
         device = session.Name
     };
