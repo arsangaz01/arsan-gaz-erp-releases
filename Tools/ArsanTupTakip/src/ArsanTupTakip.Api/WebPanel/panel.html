@@ -54,6 +54,8 @@ tr.click { cursor:pointer; }
 tr.click { transition:background-color .07s ease; }
 tr.click:hover td { background:var(--sea-light); }
 tr.click:active td { background:#bae6fd; }
+tr.group-head td { background:#f1f5f9; font-weight:600; border-top:2px solid var(--line); }
+tr.selected td { background:var(--sea-light); }
 .badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:12px; background:#f3f4f6; border:1px solid var(--line); white-space:nowrap; }
 .b1 { background:#eff6ff; border-color:#bfdbfe; color:#1e40af; } .b2 { background:#e0f2fe; border-color:#7dd3fc; color:#0369a1; } .b3 { background:#f3f4f6; border-color:#d1d5db; color:#374151; }
 .b4 { background:#dbeafe; border-color:#93c5fd; color:#1d4ed8; } .b5 { background:#f9fafb; border-color:#e5e7eb; color:#4b5563; } .b6 { background:#e5e7eb; border-color:#cbd5e1; color:#1e3a8a; }
@@ -501,9 +503,9 @@ tr.alarm-row td { background:#fef2f2; }
       </div>
       <div class="kv" id="sd-info"></div>
     </div>
-    <div class="card"><h2>Gaz türü ve boyuta göre</h2><div class="table-wrap"><table id="sd-groups"></table></div></div>
+    <div class="card"><h2>Gaz türü ve boyuta göre</h2><p class="muted">Bir satıra tıklayınca aşağıda yalnızca o grubun tüpleri listelenir; tekrar tıklayınca tümü gelir.</p><div class="table-wrap"><table id="sd-groups"></table></div></div>
     <div class="card">
-      <div class="toolbar"><h2>Tüpler (en uzun bekleyen önce)</h2><input id="sd-q" placeholder="Barkod, seri no, gaz ara" style="min-width:220px"></div>
+      <div class="toolbar"><h2 id="sd-cyl-title">Tüpler (gaz türü ve boyuta göre, en uzun bekleyen önce)</h2><input id="sd-q" placeholder="Barkod, seri no, gaz ara" style="min-width:220px"></div>
       <div class="table-wrap"><table id="sd-cylinders"></table></div>
     </div>
   </div>

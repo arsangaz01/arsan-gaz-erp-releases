@@ -1025,6 +1025,7 @@ function openCustomerCylinders(c) {
 // ---- Customer stock --------------------------------------------------------------------------------
 
 let stockCustomer = null;
+let stockPick = null;
 const daysText = (days) => (days === null || days === undefined ? "-" : `${days} gün`);
 const fullEmpty = (full, empty) => `dolu ${full} · boş ${empty}`;
 
@@ -1046,9 +1047,13 @@ $("ms-csv").addEventListener("click", (e) => {
   window.location.href = BASE + "/panel/api/musteri-stok.csv?" + query;
 });
 
-function stockGroupTable(table, groups, longDays) {
+function stockGroupKey(gasType, capacity) { return `${(gasType || "").trim().toLocaleUpperCase("tr-TR")}|${capacity}`; }
+
+function stockGroupTable(table, groups, longDays, onPick, picked) {
   const head = el("tr", {}, ...["Gaz türü", "Boyut", "Adet", "Dolu / boş", "En kısa", "Ortalama", "En uzun", `${longDays}+ gün`].map((h) => el("th", {}, h)));
-  const body = groups.map((g) => el("tr", {},
+  const body = groups.map((g) => el("tr", onPick
+      ? { class: "click" + (picked === stockGroupKey(g.gasType, g.capacity) ? " selected" : ""), onclick: () => onPick(g) }
+      : {},
     el("td", {}, el("b", {}, g.gasType)),
     el("td", {}, g.capacity),
     el("td", {}, el("b", {}, String(g.count))),
@@ -1107,10 +1112,21 @@ async function openStockDialog(id) {
   if (s.phone) info.splice(2, 0, ["Telefon", s.phone]);
   if (!s.isActive) info.push(["Kayıt", "Pasif müşteri"]);
   $("sd-info").replaceChildren(...info.map(([k, v]) => el("div", {}, el("span", {}, k), v)));
-  stockGroupTable($("sd-groups"), s.groups, s.longDays);
+  stockPick = null;
+  renderStockGroups();
   $("sd-q").value = "";
   renderStockCylinders();
   if (!$("stock-dialog").open) $("stock-dialog").showModal();
+}
+
+function renderStockGroups() {
+  const s = stockCustomer;
+  stockGroupTable($("sd-groups"), s.groups, s.longDays, (g) => {
+    const key = stockGroupKey(g.gasType, g.capacity);
+    stockPick = stockPick === key ? null : key;
+    renderStockGroups();
+    renderStockCylinders();
+  }, stockPick);
 }
 
 function renderStockCylinders() {
@@ -1118,10 +1134,30 @@ function renderStockCylinders() {
   if (!s) return;
   const term = $("sd-q").value.trim().toLocaleLowerCase("tr-TR");
   const rows = s.cylinders
+    .filter((c) => !stockPick || stockGroupKey(c.gasType, c.capacity) === stockPick)
     .filter((c) => !term || [c.serialNumber, c.barcode, c.manufacturerSerial, c.gasType].some((v) => v && v.toLocaleLowerCase("tr-TR").includes(term)))
     .sort((a, b) => (b.days ?? -1) - (a.days ?? -1));
+  const picked = s.groups.find((g) => stockGroupKey(g.gasType, g.capacity) === stockPick);
+  $("sd-cyl-title").textContent = picked
+    ? `${picked.gasType} ${picked.capacity} · ${picked.count} adet (tümünü görmek için gruba tekrar tıklayın)`
+    : "Tüpler (gaz türü ve boyuta göre, en uzun bekleyen önce)";
+  const order = new Map(s.groups.map((g, i) => [stockGroupKey(g.gasType, g.capacity), i]));
+  const sections = new Map();
+  for (const c of rows) {
+    const key = stockGroupKey(c.gasType, c.capacity);
+    if (!sections.has(key)) sections.set(key, []);
+    sections.get(key).push(c);
+  }
+  const sorted = [...sections.entries()].sort((a, b) => (order.get(a[0]) ?? 1e9) - (order.get(b[0]) ?? 1e9));
   const head = el("tr", {}, ...["Seri no / barkod", "Gaz", "Boyut", "Dolu/Boş", "Teslim", "Gün", "Test"].map((h) => el("th", {}, h)));
-  const body = rows.map((c) => el("tr", { class: "click", onclick: () => openDetail(c.id) },
+  const body = sorted.flatMap(([, list]) => [el("tr", { class: "group-head" },
+    el("td", { colspan: 7 }, `${list[0].gasType.trim()} ${list[0].capacity} · ${list.length} adet · ${fullEmpty(list.filter((c) => c.fullness === "Dolu").length, list.filter((c) => c.fullness === "Boş").length)}`)),
+    ...list.map((c) => stockCylinderRow(c, s.longDays))]);
+  $("sd-cylinders").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 7, class: "muted" }, s.cylinders.length ? "Aramaya uyan tüp yok." : "Bu müşteride tüp yok."))])));
+}
+
+function stockCylinderRow(c, longDays) {
+  return el("tr", { class: "click", onclick: () => openDetail(c.id) },
     el("td", {}, el("b", {}, (c.needsReview ? "⚠ " : "") + c.serialNumber),
       c.barcode !== c.serialNumber ? el("div", { class: "muted" }, c.barcode) : null,
       c.manufacturerSerial ? el("div", { class: "muted" }, "Üretici seri: " + c.manufacturerSerial) : null,
@@ -1130,9 +1166,8 @@ function renderStockCylinders() {
     el("td", {}, c.capacity),
     el("td", {}, c.fullness),
     el("td", {}, c.since || "-"),
-    el("td", { class: c.days >= s.longDays ? "warn-text" : "" }, daysText(c.days)),
-    el("td", { class: c.testOverdue ? "bad-text" : "" }, c.testDue || "-")));
-  $("sd-cylinders").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 7, class: "muted" }, s.cylinders.length ? "Aramaya uyan tüp yok." : "Bu müşteride tüp yok."))])));
+    el("td", { class: c.days >= longDays ? "warn-text" : "" }, daysText(c.days)),
+    el("td", { class: c.testOverdue ? "bad-text" : "" }, c.testDue || "-"));
 }
 
 $("sd-q").addEventListener("input", renderStockCylinders);

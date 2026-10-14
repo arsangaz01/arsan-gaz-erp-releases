@@ -12,8 +12,8 @@ internal static class VehicleTrackingTests
         WarnsWhenOverCapacity();
     }
 
-    private static LoadCylinderItem Item(int id, string serial, string gas, bool? full, bool alarm = false) =>
-        new(id, serial, serial, gas, "40 Litre", full, CylinderTracking.FullnessName(full), "Taşınıyor (araçta)", null, "01 ABC 123",
+    private static LoadCylinderItem Item(int id, string serial, string gas, bool? full, bool alarm = false, string capacity = "40 Litre") =>
+        new(id, serial, serial, gas, capacity, full, CylinderTracking.FullnessName(full), "Taşınıyor (araçta)", null, "01 ABC 123",
             null, null, null, alarm ? "Eksik" : "Araçta", alarm);
 
     private static void GroupsByGasTypeWithCounts()
@@ -28,12 +28,28 @@ internal static class VehicleTrackingTests
         ]);
         Assert(groups.Count == 3, "Gas types are grouped case and space insensitively.");
         GasTypeGroup oxygen = groups[0];
-        Assert(oxygen.GasType == "Oksijen" && oxygen.Count == 3, "The largest group comes first with its count.");
+        Assert(oxygen.GasType == "Oksijen 40 Litre" && oxygen.Count == 3, "The largest group comes first with its gas and size.");
         Assert(oxygen.Full == 2 && oxygen.Empty == 1 && oxygen.Alarm == 1, "Full, empty and missing cylinders are counted per group.");
         Assert(oxygen.Cylinders.Select(x => x.SerialNumber).SequenceEqual(["OX-1", "OX-2", "OX-3"]), "Cylinders in a group are sorted by serial number.");
-        Assert(groups.Any(x => x.GasType == VehicleTracking.UnknownGas && x.Count == 1), "A cylinder without gas type is listed as unknown.");
+        Assert(groups.Any(x => x.GasType == VehicleTracking.UnknownGas + " 40 Litre" && x.Count == 1), "A cylinder without gas type is listed as unknown.");
         Assert(VehicleTracking.GroupSummary(oxygen).Contains("⚠ 1 eksik"), "The group summary mentions missing cylinders.");
         Assert(VehicleTracking.GroupByGas([]).Count == 0, "An empty load has no groups.");
+
+        IReadOnlyList<GasTypeGroup> sized = VehicleTracking.GroupByGas(
+        [
+            Item(1, "AR-50a", "ARGON", true, capacity: "50 Litre"),
+            Item(2, "AR-10a", "ARGON", true, capacity: "10 Litre"),
+            Item(3, "AR-10b", "argon", false, capacity: "10 Litre"),
+            Item(4, "AR-50b", "ARGON", true, capacity: "50 Litre"),
+            Item(5, "AR-50c", "ARGON", true, capacity: "50 Litre"),
+            Item(6, "OX-1", "OKSİJEN", true, capacity: "40 Litre"),
+            Item(7, "EO-1", "ETİLENOKSİT", true, capacity: "0 Litre"),
+            Item(8, "X-1", "ARGON", true, capacity: "-")
+        ]);
+        Assert(sized.Select(x => x.GasType).SequenceEqual(["ARGON", "ARGON 10 Litre", "ARGON 50 Litre", "ETİLENOKSİT", "OKSİJEN 40 Litre"]),
+            "Each gas is split by size, sizes of a gas stay together from small to large and a missing size is left out of the name.");
+        Assert(sized[1].Count == 2 && sized[2].Count == 3, "Each size group counts only its own cylinders.");
+        Assert(sized[2].Cylinders.Select(x => x.SerialNumber).SequenceEqual(["AR-50a", "AR-50b", "AR-50c"]), "Every cylinder of a size group is listed.");
     }
 
     private static void TripStateNames()

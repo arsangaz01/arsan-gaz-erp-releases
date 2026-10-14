@@ -12,8 +12,10 @@ public sealed class CustomerStockPage : ContentPage
     private readonly VerticalStackLayout _groups = new() { Spacing = 8 };
     private readonly VerticalStackLayout _cylinders = new() { Spacing = 8 };
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
+    private readonly List<(string Key, Border Card)> _groupCards = [];
     private List<CustomerItem> _customers = [];
     private CustomerStockResponse? _stock;
+    private string? _picked;
 
     public CustomerStockPage(CustomerItem? customer = null)
     {
@@ -122,9 +124,12 @@ public sealed class CustomerStockPage : ContentPage
         _summary.Children.Add(Ui.Card(card));
 
         _groups.Children.Clear();
+        _groupCards.Clear();
+        _picked = null;
         if (s.Groups.Count > 0)
         {
             _groups.Children.Add(Ui.SectionCaption("Gaz türü ve boyuta göre"));
+            _groups.Children.Add(Ui.Note("Bir gruba dokunun: aşağıda yalnızca o grubun tüpleri listelenir. Tekrar dokununca tümü gelir."));
         }
 
         foreach (CustomerStockGroupItem g in s.Groups)
@@ -146,9 +151,15 @@ public sealed class CustomerStockPage : ContentPage
             }, 1, 0);
             Border groupCard = Ui.Card(row);
             TapGestureRecognizer tap = new();
-            string gas = g.GasType;
-            tap.Tapped += (_, _) => _filter.Text = gas;
+            string key = GroupKey(g.GasType, g.Capacity);
+            tap.Tapped += (_, _) =>
+            {
+                _picked = _picked == key ? null : key;
+                MarkPicked();
+                ShowCylinders();
+            };
             groupCard.GestureRecognizers.Add(tap);
+            _groupCards.Add((key, groupCard));
             _groups.Children.Add(groupCard);
         }
 
@@ -167,11 +178,12 @@ public sealed class CustomerStockPage : ContentPage
 
         string term = (_filter.Text ?? string.Empty).Trim();
         List<CustomerStockCylinderItem> rows = _stock.Cylinders
+            .Where(c => _picked is null || GroupKey(c.GasType, c.Capacity) == _picked)
             .Where(c => term.Length == 0 || new[] { c.SerialNumber, c.Barcode, c.ManufacturerSerial, c.GasType }
                 .Any(v => v is not null && v.Contains(term, StringComparison.CurrentCultureIgnoreCase)))
             .ToList();
         _cylinders.Children.Add(Ui.SectionCaption(term.Length == 0
-            ? $"Tüpler ({rows.Count}) · en uzun bekleyen önce"
+            ? $"Tüpler ({rows.Count}) · gruba göre, en uzun bekleyen önce"
             : $"'{term}' için {rows.Count} tüp"));
         if (rows.Count == 0)
         {
@@ -179,29 +191,73 @@ public sealed class CustomerStockPage : ContentPage
             return;
         }
 
-        foreach (CustomerStockCylinderItem c in rows)
+        List<string> order = _stock.Groups.Select(g => GroupKey(g.GasType, g.Capacity)).ToList();
+        IEnumerable<IGrouping<string, CustomerStockCylinderItem>> sections = rows
+            .GroupBy(c => GroupKey(c.GasType, c.Capacity))
+            .OrderBy(g => order.IndexOf(g.Key) is int i && i >= 0 ? i : int.MaxValue);
+        foreach (IGrouping<string, CustomerStockCylinderItem> section in sections)
         {
-            VerticalStackLayout body = new()
+            CustomerStockCylinderItem first = section.First();
+            int full = section.Count(c => c.Fullness == "Dolu");
+            int empty = section.Count(c => c.Fullness == "Boş");
+            _cylinders.Children.Add(new Label
             {
-                Spacing = 3,
-                Children = { new Label { Text = c.Title, FontSize = 16, FontFamily = "OpenSansSemibold" }, Ui.Note(c.Subtitle) }
-            };
-            if (c.Codes.Length > 0)
+                Text = $"{first.GasType.Trim()} {first.Capacity} · {section.Count()} adet · dolu {full} · boş {empty}",
+                FontSize = 15,
+                FontFamily = "OpenSansSemibold",
+                TextColor = Ui.Accent,
+                Margin = new Thickness(2, 10, 0, 0)
+            });
+            foreach (CustomerStockCylinderItem c in section)
             {
-                body.Children.Add(Ui.Note(c.Codes));
+                _cylinders.Children.Add(CylinderCard(c));
             }
-
-            if (c.Days >= _stock.LongDays)
-            {
-                ((Label)body.Children[1]).TextColor = Color.FromArgb("#B45309");
-            }
-
-            Border card = Ui.Card(body);
-            TapGestureRecognizer tap = new();
-            string code = c.SerialNumber;
-            tap.Tapped += async (_, _) => await Navigation.PushAsync(new CylinderInfoPage(code));
-            card.GestureRecognizers.Add(tap);
-            _cylinders.Children.Add(card);
         }
+    }
+
+    private static string GroupKey(string gasType, string capacity) =>
+        $"{gasType.Trim().ToUpper(new System.Globalization.CultureInfo("tr-TR"))}|{capacity}";
+
+    private void MarkPicked()
+    {
+        foreach ((string key, Border card) in _groupCards)
+        {
+            if (key == _picked)
+            {
+                card.StrokeThickness = 3;
+                card.Stroke = new SolidColorBrush(Ui.Accent);
+            }
+            else
+            {
+                card.StrokeThickness = 1;
+                card.SetAppTheme<Brush>(Border.StrokeProperty,
+                    new SolidColorBrush(Color.FromArgb("#E5E7EB")), new SolidColorBrush(Color.FromArgb("#3F3F46")));
+            }
+        }
+    }
+
+    private Border CylinderCard(CustomerStockCylinderItem c)
+    {
+        VerticalStackLayout body = new()
+        {
+            Spacing = 3,
+            Children = { new Label { Text = c.Title, FontSize = 16, FontFamily = "OpenSansSemibold" }, Ui.Note(c.Subtitle) }
+        };
+        if (c.Codes.Length > 0)
+        {
+            body.Children.Add(Ui.Note(c.Codes));
+        }
+
+        if (c.Days >= _stock!.LongDays)
+        {
+            ((Label)body.Children[1]).TextColor = Color.FromArgb("#B45309");
+        }
+
+        Border card = Ui.Card(body);
+        TapGestureRecognizer tap = new();
+        string code = c.SerialNumber;
+        tap.Tapped += async (_, _) => await Navigation.PushAsync(new CylinderInfoPage(code));
+        card.GestureRecognizers.Add(tap);
+        return card;
     }
 }

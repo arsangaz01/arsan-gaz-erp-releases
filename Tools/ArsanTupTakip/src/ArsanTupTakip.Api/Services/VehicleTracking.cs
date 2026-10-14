@@ -38,19 +38,46 @@ public static class VehicleTracking
 
     public static string GasKey(string? gasType) => string.IsNullOrWhiteSpace(gasType) ? UnknownGas : gasType.Trim();
 
-    // Largest group first; inside a group the cylinders are listed by serial number.
-    public static IReadOnlyList<GasTypeGroup> GroupByGas(IEnumerable<LoadCylinderItem> items) =>
-        items
-            .GroupBy(x => GasKey(x.GasType), StringComparer.OrdinalIgnoreCase)
+    // One group per gas type and size ("SAF ARGON 50 Litre"); the gas with the most cylinders comes first and its sizes stay
+    // together from small to large. Inside a group the cylinders are listed by serial number.
+    public static IReadOnlyList<GasTypeGroup> GroupByGas(IEnumerable<LoadCylinderItem> items)
+    {
+        CultureInfo turkish = CultureInfo.GetCultureInfo("tr-TR");
+        List<(string Gas, string GasId, string? Size, LoadCylinderItem Item)> rows = items
+            .Select(x => (Gas: GasKey(x.GasType), Size: SizeKey(x.Capacity), Item: x))
+            .Select(x => (x.Gas, x.Gas.ToUpper(turkish), x.Size, x.Item))
+            .ToList();
+        Dictionary<string, int> gasTotals = rows.GroupBy(x => x.GasId).ToDictionary(g => g.Key, g => g.Count());
+        return rows
+            .GroupBy(x => (x.GasId, Size: x.Size?.ToUpper(turkish)))
             .Select(g =>
             {
-                List<LoadCylinderItem> cylinders = g.OrderBy(x => x.SerialNumber, TurkishOrder).ToList();
-                return new GasTypeGroup(g.Key, cylinders.Count,
+                List<LoadCylinderItem> cylinders = g.Select(x => x.Item).OrderBy(x => x.SerialNumber, TurkishOrder).ToList();
+                string gas = g.First().Gas;
+                string? size = g.First().Size;
+                GasTypeGroup group = new(size is null ? gas : $"{gas} {size}", cylinders.Count,
                     cylinders.Count(x => x.IsFull == true), cylinders.Count(x => x.IsFull == false), cylinders.Count(x => x.Alarm), cylinders);
+                return (Gas: gas, g.Key.GasId, SizeValue: SizeValue(size), Group: group);
             })
-            .OrderByDescending(x => x.Count)
-            .ThenBy(x => x.GasType, TurkishOrder)
+            .OrderByDescending(x => gasTotals[x.GasId])
+            .ThenBy(x => x.Gas, TurkishOrder)
+            .ThenBy(x => x.SizeValue)
+            .Select(x => x.Group)
             .ToList();
+    }
+
+    // "40 Litre" → "40 Litre"; a missing or zero size is not part of the group name.
+    private static string? SizeKey(string? capacity)
+    {
+        string text = (capacity ?? string.Empty).Trim();
+        return text.Length == 0 || text == "-" || SizeValue(text) <= 0 ? null : text;
+    }
+
+    private static decimal SizeValue(string? size)
+    {
+        string number = new((size ?? string.Empty).TakeWhile(c => char.IsDigit(c) || c is ',' or '.').ToArray());
+        return decimal.TryParse(number.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal value) ? value : 0;
+    }
 
     public static string TripState(DateTime? deliveredAt, DateTime? returnedAt, bool missing) =>
         deliveredAt is not null ? "Müşteriye teslim edildi"
