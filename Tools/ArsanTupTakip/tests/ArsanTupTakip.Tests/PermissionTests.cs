@@ -27,7 +27,7 @@ internal static class PermissionTests
         WrongPasswordsLockTheAddress().GetAwaiter().GetResult();
         HttpChecks().GetAwaiter().GetResult();
         DeletingUsers().GetAwaiter().GetResult();
-        Console.WriteLine("PASS: yetki kataloğu, rol varsayılanları, kullanıcıya özel yetkiler, son yönetici koruması, kullanıcı silme, oturum süreleri (panel 1 saat, mobil 24 saat), eşzamanlı girişler ve sunucu tarafı yetki denetimi.");
+        Console.WriteLine("PASS: yetki kataloğu, rol varsayılanları, kullanıcıya özel yetkiler, son yönetici koruması, kullanıcı silme, oturum süreleri (panel 24 saat, mobil 24 saat), eşzamanlı girişler ve sunucu tarafı yetki denetimi.");
     }
 
     private static void CatalogIsConsistent()
@@ -116,10 +116,10 @@ internal static class PermissionTests
         DefaultHttpContext login = Context("10.1.0.1");
         Check(await auth.LoginAsync(login, "sorumlu", Password) is null, "Panel girişi yapılabilmeli.");
         DefaultHttpContext request = WithCookie(login);
-        now = now.AddMinutes(59);
-        Check(auth.Current(request) is not null, "Panel oturumu 59. dakikada geçerli olmalı.");
+        now = now.AddHours(23).AddMinutes(59);
+        Check(auth.Current(request) is not null, "Panel oturumu 23 saat 59. dakikada geçerli olmalı.");
         now = now.AddMinutes(1).AddSeconds(1);
-        Check(auth.Current(request) is null, "Panel oturumu girişten 1 saat sonra kullanım olsa bile bitmeli.");
+        Check(auth.Current(request) is null, "Panel oturumu girişten 24 saat sonra kullanım olsa bile bitmeli.");
 
         now = new DateTime(2026, 10, 12, 9, 0, 0, DateTimeKind.Utc);
         DeviceStore devices = new(() => now);

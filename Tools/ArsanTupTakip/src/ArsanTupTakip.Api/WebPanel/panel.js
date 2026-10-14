@@ -61,7 +61,7 @@ async function api(path, options = {}) {
   if (response.status === 401 && path.startsWith("/panel/api/")) {
     me = null;
     for (const d of document.querySelectorAll("dialog")) if (d.open) d.close();
-    showLogin("Oturum süresi doldu (panel girişi 1 saat geçerlidir); yeniden giriş yapın.");
+    showLogin("Oturum süresi doldu (panel girişi 24 saat geçerlidir); yeniden giriş yapın.");
     throw new Error("Oturum kapalı.");
   }
   if (response.status === 409 && data.stale) data.error = data.error || STALE_TEXT;

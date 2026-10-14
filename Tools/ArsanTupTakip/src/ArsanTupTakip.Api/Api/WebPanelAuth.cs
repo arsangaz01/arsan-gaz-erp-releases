@@ -14,7 +14,7 @@ internal sealed class WebPanelAuth
 {
     internal const string CookieName = "att_oturum";
     internal const string CsrfHeader = "X-Panel-Istek";
-    internal static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(1);
+    internal static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(24);
     private const int MaxFailuresPerIp = 5;
     private const int MaxFailuresPerHour = 20;
     private static readonly TimeSpan LockTime = TimeSpan.FromMinutes(15);
