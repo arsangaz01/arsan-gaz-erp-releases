@@ -50,6 +50,7 @@ public partial class MainWindow : Window
         var unifiedTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         unifiedTimer.Tick += (_, _) => RefreshUnifiedConnectionStatus();
         unifiedTimer.Start();
+        Closed += (_, _) => unifiedTimer.Stop();
 	}
 
 	private void InitializeTrayIcon()
@@ -342,7 +343,7 @@ public partial class MainWindow : Window
 
 	private void OpenAgentChat()
 	{
-		if (_agentChatWindow is { IsLoaded: true })
+		if (_agentChatWindow is not null)
 		{
             if (!_agentChatWindow.IsVisible)
             {

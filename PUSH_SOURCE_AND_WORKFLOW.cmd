@@ -13,12 +13,12 @@ if not exist ".git" git init
 git remote get-url origin >nul 2>nul
 if errorlevel 1 git remote add origin https://github.com/arsangaz01/arsan-gaz-erp-kaynak.git
 
-git add .
+rem Only tracked files are staged; new files must be added deliberately so local-only files are never pushed.
+git add -u
 git commit -m "Arsan Gaz ERP V6 CI and Setup pipeline"
 if errorlevel 1 echo No new commit was created, continuing.
 
-git branch -M main
-git push -u origin main
+git push origin HEAD:main
 if errorlevel 1 (
   echo Push failed. Complete GitHub authentication, then run this file again.
   pause

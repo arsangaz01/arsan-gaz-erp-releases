@@ -56,7 +56,7 @@ appsettings.Development.json
 Thumbs.db
 .DS_Store
 .vscode/
-.idea/bin/
+.idea/
 obj/
 publish/
 _Backups/
@@ -64,6 +64,8 @@ _Backups/
 secrets.json
 bin/
 Data/
+# The root Data folder holds source code (DbContext, schema), not runtime data.
+!/Data/
 Logs/
 Screens/
 Tools/AgentBridge/bin/

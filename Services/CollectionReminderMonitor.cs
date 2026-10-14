@@ -56,6 +56,34 @@ public sealed class CollectionReminderMonitor : IAsyncDisposable
         }
     }
 
+    // Synchronous counterpart of DisposeAsync for Application.OnExit, which cannot await. The token source is
+    // left undisposed when the loop does not stop in time because the loop may still observe it.
+    public void Stop(TimeSpan timeout)
+    {
+        _closing.Cancel();
+        bool stopped = true;
+        if (_loop is not null)
+        {
+            try
+            {
+                stopped = _loop.Wait(timeout);
+            }
+            catch (AggregateException)
+            {
+            }
+        }
+
+        if (stopped)
+        {
+            _closing.Dispose();
+        }
+
+        if (_dispatcher.CheckAccess())
+        {
+            DisposeNotifyIcon();
+        }
+    }
+
     private void DisposeNotifyIcon()
     {
         if (_notifyIcon is null)

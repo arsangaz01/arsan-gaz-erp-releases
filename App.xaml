@@ -1,8 +1,7 @@
 ﻿<Application x:Class="ArsanGazERP.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:prim="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
-             StartupUri="MainWindow.xaml">
+             xmlns:prim="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework">
     <Application.Resources>
         <SolidColorBrush x:Key="CanvasBrush" Color="#060D18" />
         <SolidColorBrush x:Key="SurfaceBrush" Color="#0B1828" />

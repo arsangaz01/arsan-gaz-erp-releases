@@ -2,7 +2,11 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 for /f "tokens=2 delims=<>" %%V in ('findstr /i "<Version>" ArsanGazERP.csproj') do set VERSION=%%V
-if "%VERSION%"=="" set VERSION=5.3.0
+if "%VERSION%"=="" (
+  echo Version could not be read from ArsanGazERP.csproj; no tag was created.
+  pause
+  exit /b 1
+)
 set TAG=v%VERSION%
 
 rem The tag goes to the private source repo (origin); its workflow publishes the release to the public

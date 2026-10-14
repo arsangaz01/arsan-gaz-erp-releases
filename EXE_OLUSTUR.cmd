@@ -15,7 +15,7 @@ dotnet restore .\ArsanGazERP.csproj
 if errorlevel 1 goto hata
 dotnet build .\ArsanGazERP.csproj -c Release --no-restore
 if errorlevel 1 goto hata
-dotnet publish .\ArsanGazERP.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --no-restore -o "%STAGE_DIR%"
+dotnet publish .\ArsanGazERP.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "%STAGE_DIR%"
 if errorlevel 1 goto hata
 dotnet publish .\Tools\AgentWatcher\ArsanGazERP.AgentWatcher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o "%STAGE_DIR%\AgentWatcher"
 if errorlevel 1 goto hata
