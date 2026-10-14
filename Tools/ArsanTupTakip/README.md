@@ -151,6 +151,15 @@ hareket geçmişi ve Excel, müşteriler, seferler (görüntüleme, başlatma, y
 - Yalnızca yetki değişikliği açık oturumları kapatmaz (bir sonraki istekte geçerli olur); rol değişikliği, pasife alma ve
   şifre değişikliği oturumları kapatır.
 
+## Mobil ana menü ve Tüp Bilgisi (1.2.0 / build 4)
+
+- Girişten sonra kutucuklu ana menü (`Pages/HomePage.cs`): başlıkta uygulama adı, kullanıcı adı ve rolü; yalnızca yetkili
+  bölümlerin kutucukları (Tüp İşlemleri, Tüp Bilgisi, Tüp Durumu, Sefer, Araçlar, Müşteride Sayım, Raporlar, Hesap), Çıkış ve tarih.
+  Kutucuk ilgili sayfayı açar, geri tuşu menüye döner. İkonlar Material Icons yazı tipi (Apache-2.0, lisans `Resources/Raw/MaterialIcons-LICENSE.txt`).
+- **Tüp Bilgisi** (`Pages/CylinderInfoPage.cs`): barkod kamerayla, çekilen fotoğraftan, galeriden veya elle girilir; yalnızca durum
+  gösterilir (barkod/seri, gaz/kapasite, dolu/boş, şu anki yer: depo / müşteri / araç+sefer, son hareket, test tarihi). Hareket kaydedilmez.
+  Sunucu: `GET /api/tup/bilgi?kod=` salt okunur, yalnızca `tup-goruntule` yetkisi; müşteri telefonu dönmez.
+
 ## Mobil giriş ve oturum süreleri
 
 Telefonda web paneldeki kullanıcı adı ve şifreyle giriş yapılır (`POST /api/giris`); hatalı deneme kilidi panelle

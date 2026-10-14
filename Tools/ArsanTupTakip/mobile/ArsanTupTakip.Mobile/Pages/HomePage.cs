@@ -1,0 +1,394 @@
+using System.Globalization;
+using ArsanTupTakip.Mobile.Services;
+
+namespace ArsanTupTakip.Mobile.Pages;
+
+// Start screen: one tile per section the signed-in user may open; every tile pushes the existing page, back returns here.
+public sealed class HomePage : ContentPage
+{
+    private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
+    private static readonly Color Glow = Color.FromArgb("#5EEAD4");
+
+    private sealed record Tile(string Glyph, string Title, string? Subtitle, bool Wide, Color From, Color To, Func<Task> Open);
+
+    private readonly Dictionary<string, Page> _pages = [];
+    private readonly Border _pending;
+    private readonly Label _pendingText = new() { FontSize = 13, TextColor = Colors.White, VerticalTextAlignment = TextAlignment.Center };
+
+    public HomePage()
+    {
+        Title = "ArsanTüpTakip";
+        NavigationPage.SetHasNavigationBar(this, false);
+        Ui.ApplyPageChrome(this);
+        ApiClient api = ApiClient.Instance;
+        AccountInfo? account = api.Account;
+
+        List<Tile> tiles = [];
+        Color navy = Ui.Navy;
+        Color indigo = Ui.Indigo;
+        if (api.CanAny([Perm.CylinderView, Perm.CylinderRegister, Perm.CylinderAudit, .. Perm.AnyMove]))
+        {
+            tiles.Add(new Tile(Icons.QrScanner, "Tüp İşlemleri", "Okut, sorgula, hareket kaydet", true, Color.FromArgb("#0F766E"), Color.FromArgb("#134E4A"),
+                () => Open("tup", () => new CylinderPage())));
+        }
+
+        if (api.Can(Perm.CylinderView))
+        {
+            tiles.Add(new Tile(Icons.ManageSearch, "Tüp Bilgisi", null, false, indigo, navy, () => Open("bilgi", () => new CylinderInfoPage())));
+        }
+
+        if (api.Can(Perm.Summary))
+        {
+            tiles.Add(new Tile(Icons.Dashboard, "Tüp Durumu", null, false, indigo, navy, () => Open("durum", () => new CylinderStatusPage())));
+        }
+
+        if (api.Can(Perm.TripView))
+        {
+            tiles.Add(new Tile(Icons.Shipping, "Sefer", "Yükle, teslim et, dönüş", true, Color.FromArgb("#312E81"), navy, () => Open("sefer", () => new CylinderTripPage())));
+        }
+
+        if (api.Can(Perm.VehicleView))
+        {
+            tiles.Add(new Tile(Icons.Car, "Araçlar", null, false, indigo, navy, () => Open("arac", () => new VehiclePage())));
+        }
+
+        if (api.Can(Perm.CylinderAudit))
+        {
+            tiles.Add(new Tile(Icons.FactCheck, "Müşteride Sayım", null, false, indigo, navy, () => Open("sayim", () => new CylinderAuditPage())));
+        }
+
+        if (api.CanAny(Perm.Summary, Perm.Reports, Perm.MovementHistory))
+        {
+            tiles.Add(new Tile(Icons.Insights, "Raporlar", null, false, indigo, navy, () => Open("rapor", () => new SummaryPage())));
+        }
+
+        tiles.Add(new Tile(Icons.Account, "Hesap", null, false, indigo, navy, () => Open("hesap", () => new AccountPage())));
+        tiles.Add(new Tile(Icons.Logout, "Çıkış", null, false, Color.FromArgb("#4B5563"), Color.FromArgb("#1F2937"), LogoutAsync));
+
+        TapGestureRecognizer pendingTap = new();
+        pendingTap.Tapped += async (_, _) => await Open("tup", () => new CylinderPage());
+        _pending = new Border
+        {
+            Padding = new Thickness(14, 10),
+            StrokeThickness = 0,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
+            BackgroundColor = Color.FromArgb("#B45309"),
+            IsVisible = false,
+            Content = _pendingText,
+            GestureRecognizers = { pendingTap }
+        };
+
+        Content = new ScrollView
+        {
+            Content = new VerticalStackLayout
+            {
+                Spacing = 16,
+                Padding = new Thickness(0, 0, 0, 20),
+                Children =
+                {
+                    Header(account),
+                    new VerticalStackLayout
+                    {
+                        Padding = new Thickness(14, 0),
+                        Spacing = 12,
+                        Children = { _pending, TileGrid(tiles), Footer() }
+                    }
+                }
+            }
+        };
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        int pending = OfflineMoves.Pending.Count;
+        _pending.IsVisible = pending > 0;
+        _pendingText.Text = $"📶 Gönderilmeyi bekleyen {pending} tüp hareketi var. Göndermek için dokunun.";
+        await ServerUrlCoordinator.RefreshIfDueAsync();
+    }
+
+    private static View Header(AccountInfo? account)
+    {
+        Grid grid = new()
+        {
+            ColumnSpacing = 12,
+            RowSpacing = 2,
+            ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)],
+            RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto)]
+        };
+
+        Grid brand = new() { ColumnSpacing = 10, ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
+        brand.Add(new Border
+        {
+            WidthRequest = 46,
+            HeightRequest = 46,
+            StrokeThickness = 1,
+            Stroke = new SolidColorBrush(Glow.WithAlpha(0.5f)),
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
+            BackgroundColor = Colors.White.WithAlpha(0.08f),
+            Content = Ui.IconLabel(Icons.Tank, Glow, 28)
+        }, 0, 0);
+        brand.Add(new VerticalStackLayout
+        {
+            VerticalOptions = LayoutOptions.Center,
+            Children =
+            {
+                new Label
+                {
+                    FormattedText = new FormattedString
+                    {
+                        Spans =
+                        {
+                            new Span { Text = "Arsan", TextColor = Colors.White, FontSize = 24, FontFamily = "OpenSansSemibold" },
+                            new Span { Text = "TüpTakip", TextColor = Glow, FontSize = 24, FontFamily = "OpenSansSemibold" }
+                        }
+                    }
+                },
+                new Label { Text = "TÜP TAKİP SİSTEMİ", FontSize = 11, CharacterSpacing = 1.5, TextColor = Colors.White.WithAlpha(0.65f) }
+            }
+        }, 1, 0);
+        grid.Add(brand, 0, 0);
+        Grid.SetColumnSpan(brand, 2);
+
+        BoxView divider = new() { HeightRequest = 1, Color = Colors.White.WithAlpha(0.12f), Margin = new Thickness(0, 14, 0, 10) };
+        grid.Add(divider, 0, 1);
+        Grid.SetColumnSpan(divider, 2);
+
+        Grid user = new() { ColumnSpacing = 10, ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
+        user.Add(new Border
+        {
+            WidthRequest = 36,
+            HeightRequest = 36,
+            StrokeThickness = 0,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.Ellipse(),
+            BackgroundColor = Ui.Accent.WithAlpha(0.35f),
+            Content = Ui.IconLabel(Icons.Account, Colors.White, 22)
+        }, 0, 0);
+        user.Add(new VerticalStackLayout
+        {
+            VerticalOptions = LayoutOptions.Center,
+            Children =
+            {
+                new Label { Text = account?.DisplayName ?? "-", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.TailTruncation },
+                new Label { Text = account?.RoleText ?? string.Empty, FontSize = 12, TextColor = Glow }
+            }
+        }, 1, 0);
+        grid.Add(user, 0, 2);
+        Grid.SetColumnSpan(user, 2);
+
+        return new Border
+        {
+            Padding = new Thickness(18, 22, 18, 18),
+            StrokeThickness = 0,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = new CornerRadius(0, 0, 28, 28) },
+            Background = new LinearGradientBrush(
+                [new GradientStop(Ui.Navy, 0), new GradientStop(Ui.Indigo, 0.55f), new GradientStop(Color.FromArgb("#0F766E"), 1)],
+                new Point(0, 0), new Point(1, 1)),
+            Shadow = new Shadow { Brush = new SolidColorBrush(Colors.Black), Opacity = 0.25f, Radius = 16, Offset = new Point(0, 4) },
+            Content = grid
+        };
+    }
+
+    // Wide tiles take a full row; a normal tile left without a partner spans the row too, so the grid never has holes.
+    private static Grid TileGrid(List<Tile> tiles)
+    {
+        Grid grid = new()
+        {
+            ColumnSpacing = 12,
+            RowSpacing = 12,
+            ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star)]
+        };
+        int row = 0;
+        Tile? waiting = null;
+
+        void Place(Tile tile, int column, int span)
+        {
+            if (grid.RowDefinitions.Count <= row)
+            {
+                grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            }
+
+            View view = TileView(tile, span == 2);
+            grid.Add(view, column, row);
+            Grid.SetColumnSpan(view, span);
+        }
+
+        foreach (Tile tile in tiles)
+        {
+            if (tile.Wide)
+            {
+                if (waiting is not null)
+                {
+                    Place(waiting, 0, 2);
+                    row++;
+                    waiting = null;
+                }
+
+                Place(tile, 0, 2);
+                row++;
+            }
+            else if (waiting is null)
+            {
+                waiting = tile;
+            }
+            else
+            {
+                Place(waiting, 0, 1);
+                Place(tile, 1, 1);
+                row++;
+                waiting = null;
+            }
+        }
+
+        if (waiting is not null)
+        {
+            Place(waiting, 0, 2);
+        }
+
+        return grid;
+    }
+
+    private static View TileView(Tile tile, bool wide)
+    {
+        Border iconBubble = new()
+        {
+            WidthRequest = wide ? 58 : 62,
+            HeightRequest = wide ? 58 : 62,
+            StrokeThickness = 1,
+            Stroke = new SolidColorBrush(Glow.WithAlpha(0.35f)),
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 20 },
+            BackgroundColor = Colors.White.WithAlpha(0.08f),
+            HorizontalOptions = wide ? LayoutOptions.Start : LayoutOptions.Center,
+            VerticalOptions = LayoutOptions.Center,
+            Content = Ui.IconLabel(tile.Glyph, Glow, wide ? 32 : 36)
+        };
+        Label title = new()
+        {
+            Text = tile.Title,
+            FontSize = wide ? 18 : 15,
+            FontFamily = "OpenSansSemibold",
+            TextColor = Colors.White,
+            HorizontalTextAlignment = wide ? TextAlignment.Start : TextAlignment.Center,
+            LineBreakMode = LineBreakMode.WordWrap
+        };
+
+        View content;
+        if (wide)
+        {
+            Grid row = new()
+            {
+                ColumnSpacing = 16,
+                ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)]
+            };
+            row.Add(iconBubble, 0, 0);
+            VerticalStackLayout texts = new() { VerticalOptions = LayoutOptions.Center, Spacing = 2, Children = { title } };
+            if (tile.Subtitle is not null)
+            {
+                texts.Children.Add(new Label { Text = tile.Subtitle, FontSize = 12, TextColor = Colors.White.WithAlpha(0.7f) });
+            }
+
+            row.Add(texts, 1, 0);
+            row.Add(new Label { Text = "›", FontSize = 30, TextColor = Glow, VerticalTextAlignment = TextAlignment.Center }, 2, 0);
+            content = row;
+        }
+        else
+        {
+            content = new VerticalStackLayout
+            {
+                Spacing = 10,
+                VerticalOptions = LayoutOptions.Center,
+                Children = { iconBubble, title }
+            };
+        }
+
+        Border card = new()
+        {
+            Padding = wide ? new Thickness(18, 16) : new Thickness(10, 18),
+            MinimumHeightRequest = wide ? 96 : 132,
+            StrokeThickness = 1,
+            Stroke = new SolidColorBrush(Colors.White.WithAlpha(0.08f)),
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 22 },
+            Background = new LinearGradientBrush([new GradientStop(tile.From, 0), new GradientStop(tile.To, 1)], new Point(0, 0), new Point(1, 1)),
+            Shadow = new Shadow { Brush = new SolidColorBrush(Colors.Black), Opacity = 0.22f, Radius = 10, Offset = new Point(0, 4) },
+            Content = content
+        };
+        SemanticProperties.SetDescription(card, tile.Title);
+
+        bool busy = false;
+        TapGestureRecognizer tap = new();
+        tap.Tapped += async (_, _) =>
+        {
+            if (busy)
+            {
+                return;
+            }
+
+            busy = true;
+            try
+            {
+                await card.ScaleToAsync(0.94, 70, Easing.CubicOut);
+                await card.ScaleToAsync(1, 90, Easing.CubicIn);
+                await tile.Open();
+            }
+            finally
+            {
+                busy = false;
+            }
+        };
+        card.GestureRecognizers.Add(tap);
+        return card;
+    }
+
+    private static View Footer()
+    {
+        Grid footer = new()
+        {
+            ColumnSpacing = 12,
+            Margin = new Thickness(0, 8, 0, 0),
+            ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)]
+        };
+        footer.Add(new BoxView { HeightRequest = 2, Color = Ui.Accent, VerticalOptions = LayoutOptions.Center }, 0, 0);
+        footer.Add(new Label
+        {
+            Text = DateTime.Now.ToString("d MMMM yyyy, dddd", Turkish),
+            FontSize = 14,
+            FontFamily = "OpenSansSemibold",
+            TextColor = Ui.Muted
+        }, 1, 0);
+        footer.Add(new BoxView { HeightRequest = 2, Color = Ui.Indigo, VerticalOptions = LayoutOptions.Center }, 2, 0);
+        return footer;
+    }
+
+    // Section pages are created once and reused, like the former tabs, so their state and event handlers are not duplicated.
+    private async Task Open(string key, Func<Page> create)
+    {
+        try
+        {
+            if (!_pages.TryGetValue(key, out Page? page))
+            {
+                page = create();
+                _pages[key] = page;
+            }
+
+            if (Navigation.NavigationStack.Contains(page))
+            {
+                return;
+            }
+
+            await Navigation.PushAsync(page);
+        }
+        catch (Exception exception)
+        {
+            CrashLog.Write(exception, key + " ekranı");
+            await Navigation.PushAsync(CrashLog.ErrorPage("Ekran açılamadı", exception.ToString()));
+        }
+    }
+
+    private async Task LogoutAsync()
+    {
+        if (await DisplayAlertAsync("Çıkış", "Bu telefondaki oturum kapatılsın mı? Tekrar kullanmak için kullanıcı adı ve şifre gerekir.", "Çıkış yap", "Vazgeç"))
+        {
+            await App.LogoutAsync();
+        }
+    }
+}

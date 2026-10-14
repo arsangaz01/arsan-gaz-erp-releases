@@ -97,6 +97,27 @@ public sealed record CylinderListItem(
     }.Where(part => !string.IsNullOrEmpty(part)));
 }
 
+// Read-only answer of /api/tup/bilgi for the "Tüp Bilgisi" screen.
+public sealed record CylinderStatusInfo(
+    string SerialNumber,
+    string Barcode,
+    string GasType,
+    string Capacity,
+    int Status,
+    string StatusName,
+    bool? IsFull,
+    string Fullness,
+    string Location,
+    string? Customer,
+    string? Plate,
+    string? Trip,
+    int? DaysThere,
+    string? LastMovementDate,
+    string? LastMovementType,
+    string? TestDue,
+    bool TestOverdue,
+    bool IsActive);
+
 public sealed record CylinderBulkResult(string Code, bool Ok, string Message);
 public sealed record CylinderBulkResponse(string Message, int Ok, int Failed, List<CylinderBulkResult> Results);
 public sealed record CylinderAuditResponse(string Message, int Expected, int Found, List<string> Missing, List<string> Unexpected, List<string> Unknown);
@@ -444,6 +465,9 @@ public sealed class ApiClient
 
     public async Task<CylinderInfo> CylinderAsync(string code) =>
         await GetAsync<CylinderInfo>("/api/tup?kod=" + Uri.EscapeDataString(code));
+
+    public Task<CylinderStatusInfo> CylinderStatusInfoAsync(string code) =>
+        GetAsync<CylinderStatusInfo>("/api/tup/bilgi?kod=" + Uri.EscapeDataString(code));
 
     // requestKey: the same key for the same logical movement (also when it is resent from the offline queue), so a
     // request that reached the server but whose answer was lost is not applied twice.

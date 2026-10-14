@@ -377,6 +377,9 @@ internal static class PermissionTests
             }
         }
 
+        RouteEndpoint? info = endpoints.FirstOrDefault(e => "/" + (e.RoutePattern.RawText ?? string.Empty).TrimStart('/') == "/api/tup/bilgi");
+        Check(info?.Metadata.GetMetadata<RequiresPermission>()?.AnyOf is [Perm.CylinderView],
+            "Tüp Bilgisi (salt okunur) yalnızca tüp görüntüleme yetkisi istemeli.");
         Check(checkedCount > 50, $"Uç noktalar bulunamadı ({checkedCount}).");
         Check(missing.Count == 0, "Yetki tanımı olmayan uç noktalar: " + string.Join(", ", missing));
     }

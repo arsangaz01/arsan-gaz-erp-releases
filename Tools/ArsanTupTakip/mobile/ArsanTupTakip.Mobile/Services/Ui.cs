@@ -2,20 +2,22 @@ namespace ArsanTupTakip.Mobile.Services;
 
 public static class Ui
 {
-    public static readonly Color Accent = Color.FromArgb("#0284C7");
-    public static readonly Color AccentDark = Color.FromArgb("#1E3A8A");
+    public static readonly Color Accent = Color.FromArgb("#0D9488");
+    public static readonly Color AccentDark = Color.FromArgb("#115E59");
+    public static readonly Color Navy = Color.FromArgb("#0B1324");
+    public static readonly Color Indigo = Color.FromArgb("#1E1B4B");
     public static readonly Color Muted = Color.FromArgb("#6B7280");
     public static readonly Color SurfaceLight = Colors.White;
     public static readonly Color SurfaceDark = Color.FromArgb("#262626");
     public static readonly Color PageLight = Color.FromArgb("#F3F4F6");
     public static readonly Color PageDark = Color.FromArgb("#171717");
 
-    private static readonly Color SecondaryLight = Color.FromArgb("#EFF6FF");
-    private static readonly Color SecondaryDark = Color.FromArgb("#1E293B");
-    private static readonly Color SecondaryPressedLight = Color.FromArgb("#BFDBFE");
-    private static readonly Color SecondaryPressedDark = Color.FromArgb("#334155");
-    private static readonly Color CompactLight = Color.FromArgb("#E0F2FE");
-    private static readonly Color CompactPressedLight = Color.FromArgb("#BAE6FD");
+    private static readonly Color SecondaryLight = Color.FromArgb("#F0FDFA");
+    private static readonly Color SecondaryDark = Color.FromArgb("#132A2A");
+    private static readonly Color SecondaryPressedLight = Color.FromArgb("#99F6E4");
+    private static readonly Color SecondaryPressedDark = Color.FromArgb("#1F4441");
+    private static readonly Color CompactLight = Color.FromArgb("#CCFBF1");
+    private static readonly Color CompactPressedLight = Color.FromArgb("#99F6E4");
     private static readonly Color IconIdleLight = Color.FromArgb("#F3F4F6");
     private static readonly Color IconIdleDark = Color.FromArgb("#3F3F46");
     private static readonly Color IconPressedLight = Color.FromArgb("#D1D5DB");
@@ -25,6 +27,25 @@ public static class Ui
     {
         page.SetAppThemeColor(Page.BackgroundColorProperty, PageLight, PageDark);
     }
+
+    // Glyph from the bundled Material Icons font (Apache-2.0, Resources/Raw/MaterialIcons-LICENSE.txt).
+    public static FontImageSource Icon(string glyph, Color color, double size = 28) => new()
+    {
+        FontFamily = Icons.Font,
+        Glyph = glyph,
+        Color = color,
+        Size = size
+    };
+
+    public static Label IconLabel(string glyph, Color color, double size = 24) => new()
+    {
+        FontFamily = Icons.Font,
+        Text = glyph,
+        TextColor = color,
+        FontSize = size,
+        VerticalTextAlignment = TextAlignment.Center,
+        HorizontalTextAlignment = TextAlignment.Center
+    };
 
     public static Label Title(string text) => new()
     {

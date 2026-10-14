@@ -1,5 +1,8 @@
+using System.Globalization;
+using ArsanTupTakip.Database;
 using ArsanTupTakip.Models;
 using ArsanTupTakip.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace ArsanTupTakip.Api;
 
@@ -15,6 +18,8 @@ internal sealed record CustomerCreateRequest(
 
 internal static class MobileEndpoints
 {
+    private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
+
     public static void Map(WebApplication app)
     {
         app.MapGet("/api/merhaba", () =>
@@ -124,6 +129,49 @@ internal static class MobileEndpoints
                     cylinder.Version
                 });
         }).Requires([Perm.CylinderView, .. Perm.AnyMove]);
+
+        // Read-only status for the "Tüp Bilgisi" screen; customer phones are never included (they need CustomerView).
+        app.MapGet("/api/tup/bilgi", async (string? kod) =>
+        {
+            Cylinder? c = await new CrudService().FindCylinderByCodeAsync(kod ?? string.Empty);
+            if (c is null)
+            {
+                return Results.NotFound(new { error = $"'{(kod ?? string.Empty).Trim()}' barkodlu veya seri numaralı tüp bulunamadı." });
+            }
+
+            await using TupTakipDbContext db = new();
+            CylinderMovement? last = await db.CylinderMovements.AsNoTracking()
+                .Where(m => m.CylinderId == c.Id).OrderByDescending(m => m.MovementDate).ThenByDescending(m => m.Id).FirstOrDefaultAsync();
+            string? trip = c.Status == CylinderStatus.Vehicle
+                ? await db.CylinderTripCylinders.AsNoTracking()
+                    .Where(t => t.CylinderId == c.Id && t.DeliveredAt == null && t.ReturnedAt == null && t.Trip.Status == CylinderTripStatus.Active)
+                    .OrderByDescending(t => t.LoadedAt).Select(t => t.Trip.Title).FirstOrDefaultAsync()
+                : null;
+            string? customer = c.Status == CylinderStatus.Customer ? c.CurrentCustomer?.CompanyName : null;
+            string? plate = c.Status == CylinderStatus.Vehicle ? c.VehiclePlate : null;
+            DateTime today = DateTime.Today;
+            return Results.Ok(new
+            {
+                c.SerialNumber,
+                c.Barcode,
+                c.GasType,
+                Capacity = $"{c.Capacity.ToString("0.##", Turkish)} {c.CapacityUnit}",
+                Status = (int)c.Status,
+                StatusName = CylinderTracking.StatusName((int)c.Status),
+                c.IsFull,
+                Fullness = c.IsFull is null ? "Bilinmiyor" : CylinderTracking.FullnessName(c.IsFull),
+                Location = CylinderTracking.LocationText((int)c.Status, customer, plate, trip),
+                Customer = customer,
+                Plate = plate,
+                Trip = trip,
+                DaysThere = CylinderTracking.DaysSince(c.LastMovementAt, today),
+                LastMovementDate = (last?.MovementDate ?? c.LastMovementAt)?.ToString("dd.MM.yyyy HH:mm", Turkish),
+                LastMovementType = last is null ? null : $"{last.MovementType} ({CylinderTracking.StatusName((int)last.FromStatus)} → {CylinderTracking.StatusName((int)last.ToStatus)})",
+                TestDue = c.TestDueDate?.ToString("dd.MM.yyyy", Turkish),
+                TestOverdue = c.TestDueDate != null && c.TestDueDate < today,
+                c.IsActive
+            });
+        }).Requires(Perm.CylinderView);
 
         app.MapPost("/api/tup/hareket", async (MoveRequest request, HttpContext context) =>
         {

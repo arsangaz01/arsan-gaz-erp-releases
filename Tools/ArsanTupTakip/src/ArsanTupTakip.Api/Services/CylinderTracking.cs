@@ -111,6 +111,16 @@ public static class CylinderTracking
         _ => $"Durum {status}"
     };
 
+    // "Where is it now?" for the read-only cylinder info screen.
+    public static string LocationText(int status, string? customer, string? plate, string? tripTitle) => status switch
+    {
+        Warehouse => "Depoda",
+        Customer => string.IsNullOrWhiteSpace(customer) ? "Müşteride" : "Müşteride: " + customer.Trim(),
+        Vehicle => "Araçta" + (string.IsNullOrWhiteSpace(plate) ? string.Empty : ": " + plate.Trim())
+            + (string.IsNullOrWhiteSpace(tripTitle) ? string.Empty : " · sefer: " + tripTitle.Trim()),
+        _ => StatusName(status)
+    };
+
     public static string FullnessName(bool? isFull) => isFull switch
     {
         true => "Dolu",

@@ -5,19 +5,19 @@
 
     <!-- Note: For Android please see also Platforms\Android\Resources\values\colors.xml -->
 
-    <Color x:Key="Primary">#0284C7</Color>
-    <Color x:Key="PrimaryDark">#1E3A8A</Color>
+    <Color x:Key="Primary">#0D9488</Color>
+    <Color x:Key="PrimaryDark">#115E59</Color>
     <Color x:Key="PrimaryDarkText">#1F2937</Color>
-    <Color x:Key="Secondary">#E0F2FE</Color>
-    <Color x:Key="SecondaryDarkText">#7DD3FC</Color>
-    <Color x:Key="Tertiary">#1E3A8A</Color>
+    <Color x:Key="Secondary">#CCFBF1</Color>
+    <Color x:Key="SecondaryDarkText">#5EEAD4</Color>
+    <Color x:Key="Tertiary">#115E59</Color>
 
-    <Color x:Key="ButtonSoft">#EFF6FF</Color>
-    <Color x:Key="ButtonSoftBorder">#BFDBFE</Color>
-    <Color x:Key="ButtonSoftText">#1E3A8A</Color>
-    <Color x:Key="ButtonSoftDark">#1E293B</Color>
-    <Color x:Key="ButtonSoftDarkBorder">#334155</Color>
-    <Color x:Key="ButtonSoftDarkText">#BAE6FD</Color>
+    <Color x:Key="ButtonSoft">#F0FDFA</Color>
+    <Color x:Key="ButtonSoftBorder">#99F6E4</Color>
+    <Color x:Key="ButtonSoftText">#115E59</Color>
+    <Color x:Key="ButtonSoftDark">#132A2A</Color>
+    <Color x:Key="ButtonSoftDarkBorder">#1F4441</Color>
+    <Color x:Key="ButtonSoftDarkText">#99F6E4</Color>
     <Color x:Key="CardLight">#FFFFFF</Color>
     <Color x:Key="CardLightBorder">#E5E7EB</Color>
     <Color x:Key="CardDark">#262626</Color>

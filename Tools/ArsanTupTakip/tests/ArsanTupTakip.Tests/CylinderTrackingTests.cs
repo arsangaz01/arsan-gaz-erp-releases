@@ -54,6 +54,11 @@ internal static class CylinderTrackingTests
         Assert(CylinderTracking.NextFullness(CylinderTracking.Warehouse, CylinderTracking.Vehicle, true, null) == true, "A plain transfer keeps the current fullness.");
         Assert(CylinderTracking.NextFullness(CylinderTracking.Customer, CylinderTracking.Warehouse, true, true) == true, "An explicit choice overrides the automatic rule.");
         Assert(CylinderTracking.StatusName(CylinderTracking.Vehicle) == "Taşınıyor (araçta)", "Vehicle status is shown as in transit.");
+        Assert(CylinderTracking.LocationText(CylinderTracking.Warehouse, "Eski Müşteri", null, null) == "Depoda", "A cylinder in the warehouse shows no customer.");
+        Assert(CylinderTracking.LocationText(CylinderTracking.Customer, " Acme ", null, null) == "Müşteride: Acme", "A cylinder at a customer names the customer.");
+        Assert(CylinderTracking.LocationText(CylinderTracking.Vehicle, null, "01 ABC 123", "Sefer 5") == "Araçta: 01 ABC 123 · sefer: Sefer 5", "A cylinder on a trip names the plate and trip.");
+        Assert(CylinderTracking.LocationText(CylinderTracking.Vehicle, null, null, null) == "Araçta", "A vehicle without a plate still reads as on a vehicle.");
+        Assert(CylinderTracking.LocationText(CylinderTracking.Service, null, null, null) == "Serviste", "Other statuses use the status name.");
     }
 
     private static void PlatesAreNormalized()

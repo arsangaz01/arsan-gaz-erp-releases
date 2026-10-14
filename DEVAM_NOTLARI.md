@@ -1,5 +1,23 @@
 # Devam Notları — 11 Ekim 2026, 01:20
 
+## ArsanGaz mobil 1.9.0 / build 30 - ana menü + Tüp Bilgisi (14 Ekim 2026)
+- Alt sekme çubuğu kaldırıldı; `AppShell` tek `HomePage` gösterir: lacivert→teal degrade başlık (logo, kullanıcı adı/rol),
+  yetkiye göre 3 sütunlu degrade kutucuklar (Tüp Okut ve Sefer geniş), Hesap ve Bağlantı, Çıkış, tarih + sürüm alt bilgisi,
+  yeni APK varsa turuncu güncelleme şeridi. Satırda boşluk kalırsa son kutucuk genişletilir. Sayfalar eski sekmeler gibi bir kez
+  oluşturulup yeniden kullanılır (`CylinderPage` kurucuda olaylara abone olur). Oturum yenileme `AppShell`'den `HomePage`'e taşındı.
+- İkonlar: Material Icons (Apache-2.0) `Resources/Fonts/MaterialIcons-Regular.ttf`, lisans `Resources/Licenses/`; kod noktaları `Services/Icons.cs`.
+- `Tüp Bilgisi` (`CylinderInfoPage`): kamera (ScanPage, içinde fotoğraftan okuma da var) / galeriden tek fotoğraf / elle kod;
+  yalnızca durum kartı, hareket ve kayıt yok. Sunucu: salt okunur `GET /api/tup/bilgi?kod=` (`tup-goruntule`), müşteri adı
+  yalnızca `musteri-goruntule` yetkisiyle döner. MobileApi sürümü 1.12.0.
+
+## ArsanTüpTakip mobil 1.2.0 / build 4 — ana menü + Tüp Bilgisi (14 Ekim 2026)
+- Alt sekme çubuğu (AppShell) kaldırıldı; giriş sonrası `HomePage` kutucuk menüsü (lacivert→teal degrade başlık, kullanıcı adı/rol,
+  yetkiye göre kutucuklar, Çıkış, tarih). Kutucuklar mevcut sayfaları NavigationPage ile açar, sayfalar bir kez oluşturulup yeniden kullanılır.
+- İkonlar: Material Icons (Apache-2.0) `Resources/Fonts/MaterialIcons-Regular.ttf`, lisans `Resources/Raw/MaterialIcons-LICENSE.txt`.
+  Vurgu rengi mavi yerine teal (#0D9488), ArsanGaz uygulamasından ayırt edilsin diye.
+- `Tüp Bilgisi` (`CylinderInfoPage`): kamera / fotoğraf çek / galeriden barkod veya elle kod; yalnızca durum gösterir, hareket yok.
+  Sunucu: salt okunur `GET /tuptakip/api/tup/bilgi?kod=` (yalnızca `tup-goruntule`; müşteri telefonu dönmez).
+
 ## Kullanıcı silme (iki panel, 12 Ekim 2026)
 - Yönetim → Kullanıcılar → "Sil": kullanıcı adını yazarak onaylanır; kalıcıdır ("Pasife al" geri alınabilir yol olarak kalır).
 - Sunucu: `POST /panel/api/yonetim/kullanici/{id}/sil` (`{onay: kullanıcıAdı}`). Kendini silemez, son aktif Yönetici silinemez,

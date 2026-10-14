@@ -88,7 +88,7 @@ public partial class App : Application
 		}
 	}
 
-	// Rebuilds the tabs for the current user's permissions.
+	// Rebuilds the home tiles for the current user's permissions.
 	public static void ShowMain()
 	{
 		if (_window is null)
@@ -106,11 +106,11 @@ public partial class App : Application
 		{
 			_window.Page = account.MustChangePassword
 				? new NavigationPage(new ChangePasswordPage(required: true))
-				: new AppShell();
+				: new NavigationPage(new HomePage()) { BarBackgroundColor = Ui.Navy, BarTextColor = Colors.White };
 		}
 		catch (Exception exception)
 		{
-			CrashLog.Write(exception, "AppShell");
+			CrashLog.Write(exception, "Ana menü");
 			_window.Page = CrashLog.ErrorPage("Uygulama açılamadı", exception.ToString());
 		}
 	}
