@@ -39,13 +39,14 @@ public sealed class StockCountPage : ContentPage
         _code.Completed += async (_, _) => await ManualAsync();
         _pendingButton = Ui.Secondary("🔄 Bekleyenleri sunucuya gönder", async (_, _) => await FlushAsync(quiet: false));
 
-        _startSection = Ui.Section("Sayım başlat",
-            Ui.Note("Açık sayım yok. Başlatınca depodaki tüpleri okutun; her okutulan tüp gaz türü ve boyutuna göre 1 sayılır. Aynı sayıma birden çok telefon aynı anda okutabilir."),
+        _startSection = Ui.Section("Sayım",
+            Ui.Note("Açık sayım yok. \"Sayımı başlat\"a basınca kayıt açılır ve okutma ekranı hemen gelir. Her okutulan tüp gaz türü ve boyutuna göre 1 sayılır; aynı sayıma birden çok telefon okutabilir."),
             _note,
-            Ui.Primary("Depo sayımını başlat", async (_, _) => await StartAsync()));
-        _scanSection = Ui.Section("Okut",
+            Ui.Primary("▶ Sayımı başlat", async (_, _) => await StartAsync()));
+        _scanSection = Ui.Section("Okutma",
             _status,
-            Ui.Primary("📷 Kamerayla okut", async (_, _) => await CameraAsync()),
+            Ui.Note("\"Kayıtta depoda\" sayıları sefer, teslim, yükleme ve diğer stok hareketleriyle anlık güncellenir (Yenile veya her okutmada)."),
+            Ui.Primary("▶ Sayımı başlat", async (_, _) => await CameraAsync()),
             _code,
             Ui.ActionRow(
                 Ui.Secondary("Son okutmayı geri al", async (_, _) => await UndoAsync()),
@@ -121,14 +122,20 @@ public sealed class StockCountPage : ContentPage
         }
     }
 
-    private Task StartAsync() => Ui.RunAsync(this, _busy, async () =>
+    private async Task StartAsync()
     {
-        StockCountResponse response = await ApiClient.Instance.StartStockCountAsync(_note.Text);
-        _note.Text = string.Empty;
-        Show(response.Count);
-        SetLast(response.Message, Good);
-        _code.Focus();
-    });
+        await Ui.RunAsync(this, _busy, async () =>
+        {
+            StockCountResponse response = await ApiClient.Instance.StartStockCountAsync(_note.Text);
+            _note.Text = string.Empty;
+            Show(response.Count);
+            SetLast(response.Message, Good);
+        });
+        if (_count is not null)
+        {
+            await CameraAsync();
+        }
+    }
 
     private async Task CameraAsync()
     {

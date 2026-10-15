@@ -75,7 +75,7 @@ public sealed class HomePage : ContentPage
 
             if (api.Can(Perm.StockCount))
             {
-                tiles.Add(new Tile(Icons.Warehouse, "Sayım", "Depodaki tüpleri okutarak say", true, Color.FromArgb("#312E81"), navy,
+                tiles.Add(new Tile(Icons.Warehouse, "Sayım", "Sayımı başlat → doğrudan okutma", true, Color.FromArgb("#312E81"), navy,
                     () => Open("depo-sayim", () => new StockCountPage())));
             }
 
