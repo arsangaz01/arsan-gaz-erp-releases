@@ -53,9 +53,10 @@ public sealed class CylinderTripPage : ContentPage
     private readonly VerticalStackLayout _route = new() { Spacing = 10 };
     private readonly Label _routeInfo = Ui.Note(string.Empty);
     private readonly Label _groupsTotal = Ui.Note(string.Empty);
-    private readonly Entry _customerSearch = new() { Placeholder = "Müşteri ara", ReturnType = ReturnType.Search, IsVisible = false };
+    private readonly Entry _customerSearch = new() { Placeholder = "Müşteri adı, kodu veya şehri", ReturnType = ReturnType.Search };
     private readonly Button _customerSearchButton;
-    private readonly Picker _customer = new() { Title = "Teslim müşterisi", IsVisible = false };
+    private readonly Picker _customer = new() { Title = "Teslim müşterisi" };
+    private readonly Border _customerSection;
     private readonly Entry _code = new() { Placeholder = "Barkod veya seri no", ReturnType = ReturnType.Done };
     private readonly Label _scannedText = new() { FontSize = 14 };
     private readonly Label _result = new() { FontSize = 14, LineBreakMode = LineBreakMode.WordWrap };
@@ -80,21 +81,20 @@ public sealed class CylinderTripPage : ContentPage
             _mode.Items.Add(mode.Label);
         }
 
+        VerticalStackLayout steps = new() { Spacing = 8 };
         for (int i = 0; i < _modes.Length; i++)
         {
             int index = i;
             string label = _modes[i].Kind == 3 ? _modes[i].Label : $"{i + 1}. {_modes[i].Label}";
-            _stepButtons.Add(Ui.Secondary(label, (_, _) =>
+            Button button = Ui.Secondary($"{StepIcon(_modes[i].Kind)}  {label}", (_, _) =>
             {
                 _mode.SelectedIndex = index;
                 ApplyMode();
-            }));
-        }
-
-        VerticalStackLayout steps = new() { Spacing = 8 };
-        for (int i = 0; i < _stepButtons.Count; i += 2)
-        {
-            steps.Children.Add(Ui.ActionRow([.. _stepButtons.Skip(i).Take(2)]));
+            });
+            button.FontSize = 16;
+            button.MinimumHeightRequest = 52;
+            _stepButtons.Add(button);
+            steps.Children.Add(button);
         }
 
         _mode.SelectedIndex = 0;
@@ -124,10 +124,11 @@ public sealed class CylinderTripPage : ContentPage
 
         _resultCard = Ui.Card(_result);
         _resultCard.IsVisible = false;
-        _customerSearchButton = Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync());
-        _customerSearchButton.IsVisible = false;
+        _customerSearchButton = Ui.Secondary("🔎 Müşteri ara", async (_, _) => await SearchCustomersAsync());
         _todaySection = Ui.Section("🗓️ Bugünkü sefer planım", _todayPlan);
         _todaySection.IsVisible = false;
+        _customerSection = Ui.Section("👤 HANGİ MÜŞTERİ?", _customerSearch, _customerSearchButton, _customer);
+        bool finish = ApiClient.Instance.Can(Perm.TripReturn) || ApiClient.Instance.Can(Perm.TripClose);
 
         Content = new ScrollView
         {
@@ -137,26 +138,25 @@ public sealed class CylinderTripPage : ContentPage
                 Spacing = 14,
                 Children =
                 {
+                    Ui.Note("Yukarıdan aşağıya sırayla ilerleyin: seferi seçin, ne yaptığınızı seçin, tüpleri okutup kaydedin."),
                     _todaySection,
-                    Ui.Note((_pickup
-                        ? "\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteride verdiğiniz dolu tüpleri \"Müşteriye teslim (dolu)\", aldığınız boşları \"Müşteriden boş alım\" ile okutun; her kayıttan sonra o müşteriye verilen/alınan sayısı ve müşterideki güncel tüp bakiyesi gösterilir."
-                        : "\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteriye teslimi de buradan okutun.")
-                        + (ApiClient.Instance.Can(Perm.TripReturn)
-                            ? " Depoya dönen aracın dolu ve boş tüplerini \"Aracı boşalt (depo)\" ile okutun; eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir. Sefer kapatılırken okutulmayan her tüp için gerekçe seçilir; gerekçeler yöneticiye bildirilir (müşteriye mesaj gitmez)."
-                            : " Teslimatlar bitince depoya dönün; aracı depoda operatör boşaltıp seferi kapatır.")),
-                    Ui.Primary("🚚 Sefer Başlat", async (_, _) => await StartTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripStart)),
                     Ui.Section(
-                        "Seferdeki araçlar",
+                        "1 · 🚚 SEFER VE ARAÇ",
+                        Ui.Primary("🚚 Yeni sefer başlat", async (_, _) => await StartTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripStart)),
+                        _trip,
+                        _vehicle,
                         _overview,
                         Ui.ActionRow(
-                            Ui.Secondary("Yenile", async (_, _) => await RefreshTripsAsync()),
-                            Ui.Secondary("Sefere araç ekle", async (_, _) => await AddVehicleAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripStart) && FixedPlate is null))),
+                            Ui.Secondary("🔄 Yenile", async (_, _) => await RefreshTripsAsync()),
+                            Ui.Secondary("➕ Sefere araç ekle", async (_, _) => await AddVehicleAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripStart) && FixedPlate is null))),
                     Ui.Section(
-                        "Sefer ve araç",
-                        _trip,
-                        _vehicle),
+                        "2 · 🧭 NE YAPIYORSUNUZ?",
+                        _mode,
+                        steps,
+                        _stepHint),
+                    _customerSection,
                     Ui.Section(
-                        "Rota (müşteri sırası)",
+                        "🗺️ ROTA (MÜŞTERİ SIRASI)",
                         _routeInfo,
                         _proximityBox,
                         _route,
@@ -164,13 +164,7 @@ public sealed class CylinderTripPage : ContentPage
                             Ui.Secondary("Müşteri ekle", async (_, _) => await AddStopAsync()),
                             Ui.Secondary("Önerilenler", async (_, _) => await SuggestStopsAsync()))).ShowIf(_routes),
                     Ui.Section(
-                        "Okutma",
-                        _mode,
-                        steps,
-                        _stepHint,
-                        _customerSearch,
-                        _customerSearchButton,
-                        _customer,
+                        "3 · 📷 TÜPLERİ OKUT VE KAYDET",
                         Ui.ActionRow(
                             Ui.Primary("📷 Okut", async (_, _) => await ScanAsync()),
                             Ui.Primary("📷 Toplu okut", async (_, _) => await ScanManyAsync())),
@@ -179,18 +173,20 @@ public sealed class CylinderTripPage : ContentPage
                             Ui.Secondary("Kodu ekle", (_, _) => AddManual()),
                             Ui.Secondary("Listeyi temizle", (_, _) => { _scanned.Clear(); RefreshScanned(); })),
                         _scannedText,
-                        Ui.Primary("Kaydet / kontrol et", async (_, _) => await SubmitAsync())),
+                        Ui.Primary("💾 Kaydet", async (_, _) => await SubmitAsync())),
                     _busy,
                     _resultCard,
                     Ui.Section(
-                        "Yük listesi (gaz türüne göre)",
+                        "4 · 🏁 SEFERİ BİTİR",
+                        Ui.Note("Araç depoda boşaltıldıktan sonra: okutulmayan tüp varsa gerekçe yazın, seferi kapatın."),
+                        Ui.Secondary("📝 Okutulmayan tüplere gerekçe yaz", async (_, _) => await ExplainMissingAsync(false)),
+                        Ui.Primary("🏁 Seferi kapat", async (_, _) => await CloseTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripClose))).ShowIf(finish),
+                    Ui.Section(
+                        "📋 YÜK LİSTESİ (GAZ TÜRÜNE GÖRE)",
                         _groupPlate,
                         _groupsTotal,
                         _groups,
-                        Ui.Secondary("Listeyi yenile", async (_, _) => await RefreshGroupsAsync())),
-                    Ui.Secondary("Okutulmayan tüplere gerekçe yaz", async (_, _) => await ExplainMissingAsync(false))
-                        .ShowIf(ApiClient.Instance.Can(Perm.TripReturn) || ApiClient.Instance.Can(Perm.TripClose)),
-                    Ui.Secondary("Seferi kapat", async (_, _) => await CloseTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripClose))
+                        Ui.Secondary("🔄 Listeyi yenile", async (_, _) => await RefreshGroupsAsync()))
                 }
             }
         };
@@ -221,10 +217,7 @@ public sealed class CylinderTripPage : ContentPage
 
     private void ApplyMode()
     {
-        bool deliver = SelectedMode is DeliverMode or PickupMode;
-        _customerSearch.IsVisible = deliver;
-        _customerSearchButton.IsVisible = deliver;
-        _customer.IsVisible = deliver;
+        _customerSection.IsVisible = SelectedMode is DeliverMode or PickupMode;
         for (int i = 0; i < _stepButtons.Count; i++)
         {
             Ui.Highlight(_stepButtons[i], i == _mode.SelectedIndex);
@@ -251,6 +244,15 @@ public sealed class CylinderTripPage : ContentPage
     }
 
     private bool HasMode(int kind) => _modes.Any(m => m.Kind == kind);
+
+    private static string StepIcon(int kind) => kind switch
+    {
+        LoadMode => "📦",
+        DeliverMode => "🤝",
+        PickupMode => "♻️",
+        ReturnMode => "🏭",
+        _ => "🔍"
+    };
 
     private string Step(int kind)
     {
@@ -382,7 +384,7 @@ public sealed class CylinderTripPage : ContentPage
             _trip.ItemsSource = _trips.Select(t => $"{t.Title} · {t.LoadedTotal} yüklü · {t.Vehicles.Count(v => v.OnTrip)} araç").ToList();
             if (_trips.Count == 0)
             {
-                _overview.Text = "Aktif sefer yok. \"Sefer Başlat\" ile başlatın.";
+                _overview.Text = "Aktif sefer yok. \"Yeni sefer başlat\" ile başlatın.";
                 _trip.SelectedIndex = -1;
                 _vehicle.ItemsSource = null;
                 _groupPlate.ItemsSource = null;
