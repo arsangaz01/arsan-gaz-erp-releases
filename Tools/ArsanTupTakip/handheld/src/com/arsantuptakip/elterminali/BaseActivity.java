@@ -37,6 +37,8 @@ abstract class BaseActivity extends Activity {
     static final int RED = Color.rgb(185, 28, 28);
     static final int MUTED = Color.rgb(71, 85, 105);
     static final int ACCENT = Color.rgb(15, 118, 110);
+    static final int GOOD = Color.rgb(22, 163, 74);
+    static final int WARN = Color.rgb(217, 119, 6);
 
     interface Job<T> {
         T run() throws Exception;
@@ -89,6 +91,63 @@ abstract class BaseActivity extends Activity {
         }
 
         return super.dispatchKeyEvent(event);
+    }
+
+    // Emoji only from Unicode 6.0: Android 4.4 shows those in colour, newer ones as empty boxes.
+    android.graphics.drawable.GradientDrawable rounded(int color, boolean outline) {
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setCornerRadius(dp(12));
+        shape.setColor(Color.argb(32, Color.red(color), Color.green(color), Color.blue(color)));
+        if (outline) {
+            shape.setStroke(dp(2), color);
+        }
+
+        return shape;
+    }
+
+    // A big number with an icon and caption, like the phone app's tiles.
+    LinearLayout tile(String icon, String value, String caption, int color) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10), dp(8), dp(10), dp(8));
+        box.setBackgroundDrawable(rounded(color, false));
+        TextView number = text(icon + " " + value, 24, true);
+        number.setTextColor(color);
+        box.addView(number);
+        box.addView(text(caption, 14, true));
+        return box;
+    }
+
+    LinearLayout tiles(View... views) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        for (int i = 0; i < views.length; i++) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+            params.setMargins(i == 0 ? 0 : dp(4), dp(4), i == views.length - 1 ? 0 : dp(4), dp(4));
+            row.addView(views[i], params);
+        }
+
+        return row;
+    }
+
+    // Coloured result box: success, warning or failure is clear before reading the text.
+    void banner(TextView view, String icon, String message, int color) {
+        view.setText(icon + "  " + message);
+        view.setTextColor(color);
+        view.setTypeface(Typeface.DEFAULT_BOLD);
+        view.setPadding(dp(10), dp(10), dp(10), dp(10));
+        view.setBackgroundDrawable(rounded(color, true));
+    }
+
+    void buzz() {
+        try {
+            android.os.Vibrator vibrator = (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (vibrator != null) {
+                vibrator.vibrate(120);
+            }
+        } catch (RuntimeException ignored) {
+            // No vibrator or no permission.
+        }
     }
 
     int dp(int value) {

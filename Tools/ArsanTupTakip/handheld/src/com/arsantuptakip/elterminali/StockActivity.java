@@ -18,6 +18,7 @@ public final class StockActivity extends BaseActivity {
     private TextView summary;
     private TextView groups;
     private TextView cylinders;
+    private android.widget.LinearLayout stockTiles;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -41,6 +42,8 @@ public final class StockActivity extends BaseActivity {
         groups = text("", 16, false);
         cylinders = text("", 15, false);
         page.addView(title);
+        stockTiles = new android.widget.LinearLayout(this);
+        page.addView(stockTiles);
         page.addView(summary);
         page.addView(groups);
         page.addView(cylinders);
@@ -84,9 +87,16 @@ public final class StockActivity extends BaseActivity {
         }
 
         JSONObject t = s.optJSONObject("totals");
+        stockTiles.removeAllViews();
         if (t != null) {
-            head.add("Müşteride " + t.optInt("count") + " tüp · dolu " + t.optInt("full") + " · boş " + t.optInt("empty")
-                + (t.optInt("unknown") > 0 ? " · belirsiz " + t.optInt("unknown") : ""));
+            stockTiles.addView(tiles(
+                tile("👥", String.valueOf(t.optInt("count")), "Müşteride", ACCENT),
+                tile("🔋", String.valueOf(t.optInt("full")), "Dolu", GOOD),
+                tile("⚪", String.valueOf(t.optInt("empty")), "Boş", MUTED)), new android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
+            if (t.optInt("unknown") > 0) {
+                head.add("Dolu/boş bilgisi olmayan: " + t.optInt("unknown"));
+            }
             if (t.optInt("customerOwned") > 0) {
                 head.add("Müşteri malı: " + t.optInt("customerOwned"));
             }

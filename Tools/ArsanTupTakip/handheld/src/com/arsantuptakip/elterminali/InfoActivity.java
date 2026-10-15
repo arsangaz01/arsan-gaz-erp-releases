@@ -47,6 +47,7 @@ public final class InfoActivity extends BaseActivity {
     }
 
     private void lookup(final String value) {
+        title.setBackgroundDrawable(null);
         title.setText(value + " sorgulanıyor…");
         title.setTextColor(MUTED);
         result.setText("");
@@ -66,8 +67,7 @@ public final class InfoActivity extends BaseActivity {
     @Override
     void fail(Exception error) {
         if (error instanceof Api.ApiException && ((Api.ApiException) error).status == 404) {
-            title.setText(error.getMessage());
-            title.setTextColor(RED);
+            banner(title, "❌", error.getMessage(), RED);
             return;
         }
 
@@ -77,8 +77,7 @@ public final class InfoActivity extends BaseActivity {
 
     private void show(JSONObject c) {
         boolean warn = c.optBoolean("testOverdue") || c.optBoolean("needsReview") || !c.optBoolean("isActive", true);
-        title.setText(Api.str(c, "serialNumber") + " · " + Api.str(c, "gasType") + " " + Api.str(c, "capacity"));
-        title.setTextColor(warn ? RED : ACCENT);
+        banner(title, warn ? "⚠" : "🔍", Api.str(c, "serialNumber") + " · " + Api.str(c, "gasType") + " " + Api.str(c, "capacity"), warn ? RED : ACCENT);
         List<String> lines = new ArrayList<String>();
         add(lines, "Durum", Api.str(c, "statusName"));
         String fullness = Api.str(c, "fullness");
@@ -123,7 +122,18 @@ public final class InfoActivity extends BaseActivity {
 
     private static void add(List<String> lines, String label, String value) {
         if (value != null && value.trim().length() > 0) {
-            lines.add(label + ": " + value);
+            lines.add(icon(label) + " " + label + ": " + value);
         }
+    }
+
+    private static String icon(String label) {
+        if (label.equals("Durum")) return "📌";
+        if (label.equals("Dolu/boş")) return "🔋";
+        if (label.equals("Yer") || label.equals("Müşteri")) return "📍";
+        if (label.equals("Araç") || label.equals("Sefer")) return "🚚";
+        if (label.equals("Orada")) return "⏳";
+        if (label.equals("Son hareket")) return "🔄";
+        if (label.equals("Test tarihi")) return "📅";
+        return "🏷";
     }
 }

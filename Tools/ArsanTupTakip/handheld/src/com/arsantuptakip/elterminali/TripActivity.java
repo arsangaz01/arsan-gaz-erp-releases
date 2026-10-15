@@ -67,6 +67,7 @@ public final class TripActivity extends BaseActivity {
     private TextView tripLine;
     private LinearLayout pickers;
     private LinearLayout work;
+    private LinearLayout tripTiles;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -82,11 +83,13 @@ public final class TripActivity extends BaseActivity {
         }
 
         // Simple view for drivers: trip line, step buttons, scan and save; everything else sits under "Ayrıntılar".
-        startBig = big(button("SEFER BAŞLAT", v -> startTrip()));
+        startBig = big(button("🚚 SEFER BAŞLAT", v -> startTrip()));
         startBig.setVisibility(View.GONE);
         page.addView(startBig);
         tripLine = text("Seferler yükleniyor...", 20, true);
         page.addView(tripLine);
+        tripTiles = new LinearLayout(this);
+        page.addView(tripTiles);
         tripSpinner = new Spinner(this);
         vehicleSpinner = new Spinner(this);
         pickers = vertical();
@@ -100,7 +103,7 @@ public final class TripActivity extends BaseActivity {
         page.addView(work);
         for (int i = 0; i < modeKinds.size(); i++) {
             final int kind = modeKinds.get(i);
-            Button step = big(button((i + 1) + ". " + modeLabels.get(i), v -> selectMode(kind)));
+            Button step = big(button(icon(kind) + " " + (i + 1) + ". " + modeLabels.get(i), v -> selectMode(kind)));
             modeButtons.add(step);
             modeBackgrounds.add(step.getBackground());
             modeTextColors.add(step.getTextColors());
@@ -123,7 +126,7 @@ public final class TripActivity extends BaseActivity {
         work.addView(code);
         scannedText = text("", 16, false);
         work.addView(scannedText);
-        work.addView(big(button("KAYDET", v -> save(mode()))));
+        work.addView(big(button("✅ KAYDET", v -> save(mode()))));
         result = text("", 16, false);
         work.addView(result);
 
@@ -226,8 +229,24 @@ public final class TripActivity extends BaseActivity {
         return button;
     }
 
+    private static String icon(int kind) {
+        switch (kind) {
+            case LOAD:
+                return "📦";
+            case DELIVER:
+                return "🏠";
+            case PICKUP:
+                return "🔁";
+            case RETURN:
+                return "🏭";
+            default:
+                return "🔍";
+        }
+    }
+
     private void updateSimple() {
         JSONObject t = trip();
+        tripTiles.removeAllViews();
         startBig.setVisibility(t == null && Api.can("sefer-baslat") ? View.VISIBLE : View.GONE);
         work.setVisibility(t == null ? View.GONE : View.VISIBLE);
         pickers.setVisibility(trips.size() > 1 || plates.size() > 1 ? View.VISIBLE : View.GONE);
@@ -248,7 +267,11 @@ public final class TripActivity extends BaseActivity {
             }
         }
 
-        tripLine.setText((p == null ? "Araç seçin" : "Araç " + p) + "\nAraçta " + loaded + " tüp var");
+        tripLine.setText("🚚 " + (p == null ? "Araç seçin" : p));
+        tripTiles.addView(tiles(
+            tile("📦", String.valueOf(loaded), "Araçta tüp", ACCENT),
+            tile("🏠", String.valueOf(t.optInt("deliveredTotal")), "Teslim edilen", GOOD)), new LinearLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
     private LinearLayout vertical() {
@@ -343,8 +366,7 @@ public final class TripActivity extends BaseActivity {
     private void addCode(String value) {
         for (String existing : scanned) {
             if (existing.equalsIgnoreCase(value)) {
-                result.setText(value + " zaten listede.");
-                result.setTextColor(MUTED);
+                banner(result, "⚠", value + " zaten listede.", WARN);
                 return;
             }
         }
@@ -603,8 +625,16 @@ public final class TripActivity extends BaseActivity {
                     return reconcile(Api.getObject("/api/sefer/" + tripId + "/kontrol" + (p == null ? "" : "?plaka=" + Api.q(p))));
             }
         }, shown -> {
-            result.setText(shown[0]);
-            result.setTextColor(shown[1] != null ? RED : MUTED);
+            boolean failed = shown[0] != null && (shown[0].startsWith("0/") || shown[0].startsWith("0 tüp"));
+            if (failed) {
+                banner(result, "❌", shown[0], RED);
+            } else if (shown[1] != null) {
+                banner(result, "⚠", shown[0], WARN);
+            } else {
+                banner(result, "✅", shown[0], GOOD);
+            }
+
+            buzz();
             scanned.clear();
             showScanned();
             refreshTrips(tripId);
@@ -816,8 +846,7 @@ public final class TripActivity extends BaseActivity {
 
         scanned.clear();
         showScanned();
-        result.setText(Api.str(s, "customerName") + " seçildi. Tüpleri okutup \"Kaydet\"e basın.");
-        result.setTextColor(MUTED);
+        banner(result, "👤", Api.str(s, "customerName") + " seçildi. Tüpleri okutup KAYDET'e basın.", ACCENT);
         code.requestFocus();
     }
 
@@ -855,8 +884,7 @@ public final class TripActivity extends BaseActivity {
             Runnable close = () -> call(() -> Api.post("/api/sefer/kapat", body("tripId", t.optInt("id"))), closed -> {
                 JSONObject r = closed.optJSONObject("reconcile");
                 boolean alerts = r != null && r.optBoolean("hasAlerts");
-                result.setText(Api.str(closed, "message"));
-                result.setTextColor(alerts ? RED : MUTED);
+                banner(result, alerts ? "⚠" : "🏁", Api.str(closed, "message"), alerts ? WARN : GOOD);
                 alert(alerts ? "Sefer kapatıldı — uyarı" : "Sefer kapatıldı", Api.str(closed, "message"));
                 setCustomer(null);
                 if (!modeKinds.isEmpty()) {
@@ -989,9 +1017,8 @@ public final class TripActivity extends BaseActivity {
 
                 call(() -> Api.postMessage("/api/sefer/gerekce",
                     body("tripId", tripId, "cylinderIds", ids, "reason", Api.str(reason, "key"), "note", note.length() == 0 ? null : note, "customerId", null)), message -> {
-                    result.setText(message);
-                    result.setTextColor(MUTED);
-                    next.run();
+                banner(result, "📝", message, GOOD);
+                next.run();
                 });
             };
             final Text askNote = intro -> prompt(Api.str(reason, "label"), intro, "Kaydet", "Vazgeç", note -> {
@@ -1021,9 +1048,8 @@ public final class TripActivity extends BaseActivity {
 
                     call(() -> Api.postMessage("/api/sefer/gerekce",
                         body("tripId", tripId, "cylinderIds", ids, "reason", Api.str(reason, "key"), "note", null, "customerId", c.optInt("id"))), message -> {
-                        result.setText(message);
-                        result.setTextColor(MUTED);
-                        next.run();
+                banner(result, "📝", message, GOOD);
+                next.run();
                     });
                 });
             });

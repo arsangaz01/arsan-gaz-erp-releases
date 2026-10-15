@@ -58,19 +58,19 @@ public final class HomeActivity extends BaseActivity {
         page.addView(note(role == null ? "" : role));
         String plate = Api.fixedPlate();
         if (plate != null) {
-            page.addView(text("Araç: " + plate, 17, true));
+            page.addView(text("🚚 Araç: " + plate, 17, true));
         }
 
         if (Api.can("sefer-goruntule")) {
-            add(plate == null ? "Sefer" : "Sevkiyat / sefer", TripActivity.class);
+            add(plate == null ? "🚚 Sefer" : "🚚 Sevkiyat / sefer", TripActivity.class);
             if (Api.can("sefer-rota") && Api.can("musteri-konum-kaydet")) {
-                add("Bugünkü sefer planım", PlanActivity.class);
+                add("📋 Bugünkü sefer planım", PlanActivity.class);
             }
         }
 
         if (Api.can("tup-goruntule")) {
-            add("Tüp bilgisi", InfoActivity.class);
-            add("Müşteri stok bilgisi", StockActivity.class);
+            add("🔍 Tüp bilgisi", InfoActivity.class);
+            add("👥 Müşteri stok bilgisi", StockActivity.class);
         }
 
         if (!Api.can("sefer-goruntule") && !Api.can("tup-goruntule")) {
@@ -79,19 +79,19 @@ public final class HomeActivity extends BaseActivity {
 
         page.addView(heading("Hesap"));
         page.addView(row(
-            button("Güncelleme", new View.OnClickListener() {
+            button("🔄 Güncelle", new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     Updater.check(HomeActivity.this, true);
                 }
             }),
-            button("Şifre", new View.OnClickListener() {
+            button("🔑 Şifre", new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     changePassword();
                 }
             }),
-            button("Çıkış", new View.OnClickListener() {
+            button("🚪 Çıkış", new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     logout();
@@ -101,12 +101,15 @@ public final class HomeActivity extends BaseActivity {
     }
 
     private void add(String label, final Class<?> screen) {
-        page.addView(button(label, new View.OnClickListener() {
+        android.widget.Button button = button(label, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 startActivity(new Intent(HomeActivity.this, screen));
             }
-        }));
+        });
+        button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 20);
+        button.setMinHeight(dp(64));
+        page.addView(button);
     }
 
     private void logout() {
