@@ -149,6 +149,24 @@ public static class CylinderTripTracking
         _ => null
     };
 
+    // A cylinder already on this trip: only open rows (still on the vehicle) are "already loaded".
+    // Delivered ones left for a customer and returned ones went back to the depot — they must not be
+    // reported as "already on the trip list" when scanned again during load.
+    public static string LoadDuplicateMessage(string serialNumber, DateTime? deliveredAt, DateTime? returnedAt)
+    {
+        if (deliveredAt is null && returnedAt is null)
+        {
+            return $"{serialNumber}: zaten araçta (sefer listesinde).";
+        }
+
+        if (deliveredAt is not null)
+        {
+            return $"{serialNumber}: bu seferde müşteriye teslim edilmiş; araca almak için 'Müşteriden boş alma' kullanın.";
+        }
+
+        return $"{serialNumber}: bu seferde depoya dönüşü okutulmuş.";
+    }
+
     // Fullness written when a cylinder is scanned back at the depot: a loaded cylinder that was not delivered comes back
     // full, an empty picked up from a customer comes back empty; anything else keeps the default rule.
     public static bool? ReturnFullness(bool onTrip, bool isPickup, bool delivered) =>

@@ -446,7 +446,8 @@ public sealed class CylinderTripService
         CylinderTrip trip = await EnsureActiveTripAsync(db, tripId);
         await EnsureVehicleOnTripAsync(db, tripId, normalized);
 
-        HashSet<int> already = trip.Cylinders.Select(x => x.CylinderId).ToHashSet();
+        Dictionary<int, CylinderTripCylinder> onTrip = trip.Cylinders.ToDictionary(x => x.CylinderId);
+        HashSet<int> seen = [];
         int added = 0;
         int skipped = 0;
         List<string> messages = [];
@@ -463,17 +464,24 @@ public sealed class CylinderTripService
                 continue;
             }
 
-            if (CylinderTripTracking.LoadRefusal((int)cylinder.Status, cylinder.IsFull) is string refusal)
+            if (!seen.Add(cylinder.Id))
             {
-                messages.Add($"{cylinder.SerialNumber}: {refusal}");
+                continue;
+            }
+
+            // Delivered / returned rows stay for history but no longer count as "on the trip" for loading.
+            if (onTrip.TryGetValue(cylinder.Id, out CylinderTripCylinder? row))
+            {
+                messages.Add(CylinderTripTracking.LoadDuplicateMessage(cylinder.SerialNumber, row.DeliveredAt, row.ReturnedAt));
                 refused.Add(cylinder.SerialNumber);
                 skipped++;
                 continue;
             }
 
-            if (!already.Add(cylinder.Id))
+            if (CylinderTripTracking.LoadRefusal((int)cylinder.Status, cylinder.IsFull) is string refusal)
             {
-                messages.Add($"{cylinder.SerialNumber}: zaten sefer listesinde.");
+                messages.Add($"{cylinder.SerialNumber}: {refusal}");
+                refused.Add(cylinder.SerialNumber);
                 skipped++;
                 continue;
             }

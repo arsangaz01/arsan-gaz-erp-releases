@@ -12,7 +12,21 @@ internal static class CylinderTripTrackingTests
         CloseWithReasonsIsAllowed();
         ReasonValidation();
         ManagerNoticeHasNoPhone();
-        Console.WriteLine("PASS: sefer kontrolü, gerekçesiz kapanış reddi, gerekçeli kapanış, gerekçe doğrulaması ve yönetici bildirimi (telefonsuz).");
+        LoadDuplicateMessagesDistinguishDelivered();
+        Console.WriteLine("PASS: sefer kontrolü, gerekçesiz kapanış reddi, gerekçeli kapanış, gerekçe doğrulaması, yönetici bildirimi (telefonsuz) ve yükleme tekrar uyarısı.");
+    }
+
+    private static void LoadDuplicateMessagesDistinguishDelivered()
+    {
+        Assert(CylinderTripTracking.LoadDuplicateMessage("X1", null, null).Contains("zaten araçta"),
+            "Araçtaki tüp 'zaten araçta' demeli.");
+        string delivered = CylinderTripTracking.LoadDuplicateMessage("X2", DateTime.Now, null);
+        Assert(delivered.Contains("müşteriye teslim", StringComparison.OrdinalIgnoreCase)
+            && delivered.Contains("boş alım", StringComparison.OrdinalIgnoreCase)
+            && !delivered.Contains("zaten sefer listesinde", StringComparison.Ordinal),
+            "Teslim edilmiş tüp sefer listesinde sayılmamalı; boş alıma yönlendirmeli.");
+        Assert(CylinderTripTracking.LoadDuplicateMessage("X3", null, DateTime.Now).Contains("depoya dönüş", StringComparison.OrdinalIgnoreCase),
+            "Dönüşü okutulmuş tüp ayrı uyarı almalı.");
     }
 
     private static void ReconcileFlagsMissingAndUnexpected()

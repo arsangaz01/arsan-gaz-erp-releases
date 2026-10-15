@@ -121,6 +121,24 @@ public sealed record TripReconcileResult(
 
 public static class CylinderTripTracking
 {
+    // A cylinder already on this trip: only open rows (still on the vehicle) are "already loaded".
+    // Delivered ones left for a customer and returned ones went back to the depot — they must not be
+    // reported as "already on the trip list" when the driver scans them again during load.
+    public static string LoadDuplicateMessage(string serialNumber, DateTime? deliveredAt, DateTime? returnedAt)
+    {
+        if (deliveredAt is null && returnedAt is null)
+        {
+            return $"{serialNumber}: zaten araçta (sefer listesinde).";
+        }
+
+        if (deliveredAt is not null)
+        {
+            return $"{serialNumber}: bu seferde müşteriye teslim edilmiş; araca almak için 'Müşteriden boş alım' kullanın.";
+        }
+
+        return $"{serialNumber}: bu seferde depoya dönüşü okutulmuş.";
+    }
+
     public static TripReconcileResult Reconcile(
         IEnumerable<TripCylinderSnapshot> loaded,
         IEnumerable<string> returnScanCodes,

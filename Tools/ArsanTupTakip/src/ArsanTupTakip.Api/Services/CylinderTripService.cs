@@ -433,7 +433,8 @@ public sealed class CylinderTripService
         CylinderTrip trip = await EnsureActiveTripAsync(db, tripId);
         await EnsureVehicleOnTripAsync(db, tripId, normalized);
 
-        HashSet<int> already = trip.Cylinders.Select(x => x.CylinderId).ToHashSet();
+        Dictionary<int, CylinderTripCylinder> onTrip = trip.Cylinders.ToDictionary(x => x.CylinderId);
+        HashSet<int> seen = [];
         int added = 0;
         int skipped = 0;
         List<string> messages = [];
@@ -448,9 +449,22 @@ public sealed class CylinderTripService
                 continue;
             }
 
-            if (!already.Add(cylinder.Id))
+            if (!seen.Add(cylinder.Id))
             {
-                messages.Add($"{cylinder.SerialNumber}: zaten sefer listesinde.");
+                continue;
+            }
+
+            // Delivered / returned rows stay for history but no longer count as "on the trip" for loading.
+            if (onTrip.TryGetValue(cylinder.Id, out CylinderTripCylinder? row))
+            {
+                messages.Add(CylinderTripTracking.LoadDuplicateMessage(cylinder.SerialNumber, row.DeliveredAt, row.ReturnedAt));
+                skipped++;
+                continue;
+            }
+
+            if (cylinder.Status == CylinderStatus.Customer)
+            {
+                messages.Add($"{cylinder.SerialNumber}: sistemde müşteride görünüyor; araca almak için 'Müşteriden boş alım' kullanın.");
                 skipped++;
                 continue;
             }
