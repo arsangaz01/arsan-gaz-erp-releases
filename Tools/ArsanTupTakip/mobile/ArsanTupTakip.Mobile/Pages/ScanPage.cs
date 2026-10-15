@@ -336,8 +336,8 @@ public sealed class ScanPage : ContentPage
         if (found.Count == 0)
         {
             await DisplayAlertAsync("Barkod bulunamadı", imageCount == 1
-                ? "Görüntüde okunabilir barkod veya QR kod yok. Parlamayı azaltın (fener veya gölge), etiketi düz tutmaya çalışın; net ve yakından bir fotoğraf deneyin."
-                : $"{imageCount} resmin hiçbirinde okunabilir barkod veya QR kod yok. Parlamayı azaltıp net, yakından fotoğraflar deneyin.", "Tamam");
+                ? "Görüntüde barkod okunamadı (otomatik düzeltme de denendi). Parlamayı azaltın, etiketi mümkün olduğunca düz ve net çekin; feneri açmayı deneyin."
+                : $"{imageCount} resmin hiçbirinde barkod okunamadı (otomatik düzeltme de denendi). Parlamayı azaltıp net fotoğraflar deneyin.", "Tamam");
             return;
         }
 
