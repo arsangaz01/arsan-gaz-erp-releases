@@ -63,6 +63,10 @@ public final class TripActivity extends BaseActivity {
     private TextView routeText;
     private LinearLayout routeBox;
     private JSONObject customer;
+    private Button startBig;
+    private TextView tripLine;
+    private LinearLayout pickers;
+    private LinearLayout work;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -77,37 +81,35 @@ public final class TripActivity extends BaseActivity {
             current = modeKinds.get(0);
         }
 
-        page.addView(note("Yukarıdan aşağıya sırayla ilerleyin: seferi seçin, ne yaptığınızı seçin, tüpleri okutup kaydedin."));
-
-        page.addView(heading("1 · SEFER VE ARAÇ"));
-        if (Api.can("sefer-baslat")) {
-            page.addView(button("Yeni sefer başlat", v -> startTrip()));
-        }
-
+        // Simple view for drivers: trip line, step buttons, scan and save; everything else sits under "Ayrıntılar".
+        startBig = big(button("SEFER BAŞLAT", v -> startTrip()));
+        startBig.setVisibility(View.GONE);
+        page.addView(startBig);
+        tripLine = text("Seferler yükleniyor...", 20, true);
+        page.addView(tripLine);
         tripSpinner = new Spinner(this);
         vehicleSpinner = new Spinner(this);
-        overview = note("");
-        page.addView(tripSpinner);
-        page.addView(vehicleSpinner);
-        page.addView(overview);
-        Button addVehicle = button("Sefere araç ekle", v -> addVehicle());
-        page.addView(Api.can("sefer-baslat") && Api.fixedPlate() == null
-            ? row(button("Yenile", v -> refreshTrips(null)), addVehicle)
-            : button("Yenile", v -> refreshTrips(null)));
+        pickers = vertical();
+        pickers.addView(tripSpinner);
+        pickers.addView(vehicleSpinner);
+        pickers.setVisibility(View.GONE);
+        page.addView(pickers);
 
-        page.addView(heading("2 · NE YAPIYORSUNUZ?"));
+        work = vertical();
+        work.setVisibility(View.GONE);
+        page.addView(work);
         for (int i = 0; i < modeKinds.size(); i++) {
             final int kind = modeKinds.get(i);
-            Button step = button((i + 1) + ". " + modeLabels.get(i), v -> selectMode(kind));
+            Button step = big(button((i + 1) + ". " + modeLabels.get(i), v -> selectMode(kind)));
             modeButtons.add(step);
             modeBackgrounds.add(step.getBackground());
             modeTextColors.add(step.getTextColors());
-            page.addView(step);
+            work.addView(step);
         }
 
-        stepHint = text("", 16, true);
+        stepHint = text("", 17, true);
         stepHint.setTextColor(ACCENT);
-        page.addView(stepHint);
+        work.addView(stepHint);
 
         customerBox = vertical();
         customerBox.addView(heading("HANGİ MÜŞTERİ?"));
@@ -115,48 +117,71 @@ public final class TripActivity extends BaseActivity {
         customerText = text("Müşteri seçilmedi.", 16, true);
         customerBox.addView(customerText);
         customerBox.addView(row(customerSearch, button("Müşteri ara", v -> findCustomer())));
-        page.addView(customerBox);
+        work.addView(customerBox);
 
-        if (routes) {
-            page.addView(heading("ROTA (MÜŞTERİ SIRASI)"));
-            routeText = note("");
-            routeBox = vertical();
-            page.addView(routeText);
-            page.addView(routeBox);
-            page.addView(button("Rotaya müşteri ekle", v -> addStop()));
-        }
-
-        page.addView(heading("3 · TÜPLERİ OKUT VE KAYDET"));
         code = scanField("Barkodu okutun", this::addCode);
-        page.addView(code);
-        page.addView(row(button("Kodu ekle", v -> submit(code, this::addCode)), button("Listeyi temizle", v -> {
-            scanned.clear();
-            showScanned();
-        })));
+        work.addView(code);
         scannedText = text("", 16, false);
-        page.addView(scannedText);
-        page.addView(button("Kaydet", v -> save(mode())));
+        work.addView(scannedText);
+        work.addView(big(button("KAYDET", v -> save(mode()))));
         result = text("", 16, false);
-        page.addView(result);
+        work.addView(result);
 
         if (Api.can("sefer-donus") || Api.can("sefer-kapat")) {
-            page.addView(heading("4 · SEFERİ BİTİR"));
-            page.addView(note("Araç depoda boşaltıldıktan sonra: okutulmayan tüp varsa gerekçe yazın, seferi kapatın."));
-            page.addView(button("Okutulmayan tüplere gerekçe yaz", v -> explainMissing(false, null)));
+            work.addView(heading("SEFERİ BİTİR"));
+            work.addView(button("Okutulmayan tüplere gerekçe yaz", v -> explainMissing(false, null)));
             if (Api.can("sefer-kapat")) {
-                page.addView(button("Seferi kapat", v -> closeTrip(true)));
+                work.addView(button("Seferi kapat", v -> closeTrip(true)));
             }
         }
 
-        page.addView(heading("YÜK LİSTESİ"));
+        final LinearLayout details = vertical();
+        details.setVisibility(View.GONE);
+        final Button toggle = button("Ayrıntılar (rota, yük listesi, diğer)", null);
+        toggle.setOnClickListener(v -> {
+            boolean show = details.getVisibility() != View.VISIBLE;
+            details.setVisibility(show ? View.VISIBLE : View.GONE);
+            toggle.setText(show ? "Ayrıntıları gizle" : "Ayrıntılar (rota, yük listesi, diğer)");
+        });
+        page.addView(toggle);
+        page.addView(details);
+
+        details.addView(heading("SEFER AYRINTISI"));
+        overview = note("");
+        details.addView(overview);
+        Button addVehicle = button("Sefere araç ekle", v -> addVehicle());
+        details.addView(Api.can("sefer-baslat") && Api.fixedPlate() == null
+            ? row(button("Yenile", v -> refreshTrips(null)), addVehicle)
+            : button("Yenile", v -> refreshTrips(null)));
+        if (Api.can("sefer-baslat")) {
+            details.addView(button("Yeni sefer başlat", v -> startTrip()));
+        }
+
+        details.addView(heading("OKUTMA SEÇENEKLERİ"));
+        details.addView(row(button("Kodu ekle", v -> submit(code, this::addCode)), button("Okutulanları temizle", v -> {
+            scanned.clear();
+            showScanned();
+        })));
+
+        if (routes) {
+            details.addView(heading("ROTA (MÜŞTERİ SIRASI)"));
+            routeText = note("");
+            routeBox = vertical();
+            details.addView(routeText);
+            details.addView(routeBox);
+            details.addView(button("Rotaya müşteri ekle", v -> addStop()));
+        }
+
+        details.addView(heading("YÜK LİSTESİ"));
         loadText = note("");
         loadBox = vertical();
-        page.addView(loadText);
-        page.addView(loadBox);
-        page.addView(row(button("Yük listesini yenile", v -> refreshLoad()), button("Kontrol", v -> save(CHECK))));
+        details.addView(loadText);
+        details.addView(loadBox);
+        details.addView(row(button("Yük listesini yenile", v -> refreshLoad()), button("Kontrol", v -> save(CHECK))));
 
         tripSpinner.setOnItemSelectedListener(new Selected(this::tripChanged));
         vehicleSpinner.setOnItemSelectedListener(new Selected(() -> {
+            updateSimple();
             refreshRoute();
             refreshLoad();
         }));
@@ -195,6 +220,37 @@ public final class TripActivity extends BaseActivity {
         }
     }
 
+    private Button big(Button button) {
+        button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 20);
+        button.setMinHeight(dp(64));
+        return button;
+    }
+
+    private void updateSimple() {
+        JSONObject t = trip();
+        startBig.setVisibility(t == null && Api.can("sefer-baslat") ? View.VISIBLE : View.GONE);
+        work.setVisibility(t == null ? View.GONE : View.VISIBLE);
+        pickers.setVisibility(trips.size() > 1 || plates.size() > 1 ? View.VISIBLE : View.GONE);
+        if (t == null) {
+            tripLine.setText(Api.can("sefer-baslat")
+                ? "Aktif sefer yok. Başlamak için \"SEFER BAŞLAT\"a basın."
+                : "Aktif sefer yok. Sefer depoda başlatılınca burada görünür.");
+            return;
+        }
+
+        String p = plate();
+        int loaded = 0;
+        JSONArray vehicles = t.optJSONArray("vehicles");
+        for (int i = 0; p != null && vehicles != null && i < vehicles.length(); i++) {
+            JSONObject v = vehicles.optJSONObject(i);
+            if (p.equalsIgnoreCase(Api.str(v, "plate"))) {
+                loaded = v.optInt("loadedCount");
+            }
+        }
+
+        tripLine.setText((p == null ? "Araç seçin" : "Araç " + p) + "\nAraçta " + loaded + " tüp var");
+    }
+
     private LinearLayout vertical() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -226,13 +282,13 @@ public final class TripActivity extends BaseActivity {
     private String hint(int kind) {
         switch (kind) {
             case LOAD:
-                return "Araca yüklediğiniz tüpleri okutun, sonra \"Kaydet\".";
+                return "Araca koyduğunuz tüpleri okutun, sonra KAYDET'e basın.";
             case DELIVER:
-                return "Müşteriyi seçin, verdiğiniz dolu tüpleri okutun, \"Kaydet\". Her müşteri için tekrarlayın.";
+                return "Müşteriyi bulun, verdiğiniz tüpleri okutun, KAYDET'e basın.";
             case PICKUP:
-                return "Müşteriyi seçin, aldığınız boş tüpleri okutun, \"Kaydet\".";
+                return "Müşteriyi bulun, aldığınız boş tüpleri okutun, KAYDET'e basın.";
             case RETURN:
-                return "Depoda araçtan indirdiğiniz bütün tüpleri (kalan dolular ve müşterilerden alınan boşlar) okutun, \"Kaydet\". Ardından sefer kapatılır.";
+                return "Araçtan inen bütün tüpleri (dolu ve boş) okutun, KAYDET'e basın.";
             default:
                 return "Sefer işlemi için yetkiniz yok.";
         }
@@ -363,6 +419,7 @@ public final class TripActivity extends BaseActivity {
         if (t == null) {
             overview.setText("Aktif sefer yok." + (Api.can("sefer-baslat") ? " \"Yeni sefer başlat\" ile başlatın." : ""));
             vehicleSpinner.setAdapter(adapter(plates));
+            updateSimple();
             refreshRoute();
             refreshLoad();
             return;
@@ -407,6 +464,7 @@ public final class TripActivity extends BaseActivity {
             }
         }
 
+        updateSimple();
         refreshRoute();
         refreshLoad();
     }
