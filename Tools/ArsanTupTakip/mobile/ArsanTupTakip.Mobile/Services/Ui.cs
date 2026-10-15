@@ -28,7 +28,7 @@ public static class Ui
         page.SetAppThemeColor(Page.BackgroundColorProperty, PageLight, PageDark);
         // .NET 10 defaults ContentPage to edge-to-edge (None), which draws under the phone status bar.
         // Container keeps content below the clock / notifications / battery strip.
-        page.SafeAreaEdges = SafeAreaEdges.Container;
+        page.SafeAreaEdges = new SafeAreaEdges(SafeAreaRegions.Container);
     }
 
     // Glyph from the bundled Material Icons font (Apache-2.0, Resources/Raw/MaterialIcons-LICENSE.txt).

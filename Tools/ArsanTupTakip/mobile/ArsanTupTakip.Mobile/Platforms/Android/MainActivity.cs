@@ -20,7 +20,10 @@ public class MainActivity : MauiAppCompatActivity
             if (Window is not null)
             {
                 Window.SetStatusBarColor(Android.Graphics.Color.ParseColor("#0B1324"));
-                WindowCompat.GetInsetsController(Window, Window.DecorView)?.SetAppearanceLightStatusBars(false);
+                if (WindowCompat.GetInsetsController(Window, Window.DecorView) is WindowInsetsControllerCompat insets)
+                {
+                    insets.AppearanceLightStatusBars = false;
+                }
             }
 
             ApplyDeepLink(Intent);
