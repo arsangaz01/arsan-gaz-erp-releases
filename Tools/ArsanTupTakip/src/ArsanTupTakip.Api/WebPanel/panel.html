@@ -625,12 +625,12 @@ tr.alarm-row td { background:#fef2f2; }
     <div class="card hidden" id="t-missing-card">
       <h2>Okutulmayan tüpler: gerekçe ve kontrol</h2>
       <div class="table-wrap"><table id="t-missing"></table></div>
-      <div class="form-grid" data-perm="sefer-teslim|sefer-donus|sefer-kapat">
+      <div class="form-grid" data-perm="sefer-donus|sefer-kapat">
         <label>Gerekçe<select id="t-reason"></select></label>
         <label>Açıklama<input id="t-reason-note" maxlength="500" placeholder="Araç, yer veya ayrıntı"></label>
       </div>
       <div class="actions">
-        <button class="primary" id="t-reason-save" type="button" data-perm="sefer-teslim|sefer-donus|sefer-kapat">Seçilenlere gerekçe yaz</button>
+        <button class="primary" id="t-reason-save" type="button" data-perm="sefer-donus|sefer-kapat">Seçilenlere gerekçe yaz</button>
         <button class="secondary" id="t-reason-check" type="button" data-perm="sefer-kayip-kontrol">Seçilenleri kontrol edildi işaretle</button>
         <button class="secondary" id="t-reason-uncheck" type="button" data-perm="sefer-kayip-kontrol">Kontrolü geri al</button>
       </div>

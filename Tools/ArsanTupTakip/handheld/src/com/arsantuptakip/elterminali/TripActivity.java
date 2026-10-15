@@ -144,7 +144,7 @@ public final class TripActivity extends BaseActivity {
         page.addView(loadText);
         page.addView(loadBox);
         page.addView(row(button("Yük listesini yenile", v -> refreshLoad()), button("Kontrol", v -> save(CHECK))));
-        if (Api.can("sefer-teslim") || Api.can("sefer-donus") || Api.can("sefer-kapat")) {
+        if (Api.can("sefer-donus") || Api.can("sefer-kapat")) {
             page.addView(button("Okutulmayan tüplere gerekçe yaz", v -> explainMissing(false, null)));
         }
 
@@ -399,7 +399,7 @@ public final class TripActivity extends BaseActivity {
             for (int i = 0; p != null && vehicles != null && i < vehicles.length(); i++) {
                 JSONObject v = vehicles.optJSONObject(i);
                 if (p.equalsIgnoreCase(Api.str(v, "plate")) && v.optBoolean("onTrip") && v.optInt("loadedCount") > 0) {
-                    selectMode(DELIVER);
+                    selectMode(modeKinds.contains(RETURN) ? RETURN : DELIVER);
                 }
             }
         }
@@ -603,8 +603,8 @@ public final class TripActivity extends BaseActivity {
         setCustomer(null);
         customerSearch.setText("");
         selectMode(DELIVER);
-        stepHint.setText("Sıradaki müşteriyi seçin ve teslim ettiğiniz tüpleri okutun. Teslimatlar bitince depoda "
-            + (modeKinds.contains(RETURN) ? step(RETURN) : "aracı boşaltın") + ".");
+        stepHint.setText("Sıradaki müşteriyi seçin ve teslim ettiğiniz tüpleri okutun. Teslimatlar bitince "
+            + (modeKinds.contains(RETURN) ? "depoda " + step(RETURN) + "." : "depoya dönün; aracı depoda operatör boşaltıp seferi kapatır."));
     }
 
     // [text, non-null when the server raised alerts]

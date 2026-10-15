@@ -25,9 +25,9 @@ internal static class PanelRoles
     internal static string Description(string role) => role switch
     {
         Admin => "Her şey, her zaman: tüm işlemler, kullanıcı/yetki ve cihaz yönetimi, denetim kaydı. Yöneticinin yetkileri kısıtlanamaz.",
-        Operator => "Varsayılan: tüp, hareket, sefer, araç ve müşteri işlemleri, raporlar, Excel; yönetim yok. Tek tek değiştirilebilir.",
+        Operator => "Varsayılan: tüp, hareket, sefer, araç ve müşteri işlemleri, raporlar, Excel; yönetim yok. Tek tek değiştirilebilir. Depoda aracı boşaltma ve seferi kapatma yalnızca Operatör'de olabilir; bunları yalnızca Yönetici açıp kapatır.",
         Viewer => "Varsayılan: yalnızca görüntüleme, raporlar ve Excel; kayıt değiştiremez. Tek tek yetki eklenebilir.",
-        Driver => "Yalnızca mobil: sevkiyat (sefer başlat, yükle, teslim, dönüş, kapat, eksik tüp gerekçesi), tüp bilgisi, müşteri stok bilgisi ve depo sayımı. Panel girişi, tüp kaydı, hareket, araç, rapor ve yönetim yok. Sabit aracı varsa sefer o araçla başlar. Tek tek yetki eklenip çıkarılabilir.",
+        Driver => "Yalnızca mobil: sevkiyat (sefer başlat, yükle, müşteriye teslim, boş alım), tüp bilgisi, müşteri stok bilgisi ve depo sayımı. Panel girişi, tüp kaydı, hareket, araç, rapor ve yönetim yok. Sabit aracı varsa sefer o araçla başlar. Aracı boşaltma ve seferi kapatma depoda operatörün işidir; şoföre verilemez. Tek tek yetki eklenip çıkarılabilir.",
         _ => string.Empty
     };
 

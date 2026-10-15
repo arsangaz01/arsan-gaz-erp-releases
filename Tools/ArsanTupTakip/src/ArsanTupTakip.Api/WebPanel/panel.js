@@ -2374,7 +2374,11 @@ function refreshPermissionMarks() {
     const key = box.dataset.key;
     const row = box.closest(".perm-item");
     if (admin) box.checked = true;
-    box.disabled = admin || $("u-role").disabled || (!can(key) && !box.checked && me.role !== "Yönetici");
+    // Unloading the vehicle and closing the trip: only an Operatör may hold them and only a Yönetici changes them.
+    const chosen = (catalog.adminChosen || []).includes(key);
+    if (chosen && !admin && role !== catalog.adminChosenRole) box.checked = false;
+    box.disabled = admin || $("u-role").disabled || (!can(key) && !box.checked && me.role !== "Yönetici")
+      || (chosen && (role !== catalog.adminChosenRole || me.role !== "Yönetici"));
     const on = box.checked && !defaults.has(key);
     const off = !box.checked && defaults.has(key);
     if (on) added++;

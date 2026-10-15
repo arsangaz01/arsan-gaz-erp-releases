@@ -261,7 +261,7 @@ internal sealed class WebPanelAuth
         }
 
         Dictionary<string, bool> overrides = normalizedRole == PanelRoles.Admin || permissions is null ? [] : Perm.Diff(normalizedRole, permissions);
-        if (GrantProblem(actor, [], Perm.Effective(normalizedRole, overrides)) is string grantProblem)
+        if (GrantProblem(actor, [], Perm.Effective(normalizedRole, overrides), normalizedRole, null) is string grantProblem)
         {
             return grantProblem;
         }
@@ -346,7 +346,7 @@ internal sealed class WebPanelAuth
             return "Kendi yetki düzeyinizi, yetkilerinizi veya hesap durumunuzu değiştiremezsiniz. Bunu bir Yönetici yapmalı.";
         }
 
-        if (GrantProblem(actor, Perm.Effective(existing.Role, currentOverrides), Perm.Effective(normalizedRole, overrides)) is string grantProblem)
+        if (GrantProblem(actor, Perm.Effective(existing.Role, currentOverrides), Perm.Effective(normalizedRole, overrides), normalizedRole, existing.Role) is string grantProblem)
         {
             return grantProblem;
         }
@@ -686,11 +686,24 @@ internal sealed class WebPanelAuth
         return null;
     }
 
-    private static string? GrantProblem(WebPanelUser actor, HashSet<string> before, HashSet<string> after)
+    private static string? GrantProblem(WebPanelUser actor, HashSet<string> before, HashSet<string> after, string role, string? previousRole)
     {
         if (actor.Role == PanelRoles.Admin)
         {
             return null;
+        }
+
+        // A new Operatör gets the role default and a role change away from Operatör drops them; on an existing Operatör
+        // only a Yönetici turns them on or off.
+        bool stays = previousRole == PanelRoles.Operator && role == PanelRoles.Operator;
+        IReadOnlyList<string> defaults = stays ? [] : Perm.RoleDefaults(role);
+        List<string> adminOnly = Perm.AdminChosen
+            .Where(k => after.Contains(k) && !before.Contains(k) && !defaults.Contains(k)
+                || stays && before.Contains(k) && !after.Contains(k))
+            .Select(k => Perm.ByKey[k].Label).ToList();
+        if (adminOnly.Count > 0)
+        {
+            return "Bu yetkiyi yalnızca bir Yönetici açıp kapatabilir: " + string.Join(", ", adminOnly) + ".";
         }
 
         HashSet<string> mine = Perm.Assigned(actor);

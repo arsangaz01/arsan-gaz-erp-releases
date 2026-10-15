@@ -61,8 +61,8 @@ internal static class DriverVehicle
 
 internal static class CylinderTripEndpoints
 {
-    // Whoever scans on a trip may explain why a cylinder was not scanned.
-    internal static readonly string[] ReasonWriters = [Perm.TripDeliver, Perm.TripReturn, Perm.TripClose];
+    // Whoever unloads the vehicle or closes the trip at the depot explains why a cylinder did not come back.
+    internal static readonly string[] ReasonWriters = [Perm.TripReturn, Perm.TripClose];
 
     public static void Map(WebApplication app)
     {

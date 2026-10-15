@@ -120,8 +120,8 @@ internal static class Perm
             P(TripRoute, "Sefer rotası (durak sırası, yol tarifi)", "Seferdeki araç için müşteri sırasını görür ve düzenler, yol tarifini açar, önerilen müşterileri ekler. \"Sefer rotası\" özelliği açıkken çalışır.", TripView),
             P(TripPlan, "Sefer planı (uğranacak müşteriler, uyarı mesafesi)", "Panelde Sefer Planı sekmesi: gün ve araç için uğranacak müşterileri, sırasını ve telefondaki yaklaşma uyarısının mesafesini belirler; müşteri konumunu Google Haritalar bağlantısı veya koordinatla girer. \"Sefer planı\" özelliği açıkken çalışır.", PanelLogin),
             P(CustomerLocation, "Müşteri konumunu telefondan kaydetme", "Seferde müşterinin yanındayken rotadaki durakta \"Konumu kaydet\" ile telefonun konumunu müşterinin konumu olarak kaydeder. \"Sefer planı\" özelliği açıkken çalışır.", TripRoute),
-            P(TripReturn, "Sefer dönüşü (depoya)", "Dönen aracın tüplerini depoya okutur.", TripView),
-            P(TripClose, "Seferi kapatma", "Seferi kapatır. Yeni seferlerde okutulmayan her tüpe gerekçe seçilmeden kapatılamaz; gerekçeler yöneticiye bildirilir.", TripView),
+            P(TripReturn, "Aracı boşaltma (sefer dönüşü, depoya)", "Depoya dönen aracın dolu ve boş tüplerini okutup depoya alır; okutulmayan tüplere gerekçe yazar. Eksik tüpü ve çalınmayı yakalamak için depoda yapılır: yalnızca Yönetici ve Operatör'de olabilir, Operatör'de açıp kapatmayı yalnızca Yönetici yapar.", TripView),
+            P(TripClose, "Seferi kapatma", "Seferi kapatır. Yeni seferlerde okutulmayan her tüpe gerekçe seçilmeden kapatılamaz; gerekçeler yöneticiye bildirilir. Yalnızca Yönetici ve Operatör'de olabilir, Operatör'de açıp kapatmayı yalnızca Yönetici yapar.", TripView),
             P(TripLossCheck, "Kayıp kontrolü onayı", "Okutulmayan tüplerin gerekçelerini \"kontrol edildi\" olarak işaretler ve Özet'te kontrol bekleyen sefer eksiklerini görür. Varsayılan olarak yalnızca Yönetici'de vardır.", TripView)
         ]),
         new("Araçlar", [
@@ -154,10 +154,14 @@ internal static class Perm
     private static readonly string[] ViewerDefaults =
         [PanelLogin, MobileLogin, Summary, Reports, CylinderView, MovementHistory, Export, CustomerView, TripView, VehicleView];
 
-    // Phone only: the trip flow (with reasons for unscanned cylinders), cylinder info, customer stock and the depot count.
+    // Phone only: loading, deliveries and pickups, cylinder info, customer stock and the depot count. Unloading the vehicle
+    // and closing the trip are done at the depot by an operator (AdminChosen).
     // CylinderView covers the cylinder info screen, the customer stock screen and the customer picker without phones.
     private static readonly string[] DriverDefaults =
-        [MobileLogin, CylinderView, StockCount, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute, CustomerLocation, TripReturn, TripClose];
+        [MobileLogin, CylinderView, StockCount, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute, CustomerLocation];
+
+    // Only a Yönetici or an Operatör may hold these, and only a Yönetici may grant or revoke them.
+    internal static readonly string[] AdminChosen = [TripReturn, TripClose];
 
     internal static IReadOnlyList<string> RoleDefaults(string? role) => role switch
     {
@@ -198,6 +202,11 @@ internal static class Perm
             {
                 set.Remove(key);
             }
+        }
+
+        if (role != PanelRoles.Operator)
+        {
+            set.ExceptWith(AdminChosen);
         }
 
         bool changed = true;

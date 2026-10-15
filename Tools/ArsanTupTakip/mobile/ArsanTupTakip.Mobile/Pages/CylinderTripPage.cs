@@ -34,7 +34,7 @@ public sealed class CylinderTripPage : ContentPage
             ("Yükleme", LoadMode, Perm.TripLoad),
             (ApiClient.Instance.Can(Perm.TripPickup) ? "Müşteriye teslim (dolu)" : "Müşteriye teslim", DeliverMode, Perm.TripDeliver),
             ("Müşteriden boş alım", PickupMode, Perm.TripPickup),
-            ("Depo dönüşü", ReturnMode, Perm.TripReturn),
+            ("Aracı boşalt (depo)", ReturnMode, Perm.TripReturn),
             ("Kontrol", 3, Perm.TripView)
         ];
         return all.Where(m => ApiClient.Instance.Can(m.Permission)).ToArray();
@@ -117,9 +117,12 @@ public sealed class CylinderTripPage : ContentPage
                 Children =
                 {
                     _todaySection,
-                    Ui.Note(_pickup
-                        ? "\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteride verdiğiniz dolu tüpleri \"Müşteriye teslim (dolu)\", aldığınız boşları \"Müşteriden boş alım\" ile okutun; her kayıttan sonra o müşteriye verilen/alınan sayısı ve müşterideki güncel tüp bakiyesi gösterilir. Depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir. Sefer kapatılırken okutulmayan her tüp için gerekçe seçilir; gerekçeler yöneticiye bildirilir (müşteriye mesaj gitmez)."
-                        : "\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteriye teslim ve depo dönüşünü de buradan okutun; dönüşte eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir. Sefer kapatılırken okutulmayan her tüp için gerekçe seçilir; gerekçeler yöneticiye bildirilir (müşteriye mesaj gitmez)."),
+                    Ui.Note((_pickup
+                        ? "\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteride verdiğiniz dolu tüpleri \"Müşteriye teslim (dolu)\", aldığınız boşları \"Müşteriden boş alım\" ile okutun; her kayıttan sonra o müşteriye verilen/alınan sayısı ve müşterideki güncel tüp bakiyesi gösterilir."
+                        : "\"Sefer Başlat\" ile kayıtlı araçlardan seçip seferi açın, tüpleri okutup araca yükleyin; yük gaz türüne göre listelenir, bir türe dokununca barkodlar ve ayrıntılar açılır. Müşteriye teslimi de buradan okutun.")
+                        + (ApiClient.Instance.Can(Perm.TripReturn)
+                            ? " Depoya dönen aracın dolu ve boş tüplerini \"Aracı boşalt (depo)\" ile okutun; eşleşmeyen veya okutulmayan tüpler kırmızı uyarı verir. Sefer kapatılırken okutulmayan her tüp için gerekçe seçilir; gerekçeler yöneticiye bildirilir (müşteriye mesaj gitmez)."
+                            : " Teslimatlar bitince depoya dönün; aracı depoda operatör boşaltıp seferi kapatır.")),
                     Ui.Primary("🚚 Sefer Başlat", async (_, _) => await StartTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripStart)),
                     Ui.Section(
                         "Seferdeki araçlar",
@@ -163,7 +166,7 @@ public sealed class CylinderTripPage : ContentPage
                         _groups,
                         Ui.Secondary("Listeyi yenile", async (_, _) => await RefreshGroupsAsync())),
                     Ui.Secondary("Okutulmayan tüplere gerekçe yaz", async (_, _) => await ExplainMissingAsync(false))
-                        .ShowIf(ApiClient.Instance.Can(Perm.TripDeliver) || ApiClient.Instance.Can(Perm.TripReturn) || ApiClient.Instance.Can(Perm.TripClose)),
+                        .ShowIf(ApiClient.Instance.Can(Perm.TripReturn) || ApiClient.Instance.Can(Perm.TripClose)),
                     Ui.Secondary("Seferi kapat", async (_, _) => await CloseTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripClose))
                 }
             }

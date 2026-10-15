@@ -120,7 +120,9 @@ internal static class WebPanelEndpoints
                 name = g.Name,
                 permissions = g.Permissions.Select(p => new { key = p.Key, label = p.Label, description = p.Description, requires = p.Requires })
             }),
-            roles = PanelRoles.All.Select(r => new { name = r, description = PanelRoles.Description(r), defaults = Perm.RoleDefaults(r) })
+            roles = PanelRoles.All.Select(r => new { name = r, description = PanelRoles.Description(r), defaults = Perm.RoleDefaults(r) }),
+            adminChosen = Perm.AdminChosen,
+            adminChosenRole = PanelRoles.Operator
         })).Requires(Perm.ManageUsers);
 
         api.MapGet("/yonetim/kullanicilar", (HttpContext context, DeviceStore devices) =>
