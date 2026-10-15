@@ -88,38 +88,38 @@ public sealed class CustomerStockPage : ContentPage
         CustomerStockResponse s = _stock!;
         CustomerStockTotals t = s.Totals;
         string place = string.Join(" / ", new[] { s.City, s.District }.Where(v => !string.IsNullOrWhiteSpace(v)));
-        Label total = new() { Text = $"{t.Count} tüp", FontSize = 28, FontFamily = "OpenSansSemibold", TextColor = Ui.Accent };
-        List<string> lines =
+        List<View> tiles =
         [
-            $"Dolu {t.Full} · boş {t.Empty}" + (t.Unknown > 0 ? $" · bilinmiyor {t.Unknown}" : string.Empty),
-            $"En uzun bekleyen: {(t.MaxDays is int max ? max + " gün" : "-")} · ortalama: {(t.AvgDays is int avg ? avg + " gün" : "-")}",
+            Ui.StatTile("🛢️", t.Count.ToString(), "Müşteride tüp", Ui.Accent, t.Unknown > 0 ? $"{t.Unknown} tanesinin dolu/boş bilgisi yok" : null),
+            Ui.StatTile("🟢", t.Full.ToString(), "Dolu", Ui.Good),
+            Ui.StatTile("⚪", t.Empty.ToString(), "Boş", Ui.Muted),
+            Ui.StatTile("⏳", t.MaxDays is int max ? max + " gün" : "-", "En uzun bekleyen", t.Long > 0 ? Ui.Warn : Ui.Accent,
+                t.AvgDays is int avg ? $"ortalama {avg} gün" : null)
         ];
+        VerticalStackLayout card = new()
+        {
+            Spacing = 8,
+            Children =
+            {
+                new Label { Text = "👤 " + s.Name, FontSize = 18, FontFamily = "OpenSansSemibold" },
+                Ui.Note(string.Join(" · ", new[] { s.Code, place, s.Phone }.Where(v => !string.IsNullOrWhiteSpace(v)))),
+                Ui.TileGrid(tiles)
+            }
+        };
         if (t.Long > 0)
         {
-            lines.Add($"⚠ {t.Long} tüp {s.LongDays} günden uzun süredir müşteride");
+            card.Children.Add(new Label { Text = $"⚠️ {t.Long} tüp {s.LongDays} günden uzun süredir müşteride", TextColor = Ui.Warn, FontFamily = "OpenSansSemibold", FontSize = 14 });
         }
 
         if (t.CustomerOwned > 0)
         {
-            lines.Add($"{t.CustomerOwned} tüp müşteri malı");
+            card.Children.Add(Ui.Note($"🏷️ {t.CustomerOwned} tüp müşteri malı"));
         }
 
         if (!s.IsActive)
         {
-            lines.Add("Pasif müşteri kaydı");
+            card.Children.Add(new Label { Text = "⛔ Pasif müşteri kaydı", TextColor = Ui.Bad, FontSize = 14 });
         }
-
-        VerticalStackLayout card = new()
-        {
-            Spacing = 4,
-            Children =
-            {
-                new Label { Text = s.Name, FontSize = 17, FontFamily = "OpenSansSemibold" },
-                Ui.Note(string.Join(" · ", new[] { s.Code, place, s.Phone }.Where(v => !string.IsNullOrWhiteSpace(v)))),
-                total,
-                Ui.Note(string.Join(Environment.NewLine, lines))
-            }
-        };
         _summary.Children.Clear();
         _summary.Children.Add(Ui.Card(card));
 

@@ -59,6 +59,7 @@ public sealed class CylinderTripPage : ContentPage
     private readonly Border _customerSection;
     // Simple view for drivers: only the trip line, the steps and scanning; everything else sits under "Ayrıntılar".
     private readonly Label _tripLine = new() { FontSize = 18, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap };
+    private readonly ContentView _tripTiles = new() { IsVisible = false };
     private readonly VerticalStackLayout _tripPickers;
     private readonly Button _startBig;
     private readonly VerticalStackLayout _workArea;
@@ -230,7 +231,7 @@ public sealed class CylinderTripPage : ContentPage
                 Children =
                 {
                     _startBig,
-                    Ui.Card(new VerticalStackLayout { Spacing = 8, Children = { _tripLine, _tripPickers } }),
+                    Ui.Card(new VerticalStackLayout { Spacing = 8, Children = { _tripLine, _tripTiles, _tripPickers } }),
                     _workArea,
                     details,
                     _detailsBox
@@ -549,6 +550,7 @@ public sealed class CylinderTripPage : ContentPage
         _workArea.IsVisible = any;
         int plates = (_vehicle.ItemsSource as List<string>)?.Count ?? 0;
         _tripPickers.IsVisible = _trips.Count > 1 || plates > 1;
+        _tripTiles.IsVisible = any;
         if (!any)
         {
             _tripLine.Text = ApiClient.Instance.Can(Perm.TripStart)
@@ -558,7 +560,12 @@ public sealed class CylinderTripPage : ContentPage
         }
 
         int loaded = SelectedTrip?.Vehicles.FirstOrDefault(v => string.Equals(v.Plate, SelectedPlate, StringComparison.OrdinalIgnoreCase))?.LoadedCount ?? 0;
-        _tripLine.Text = $"🚚 {SelectedPlate ?? "Araç seçin"}\nAraçta {loaded} tüp var";
+        _tripLine.Text = $"🚚 {SelectedPlate ?? "Araç seçin"}";
+        _tripTiles.Content = Ui.TileGrid(
+        [
+            Ui.StatTile("🛢️", loaded.ToString(), "Araçta tüp", Ui.Accent),
+            Ui.StatTile("🤝", (SelectedTrip?.DeliveredTotal ?? 0).ToString(), "Bu seferde teslim", Ui.Good)
+        ]);
     }
 
     private async Task RefreshGroupsAsync()
@@ -822,21 +829,36 @@ public sealed class CylinderTripPage : ContentPage
 
     private void ShowResult(string message, TripReconcileResponse? reconcile)
     {
-        _result.Text = message;
-        _result.TextColor = reconcile?.HasAlerts == true ? Colors.Red : Ui.Muted;
+        string text = message;
         if (reconcile is not null && reconcile.UnexpectedReturnCodes.Count > 0)
         {
-            _result.Text += Environment.NewLine + "Eşleşmeyen: " + string.Join(", ", reconcile.UnexpectedReturnCodes);
+            text += Environment.NewLine + "Eşleşmeyen: " + string.Join(", ", reconcile.UnexpectedReturnCodes);
         }
 
         if (reconcile is not null && reconcile.ShortagesByGas.Count > 0)
         {
-            _result.Text += Environment.NewLine + "Okutulmayan: "
+            text += Environment.NewLine + "Okutulmayan: "
                 + string.Join(", ", reconcile.ShortagesByGas.Select(s => $"{s.GasType} ×{s.Count}"));
         }
 
-        _resultCard.IsVisible = true;
+        bool failed = message.StartsWith("0/", StringComparison.Ordinal) || message.StartsWith("0 tüp", StringComparison.Ordinal);
+        if (failed)
+        {
+            Ui.Banner(_resultCard, _result, "❌", text, Ui.Bad);
+        }
+        else if (reconcile?.HasAlerts == true)
+        {
+            Ui.Banner(_resultCard, _result, "⚠️", text, Ui.Warn);
+        }
+        else
+        {
+            Ui.Banner(_resultCard, _result, "✅", text, Ui.Good);
+        }
+
+        Ui.Buzz();
     }
+
+    private void ShowInfo(string text) => Ui.Banner(_resultCard, _result, "ℹ️", text, Ui.Accent);
 
     private async Task CloseTripAsync(bool ask = true)
     {
@@ -997,10 +1019,7 @@ public sealed class CylinderTripPage : ContentPage
             UseStop(stop);
         }
 
-        _result.Text = $"📍 {target.Name} müşterisine yaklaştınız (yaklaşık {Math.Round(distance / 10) * 10:0} m). Tüpleri teslim etmeyi unutmayın."
-            + (_resultCard.IsVisible && !string.IsNullOrEmpty(_result.Text) ? Environment.NewLine + _result.Text : string.Empty);
-        _result.TextColor = Ui.Accent;
-        _resultCard.IsVisible = true;
+        Ui.Banner(_resultCard, _result, "📍", $"{target.Name} müşterisine yaklaştınız (yaklaşık {Math.Round(distance / 10) * 10:0} m). Tüpleri teslim etmeyi unutmayın.", Ui.Accent);
     }
 
     protected override void OnAppearing()
@@ -1079,9 +1098,7 @@ public sealed class CylinderTripPage : ContentPage
             {
                 case Correct:
                     string message = await ApiClient.Instance.VerifyCustomerLocationAsync(stop.CustomerId);
-                    _result.Text = $"{stop.CustomerName}: {message}";
-                    _result.TextColor = Ui.Muted;
-                    _resultCard.IsVisible = true;
+                    ShowInfo($"{stop.CustomerName}: {message}");
                     await RefreshRouteAsync();
                     break;
                 case Here:
@@ -1165,11 +1182,9 @@ public sealed class CylinderTripPage : ContentPage
 
         _scanned.Clear();
         RefreshScanned();
-        _result.Text = _pickup
+        ShowInfo(_pickup
             ? $"{stop.CustomerName} seçildi. Verdiğiniz dolu tüpleri \"Müşteriye teslim (dolu)\", aldığınız boşları \"Müşteriden boş alım\" ile okutun."
-            : $"{stop.CustomerName} seçildi. Teslim ettiğiniz tüpleri okutun.";
-        _result.TextColor = Ui.Muted;
-        _resultCard.IsVisible = true;
+            : $"{stop.CustomerName} seçildi. Teslim ettiğiniz tüpleri okutun.");
         _ = ConfirmLocationAsync(stop);
     }
 
@@ -1391,9 +1406,7 @@ public sealed class CylinderTripPage : ContentPage
         try
         {
             string message = await ApiClient.Instance.ExplainTripMissingAsync(tripId, cylinders.Select(c => c.CylinderId).ToList(), reason.Key, note, customerId);
-            _result.Text = message;
-            _result.TextColor = Ui.Muted;
-            _resultCard.IsVisible = true;
+            Ui.Banner(_resultCard, _result, "📝", message, Ui.Good);
         }
         catch (Exception exception)
         {

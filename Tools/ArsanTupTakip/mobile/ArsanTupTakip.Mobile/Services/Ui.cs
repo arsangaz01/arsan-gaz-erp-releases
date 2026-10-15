@@ -186,6 +186,85 @@ public static class Ui
         }
     }
 
+    // Colours carry meaning only: green done, amber needs attention, red failed.
+    public static readonly Color Good = Color.FromArgb("#16A34A");
+    public static readonly Color Warn = Color.FromArgb("#D97706");
+    public static readonly Color Bad = Color.FromArgb("#DC2626");
+
+    // A big number with an icon and a short caption, readable at a glance.
+    public static Border StatTile(string icon, string value, string caption, Color color, string? detail = null)
+    {
+        VerticalStackLayout body = new()
+        {
+            Spacing = 2,
+            Children =
+            {
+                new Label { Text = icon, FontSize = 20 },
+                new Label { Text = value, FontSize = 28, FontFamily = "OpenSansSemibold", TextColor = color },
+                new Label { Text = caption, FontSize = 13, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap }
+            }
+        };
+        if (!string.IsNullOrWhiteSpace(detail))
+        {
+            body.Children.Add(Note(detail));
+        }
+
+        return new Border
+        {
+            Padding = new Thickness(12, 10),
+            StrokeThickness = 0,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
+            BackgroundColor = color.WithAlpha(0.12f),
+            Content = body
+        };
+    }
+
+    public static Grid TileGrid(IReadOnlyList<View> tiles, int columns = 2)
+    {
+        Grid grid = new() { ColumnSpacing = 8, RowSpacing = 8 };
+        for (int c = 0; c < columns; c++)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        }
+
+        for (int i = 0; i < tiles.Count; i++)
+        {
+            if (i % columns == 0)
+            {
+                grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            }
+
+            grid.Add(tiles[i], i % columns, i / columns);
+        }
+
+        return grid;
+    }
+
+    // Tints a result card: icon + coloured text and border, so success or failure is clear without reading.
+    public static void Banner(Border card, Label label, string icon, string text, Color color)
+    {
+        label.Text = $"{icon}  {text}";
+        label.TextColor = color;
+        label.FontSize = 16;
+        label.FontFamily = "OpenSansSemibold";
+        card.BackgroundColor = color.WithAlpha(0.10f);
+        card.Stroke = new SolidColorBrush(color);
+        card.StrokeThickness = 2;
+        card.IsVisible = true;
+    }
+
+    public static void Buzz()
+    {
+        try
+        {
+            HapticFeedback.Default.Perform(HapticFeedbackType.LongPress);
+        }
+        catch (Exception)
+        {
+            // Devices without a vibrator.
+        }
+    }
+
     public static Button Compact(string text, EventHandler onClick)
     {
         Button button = new()
