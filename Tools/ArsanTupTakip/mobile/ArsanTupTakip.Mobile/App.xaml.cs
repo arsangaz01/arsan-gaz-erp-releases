@@ -128,8 +128,13 @@ public partial class App : Application
 		ShowLogin("Çıkış yapıldı.");
 	}
 
-	private static ContentPage Loading() => new()
+	private static ContentPage Loading()
 	{
-		Content = new ActivityIndicator { IsRunning = true, Color = Ui.Accent, VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center }
-	};
+		ContentPage page = new()
+		{
+			Content = new ActivityIndicator { IsRunning = true, Color = Ui.Accent, VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center }
+		};
+		Ui.ApplyPageChrome(page);
+		return page;
+	}
 }

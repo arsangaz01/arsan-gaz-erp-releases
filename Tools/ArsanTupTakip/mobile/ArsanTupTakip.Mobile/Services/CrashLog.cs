@@ -78,6 +78,8 @@ public static class CrashLog
             layout.Children.Insert(2, Ui.Primary("Uygulamayı aç", (_, _) => onContinue()));
         }
 
-        return new ContentPage { Title = title, Content = new ScrollView { Content = layout } };
+        ContentPage page = new() { Title = title, Content = new ScrollView { Content = layout } };
+        Ui.ApplyPageChrome(page);
+        return page;
     }
 }

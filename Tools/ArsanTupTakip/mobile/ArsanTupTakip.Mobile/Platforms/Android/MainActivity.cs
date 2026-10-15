@@ -2,6 +2,7 @@ using Android.App;
 using Android.Content;
 using Android.Content.PM;
 using Android.OS;
+using AndroidX.Core.View;
 using ArsanTupTakip.Mobile.Services;
 
 namespace ArsanTupTakip.Mobile;
@@ -15,6 +16,13 @@ public class MainActivity : MauiAppCompatActivity
         base.OnCreate(savedInstanceState);
         try
         {
+            // Navy strip behind the clock/battery; ContentPage.SafeAreaEdges keeps UI below it.
+            if (Window is not null)
+            {
+                Window.SetStatusBarColor(Android.Graphics.Color.ParseColor("#0B1324"));
+                WindowCompat.GetInsetsController(Window, Window.DecorView)?.SetAppearanceLightStatusBars(false);
+            }
+
             ApplyDeepLink(Intent);
         }
         catch (Exception exception)
