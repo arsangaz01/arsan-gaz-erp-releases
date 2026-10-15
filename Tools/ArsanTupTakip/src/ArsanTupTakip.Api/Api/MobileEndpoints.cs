@@ -50,6 +50,20 @@ internal static class MobileEndpoints
             });
         });
 
+        app.MapGet("/api/guncelleme/el-terminali", () =>
+        {
+            MobileUpdateInfo update = AppUpdates.GetHandheld();
+            return Results.Ok(new
+            {
+                update.ApiVersion,
+                update.PublishedMobileVersion,
+                update.PublishedMobileBuild,
+                update.ApkReady,
+                update.ApkSizeBytes,
+                downloadUrl = update.DownloadPath
+            });
+        });
+
         app.MapPost("/api/giris", async (MobileLoginRequest request, HttpContext context, WebPanelAuth auth, DeviceStore devices) =>
         {
             (string? token, MobileSession? session, WebPanelUser? user, string? error) =
@@ -102,6 +116,11 @@ internal static class MobileEndpoints
         app.MapGet("/indir", () => File.Exists(AppUpdates.ApkFile)
             ? Results.File(AppUpdates.ApkFile, "application/vnd.android.package-archive", AppUpdates.ApkFileName, enableRangeProcessing: true)
             : Results.NotFound("APK henüz yüklenmedi."));
+
+        // Android 4.4 handhelds: the device browser cannot open the HTTPS site, so the first install uses http:// here.
+        app.MapGet("/indir/el-terminali", () => File.Exists(AppUpdates.HandheldApkFile)
+            ? Results.File(AppUpdates.HandheldApkFile, "application/vnd.android.package-archive", AppUpdates.HandheldApkFileName, enableRangeProcessing: true)
+            : Results.NotFound("El terminali APK'sı henüz yüklenmedi."));
 
         app.MapGet("/api/ozet", () => Text(TupReports.SummaryAsync)).Requires(Perm.Summary);
 

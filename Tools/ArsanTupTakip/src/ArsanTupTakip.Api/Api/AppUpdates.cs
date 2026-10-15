@@ -11,31 +11,38 @@ internal static class AppUpdates
 {
     internal const string ApkFileName = "ArsanTupTakip-Mobil.apk";
 
+    // Separate app for Android 4.4 handhelds (Tools/ArsanTupTakip/handheld), copied in the same way with its own .meta.json.
+    internal const string HandheldApkFileName = "ArsanTupTakip-ElTerminali.apk";
+
     internal static string ApkFile => Path.Combine(AppPaths.Root, ApkFileName);
 
-    private static string MetaFile => ApkFile + ".meta.json";
+    internal static string HandheldApkFile => Path.Combine(AppPaths.Root, HandheldApkFileName);
 
     internal static string ApiVersion { get; } =
         typeof(AppUpdates).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
         ?? typeof(AppUpdates).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
 
-    internal static MobileUpdateInfo Get()
+    internal static MobileUpdateInfo Get() => Get(ApkFile, "/indir");
+
+    internal static MobileUpdateInfo GetHandheld() => Get(HandheldApkFile, "/indir/el-terminali");
+
+    private static MobileUpdateInfo Get(string apkFile, string downloadPath)
     {
-        long? size = File.Exists(ApkFile) ? new FileInfo(ApkFile).Length : null;
-        (string name, int code) = size is > 0 ? ReadMeta() ?? ("0.0.0", 0) : ("0.0.0", 0);
-        return new MobileUpdateInfo(ApiVersion, name, code, size is > 0 && code > 0, size, "/indir");
+        long? size = File.Exists(apkFile) ? new FileInfo(apkFile).Length : null;
+        (string name, int code) = size is > 0 ? ReadMeta(apkFile + ".meta.json") ?? ("0.0.0", 0) : ("0.0.0", 0);
+        return new MobileUpdateInfo(ApiVersion, name, code, size is > 0 && code > 0, size, downloadPath);
     }
 
-    private static (string Name, int Code)? ReadMeta()
+    private static (string Name, int Code)? ReadMeta(string metaFile)
     {
         try
         {
-            if (!File.Exists(MetaFile))
+            if (!File.Exists(metaFile))
             {
                 return null;
             }
 
-            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(MetaFile));
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(metaFile));
             JsonElement root = document.RootElement;
             string name = root.TryGetProperty("versionName", out JsonElement n) ? n.GetString() ?? string.Empty : string.Empty;
             int code = root.TryGetProperty("versionCode", out JsonElement c)

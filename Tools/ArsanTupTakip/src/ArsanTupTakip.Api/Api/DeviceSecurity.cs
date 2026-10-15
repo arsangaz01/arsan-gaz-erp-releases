@@ -206,7 +206,7 @@ internal sealed class DeviceStore
 // since login; the endpoint's permission metadata is then checked against the user's effective permissions.
 internal sealed class DeviceAuthMiddleware(RequestDelegate next, DeviceStore devices)
 {
-    internal static readonly string[] PublicPaths = ["/api/giris", "/api/merhaba", "/api/guncelleme"];
+    internal static readonly string[] PublicPaths = ["/api/giris", "/api/merhaba", "/api/guncelleme", "/api/guncelleme/el-terminali"];
 
     public async Task InvokeAsync(HttpContext context)
     {

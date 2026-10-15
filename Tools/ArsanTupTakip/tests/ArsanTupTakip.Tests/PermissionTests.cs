@@ -280,6 +280,20 @@ internal static class PermissionTests
                 Check(anonymous.StatusCode == HttpStatusCode.Unauthorized && (await Json(anonymous)).GetProperty("loginRequired").GetBoolean(), "Anahtarsız istek 401 ve giriş istemeli.");
             }
 
+            using (HttpResponseMessage handheld = await Send(http, HttpMethod.Get, "api/guncelleme/el-terminali", null))
+            {
+                JsonElement info = await Json(handheld);
+                Check(handheld.StatusCode == HttpStatusCode.OK && info.GetProperty("downloadUrl").GetString() == "/indir/el-terminali"
+                    && (File.Exists(AppUpdates.HandheldApkFile) || !info.GetProperty("apkReady").GetBoolean()),
+                    "El terminali sürüm bilgisi oturumsuz okunabilmeli (Android 4.4 uygulaması giriş öncesi denetler).");
+            }
+
+            if (!File.Exists(AppUpdates.HandheldApkFile))
+            {
+                using HttpResponseMessage download = await Send(http, HttpMethod.Get, "indir/el-terminali", null);
+                Check(download.StatusCode == HttpStatusCode.NotFound, "El terminali APK'sı yokken indirme 404 dönmeli.");
+            }
+
             foreach ((HttpMethod method, string path) in new[]
             {
                 (HttpMethod.Get, "api/sefer/gerekceler"), (HttpMethod.Get, "api/sefer/1/eksikler"), (HttpMethod.Post, "api/sefer/gerekce"),
