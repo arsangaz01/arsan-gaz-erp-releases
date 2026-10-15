@@ -2,11 +2,8 @@ package com.arsantuptakip.elterminali;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -57,23 +54,11 @@ abstract class BaseActivity extends Activity {
         void on(int index);
     }
 
-    static final String SCAN_ACTION = "com.arsantuptakip.elterminali.BARCODE";
-    private static final String HONEYWELL_SERVICE = "com.intermec.datacollectionservice";
-
     private final Handler main = new Handler(Looper.getMainLooper());
     private ProgressBar busy;
     private int running;
     protected LinearLayout page;
     private EditText scanEdit;
-    private Text scanHandler;
-    private BroadcastReceiver scanReceiver;
-    private LinearLayout scanBox;
-    private TextView scanStatus;
-    private Button scanMode;
-    private int keyCount;
-    private String lastKey = "-";
-    private int textCount;
-    private int broadcastCount;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -91,110 +76,19 @@ abstract class BaseActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(12), dp(4), dp(12), dp(24));
         root.addView(page);
-        scanBox = new LinearLayout(this);
-        scanBox.setOrientation(LinearLayout.VERTICAL);
-        scanBox.setPadding(dp(12), 0, dp(12), dp(12));
-        scanBox.setVisibility(View.GONE);
-        scanStatus = note("");
-        scanStatus.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        scanBox.addView(scanStatus);
-        scanMode = button("", new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                getSharedPreferences("scanner", MODE_PRIVATE).edit().putBoolean("honeywell", !honeywellMode()).apply();
-                releaseScanner();
-                if (honeywellMode()) {
-                    claimScanner();
-                }
-
-                showScanStatus();
-                scanEdit.requestFocus();
-            }
-        });
-        scanBox.addView(scanMode);
-        root.addView(scanBox);
         scroll.addView(root);
         setContentView(scroll);
     }
 
-    private boolean honeywellMode() {
-        return getSharedPreferences("scanner", MODE_PRIVATE).getBoolean("honeywell", true);
-    }
-
-    // Shows what the scanner delivered (keys, typed text, broadcasts) so a photo of the screen tells why a scan
-    // did not arrive.
-    private void showScanStatus() {
-        scanStatus.setText("Okuyucu: tuş " + keyCount + " (son " + lastKey + ") · yazı " + textCount
-            + " · yayın " + broadcastCount + " · Honeywell modu " + (honeywellMode() ? "açık" : "kapalı")
-            + " · odak " + (scanEdit.hasFocus() ? "kutuda" : "başka yerde"));
-        scanMode.setText(honeywellMode() ? "Honeywell modunu kapat" : "Honeywell modunu aç");
-    }
-
+    // Scanner text typed while no field has focus (e.g. after tapping a button) goes to the scan field.
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (scanEdit != null && event.getAction() == KeyEvent.ACTION_DOWN) {
-            keyCount++;
-            lastKey = KeyEvent.keyCodeToString(event.getKeyCode()).replace("KEYCODE_", "") + "/" + event.getScanCode();
-            if (!(getCurrentFocus() instanceof EditText) && event.getUnicodeChar() != 0) {
-                scanEdit.requestFocus();
-            }
-
-            showScanStatus();
+        if (scanEdit != null && event.getAction() == KeyEvent.ACTION_DOWN && event.getUnicodeChar() != 0
+            && !(getCurrentFocus() instanceof EditText)) {
+            scanEdit.requestFocus();
         }
 
         return super.dispatchKeyEvent(event);
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (scanEdit == null) {
-            return;
-        }
-
-        scanBox.setVisibility(View.VISIBLE);
-        showScanStatus();
-        if (honeywellMode()) {
-            claimScanner();
-        }
-    }
-
-    @Override
-    protected void onPause() {
-        releaseScanner();
-        super.onPause();
-    }
-
-    private void claimScanner() {
-        scanReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                broadcastCount++;
-                showScanStatus();
-                String data = intent.getStringExtra("data");
-                if (data != null && data.trim().length() > 0) {
-                    scanEdit.setText(data.trim());
-                    submit(scanEdit, scanHandler);
-                }
-            }
-        };
-        registerReceiver(scanReceiver, new IntentFilter(SCAN_ACTION));
-        Bundle properties = new Bundle();
-        properties.putBoolean("DPR_DATA_INTENT", true);
-        properties.putString("DPR_DATA_INTENT_ACTION", SCAN_ACTION);
-        sendBroadcast(new Intent("com.honeywell.aidc.action.ACTION_CLAIM_SCANNER")
-            .setPackage(HONEYWELL_SERVICE)
-            .putExtra("com.honeywell.aidc.extra.EXTRA_SCANNER", "dcs.scanner.imager")
-            .putExtra("com.honeywell.aidc.extra.EXTRA_PROFILE", "DEFAULT")
-            .putExtra("com.honeywell.aidc.extra.EXTRA_PROPERTIES", properties));
-    }
-
-    private void releaseScanner() {
-        if (scanReceiver != null) {
-            unregisterReceiver(scanReceiver);
-            scanReceiver = null;
-            sendBroadcast(new Intent("com.honeywell.aidc.action.ACTION_RELEASE_SCANNER").setPackage(HONEYWELL_SERVICE));
-        }
     }
 
     int dp(int value) {
@@ -256,12 +150,11 @@ abstract class BaseActivity extends Activity {
 
     // The EDA50 scanner (keyboard wedge) types the code and presses Enter; some profiles type a newline instead, others
     // send no suffix at all. Text arriving faster than a person types (or in one piece) is therefore submitted after a
-    // short pause too. The screen also claims the Honeywell scanner while visible so codes arrive by broadcast even
-    // when the device's keyboard wedge is off.
+    // short pause too. On the EDA50 the app needs its own Internal Scanner profile with Wedge and the label symbologies
+    // (QR Code) enabled.
     EditText scanField(String hint, final Text onCode) {
         final EditText edit = edit(hint);
         scanEdit = edit;
-        scanHandler = onCode;
         final Runnable auto = new Runnable() {
             @Override
             public void run() {
@@ -298,8 +191,6 @@ abstract class BaseActivity extends Activity {
                     return;
                 }
 
-                textCount += added;
-                showScanStatus();
                 long now = SystemClock.uptimeMillis();
                 fast = added > 1 ? added : now - last < 80 ? fast + 1 : 1;
                 last = now;
