@@ -2,13 +2,17 @@ package com.arsantuptakip.elterminali;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
@@ -53,10 +57,16 @@ abstract class BaseActivity extends Activity {
         void on(int index);
     }
 
+    static final String SCAN_ACTION = "com.arsantuptakip.elterminali.BARCODE";
+    private static final String HONEYWELL_SERVICE = "com.intermec.datacollectionservice";
+
     private final Handler main = new Handler(Looper.getMainLooper());
     private ProgressBar busy;
     private int running;
     protected LinearLayout page;
+    private EditText scanEdit;
+    private Text scanHandler;
+    private BroadcastReceiver scanReceiver;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -76,6 +86,45 @@ abstract class BaseActivity extends Activity {
         root.addView(page);
         scroll.addView(root);
         setContentView(scroll);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (scanEdit == null) {
+            return;
+        }
+
+        scanReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String data = intent.getStringExtra("data");
+                if (data != null && data.trim().length() > 0) {
+                    scanEdit.setText(data.trim());
+                    submit(scanEdit, scanHandler);
+                }
+            }
+        };
+        registerReceiver(scanReceiver, new IntentFilter(SCAN_ACTION));
+        Bundle properties = new Bundle();
+        properties.putBoolean("DPR_DATA_INTENT", true);
+        properties.putString("DPR_DATA_INTENT_ACTION", SCAN_ACTION);
+        sendBroadcast(new Intent("com.honeywell.aidc.action.ACTION_CLAIM_SCANNER")
+            .setPackage(HONEYWELL_SERVICE)
+            .putExtra("com.honeywell.aidc.extra.EXTRA_SCANNER", "dcs.scanner.imager")
+            .putExtra("com.honeywell.aidc.extra.EXTRA_PROFILE", "DEFAULT")
+            .putExtra("com.honeywell.aidc.extra.EXTRA_PROPERTIES", properties));
+    }
+
+    @Override
+    protected void onPause() {
+        if (scanReceiver != null) {
+            unregisterReceiver(scanReceiver);
+            scanReceiver = null;
+            sendBroadcast(new Intent("com.honeywell.aidc.action.ACTION_RELEASE_SCANNER").setPackage(HONEYWELL_SERVICE));
+        }
+
+        super.onPause();
     }
 
     int dp(int value) {
@@ -135,9 +184,22 @@ abstract class BaseActivity extends Activity {
         return edit;
     }
 
-    // The EDA50 scanner (keyboard wedge) types the code and presses Enter; some profiles type a newline instead.
+    // The EDA50 scanner (keyboard wedge) types the code and presses Enter; some profiles type a newline instead, others
+    // send no suffix at all. Text arriving faster than a person types (or in one piece) is therefore submitted after a
+    // short pause too. The screen also claims the Honeywell scanner while visible so codes arrive by broadcast even
+    // when the device's keyboard wedge is off.
     EditText scanField(String hint, final Text onCode) {
         final EditText edit = edit(hint);
+        scanEdit = edit;
+        scanHandler = onCode;
+        final Runnable auto = new Runnable() {
+            @Override
+            public void run() {
+                if (edit.getText().toString().trim().length() >= 3) {
+                    submit(edit, onCode);
+                }
+            }
+        };
         edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         edit.setImeOptions(EditorInfo.IME_ACTION_DONE);
         edit.setOnEditorActionListener(new TextView.OnEditorActionListener() {
@@ -152,12 +214,27 @@ abstract class BaseActivity extends Activity {
             }
         });
         edit.addTextChangedListener(new TextWatcher() {
+            private long last;
+            private int fast;
+
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
             }
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
+                int added = count - before;
+                if (added <= 0) {
+                    return;
+                }
+
+                long now = SystemClock.uptimeMillis();
+                fast = added > 1 ? added : now - last < 80 ? fast + 1 : 1;
+                last = now;
+                if (fast >= 4) {
+                    main.removeCallbacks(auto);
+                    main.postDelayed(auto, 300);
+                }
             }
 
             @Override

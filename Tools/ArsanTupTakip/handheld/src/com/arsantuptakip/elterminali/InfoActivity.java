@@ -20,7 +20,7 @@ public final class InfoActivity extends BaseActivity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         setTitle("Tüp bilgisi");
-        page.addView(note("Barkodu okutun (okuyucu Enter gönderir) veya seri numarasını yazıp \"Sorgula\"ya basın."));
+        page.addView(note("Barkodu okutun veya seri numarasını yazıp \"Sorgula\"ya basın."));
         code = scanField("Barkod veya seri no", new Text() {
             @Override
             public void on(String value) {
