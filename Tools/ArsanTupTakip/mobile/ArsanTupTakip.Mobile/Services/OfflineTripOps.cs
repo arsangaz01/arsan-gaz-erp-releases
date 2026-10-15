@@ -5,7 +5,7 @@ namespace ArsanTupTakip.Mobile.Services;
 // Kind: OfflineTripOps.Load, Deliver or Pickup. RequestKey is the key of the first attempt, so a resend that the
 // server already processed is answered from its stored reply and never recorded twice.
 public sealed record PendingTripOp(string Kind, int TripId, string? Plate, int? CustomerId, string? CustomerName, List<string> Codes,
-    DateTime SavedAt, string RequestKey);
+    DateTime SavedAt, string RequestKey, bool IsFull = false);
 
 // Trip loads, deliveries and empty pickups saved on the phone while the server was unreachable (no signal at the
 // customer). They are sent in the order they were made: a delivery needs its load to be on the server first, so a
@@ -30,7 +30,7 @@ public static class OfflineTripOps
     {
         Load => $"{op.Plate} aracına yükleme · {op.Codes.Count} tüp",
         Deliver => $"{op.CustomerName} teslim · {op.Codes.Count} tüp",
-        _ => $"{op.CustomerName} boş alım · {op.Codes.Count} tüp"
+        _ => $"{op.CustomerName} {(op.IsFull ? "dolu iade" : "boş alım")} · {op.Codes.Count} tüp"
     };
 
     public static void Add(PendingTripOp op)
@@ -82,7 +82,7 @@ public static class OfflineTripOps
                     {
                         Load => (await ApiClient.Instance.LoadTripCylindersAsync(op.TripId, op.Plate!, op.Codes, op.SavedAt, op.RequestKey)).Message,
                         Deliver => await ApiClient.Instance.DeliverTripCylindersAsync(op.TripId, op.CustomerId!.Value, op.Codes, null, op.SavedAt, op.RequestKey),
-                        _ => await ApiClient.Instance.PickupTripCylindersAsync(op.TripId, op.Plate!, op.CustomerId!.Value, op.Codes, null, op.SavedAt, op.RequestKey)
+                        _ => await ApiClient.Instance.PickupTripCylindersAsync(op.TripId, op.Plate!, op.CustomerId!.Value, op.Codes, null, op.SavedAt, op.RequestKey, op.IsFull)
                     };
                     results.Add($"{Label(op)}: {message.Split('\n')[0]}");
                 }

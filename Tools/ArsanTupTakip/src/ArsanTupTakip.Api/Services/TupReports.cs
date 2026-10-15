@@ -71,8 +71,12 @@ public static class TupReports
         }
 
         text.AppendLine($"Gaz: {cylinder.GasType} · kapasite: {cylinder.Capacity.ToString("0.##", Turkish)} {cylinder.CapacityUnit}");
-        text.AppendLine($"Durum: {CylinderTracking.StatusName((int)cylinder.Status)}{(cylinder.VehiclePlate is null ? "" : " · plaka: " + cylinder.VehiclePlate)}{(cylinder.CurrentCustomer is null ? "" : " · müşteri: " + cylinder.CurrentCustomer.CompanyName)}");
-        text.AppendLine($"Dolu/boş: {CylinderTracking.FullnessName(cylinder.IsFull)}");
+        text.AppendLine($"Durum: {CylinderTracking.StatusName((int)cylinder.Status, cylinder.VehiclePlate)}{(cylinder.CurrentCustomer is null ? "" : " · müşteri: " + cylinder.CurrentCustomer.CompanyName)}");
+        if (cylinder.Status != CylinderStatus.Customer)
+        {
+            text.AppendLine($"Dolu/boş: {CylinderTracking.FullnessName(cylinder.IsFull)}");
+        }
+
         text.AppendLine($"Test tarihi: {Date(cylinder.TestDueDate)} · son hareket: {Date(cylinder.LastMovementAt)}");
 
         await using TupTakipDbContext db = new();
@@ -89,8 +93,8 @@ public static class TupReports
 
         foreach (var m in movements)
         {
-            text.AppendLine($"- {m.MovementDate:dd.MM.yyyy HH:mm} · {m.MovementType} · {CylinderTracking.StatusName((int)m.FromStatus)} → {CylinderTracking.StatusName((int)m.ToStatus)}"
-                + $"{(m.VehiclePlate is null ? "" : " · " + m.VehiclePlate)}{(m.Customer is null ? "" : " · " + m.Customer)}{(string.IsNullOrEmpty(m.Description) ? "" : " · " + m.Description)}");
+            text.AppendLine($"- {m.MovementDate:dd.MM.yyyy HH:mm} · {m.MovementType} · {CylinderTracking.MovementPlaces((int)m.FromStatus, (int)m.ToStatus, m.VehiclePlate)}"
+                + $"{(m.Customer is null ? "" : " · " + m.Customer)}{(string.IsNullOrEmpty(m.Description) ? "" : " · " + m.Description)}");
         }
 
         return text.ToString();
@@ -222,10 +226,10 @@ public static class TupReports
         var rows = await db.CylinderMovements.AsNoTracking()
             .Where(x => x.MovementDate >= since)
             .OrderByDescending(x => x.MovementDate).Take(200)
-            .Select(x => new { x.MovementDate, x.Cylinder!.SerialNumber, x.MovementType, x.FromStatus, x.ToStatus, Customer = x.Customer != null ? x.Customer.CompanyName : null })
+            .Select(x => new { x.MovementDate, x.Cylinder!.SerialNumber, x.MovementType, x.FromStatus, x.ToStatus, x.VehiclePlate, Customer = x.Customer != null ? x.Customer.CompanyName : null })
             .ToListAsync();
         List<string> lines = rows.Select(x =>
-            $"- {x.MovementDate:dd.MM.yyyy HH:mm} · {x.SerialNumber} · {x.MovementType} · {CylinderTracking.StatusName((int)x.FromStatus)} → {CylinderTracking.StatusName((int)x.ToStatus)}{(x.Customer is null ? "" : " · " + x.Customer)}").ToList();
+            $"- {x.MovementDate:dd.MM.yyyy HH:mm} · {x.SerialNumber} · {x.MovementType} · {CylinderTracking.MovementPlaces((int)x.FromStatus, (int)x.ToStatus, x.VehiclePlate)}{(x.Customer is null ? "" : " · " + x.Customer)}").ToList();
         return lines.Count == 0 ? $"Son {days} günde tüp hareketi yok." : string.Join(Environment.NewLine, lines);
     }
 

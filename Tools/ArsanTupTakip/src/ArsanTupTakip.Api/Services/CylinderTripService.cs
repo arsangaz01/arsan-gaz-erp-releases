@@ -582,10 +582,10 @@ public sealed class CylinderTripService
 
         if (candidates.Count > 0)
         {
-            string movementNote = $"Sefer #{tripId} · {normalized} · boş alım · {customerName}" + (string.IsNullOrWhiteSpace(note) ? string.Empty : " · " + note.Trim())
+            string movementNote = $"Sefer #{tripId} · {normalized} · {(isFull ? "dolu iade" : "boş alım")} · {customerName}" + (string.IsNullOrWhiteSpace(note) ? string.Empty : " · " + note.Trim())
                 + (string.IsNullOrWhiteSpace(performedBy) ? string.Empty : $" · {performedBy}");
             List<CylinderBulkResult> moved = await _crud.MoveCylindersAsync(
-                candidates.Select(x => x.Code), CylinderStatus.Vehicle, null, movementNote, "Sefer boş alımı", normalized, isFull, confirmedCustomerChange: true);
+                candidates.Select(x => x.Code), CylinderStatus.Vehicle, null, movementNote, isFull ? "Sefer dolu iadesi" : "Sefer boş alımı", normalized, isFull, confirmedCustomerChange: true);
             Dictionary<string, CylinderBulkResult> byCode = moved.ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
             HashSet<int> ids = candidates.Select(x => x.Cylinder.Id).ToHashSet();
             Dictionary<int, CylinderTripCylinder> rows = await db.CylinderTripCylinders
@@ -695,7 +695,9 @@ public sealed class CylinderTripService
             .ToList();
     }
 
-    public async Task<TripReconcileResult> ReturnCylindersAsync(int tripId, string? plate, IEnumerable<string?> codes, string? note, string? performedBy)
+    // isFull = true: the scanned cylinders came back full from a customer (return); otherwise their full/empty state is kept,
+    // and one taken back from a customer is empty (CylinderTracking.NextFullness) until it is filled.
+    public async Task<TripReconcileResult> ReturnCylindersAsync(int tripId, string? plate, IEnumerable<string?> codes, string? note, string? performedBy, bool? isFull = null)
     {
         string normalized = CylinderTracking.NormalizePlate(plate) ?? throw new ArgumentException("Dönüş okutması için plaka zorunludur.");
         IReadOnlyList<string> clean = CylinderTracking.CleanCodes(codes);
@@ -706,9 +708,11 @@ public sealed class CylinderTripService
 
         if (clean.Count > 0)
         {
-            string movementNote = $"Sefer #{tripId} · {normalized} · depo dönüşü" + (string.IsNullOrWhiteSpace(note) ? string.Empty : " · " + note.Trim())
+            bool full = isFull == true;
+            string movementNote = $"Sefer #{tripId} · {normalized} · depo dönüşü" + (full ? " · dolu iade" : string.Empty) + (string.IsNullOrWhiteSpace(note) ? string.Empty : " · " + note.Trim())
                 + (string.IsNullOrWhiteSpace(performedBy) ? string.Empty : $" · {performedBy}");
-            List<CylinderBulkResult> moved = await _crud.MoveCylindersAsync(clean, CylinderStatus.Warehouse, null, movementNote, "Sefer dönüşü", vehiclePlate: null, isFull: null);
+            List<CylinderBulkResult> moved = await _crud.MoveCylindersAsync(clean, CylinderStatus.Warehouse, null, movementNote, "Sefer dönüşü",
+                vehiclePlate: null, isFull: full ? true : null);
             await MarkTripRowsAsync(db, tripId, normalized, moved, row => row.ReturnedAt ??= DateTime.Now);
 
             CylinderTripVehicle? vehicle = await db.CylinderTripVehicles.FirstOrDefaultAsync(x => x.TripId == tripId && x.Plate == normalized);

@@ -111,6 +111,26 @@ public static class CylinderTracking
         _ => $"Durum {status}"
     };
 
+    public static string StatusName(int status, string? plate) =>
+        status == Vehicle && !string.IsNullOrWhiteSpace(plate) ? $"Taşınıyor ({plate.Trim()})" : StatusName(status);
+
+    // Full/empty is ours to know only while we hold the cylinder; at the customer only "Müşteride" is shown.
+    public static string ShownFullness(int status, bool? isFull) => status == Customer ? "-" : FullnessName(isFull);
+
+    // One side of a movement ("Depo", "Araç 01 ABC 123", "Müşteri"); the movement's plate belongs to its vehicle side.
+    public static string PlaceName(int status, string? plate = null) => status switch
+    {
+        Warehouse => "Depo",
+        Vehicle => string.IsNullOrWhiteSpace(plate) ? "Araç" : "Araç " + plate.Trim(),
+        Customer => "Müşteri",
+        Filling => "Dolum",
+        Service => "Servis",
+        Scrap => "Hurda",
+        _ => StatusName(status)
+    };
+
+    public static string MovementPlaces(int from, int to, string? plate) => $"{PlaceName(from, plate)} → {PlaceName(to, plate)}";
+
     // "Where is it now?" for the read-only cylinder info screen.
     public static string LocationText(int status, string? customer, string? plate, string? tripTitle) => status switch
     {

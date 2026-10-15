@@ -54,6 +54,12 @@ internal static class CylinderTrackingTests
         Assert(CylinderTracking.NextFullness(CylinderTracking.Warehouse, CylinderTracking.Vehicle, true, null) == true, "A plain transfer keeps the current fullness.");
         Assert(CylinderTracking.NextFullness(CylinderTracking.Customer, CylinderTracking.Warehouse, true, true) == true, "An explicit choice overrides the automatic rule.");
         Assert(CylinderTracking.StatusName(CylinderTracking.Vehicle) == "Taşınıyor (araçta)", "Vehicle status is shown as in transit.");
+        Assert(CylinderTracking.StatusName(CylinderTracking.Vehicle, " 01 ABC 123 ") == "Taşınıyor (01 ABC 123)", "A carried cylinder names its vehicle.");
+        Assert(CylinderTracking.StatusName(CylinderTracking.Customer, "01 ABC 123") == "Müşteride", "The plate only matters on a vehicle.");
+        Assert(CylinderTracking.ShownFullness(CylinderTracking.Customer, true) == "-", "Full/empty is not shown at the customer.");
+        Assert(CylinderTracking.ShownFullness(CylinderTracking.Warehouse, false) == "Boş", "Full/empty is shown in the depot.");
+        Assert(CylinderTracking.MovementPlaces(CylinderTracking.Vehicle, CylinderTracking.Customer, "01 ABC 123") == "Araç 01 ABC 123 → Müşteri",
+            "A delivery reads from the vehicle to the customer.");
         Assert(CylinderTracking.LocationText(CylinderTracking.Warehouse, "Eski Müşteri", null, null) == "Depoda", "A cylinder in the warehouse shows no customer.");
         Assert(CylinderTracking.LocationText(CylinderTracking.Customer, " Acme ", null, null) == "Müşteride: Acme", "A cylinder at a customer names the customer.");
         Assert(CylinderTracking.LocationText(CylinderTracking.Vehicle, null, "01 ABC 123", "Sefer 5") == "Araçta: 01 ABC 123 · sefer: Sefer 5", "A cylinder on a trip names the plate and trip.");

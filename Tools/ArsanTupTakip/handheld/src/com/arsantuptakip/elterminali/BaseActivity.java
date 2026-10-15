@@ -293,7 +293,24 @@ abstract class BaseActivity extends Activity {
         edit.setText("");
         edit.requestFocus();
         if (code.length() > 0) {
+            beep();
+            buzz();
             onCode.on(code);
+        }
+    }
+
+    private static android.media.ToneGenerator tone;
+
+    // Short beep on every read so the driver hears that the scan was taken.
+    static void beep() {
+        try {
+            if (tone == null) {
+                tone = new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 90);
+            }
+
+            tone.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 150);
+        } catch (RuntimeException ignored) {
+            // No audio device.
         }
     }
 

@@ -69,6 +69,8 @@ public final class TripActivity extends BaseActivity {
     private LinearLayout pickers;
     private LinearLayout work;
     private LinearLayout tripTiles;
+    // Pickup and unloading: the scanned cylinders came back FULL from a customer (a return).
+    private android.widget.CheckBox fullReturn;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -132,6 +134,12 @@ public final class TripActivity extends BaseActivity {
         work.addView(code);
         scannedText = text("", 16, false);
         work.addView(scannedText);
+        fullReturn = new android.widget.CheckBox(this);
+        fullReturn.setText("Dolu iade (müşteriden DOLU geri geldi)");
+        fullReturn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 17);
+        fullReturn.setTextColor(WARN);
+        fullReturn.setVisibility(View.GONE);
+        work.addView(fullReturn);
         work.addView(big(button("✅ KAYDET", v -> save(mode()))));
         result = text("", 16, false);
         work.addView(result);
@@ -317,7 +325,8 @@ public final class TripActivity extends BaseActivity {
             case PICKUP:
                 return "Müşteriyi bulun, aldığınız boş tüpleri okutun, KAYDET'e basın.";
             case RETURN:
-                return "Araçtan inen bütün tüpleri (dolu ve boş) okutun, KAYDET'e basın.";
+                return "Araçtan inen bütün tüpleri okutun, KAYDET'e basın. Müşteriden alınan boşlar depoda BOŞ görünür; "
+                    + "müşteriden DOLU gelenleri ayrıca \"Dolu iade\" işaretliyken okutup kaydedin.";
             default:
                 return "Sefer işlemi için yetkiniz yok.";
         }
@@ -336,6 +345,12 @@ public final class TripActivity extends BaseActivity {
     private void modeChanged() {
         boolean needsCustomer = mode() == DELIVER || mode() == PICKUP;
         customerBox.setVisibility(needsCustomer ? View.VISIBLE : View.GONE);
+        boolean returns = mode() == PICKUP || mode() == RETURN;
+        fullReturn.setVisibility(returns ? View.VISIBLE : View.GONE);
+        if (!returns) {
+            fullReturn.setChecked(false);
+        }
+
         for (int i = 0; i < modeButtons.size(); i++) {
             Button b = modeButtons.get(i);
             if (modeKinds.get(i) == current) {
@@ -619,6 +634,7 @@ public final class TripActivity extends BaseActivity {
         final int customerId = customer == null ? 0 : customer.optInt("id");
         final String customerName = customer == null ? null : Api.str(customer, "name");
         final String key = Api.newKey();
+        final boolean full = fullReturn.isChecked();
         call(() -> {
             switch (kind) {
                 case LOAD:
@@ -641,12 +657,13 @@ public final class TripActivity extends BaseActivity {
                         customerName + " teslim · " + codes.size() + " tüp");
                     return delivered == null ? queued(codes.size()) : new String[] { message(delivered), null };
                 case PICKUP:
-                    JSONObject picked = sendOrQueue(TripQueue.PICKUP, body("tripId", tripId, "plate", p, "customerId", customerId, "codes", codes, "note", null), key,
-                        customerName + " boş alım · " + codes.size() + " tüp");
+                    JSONObject picked = sendOrQueue(TripQueue.PICKUP,
+                        body("tripId", tripId, "plate", p, "customerId", customerId, "codes", codes, "note", null, "isFull", full), key,
+                        customerName + (full ? " dolu iade · " : " boş alım · ") + codes.size() + " tüp");
                     return picked == null ? queued(codes.size()) : new String[] { message(picked), null };
                 case RETURN:
                     ensureSent(tripId);
-                    return reconcile(Api.post("/api/sefer/donus", body("tripId", tripId, "plate", p, "codes", codes, "note", null)));
+                    return reconcile(Api.post("/api/sefer/donus", body("tripId", tripId, "plate", p, "codes", codes, "note", null, "isFull", full)));
                 default:
                     ensureSent(tripId);
                     return reconcile(Api.getObject("/api/sefer/" + tripId + "/kontrol" + (p == null ? "" : "?plaka=" + Api.q(p))));
@@ -674,6 +691,7 @@ public final class TripActivity extends BaseActivity {
             buzz();
             scanned.clear();
             showScanned();
+            fullReturn.setChecked(false);
             refreshTrips(tripId);
             next(kind, shown);
         });

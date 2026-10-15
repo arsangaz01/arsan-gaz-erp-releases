@@ -795,11 +795,12 @@ public sealed class ApiClient
 
     public Task<TodayPlansResponse> TodayPlansAsync() => GetAsync<TodayPlansResponse>("/api/sefer-plani/bugun");
 
-    public Task<string> PickupTripCylindersAsync(int tripId, string plate, int customerId, IReadOnlyList<string> codes, string? note, DateTime? offlineAt = null, string? requestKey = null) =>
-        PostMessageAsync("/api/sefer/bos-alim", new { tripId, plate, customerId, codes, note, offlineAt }, requestKey);
+    public Task<string> PickupTripCylindersAsync(int tripId, string plate, int customerId, IReadOnlyList<string> codes, string? note, DateTime? offlineAt = null,
+        string? requestKey = null, bool isFull = false) =>
+        PostMessageAsync("/api/sefer/bos-alim", new { tripId, plate, customerId, codes, note, offlineAt, isFull }, requestKey);
 
-    public Task<TripReconcileResponse> ReturnTripCylindersAsync(int tripId, string plate, IReadOnlyList<string> codes, string? note) =>
-        PostAsync<TripReconcileResponse>("/api/sefer/donus", new { tripId, plate, codes, note });
+    public Task<TripReconcileResponse> ReturnTripCylindersAsync(int tripId, string plate, IReadOnlyList<string> codes, string? note, bool isFull = false) =>
+        PostAsync<TripReconcileResponse>("/api/sefer/donus", new { tripId, plate, codes, note, isFull });
 
     public Task<TripReconcileResponse> CheckTripAsync(int tripId, string? plate) =>
         GetAsync<TripReconcileResponse>("/api/sefer/" + tripId + "/kontrol" + (string.IsNullOrEmpty(plate) ? string.Empty : "?plaka=" + Uri.EscapeDataString(plate)));

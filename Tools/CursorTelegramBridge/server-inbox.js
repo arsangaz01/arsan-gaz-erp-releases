@@ -6,8 +6,9 @@
 
 const { execFile } = require("node:child_process");
 
-// ServerCommands.IsPcOnline and inbox-sync.sh use the same 90 s window; the PC sync runs every 15 s.
-const PC_OFFLINE_AFTER_SEC = 90;
+// ServerCommands.IsPcOnline uses the same window. The PC sync runs every 15 s; under heavy load (dotnet
+// build, APK, etc.) a pass can lag a few minutes, so 90 s was too short and handed work to the server agent.
+const PC_OFFLINE_AFTER_SEC = 300;
 const DEFAULT_WAIT_MINUTES = 10;
 
 function parseList(output) {

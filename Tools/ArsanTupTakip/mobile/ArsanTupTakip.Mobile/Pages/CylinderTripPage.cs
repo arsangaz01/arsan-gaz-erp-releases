@@ -53,6 +53,9 @@ public sealed class CylinderTripPage : ContentPage
     private readonly VerticalStackLayout _route = new() { Spacing = 10 };
     private readonly Label _routeInfo = Ui.Note(string.Empty);
     private readonly Label _groupsTotal = Ui.Note(string.Empty);
+    // Pickup and unloading: cylinders that came back FULL from a customer (a return) instead of empty.
+    private readonly Switch _fullReturn = new() { VerticalOptions = LayoutOptions.Center };
+    private readonly HorizontalStackLayout _fullReturnRow;
     private readonly Label _customerLabel = new() { FontSize = 18, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap };
     private CustomerItem? _selectedCustomer;
     private readonly Border _customerSection;
@@ -156,6 +159,16 @@ public sealed class CylinderTripPage : ContentPage
         _startBig.FontSize = 20;
         _startBig.MinimumHeightRequest = 72;
         _startBig.IsVisible = false;
+        _fullReturnRow = new HorizontalStackLayout
+        {
+            Spacing = 8,
+            IsVisible = false,
+            Children =
+            {
+                _fullReturn,
+                new Label { Text = "↩️ Dolu iade (müşteriden DOLU geri geldi)", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Ui.Warn, VerticalOptions = LayoutOptions.Center }
+            }
+        };
         Button save = Ui.Primary("✅  KAYDET", async (_, _) => await SubmitAsync());
         save.FontSize = 18;
         save.MinimumHeightRequest = 60;
@@ -168,7 +181,7 @@ public sealed class CylinderTripPage : ContentPage
             {
                 Ui.Card(new VerticalStackLayout { Spacing = 10, Children = { _mode, steps, _stepHint } }),
                 _customerSection,
-                Ui.Card(new VerticalStackLayout { Spacing = 10, Children = { _scannedText, _code, save } }),
+                Ui.Card(new VerticalStackLayout { Spacing = 10, Children = { _scannedText, _code, _fullReturnRow, save } }),
                 _busy,
                 _resultCard,
                 Ui.Section(
@@ -267,6 +280,12 @@ public sealed class CylinderTripPage : ContentPage
     private void ApplyMode()
     {
         _customerSection.IsVisible = SelectedMode is DeliverMode or PickupMode;
+        _fullReturnRow.IsVisible = SelectedMode is PickupMode or ReturnMode;
+        if (!_fullReturnRow.IsVisible)
+        {
+            _fullReturn.IsToggled = false;
+        }
+
         for (int i = 0; i < _stepButtons.Count; i++)
         {
             Ui.Highlight(_stepButtons[i], i == _mode.SelectedIndex);
@@ -277,7 +296,8 @@ public sealed class CylinderTripPage : ContentPage
             LoadMode => "👉 Düğmeye dokunun, kamera açılır: araca koyduğunuz tüpleri okutun, sonra KAYDET'e basın.",
             DeliverMode => "👉 Düğmeye dokunun: müşteriyi seçin, kamera açılır, verdiğiniz tüpleri okutun, KAYDET'e basın.",
             PickupMode => "👉 Düğmeye dokunun: müşteriyi seçin, kamera açılır, aldığınız boşları okutun, KAYDET'e basın.",
-            ReturnMode => "👉 Düğmeye dokunun, kamera açılır: araçtan inen bütün tüpleri (dolu ve boş) okutun, KAYDET'e basın.",
+            ReturnMode => "👉 Düğmeye dokunun, kamera açılır: araçtan inen bütün tüpleri okutun, KAYDET'e basın. Müşteriden alınan boşlar depoda BOŞ görünür; "
+                + "müşteriden DOLU geri gelenleri ayrıca \"Dolu iade\" açıkken okutup kaydedin.",
             _ => "👉 Araçtaki tüpleri okutun; yük listesiyle karşılaştırılır."
         };
     }
@@ -814,8 +834,9 @@ public sealed class CylinderTripPage : ContentPage
                     }
 
                     CustomerItem pickupFrom = SelectedCustomer;
-                    message = await SendOrQueueAsync(new PendingTripOp(OfflineTripOps.Pickup, tripId, plate, pickupFrom.Id, pickupFrom.Name, codes, DateTime.Now, key),
-                        () => ApiClient.Instance.PickupTripCylindersAsync(tripId, plate!, pickupFrom.Id, codes, null, requestKey: key));
+                    bool fullPickup = _fullReturn.IsToggled;
+                    message = await SendOrQueueAsync(new PendingTripOp(OfflineTripOps.Pickup, tripId, plate, pickupFrom.Id, pickupFrom.Name, codes, DateTime.Now, key, fullPickup),
+                        () => ApiClient.Instance.PickupTripCylindersAsync(tripId, plate!, pickupFrom.Id, codes, null, requestKey: key, isFull: fullPickup));
                     break;
                 case ReturnMode:
                     if (!await TripOpsSentAsync(tripId))
@@ -823,7 +844,7 @@ public sealed class CylinderTripPage : ContentPage
                         return;
                     }
 
-                    reconcile = await ApiClient.Instance.ReturnTripCylindersAsync(SelectedTrip.Id, plate!, _scanned, null);
+                    reconcile = await ApiClient.Instance.ReturnTripCylindersAsync(SelectedTrip.Id, plate!, _scanned, null, _fullReturn.IsToggled);
                     message = reconcile.Message;
                     break;
                 default:
@@ -859,6 +880,7 @@ public sealed class CylinderTripPage : ContentPage
 
             _scanned.Clear();
             RefreshScanned();
+            _fullReturn.IsToggled = false;
             await RefreshTripsAsync(tripId);
             await RefreshRouteAsync();
             _busy.IsVisible = false;

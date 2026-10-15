@@ -13,8 +13,8 @@ internal sealed record TripStopMoveRequest(int TripId, int StopId, int Direction
 internal sealed record TripStopRequest(int TripId, int StopId);
 internal sealed record TripStopDoneRequest(int TripId, int StopId, bool Done, string? Note);
 internal sealed record CustomerLocationRequest(double Latitude, double Longitude, double? Accuracy);
-internal sealed record TripPickupRequest(int TripId, string? Plate, int? CustomerId, List<string?>? Codes, string? Note, DateTime? OfflineAt = null);
-internal sealed record TripReturnRequest(int TripId, string? Plate, List<string?>? Codes, string? Note);
+internal sealed record TripPickupRequest(int TripId, string? Plate, int? CustomerId, List<string?>? Codes, string? Note, DateTime? OfflineAt = null, bool? IsFull = null);
+internal sealed record TripReturnRequest(int TripId, string? Plate, List<string?>? Codes, string? Note, bool? IsFull = null);
 internal sealed record TripCloseRequest(int TripId);
 internal sealed record TripReasonRequest(int TripId, List<int>? CylinderIds, string? Reason, string? Note, int? CustomerId = null);
 
@@ -159,13 +159,13 @@ internal static class CylinderTripEndpoints
             {
                 TripPickupResult result = await new CylinderTripService().PickupCylindersAsync(
                     request.TripId, DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate), request.CustomerId, request.Codes ?? [],
-                    request.Note, Source(context, request.OfflineAt));
+                    request.Note, Source(context, request.OfflineAt), request.IsFull == true);
                 int ok = result.Results.Count(r => r.Ok);
                 string details = string.Join("\n", result.Results.Where(r => !r.Ok || r.Message.Contains('⚠')).Select(r => r.Ok ? r.Message : $"{r.Code}: {r.Message}"));
                 string completed = ok > 0 ? await CompleteRequestsAsync(request.CustomerId!.Value, CustomerRequests.Pickup, request.TripId) : string.Empty;
                 return Results.Ok(new
                 {
-                    message = $"{ok}/{result.Results.Count} boş tüp araca alındı." + (details.Length > 0 ? "\n" + details : string.Empty) + completed + "\n" + result.Balance.Text,
+                    message = $"{ok}/{result.Results.Count} " + (request.IsFull == true ? "dolu iade tüp" : "boş tüp") + " araca alındı." + (details.Length > 0 ? "\n" + details : string.Empty) + completed + "\n" + result.Balance.Text,
                     balance = result.Balance
                 });
             }
@@ -180,7 +180,7 @@ internal static class CylinderTripEndpoints
             try
             {
                 TripReconcileResult reconcile = await new CylinderTripService().ReturnCylindersAsync(
-                    request.TripId, DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate), request.Codes ?? [], request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                    request.TripId, DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate), request.Codes ?? [], request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")", request.IsFull);
                 return Results.Ok(TripReconcileDto(reconcile));
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)

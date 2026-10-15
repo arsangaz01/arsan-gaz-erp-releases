@@ -325,7 +325,12 @@ public sealed class ScanPage : ContentPage
         }
     }
 
-    // A rejected scan (e.g. a barcode that is not in the depot stock) vibrates long so it is noticed without looking.
+#if ANDROID
+    private static Android.Media.ToneGenerator? _tone;
+#endif
+
+    // Every read beeps and vibrates; a rejected scan (e.g. a barcode that is not in the depot stock) buzzes long with an
+    // error tone so it is noticed without looking.
     private static void Buzz(bool error = false)
     {
         try
@@ -335,6 +340,17 @@ public sealed class ScanPage : ContentPage
         catch (Exception exception) when (exception is FeatureNotSupportedException or PermissionException)
         {
         }
+
+#if ANDROID
+        try
+        {
+            _tone ??= new Android.Media.ToneGenerator(Android.Media.Stream.Notification, 90);
+            _tone.StartTone(error ? Android.Media.Tone.SupError : Android.Media.Tone.PropBeep, error ? 400 : 150);
+        }
+        catch (Java.Lang.RuntimeException)
+        {
+        }
+#endif
     }
 
     private async Task CloseAsync(IReadOnlyList<string>? value)

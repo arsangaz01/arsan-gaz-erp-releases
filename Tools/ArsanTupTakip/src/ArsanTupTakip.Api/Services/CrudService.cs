@@ -279,6 +279,7 @@ public sealed class CrudService
         }
 
         CylinderStatus old = c.Status;
+        string? oldPlate = c.VehiclePlate;
         int? previousCustomerId = c.CurrentCustomerId;
         c.Status = target;
         c.CurrentCustomerId = movementCustomerId;
@@ -294,7 +295,7 @@ public sealed class CrudService
             MovementType = movementType,
             Description = note,
             MovementDate = DateTime.Now,
-            VehiclePlate = plate,
+            VehiclePlate = plate ?? (old == CylinderStatus.Vehicle ? oldPlate : null),
             IsFull = c.IsFull
         });
         try
@@ -471,8 +472,8 @@ public sealed class CrudService
         List<Cylinder> cylinders = await query.OrderBy(x => x.LastMovementAt).Take(Math.Clamp(take, 1, 1000)).ToListAsync();
         DateTime today = DateTime.Today;
         return cylinders.Select(x => new CylinderListItem(
-            x.SerialNumber, x.Barcode, x.GasType, $"{x.Capacity.ToString("0.##", Turkish)} {x.CapacityUnit}", (int)x.Status, CylinderTracking.StatusName((int)x.Status),
-            CylinderTracking.FullnessName(x.IsFull), x.CurrentCustomer?.CompanyName, x.VehiclePlate, CylinderTracking.DaysSince(x.LastMovementAt, today),
+            x.SerialNumber, x.Barcode, x.GasType, $"{x.Capacity.ToString("0.##", Turkish)} {x.CapacityUnit}", (int)x.Status, CylinderTracking.StatusName((int)x.Status, x.VehiclePlate),
+            CylinderTracking.ShownFullness((int)x.Status, x.IsFull), x.CurrentCustomer?.CompanyName, x.VehiclePlate, CylinderTracking.DaysSince(x.LastMovementAt, today),
             x.TestDueDate?.ToString("dd.MM.yyyy", Turkish))).ToList();
     }
 

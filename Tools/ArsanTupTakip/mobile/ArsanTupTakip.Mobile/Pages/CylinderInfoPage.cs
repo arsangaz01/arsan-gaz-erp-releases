@@ -245,13 +245,17 @@ public sealed class CylinderInfoPage : ContentPage
             Children =
             {
                 Row(Icons.Science, "Gaz / kapasite", $"{info.GasType} · {info.Capacity}", Ui.Accent),
-                Row(info.IsFull == true ? Icons.Check : Icons.Inventory, "Dolu / boş", info.Fullness, fullnessColor),
                 Row(info.Status == 1 ? Icons.Warehouse : info.Status == 2 ? Icons.Shipping : Icons.Place, "Şu an nerede",
                     info.Location + (info.DaysThere is int days && info.Status == 3 ? $" ({days} gündür)" : string.Empty), statusColor),
                 Row(Icons.History, "Son hareket",
                     info.LastMovementDate is null ? "Hareket kaydı yok" : info.LastMovementDate + (info.LastMovementType is null ? string.Empty : "\n" + info.LastMovementType), Ui.Accent)
             }
         };
+        if (info.Fullness is { Length: > 0 } fullness && fullness != "-")
+        {
+            rows.Children.Insert(1, Row(info.IsFull == true ? Icons.Check : Icons.Inventory, "Dolu / boş", fullness, fullnessColor));
+        }
+
         if (info.TestDue is not null)
         {
             rows.Children.Add(Row(Icons.Event, "Test / son kullanma tarihi", info.TestDue + (info.TestOverdue ? " · süresi geçmiş!" : string.Empty),

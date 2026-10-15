@@ -43,11 +43,13 @@ public sealed class TripCylindersPage : ContentPage
                 Spacing = 12,
                 Children =
                 {
-                    Ui.TileGrid(
-                    [
-                        Ui.StatTile(icon, total.ToString(), title, color, plate is null ? load.Title : $"{load.Title} · {plate}"),
-                        Ui.StatTile("🟢", $"{full} / {empty}", "Dolu / boş", Ui.Accent)
-                    ]),
+                    state == Delivered
+                        ? (View)Ui.StatTile(icon, total.ToString(), title, color, load.Title)
+                        : Ui.TileGrid(
+                        [
+                            Ui.StatTile(icon, total.ToString(), title, color, plate is null ? load.Title : $"{load.Title} · {plate}"),
+                            Ui.StatTile("🟢", $"{full} / {empty}", "Dolu / boş", Ui.Accent)
+                        ]),
                     CylinderGroupPage.GroupList(Navigation, groups, "Bu listede tüp yok.", title)
                 }
             };

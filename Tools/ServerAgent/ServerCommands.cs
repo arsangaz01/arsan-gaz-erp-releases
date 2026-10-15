@@ -71,7 +71,9 @@ internal sealed class ServerCommands(
                 && DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTimeOffset updated))
             {
                 lastSeen = updated;
-                return DateTimeOffset.UtcNow - updated < TimeSpan.FromSeconds(90);
+                // Same window as CursorTelegramBridge/server-inbox.js PC_OFFLINE_AFTER_SEC (was 90 s; raised so a
+                // busy PC sync lag does not look like the machine is off).
+                return DateTimeOffset.UtcNow - updated < TimeSpan.FromSeconds(300);
             }
         }
         catch (Exception exception) when (exception is IOException or JsonException or InvalidOperationException)
