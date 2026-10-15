@@ -257,7 +257,7 @@ public sealed record StockCountInfo(
 public sealed record StockCountListInfo(int Id, string Location, string Started, string StartedBy, string? Closed, bool Open,
     int Expected, int Counted, int Matched, int Missing, int Extra, int Unknown);
 
-public sealed record StockCountActiveResponse(StockCountInfo? Count);
+public sealed record StockCountActiveResponse(StockCountInfo? Count, List<StockCountInfo>? Counts = null);
 
 public sealed record StockCountResponse(string Message, StockCountInfo? Count);
 
@@ -716,10 +716,15 @@ public sealed class ApiClient
     public Task<CylinderAuditResponse> AuditCustomerAsync(int customerId, IReadOnlyList<string> codes, string? note) =>
         PostAsync<CylinderAuditResponse>("/api/tup/sayim", new { customerId, codes, note });
 
-    public Task<StockCountActiveResponse> ActiveStockCountAsync() => GetAsync<StockCountActiveResponse>("/api/depo-sayim/aktif");
+    public const string StockCountFull = "Ana depo · Dolu";
+    public const string StockCountEmpty = "Ana depo · Boş";
 
-    public Task<StockCountResponse> StartStockCountAsync(string? note) =>
-        PostAsync<StockCountResponse>("/api/depo-sayim/baslat", new { note });
+    public Task<StockCountActiveResponse> ActiveStockCountAsync(string? location = null) =>
+        GetAsync<StockCountActiveResponse>("/api/depo-sayim/aktif"
+            + (string.IsNullOrWhiteSpace(location) ? string.Empty : "?lokasyon=" + Uri.EscapeDataString(location)));
+
+    public Task<StockCountResponse> StartStockCountAsync(string? note, string? location = null) =>
+        PostAsync<StockCountResponse>("/api/depo-sayim/baslat", new { note, location });
 
     public Task<StockCountScanResponse> ScanStockCountAsync(int id, string code, DateTime? at = null) =>
         PostAsync<StockCountScanResponse>($"/api/depo-sayim/{id}/okut", new { code, at });

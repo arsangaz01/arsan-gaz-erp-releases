@@ -21,6 +21,9 @@ public sealed class CustomerStockPage : ContentPage
     private CustomerStockResponse? _stock;
     private string? _picked;
     private readonly bool _pickOnOpen;
+    // Loaded can fire again on Android when returning from the pick page; without these the pick opens in a loop.
+    private bool _openedPick;
+    private bool _picking;
 
     public CustomerStockPage(CustomerItem? customer = null)
     {
@@ -58,8 +61,9 @@ public sealed class CustomerStockPage : ContentPage
         {
             Loaded += async (_, _) =>
             {
-                if (_pickOnOpen && _stock is null)
+                if (_pickOnOpen && _stock is null && !_openedPick)
                 {
+                    _openedPick = true;
                     await PickCustomerAsync();
                 }
             };
@@ -68,15 +72,34 @@ public sealed class CustomerStockPage : ContentPage
 
     private async Task PickCustomerAsync()
     {
-        CustomerItem? picked = await CustomerPickPage.OpenAsync(Navigation, "Müşteri stoku");
-        if (picked is null)
+        if (_picking)
         {
             return;
         }
 
-        Title = picked.Name;
-        _customerInfo.Text = $"{picked.Name}\n{picked.Subtitle}";
-        await LoadAsync(picked.Id);
+        _picking = true;
+        try
+        {
+            CustomerItem? picked = await CustomerPickPage.OpenAsync(Navigation, "Müşteri stoku");
+            if (picked is null)
+            {
+                // Back on the first pick leaves the whole screen, so the user is not stuck bouncing between pages.
+                if (_stock is null && Navigation.NavigationStack.Count > 1 && Navigation.NavigationStack[^1] == this)
+                {
+                    await Navigation.PopAsync();
+                }
+
+                return;
+            }
+
+            Title = picked.Name;
+            _customerInfo.Text = $"{picked.Name}\n{picked.Subtitle}";
+            await LoadAsync(picked.Id);
+        }
+        finally
+        {
+            _picking = false;
+        }
     }
 
     private Task LoadAsync(int customerId) => Ui.RunAsync(this, _busy, async () =>

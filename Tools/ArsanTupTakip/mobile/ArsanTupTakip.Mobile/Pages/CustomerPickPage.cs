@@ -12,6 +12,7 @@ public sealed class CustomerPickPage : ContentPage
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
 
     private CustomerItem? _picked;
+    private bool _done;
 
     private CustomerPickPage(string title, string? query)
     {
@@ -64,7 +65,12 @@ public sealed class CustomerPickPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-        _result.TrySetResult(_picked);
+        // Completes once: a pick sets the result before PopAsync, so back / swipe does not race a second completion.
+        if (!_done)
+        {
+            _done = true;
+            _result.TrySetResult(_picked);
+        }
     }
 
     private async Task SearchAsync(bool live)
@@ -167,13 +173,15 @@ public sealed class CustomerPickPage : ContentPage
         TapGestureRecognizer tap = new();
         tap.Tapped += async (_, _) =>
         {
-            if (_picked is not null)
+            if (_done)
             {
                 return;
             }
 
+            _done = true;
             _picked = customer;
             card.BackgroundColor = Ui.Accent.WithAlpha(0.15f);
+            _result.TrySetResult(customer);
             await Navigation.PopAsync();
         };
         card.GestureRecognizers.Add(tap);

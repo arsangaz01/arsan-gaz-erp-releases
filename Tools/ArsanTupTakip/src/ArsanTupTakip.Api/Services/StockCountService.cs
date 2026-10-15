@@ -55,9 +55,52 @@ public sealed record StockCountScanResult(string Outcome, string Message, string
 public static class StockCounting
 {
     public const string MainDepot = "Ana depo";
+    // Separate open counts (one open count per location): full and empty cylinders in the warehouse.
+    public const string FullDepot = "Ana depo · Dolu";
+    public const string EmptyDepot = "Ana depo · Boş";
     public const int MaxItems = 20000;
     public const int MaxCodeLength = 200;
     public const int MaxNoteLength = 500;
+
+    public static IReadOnlyList<string> KnownLocations { get; } = [FullDepot, EmptyDepot, MainDepot];
+
+    // Which warehouse cylinders belong in this count's "kayıtta depoda" list; null = every warehouse cylinder.
+    public static bool? ExpectedFullness(string? location) => location switch
+    {
+        FullDepot => true,
+        EmptyDepot => false,
+        _ => null
+    };
+
+    public static string NormalizeLocation(string? location)
+    {
+        string text = (location ?? string.Empty).Trim();
+        if (text.Length == 0)
+        {
+            return MainDepot;
+        }
+
+        foreach (string known in KnownLocations)
+        {
+            if (string.Equals(text, known, StringComparison.OrdinalIgnoreCase))
+            {
+                return known;
+            }
+        }
+
+        string lower = text.ToLowerInvariant();
+        if (lower is "dolu" or "full" || lower.Contains("dolu", StringComparison.Ordinal))
+        {
+            return FullDepot;
+        }
+
+        if (lower is "bos" or "boş" or "empty" || lower.Contains("boş", StringComparison.Ordinal) || lower.Contains("bos", StringComparison.Ordinal))
+        {
+            return EmptyDepot;
+        }
+
+        return text.Length > 80 ? text[..80] : text;
+    }
 
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
     private static readonly StringComparer TurkishOrder = StringComparer.Create(Turkish, true);
@@ -123,28 +166,45 @@ public sealed class StockCountService
 
     public async Task<StockCountReport?> ActiveAsync(string location = StockCounting.MainDepot)
     {
+        string normalized = StockCounting.NormalizeLocation(location);
         await using TupTakipDbContext db = new();
-        int? id = await db.StockCounts.AsNoTracking().Where(x => x.Location == location && x.ClosedAt == null)
+        int? id = await db.StockCounts.AsNoTracking().Where(x => x.Location == normalized && x.ClosedAt == null)
             .OrderByDescending(x => x.Id).Select(x => (int?)x.Id).FirstOrDefaultAsync();
         return id is int open ? await ReportAsync(db, open) : null;
     }
 
-    public async Task<(StockCountReport Report, bool Existing)> StartAsync(string startedBy, string? note, string location = StockCounting.MainDepot)
+    // Every open depot count (full, empty, and any legacy "Ana depo"), newest first.
+    public async Task<List<StockCountReport>> ActiveAllAsync()
+    {
+        await using TupTakipDbContext db = new();
+        List<int> ids = await db.StockCounts.AsNoTracking().Where(x => x.ClosedAt == null)
+            .OrderByDescending(x => x.Id).Select(x => x.Id).ToListAsync();
+        List<StockCountReport> reports = [];
+        foreach (int id in ids)
+        {
+            reports.Add(await ReportAsync(db, id));
+        }
+
+        return reports;
+    }
+
+    public async Task<(StockCountReport Report, bool Existing)> StartAsync(string startedBy, string? note, string? location = null)
     {
         if ((note ?? string.Empty).Trim().Length > StockCounting.MaxNoteLength)
         {
             throw new ArgumentException($"Not en fazla {StockCounting.MaxNoteLength} karakter olabilir.");
         }
 
+        string normalized = StockCounting.NormalizeLocation(location);
         await using TupTakipDbContext db = new();
-        int? open = await db.StockCounts.AsNoTracking().Where(x => x.Location == location && x.ClosedAt == null)
+        int? open = await db.StockCounts.AsNoTracking().Where(x => x.Location == normalized && x.ClosedAt == null)
             .Select(x => (int?)x.Id).FirstOrDefaultAsync();
         if (open is int existing)
         {
             return (await ReportAsync(db, existing), true);
         }
 
-        StockCount count = new() { Location = location, StartedAt = DateTime.Now, StartedBy = startedBy, Note = VehicleTracking.Clean(note) };
+        StockCount count = new() { Location = normalized, StartedAt = DateTime.Now, StartedBy = startedBy, Note = VehicleTracking.Clean(note) };
         db.StockCounts.Add(count);
         try
         {
@@ -154,7 +214,7 @@ public sealed class StockCountService
         {
             // Another phone opened the count at the same moment (one open count per location).
             await using TupTakipDbContext again = new();
-            int other = await again.StockCounts.AsNoTracking().Where(x => x.Location == location && x.ClosedAt == null).Select(x => x.Id).FirstAsync();
+            int other = await again.StockCounts.AsNoTracking().Where(x => x.Location == normalized && x.ClosedAt == null).Select(x => x.Id).FirstAsync();
             return (await ReportAsync(again, other), true);
         }
 
@@ -320,6 +380,10 @@ public sealed class StockCountService
         if (count.ClosedAt is null)
         {
             expectedQuery = db.Cylinders.Where(x => x.IsActive && x.Status == CylinderStatus.Warehouse);
+            if (StockCounting.ExpectedFullness(count.Location) is bool wanted)
+            {
+                expectedQuery = expectedQuery.Where(x => x.IsFull == wanted);
+            }
         }
         else
         {
@@ -333,6 +397,7 @@ public sealed class StockCountService
         var scannedRows = await db.Cylinders.AsNoTracking().Where(x => scannedIds.Contains(x.Id))
             .Select(x => new { x.Id, x.SerialNumber, x.Barcode, x.GasType, x.Capacity, x.CapacityUnit, x.IsFull }).ToListAsync();
         var byId = scannedRows.ToDictionary(x => x.Id);
+        bool? wantedFull = StockCounting.ExpectedFullness(count.Location);
 
         List<CountCylinder> expected = expectedRows
             .Select(x => new CountCylinder(x.Id, x.SerialNumber, x.Barcode, x.GasType, CustomerStock.CapacityText(x.Capacity, x.CapacityUnit), x.IsFull,
@@ -349,7 +414,10 @@ public sealed class StockCountService
 
             CountCylinder cylinder = new(c.Id, c.SerialNumber, c.Barcode, c.GasType, CustomerStock.CapacityText(c.Capacity, c.CapacityUnit), c.IsFull,
                 item.PlaceAtScan ?? CylinderTracking.StatusName(item.StatusAtScan ?? 0), item.ScannedAt, item.ScannedBy);
-            scanned.Add((cylinder, item.StatusAtScan == CylinderTracking.Warehouse));
+            // Matched only when the cylinder was in the warehouse and fits this count's full/empty filter.
+            bool inScope = item.StatusAtScan == CylinderTracking.Warehouse
+                && (wantedFull is null || c.IsFull == wantedFull);
+            scanned.Add((cylinder, inScope));
             recent.Add(cylinder);
         }
 

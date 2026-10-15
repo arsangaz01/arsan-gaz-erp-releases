@@ -24,10 +24,14 @@ public sealed class StockCountPage : ContentPage
     private readonly VerticalStackLayout _groups = new() { Spacing = 8 };
     private readonly Label _recent = Ui.Note(string.Empty);
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
+    private readonly Label _openLine = Ui.Note(string.Empty);
+    private readonly Button _fullButton;
+    private readonly Button _emptyButton;
     private readonly View _startSection;
     private readonly View _scanSection;
     private readonly View _resultSection;
     private StockCountInfo? _count;
+    private List<StockCountInfo> _open = [];
     private string? _lastCode;
     private bool _sending;
 
@@ -39,14 +43,19 @@ public sealed class StockCountPage : ContentPage
         _code.Completed += async (_, _) => await ManualAsync();
         _pendingButton = Ui.Secondary("🔄 Bekleyenleri sunucuya gönder", async (_, _) => await FlushAsync(quiet: false));
 
+        _fullButton = Ui.Primary("🟢  Dolu sayımı başlat", async (_, _) => await StartAsync(ApiClient.StockCountFull));
+        _emptyButton = Ui.Primary("⚪  Boş sayımı başlat", async (_, _) => await StartAsync(ApiClient.StockCountEmpty));
         _startSection = Ui.Section("Sayım",
-            Ui.Note("Açık sayım yok. \"Sayımı başlat\"a basınca kayıt açılır ve okutma ekranı hemen gelir. Her okutulan tüp gaz türü ve boyutuna göre 1 sayılır; aynı sayıma birden çok telefon okutabilir."),
+            Ui.Note("Dolu ve boş tüpler ayrı sayılır. Her düğme kendi kaydını açar (veya açıksa ona devam eder) ve okutma ekranı hemen gelir. Aynı sayıma birden çok telefon okutabilir."),
             _note,
-            Ui.Primary("▶ Sayımı başlat", async (_, _) => await StartAsync()));
+            _openLine,
+            _fullButton,
+            _emptyButton);
         _scanSection = Ui.Section("Okutma",
             _status,
-            Ui.Note("\"Kayıtta depoda\" sayıları sefer, teslim, yükleme ve diğer stok hareketleriyle anlık güncellenir (Yenile veya her okutmada)."),
-            Ui.Primary("▶ Sayımı başlat", async (_, _) => await CameraAsync()),
+            Ui.Note("\"Kayıtta depoda\" yalnızca bu sayımın türüne (dolu veya boş) göre hesaplanır; sefer ve stok hareketleriyle anlık güncellenir."),
+            Ui.Primary("▶ Okutmaya devam", async (_, _) => await CameraAsync()),
+            Ui.Secondary("↩ Diğer sayıma geç", async (_, _) => { Show(null); await LoadAsync(); }),
             _code,
             Ui.ActionRow(
                 Ui.Secondary("Son okutmayı geri al", async (_, _) => await UndoAsync()),
@@ -95,7 +104,22 @@ public sealed class StockCountPage : ContentPage
         _busy.IsRunning = _busy.IsVisible = true;
         try
         {
-            Show((await ApiClient.Instance.ActiveStockCountAsync()).Count);
+            StockCountActiveResponse active = await ApiClient.Instance.ActiveStockCountAsync();
+            _open = active.Counts ?? (active.Count is null ? [] : [active.Count]);
+            RefreshStartButtons();
+            StockCountInfo? keep = _count is StockCountInfo current
+                ? _open.FirstOrDefault(c => c.Id == current.Id)
+                : Saved() is StockCountInfo saved ? _open.FirstOrDefault(c => c.Id == saved.Id) : null;
+            keep ??= _open.Count == 1 ? _open[0] : null;
+            if (keep is not null)
+            {
+                Show(keep);
+            }
+            else if (_count is not null)
+            {
+                Show(null);
+            }
+
             if (_count is not null && OfflineCountScans.PendingFor(_count.Id) > 0)
             {
                 await FlushAsync(quiet: true);
@@ -105,6 +129,7 @@ public sealed class StockCountPage : ContentPage
         {
             // Keep counting on the phone with the last known open count; the scans are sent later.
             Show(Saved());
+            RefreshStartButtons();
             SetLast(_count is null
                 ? "📴 Sunucuya ulaşılamıyor. Sayım başlatmak için bağlantı gerekir."
                 : "📴 Sunucuya ulaşılamıyor; okutmalar telefonda biriktirilir, bağlantı gelince Senkronize edin.", Warn);
@@ -122,19 +147,51 @@ public sealed class StockCountPage : ContentPage
         }
     }
 
-    private async Task StartAsync()
+    private async Task StartAsync(string location)
     {
         await Ui.RunAsync(this, _busy, async () =>
         {
-            StockCountResponse response = await ApiClient.Instance.StartStockCountAsync(_note.Text);
+            StockCountResponse response = await ApiClient.Instance.StartStockCountAsync(_note.Text, location);
             _note.Text = string.Empty;
+            if (response.Count is StockCountInfo started)
+            {
+                _open = [.. _open.Where(c => c.Id != started.Id), started];
+            }
+
             Show(response.Count);
+            RefreshStartButtons();
             SetLast(response.Message, Good);
         });
         if (_count is not null)
         {
             await CameraAsync();
         }
+    }
+
+    private void RefreshStartButtons()
+    {
+        StockCountInfo? full = _open.FirstOrDefault(c => c.Location == ApiClient.StockCountFull);
+        StockCountInfo? empty = _open.FirstOrDefault(c => c.Location == ApiClient.StockCountEmpty);
+        StockCountInfo? legacy = _open.FirstOrDefault(c => c.Location is not (ApiClient.StockCountFull or ApiClient.StockCountEmpty));
+        _fullButton.Text = full is null ? "🟢  Dolu sayımı başlat" : $"🟢  Dolu sayımına devam (#{full.Id})";
+        _emptyButton.Text = empty is null ? "⚪  Boş sayımı başlat" : $"⚪  Boş sayımına devam (#{empty.Id})";
+        List<string> lines = [];
+        if (full is not null)
+        {
+            lines.Add($"Açık dolu sayımı #{full.Id}: {full.Counted} okutulan / kayıtta {full.Expected}");
+        }
+
+        if (empty is not null)
+        {
+            lines.Add($"Açık boş sayımı #{empty.Id}: {empty.Counted} okutulan / kayıtta {empty.Expected}");
+        }
+
+        if (legacy is not null)
+        {
+            lines.Add($"Eski genel sayım #{legacy.Id} ({legacy.Location}) hâlâ açık; bitirmek için panelden veya bu ekrandan devam edin.");
+        }
+
+        _openLine.Text = lines.Count == 0 ? "Açık sayım yok. Dolu ve boş için ayrı ayrı başlatın." : string.Join("\n", lines);
     }
 
     private async Task CameraAsync()

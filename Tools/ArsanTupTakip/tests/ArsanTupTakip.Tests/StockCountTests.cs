@@ -9,6 +9,16 @@ internal static class StockCountTests
         ComparesDepotCountByGasAndSize();
         NamesPlaces();
         ExportsExcelAndPdf();
+        SeparatesFullAndEmptyLocations();
+    }
+
+    private static void SeparatesFullAndEmptyLocations()
+    {
+        Assert(StockCounting.NormalizeLocation("dolu") == StockCounting.FullDepot, "dolu → Ana depo · Dolu");
+        Assert(StockCounting.NormalizeLocation("boş") == StockCounting.EmptyDepot, "boş → Ana depo · Boş");
+        Assert(StockCounting.ExpectedFullness(StockCounting.FullDepot) == true, "Full count expects full cylinders.");
+        Assert(StockCounting.ExpectedFullness(StockCounting.EmptyDepot) == false, "Empty count expects empty cylinders.");
+        Assert(StockCounting.ExpectedFullness(StockCounting.MainDepot) is null, "Legacy main depot expects every warehouse cylinder.");
     }
 
     private static void ExportsExcelAndPdf()

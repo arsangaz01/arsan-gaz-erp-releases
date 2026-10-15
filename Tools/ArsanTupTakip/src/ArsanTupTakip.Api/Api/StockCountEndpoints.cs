@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ArsanTupTakip.Api;
 
-internal sealed record StockCountStartRequest(string? Note);
+internal sealed record StockCountStartRequest(string? Note, string? Location = null);
 internal sealed record StockCountScanRequest(string? Code, DateTime? At = null);
 
 // Depot count: the phone scans, the panel shows the "Sayım Raporları" tab.
@@ -15,18 +15,36 @@ internal static class StockCountEndpoints
 
     public static void MapMobile(WebApplication app)
     {
-        app.MapGet("/api/depo-sayim/aktif", async () =>
+        app.MapGet("/api/depo-sayim/aktif", async (string? lokasyon) =>
         {
-            StockCountReport? report = await new StockCountService().ActiveAsync();
-            return Results.Ok(new { count = report is null ? null : Json(report, lists: false) });
+            StockCountService service = new();
+            if (!string.IsNullOrWhiteSpace(lokasyon))
+            {
+                StockCountReport? one = await service.ActiveAsync(lokasyon);
+                return Results.Ok(new
+                {
+                    count = one is null ? null : Json(one, lists: false),
+                    counts = one is null ? Array.Empty<object>() : new[] { Json(one, lists: false) }
+                });
+            }
+
+            List<StockCountReport> open = await service.ActiveAllAsync();
+            return Results.Ok(new
+            {
+                count = open.Count == 0 ? null : Json(open[0], lists: false),
+                counts = open.Select(r => Json(r, lists: false))
+            });
         }).Requires(Perm.StockCount);
 
         app.MapPost("/api/depo-sayim/baslat", (StockCountStartRequest request, HttpContext context) => Run(async () =>
         {
-            (StockCountReport report, bool existing) = await new StockCountService().StartAsync(MobileEndpoints.DeviceName(context), request.Note);
+            (StockCountReport report, bool existing) = await new StockCountService().StartAsync(
+                MobileEndpoints.DeviceName(context), request.Note, request.Location);
             return new
             {
-                message = existing ? $"Açık sayıma devam ediliyor ({report.StartedBy}, {Time(report.StartedAt)})." : "Depo sayımı başlatıldı.",
+                message = existing
+                    ? $"Açık sayıma devam ediliyor ({report.Location} · {report.StartedBy}, {Time(report.StartedAt)})."
+                    : $"{report.Location} sayımı başlatıldı.",
                 count = Json(report, lists: false)
             };
         })).Requires(Perm.StockCount);
