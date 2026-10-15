@@ -885,7 +885,7 @@ $("cl-stop").addEventListener("click", async () => {
 });
 
 function renderMovements(table, rows, empty) {
-  const head = el("tr", {}, ...["Tarih", "Tüp", "Hareket", "Durum", "Müşteri / Plaka", "Dolu/Boş", "Not"].map((h) => el("th", {}, h)));
+  const head = el("tr", {}, ...["Tarih", "Tüp", "Hareket", "Durum", "Müşteri / Plaka", "Dolu/Boş", "Yapan", "Not"].map((h) => el("th", {}, h)));
   const body = rows.map((m) => el("tr", { class: "click", onclick: () => openDetail(m.cylinderId) },
     el("td", {}, m.date),
     el("td", {}, el("b", {}, m.serial), el("div", { class: "muted" }, m.gasType)),
@@ -893,8 +893,9 @@ function renderMovements(table, rows, empty) {
     el("td", {}, `${m.from} → ${m.to}`),
     el("td", {}, m.customer || m.plate || "-"),
     el("td", {}, m.fullness),
+    el("td", {}, m.performedBy || "-"),
     el("td", { class: m.warning ? "warn-text" : "muted" }, m.warning ? "⚠ " + (m.note || "") : (m.note || ""))));
-  table.replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 7, class: "muted" }, empty))])));
+  table.replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 8, class: "muted" }, empty))])));
 }
 
 async function openDetail(id) {
@@ -933,11 +934,11 @@ async function openDetail(id) {
   $("m-plate").value = "";
   moveCustomer.reset();
   updateMoveFields();
-  const head = el("tr", {}, ...["Tarih", "Hareket", "Durum", "Müşteri / Plaka", "Dolu/Boş", "Not"].map((h) => el("th", {}, h)));
+  const head = el("tr", {}, ...["Tarih", "Hareket", "Durum", "Müşteri / Plaka", "Dolu/Boş", "Yapan", "Not"].map((h) => el("th", {}, h)));
   const body = c.movements.map((m) => el("tr", {},
     el("td", {}, m.date), el("td", {}, m.movementType), el("td", {}, `${m.from} → ${m.to}`),
-    el("td", {}, m.customer || m.plate || "-"), el("td", {}, m.fullness), el("td", { class: "muted" }, m.note || "")));
-  $("d-history").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6, class: "muted" }, "Hareket yok."))])));
+    el("td", {}, m.customer || m.plate || "-"), el("td", {}, m.fullness), el("td", {}, m.performedBy || "-"), el("td", { class: "muted" }, m.note || "")));
+  $("d-history").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 7, class: "muted" }, "Hareket yok."))])));
   if (!$("detail").open) $("detail").showModal();
 }
 

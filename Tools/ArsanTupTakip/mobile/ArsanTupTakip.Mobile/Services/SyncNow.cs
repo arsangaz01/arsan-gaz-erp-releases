@@ -10,7 +10,7 @@ public static class SyncNow
 
     public static bool IsRunning => _running;
 
-    public static int PendingCount => OfflineMoves.Pending.Count + OfflineCountScans.Pending.Count;
+    public static int PendingCount => OfflineTripOps.Pending.Count + OfflineMoves.Pending.Count + OfflineCountScans.Pending.Count;
 
     public static DateTime? LastSyncUtc
     {
@@ -23,10 +23,16 @@ public static class SyncNow
 
     public static string StatusText()
     {
+        int trips = OfflineTripOps.Pending.Count;
         int pending = OfflineMoves.Pending.Count;
         int scans = OfflineCountScans.Pending.Count;
         string last = LastSyncUtc is DateTime at ? "Son: " + at.ToLocalTime().ToString("dd.MM HH:mm") : "Henüz senkronize edilmedi";
         List<string> waiting = [];
+        if (trips > 0)
+        {
+            waiting.Add($"{trips} sefer kaydı");
+        }
+
         if (pending > 0)
         {
             waiting.Add($"{pending} hareket");
@@ -70,13 +76,24 @@ public static class SyncNow
                 return;
             }
 
+            (int tripsSent, List<string> tripResults, List<string> tripsRejected) = await OfflineTripOps.FlushAsync();
+            int tripsLeft = OfflineTripOps.Pending.Count;
             (int sent, string? error, string? warning) = await OfflineMoves.FlushAsync();
             int left = OfflineMoves.Pending.Count;
             (int scansSent, _, List<string> scansRejected) = await OfflineCountScans.FlushAsync();
             int scansLeft = OfflineCountScans.Pending.Count;
-            if (error is null && left == 0 && scansLeft == 0)
+            if (error is null && left == 0 && scansLeft == 0 && tripsLeft == 0)
             {
                 Preferences.Default.Set(LastSyncKey, DateTime.UtcNow.Ticks);
+            }
+
+            if (tripsSent + tripsLeft + tripsRejected.Count > 0)
+            {
+                string tripText = $"Sefer kayıtları: {tripsSent} gönderildi"
+                    + (tripsLeft > 0 ? $", {tripsLeft} bağlantı bekliyor" : string.Empty) + "."
+                    + (tripResults.Count > 0 ? "\n\n" + string.Join("\n", tripResults.Take(10)) : string.Empty)
+                    + (tripsRejected.Count > 0 ? "\n\nKabul edilmeyenler:\n" + string.Join("\n", tripsRejected.Take(10)) : string.Empty);
+                await page.DisplayAlertAsync("Senkronizasyon", tripText, "Tamam");
             }
 
             if (scansSent + scansLeft + scansRejected.Count > 0)

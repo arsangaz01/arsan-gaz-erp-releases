@@ -315,6 +315,34 @@ public sealed class TupTakipDbContext : DbContext
     public DbSet<TripPlan> TripPlans => Set<TripPlan>();
     public DbSet<TripPlanStop> TripPlanStops => Set<TripPlanStop>();
 
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampActor();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        StampActor();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void StampActor()
+    {
+        if (CurrentActor.Name is not string actor)
+        {
+            return;
+        }
+
+        foreach (var entry in ChangeTracker.Entries<CylinderMovement>())
+        {
+            if (entry.State == EntityState.Added && string.IsNullOrWhiteSpace(entry.Entity.PerformedBy))
+            {
+                entry.Entity.PerformedBy = actor;
+            }
+        }
+    }
+
     protected override void OnConfiguring(DbContextOptionsBuilder options)
     {
         TupTakipDatabase.Initialize();

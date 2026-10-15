@@ -183,6 +183,8 @@ public sealed class HomePage : ContentPage
         };
         SemanticProperties.SetDescription(_sync, "Senkronize et");
         OfflineMoves.Changed += () => MainThread.BeginInvokeOnMainThread(RefreshSync);
+        OfflineTripOps.Changed += () => MainThread.BeginInvokeOnMainThread(RefreshSync);
+        OfflineTripOps.Watch();
 
         Grid checkRow = new()
         {
@@ -397,7 +399,7 @@ public sealed class HomePage : ContentPage
     private void RefreshSync()
     {
         _syncText.Text = SyncNow.StatusText();
-        _sync.BackgroundColor = OfflineMoves.Pending.Count > 0 ? Color.FromArgb("#B45309") : Color.FromArgb("#0F766E");
+        _sync.BackgroundColor = OfflineMoves.Pending.Count + OfflineTripOps.Pending.Count > 0 ? Color.FromArgb("#B45309") : Color.FromArgb("#0F766E");
     }
 
     private async Task SyncAsync()

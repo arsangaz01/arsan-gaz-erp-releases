@@ -65,6 +65,7 @@ public final class TripActivity extends BaseActivity {
     private JSONObject customer;
     private Button startBig;
     private TextView tripLine;
+    private TextView pendingLine;
     private LinearLayout pickers;
     private LinearLayout work;
     private LinearLayout tripTiles;
@@ -88,6 +89,11 @@ public final class TripActivity extends BaseActivity {
         page.addView(startBig);
         tripLine = text("Seferler yükleniyor...", 20, true);
         page.addView(tripLine);
+        pendingLine = text("", 17, true);
+        pendingLine.setTextColor(WARN);
+        pendingLine.setVisibility(View.GONE);
+        pendingLine.setOnClickListener(v -> sendPending(false));
+        page.addView(pendingLine);
         tripTiles = new LinearLayout(this);
         page.addView(tripTiles);
         tripSpinner = new Spinner(this);
@@ -393,6 +399,14 @@ public final class TripActivity extends BaseActivity {
         return json;
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (pendingLine != null) {
+            sendPending(true);
+        }
+    }
+
     private void refreshTrips(final Integer selectId) {
         call(() -> Api.getArray("/api/sefer/aktif"), array -> {
             JSONObject current = trip();
@@ -603,10 +617,17 @@ public final class TripActivity extends BaseActivity {
 
         final List<String> codes = new ArrayList<String>(scanned);
         final int customerId = customer == null ? 0 : customer.optInt("id");
+        final String customerName = customer == null ? null : Api.str(customer, "name");
+        final String key = Api.newKey();
         call(() -> {
             switch (kind) {
                 case LOAD:
-                    JSONObject load = Api.post("/api/sefer/yukle", body("tripId", tripId, "plate", p, "codes", codes));
+                    JSONObject loadBody = body("tripId", tripId, "plate", p, "codes", codes);
+                    JSONObject load = sendOrQueue(TripQueue.LOAD, loadBody, key, p + " aracına yükleme · " + codes.size() + " tüp");
+                    if (load == null) {
+                        return queued(codes.size());
+                    }
+
                     List<String> lines = new ArrayList<String>();
                     lines.add(Api.str(load, "message"));
                     JSONArray messages = load.optJSONArray("messages");
@@ -616,15 +637,31 @@ public final class TripActivity extends BaseActivity {
 
                     return new String[] { TextUtils.join("\n", lines), null };
                 case DELIVER:
-                    return new String[] { Api.postMessage("/api/sefer/teslim", body("tripId", tripId, "customerId", customerId, "codes", codes, "note", null)), null };
+                    JSONObject delivered = sendOrQueue(TripQueue.DELIVER, body("tripId", tripId, "customerId", customerId, "codes", codes, "note", null), key,
+                        customerName + " teslim · " + codes.size() + " tüp");
+                    return delivered == null ? queued(codes.size()) : new String[] { message(delivered), null };
                 case PICKUP:
-                    return new String[] { Api.postMessage("/api/sefer/bos-alim", body("tripId", tripId, "plate", p, "customerId", customerId, "codes", codes, "note", null)), null };
+                    JSONObject picked = sendOrQueue(TripQueue.PICKUP, body("tripId", tripId, "plate", p, "customerId", customerId, "codes", codes, "note", null), key,
+                        customerName + " boş alım · " + codes.size() + " tüp");
+                    return picked == null ? queued(codes.size()) : new String[] { message(picked), null };
                 case RETURN:
+                    ensureSent(tripId);
                     return reconcile(Api.post("/api/sefer/donus", body("tripId", tripId, "plate", p, "codes", codes, "note", null)));
                 default:
+                    ensureSent(tripId);
                     return reconcile(Api.getObject("/api/sefer/" + tripId + "/kontrol" + (p == null ? "" : "?plaka=" + Api.q(p))));
             }
         }, shown -> {
+            showPending();
+            if (shown.length > 2) {
+                banner(result, "📴", shown[0], WARN);
+                buzz();
+                scanned.clear();
+                showScanned();
+                next(kind, new String[] { shown[0], null });
+                return;
+            }
+
             boolean failed = shown[0] != null && (shown[0].startsWith("0/") || shown[0].startsWith("0 tüp"));
             if (failed) {
                 banner(result, "❌", shown[0], RED);
@@ -639,6 +676,79 @@ public final class TripActivity extends BaseActivity {
             showScanned();
             refreshTrips(tripId);
             next(kind, shown);
+        });
+    }
+
+    // Runs on the worker thread. Returns null when the operation was kept on the handheld: the server is unreachable,
+    // or earlier operations still wait (a delivery must not reach the server before its load).
+    private static JSONObject sendOrQueue(String path, JSONObject request, String key, String label) throws Exception {
+        if (TripQueue.count() > 0) {
+            TripQueue.flush();
+        }
+
+        if (TripQueue.count() == 0) {
+            try {
+                return Api.post(path, request, key);
+            } catch (Api.ApiException e) {
+                if (!e.unreachable) {
+                    throw e;
+                }
+            }
+        }
+
+        TripQueue.add(path, request, key, label);
+        return null;
+    }
+
+    private static String[] queued(int count) {
+        return new String[] { "İnternet yok: " + count + " tüp el terminalinde kaydedildi (" + TripQueue.count()
+            + " kayıt bekliyor). Bağlantı gelince gönderilir.", null, "queued" };
+    }
+
+    private static String message(JSONObject answer) {
+        String text = Api.str(answer, "message");
+        return text == null ? "Kaydedildi." : text;
+    }
+
+    // Unloading, checking and closing compare against the server's trip; operations still on the handheld go first.
+    private static void ensureSent(int tripId) throws Api.ApiException {
+        if (TripQueue.countFor(tripId) == 0) {
+            return;
+        }
+
+        TripQueue.flush();
+        int left = TripQueue.countFor(tripId);
+        if (left > 0) {
+            throw new Api.ApiException("Bu seferin " + left + " kaydı (yükleme/teslim) el terminalinde bekliyor ve henüz gönderilemedi. "
+                + "İnternete bağlanınca tekrar deneyin.");
+        }
+    }
+
+    private void showPending() {
+        int waiting = TripQueue.count();
+        pendingLine.setVisibility(waiting > 0 ? View.VISIBLE : View.GONE);
+        pendingLine.setText("📴 El terminalinde " + waiting + " kayıt bekliyor. Göndermek için dokunun.");
+    }
+
+    private void sendPending(final boolean quiet) {
+        if (TripQueue.count() == 0) {
+            showPending();
+            return;
+        }
+
+        call(TripQueue::flush, r -> {
+            showPending();
+            if (!r.rejected.isEmpty()) {
+                alert("Gönderilemeyen kayıt", "Sunucu şu kayıtları kabul etmedi; kontrol edin:\n\n" + TextUtils.join("\n", r.rejected));
+            } else if (!quiet) {
+                alert("Gönderim", r.sent > 0 ? r.sent + " kayıt gönderildi.\n\n" + TextUtils.join("\n", r.done)
+                    : "Sunucuya hâlâ ulaşılamıyor; kayıtlar el terminalinde bekliyor.");
+            }
+
+            if (r.sent > 0) {
+                JSONObject t = trip();
+                refreshTrips(t == null ? null : t.optInt("id"));
+            }
         });
     }
 
@@ -881,7 +991,10 @@ public final class TripActivity extends BaseActivity {
         }
 
         final Runnable go = () -> {
-            Runnable close = () -> call(() -> Api.post("/api/sefer/kapat", body("tripId", t.optInt("id"))), closed -> {
+            Runnable close = () -> call(() -> {
+                ensureSent(t.optInt("id"));
+                return Api.post("/api/sefer/kapat", body("tripId", t.optInt("id")));
+            }, closed -> {
                 JSONObject r = closed.optJSONObject("reconcile");
                 boolean alerts = r != null && r.optBoolean("hasAlerts");
                 banner(result, alerts ? "⚠" : "🏁", Api.str(closed, "message"), alerts ? WARN : GOOD);

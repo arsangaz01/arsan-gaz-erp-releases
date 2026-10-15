@@ -757,11 +757,12 @@ public sealed class ApiClient
     public Task<string> AddTripVehicleAsync(int tripId, string plate) =>
         PostMessageAsync("/api/sefer/arac", new { tripId, plate });
 
-    public Task<TripLoadResponse> LoadTripCylindersAsync(int tripId, string plate, IReadOnlyList<string> codes) =>
-        PostAsync<TripLoadResponse>("/api/sefer/yukle", new { tripId, plate, codes });
+    // offlineAt/requestKey: set when the operation was saved without a connection and is sent from OfflineTripOps.
+    public Task<TripLoadResponse> LoadTripCylindersAsync(int tripId, string plate, IReadOnlyList<string> codes, DateTime? offlineAt = null, string? requestKey = null) =>
+        PostAsync<TripLoadResponse>("/api/sefer/yukle", new { tripId, plate, codes, offlineAt }, requestKey);
 
-    public Task<string> DeliverTripCylindersAsync(int tripId, int customerId, IReadOnlyList<string> codes, string? note) =>
-        PostMessageAsync("/api/sefer/teslim", new { tripId, customerId, codes, note });
+    public Task<string> DeliverTripCylindersAsync(int tripId, int customerId, IReadOnlyList<string> codes, string? note, DateTime? offlineAt = null, string? requestKey = null) =>
+        PostMessageAsync("/api/sefer/teslim", new { tripId, customerId, codes, note, offlineAt }, requestKey);
 
     public Task<FillResponse> FillAsync(IReadOnlyList<string> codes, string? lot, string? note, bool allowOverdueTest) =>
         PostAsync<FillResponse>("/api/dolum", new { codes, lot, note, allowOverdueTest }, Guid.NewGuid().ToString("N"));
@@ -794,8 +795,8 @@ public sealed class ApiClient
 
     public Task<TodayPlansResponse> TodayPlansAsync() => GetAsync<TodayPlansResponse>("/api/sefer-plani/bugun");
 
-    public Task<string> PickupTripCylindersAsync(int tripId, string plate, int customerId, IReadOnlyList<string> codes, string? note) =>
-        PostMessageAsync("/api/sefer/bos-alim", new { tripId, plate, customerId, codes, note });
+    public Task<string> PickupTripCylindersAsync(int tripId, string plate, int customerId, IReadOnlyList<string> codes, string? note, DateTime? offlineAt = null, string? requestKey = null) =>
+        PostMessageAsync("/api/sefer/bos-alim", new { tripId, plate, customerId, codes, note, offlineAt }, requestKey);
 
     public Task<TripReconcileResponse> ReturnTripCylindersAsync(int tripId, string plate, IReadOnlyList<string> codes, string? note) =>
         PostAsync<TripReconcileResponse>("/api/sefer/donus", new { tripId, plate, codes, note });

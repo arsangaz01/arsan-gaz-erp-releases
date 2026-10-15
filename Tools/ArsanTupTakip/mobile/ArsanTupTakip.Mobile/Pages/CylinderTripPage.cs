@@ -59,6 +59,7 @@ public sealed class CylinderTripPage : ContentPage
     private readonly Border _customerSection;
     // Simple view for drivers: only the trip line, the steps and scanning; everything else sits under "Ayrıntılar".
     private readonly Label _tripLine = new() { FontSize = 18, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap };
+    private readonly Label _pendingLine = new() { FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Ui.Warn, IsVisible = false, LineBreakMode = LineBreakMode.WordWrap };
     private readonly ContentView _tripTiles = new() { IsVisible = false };
     private readonly VerticalStackLayout _tripPickers;
     private readonly Button _startBig;
@@ -77,6 +78,9 @@ public sealed class CylinderTripPage : ContentPage
     {
         Title = "Sefer";
         Ui.ApplyPageChrome(this);
+        OfflineTripOps.Watch();
+        OfflineTripOps.Changed += () => MainThread.BeginInvokeOnMainThread(UpdatePendingLine);
+        _pendingLine.GestureRecognizers.Add(new TapGestureRecognizer { Command = new Command(async () => await SendTripOpsAsync(quiet: false)) });
         // Handheld scanners (e.g. Honeywell EDA50 keyboard wedge) type the code and press Enter.
         _code.Completed += (_, _) =>
         {
@@ -231,7 +235,7 @@ public sealed class CylinderTripPage : ContentPage
                 Children =
                 {
                     _startBig,
-                    Ui.Card(new VerticalStackLayout { Spacing = 8, Children = { _tripLine, _tripTiles, _tripPickers } }),
+                    Ui.Card(new VerticalStackLayout { Spacing = 8, Children = { _tripLine, _pendingLine, _tripTiles, _tripPickers } }),
                     _workArea,
                     details,
                     _detailsBox
@@ -763,12 +767,17 @@ public sealed class CylinderTripPage : ContentPage
         try
         {
             TripReconcileResponse? reconcile = null;
-            string message;
+            string? message;
+            List<string> codes = [.. _scanned];
+            string key = ApiClient.NewRequestKey();
             switch (mode)
             {
                 case LoadMode:
-                    TripLoadResponse load = await ApiClient.Instance.LoadTripCylindersAsync(SelectedTrip.Id, plate!, _scanned);
-                    message = load.Message + (load.Messages.Count > 0 ? Environment.NewLine + string.Join(Environment.NewLine, load.Messages) : string.Empty);
+                    message = await SendOrQueueAsync(new PendingTripOp(OfflineTripOps.Load, tripId, plate, null, null, codes, DateTime.Now, key), async () =>
+                    {
+                        TripLoadResponse load = await ApiClient.Instance.LoadTripCylindersAsync(tripId, plate!, codes, requestKey: key);
+                        return load.Message + (load.Messages.Count > 0 ? Environment.NewLine + string.Join(Environment.NewLine, load.Messages) : string.Empty);
+                    });
                     break;
                 case DeliverMode:
                     if (SelectedCustomer is null)
@@ -783,7 +792,9 @@ public sealed class CylinderTripPage : ContentPage
                         return;
                     }
 
-                    message = await ApiClient.Instance.DeliverTripCylindersAsync(SelectedTrip.Id, SelectedCustomer.Id, _scanned, null);
+                    CustomerItem deliverTo = SelectedCustomer;
+                    message = await SendOrQueueAsync(new PendingTripOp(OfflineTripOps.Deliver, tripId, plate, deliverTo.Id, deliverTo.Name, codes, DateTime.Now, key),
+                        () => ApiClient.Instance.DeliverTripCylindersAsync(tripId, deliverTo.Id, codes, null, requestKey: key));
                     break;
                 case PickupMode:
                     if (SelectedCustomer is null || _scanned.Count == 0)
@@ -792,16 +803,42 @@ public sealed class CylinderTripPage : ContentPage
                         return;
                     }
 
-                    message = await ApiClient.Instance.PickupTripCylindersAsync(SelectedTrip.Id, plate!, SelectedCustomer.Id, _scanned, null);
+                    CustomerItem pickupFrom = SelectedCustomer;
+                    message = await SendOrQueueAsync(new PendingTripOp(OfflineTripOps.Pickup, tripId, plate, pickupFrom.Id, pickupFrom.Name, codes, DateTime.Now, key),
+                        () => ApiClient.Instance.PickupTripCylindersAsync(tripId, plate!, pickupFrom.Id, codes, null, requestKey: key));
                     break;
                 case ReturnMode:
+                    if (!await TripOpsSentAsync(tripId))
+                    {
+                        return;
+                    }
+
                     reconcile = await ApiClient.Instance.ReturnTripCylindersAsync(SelectedTrip.Id, plate!, _scanned, null);
                     message = reconcile.Message;
                     break;
                 default:
+                    if (!await TripOpsSentAsync(tripId))
+                    {
+                        return;
+                    }
+
                     reconcile = await ApiClient.Instance.CheckTripAsync(SelectedTrip.Id, plate);
                     message = reconcile.Message;
                     break;
+            }
+
+            if (message is null)
+            {
+                int waiting = OfflineTripOps.Pending.Count;
+                string queued = $"İnternet yok: {codes.Count} tüp telefonda kaydedildi ({waiting} kayıt bekliyor). Bağlantı gelince kendiliğinden gönderilir.";
+                Ui.Banner(_resultCard, _result, "📴", queued, Ui.Warn);
+                Ui.Buzz();
+                _scanned.Clear();
+                RefreshScanned();
+                UpdatePendingLine();
+                _busy.IsVisible = false;
+                await NextStepAsync(mode, queued, null);
+                return;
             }
 
             ShowResult(message, reconcile);
@@ -825,6 +862,88 @@ public sealed class CylinderTripPage : ContentPage
         {
             _busy.IsVisible = false;
         }
+    }
+
+    // Returns null when the operation was kept on the phone: the server is unreachable, or earlier operations are still
+    // waiting (a delivery must not reach the server before the load it depends on). The same request key is used for
+    // the resend, so an attempt that did reach the server is not recorded twice.
+    private async Task<string?> SendOrQueueAsync(PendingTripOp op, Func<Task<string>> send)
+    {
+        if (OfflineTripOps.Pending.Count > 0)
+        {
+            await SendTripOpsAsync(quiet: true);
+        }
+
+        if (OfflineTripOps.Pending.Count == 0)
+        {
+            try
+            {
+                return await send();
+            }
+            catch (ServerUnreachableException)
+            {
+            }
+        }
+
+        OfflineTripOps.Add(op);
+        return null;
+    }
+
+    // Unloading, checking and closing compare against the server's trip; operations still on the phone go first.
+    private async Task<bool> TripOpsSentAsync(int tripId)
+    {
+        if (OfflineTripOps.PendingFor(tripId) == 0)
+        {
+            return true;
+        }
+
+        await SendTripOpsAsync(quiet: true);
+        int left = OfflineTripOps.PendingFor(tripId);
+        if (left == 0)
+        {
+            return true;
+        }
+
+        await DisplayAlertAsync("Telefonda bekleyen kayıt", $"Bu seferin {left} kaydı (yükleme/teslim) henüz sunucuya gönderilemedi. "
+            + "İnternete bağlanınca kendiliğinden gönderilir; sonra tekrar deneyin.", "Tamam");
+        return false;
+    }
+
+    private async Task SendTripOpsAsync(bool quiet)
+    {
+        int before = OfflineTripOps.Pending.Count;
+        if (before == 0)
+        {
+            return;
+        }
+
+        (int sent, List<string> results, List<string> rejected) = await OfflineTripOps.FlushAsync();
+        MainThread.BeginInvokeOnMainThread(UpdatePendingLine);
+        if (rejected.Count > 0)
+        {
+            await DisplayAlertAsync("Gönderilemeyen kayıt", "Telefonda bekleyen şu kayıtları sunucu kabul etmedi; kontrol edin:\n\n"
+                + string.Join("\n", rejected.Take(10)), "Tamam");
+        }
+
+        if (sent > 0)
+        {
+            if (!quiet)
+            {
+                await DisplayAlertAsync("Gönderildi", $"Telefonda bekleyen {sent} kayıt sunucuya gönderildi.\n\n" + string.Join("\n", results.Take(10)), "Tamam");
+            }
+
+            if (SelectedTrip is ActiveTripSummary trip)
+            {
+                await RefreshTripsAsync(trip.Id);
+            }
+        }
+    }
+
+    private void UpdatePendingLine()
+    {
+        int waiting = OfflineTripOps.Pending.Count;
+        _pendingLine.IsVisible = waiting > 0;
+        _pendingLine.Text = $"📴 Telefonda {waiting} kayıt bekliyor; internet gelince kendiliğinden gönderilir.";
     }
 
     private void ShowResult(string message, TripReconcileResponse? reconcile)
@@ -868,6 +987,11 @@ public sealed class CylinderTripPage : ContentPage
         }
 
         ActiveTripSummary trip = SelectedTrip;
+        if (!await TripOpsSentAsync(trip.Id))
+        {
+            return;
+        }
+
         if (ask && HasMode(ReturnMode) && trip.Vehicles.FirstOrDefault(v => v.OnTrip) is TripVehicleSummary loaded)
         {
             const string unload = "Aracı boşalt";
@@ -1030,6 +1154,8 @@ public sealed class CylinderTripPage : ContentPage
         _proximitySwitch.IsToggled = ProximityAlerts.Enabled;
         _verifyAsked.Clear();
         _ = RefreshTodayPlanAsync();
+        UpdatePendingLine();
+        _ = SendTripOpsAsync(quiet: true);
     }
 
     protected override void OnDisappearing()

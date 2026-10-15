@@ -52,16 +52,27 @@ final class Api {
         final int status;
         final boolean sessionEnded;
         final boolean mustChangePassword;
+        // No connection or the server could not be reached; the request may be retried later.
+        final boolean unreachable;
 
         ApiException(String message, int status, boolean sessionEnded, boolean mustChangePassword) {
             super(message);
             this.status = status;
             this.sessionEnded = sessionEnded;
             this.mustChangePassword = mustChangePassword;
+            this.unreachable = status == 502 || status == 503 || status == 504 || status == 530;
+        }
+
+        ApiException(String message, boolean unreachable) {
+            super(message);
+            this.status = 0;
+            this.sessionEnded = false;
+            this.mustChangePassword = false;
+            this.unreachable = unreachable;
         }
 
         ApiException(String message) {
-            this(message, 0, false, false);
+            this(message, false);
         }
     }
 
@@ -76,6 +87,10 @@ final class Api {
         } catch (Exception e) {
             sslError = e.toString();
         }
+    }
+
+    static SharedPreferences prefs() {
+        return prefs;
     }
 
     static String server() {
@@ -193,7 +208,16 @@ final class Api {
     }
 
     static JSONObject post(String path, JSONObject body) throws ApiException {
-        return (JSONObject) send("POST", path, body, true);
+        return post(path, body, null);
+    }
+
+    // key: the Idempotency-Key of an operation that may be resent (TripQueue); null makes a new one.
+    static JSONObject post(String path, JSONObject body, String key) throws ApiException {
+        return (JSONObject) send("POST", path, body, true, key);
+    }
+
+    static String newKey() {
+        return UUID.randomUUID().toString().replace("-", "");
     }
 
     static String postMessage(String path, JSONObject body) throws ApiException {
@@ -230,6 +254,10 @@ final class Api {
     }
 
     private static Object send(String method, String path, JSONObject body, boolean authorize) throws ApiException {
+        return send(method, path, body, authorize, null);
+    }
+
+    private static Object send(String method, String path, JSONObject body, boolean authorize, String key) throws ApiException {
         String token = authorize ? token() : null;
         if (authorize && token == null) {
             throw new ApiException("Oturum açık değil. Kullanıcı adı ve şifrenizle giriş yapın.", 401, true, false);
@@ -246,7 +274,7 @@ final class Api {
 
             if (body != null) {
                 if (authorize) {
-                    connection.setRequestProperty("Idempotency-Key", UUID.randomUUID().toString().replace("-", ""));
+                    connection.setRequestProperty("Idempotency-Key", key != null ? key : newKey());
                 }
 
                 byte[] bytes = body.toString().getBytes("UTF-8");
@@ -293,7 +321,7 @@ final class Api {
 
             return new JSONObject(text.length() == 0 ? "{}" : text);
         } catch (IOException e) {
-            throw new ApiException("Sunucuya ulaşılamadı. İnternet bağlantısını kontrol edin. (" + e.getMessage() + ")");
+            throw new ApiException("Sunucuya ulaşılamadı. İnternet bağlantısını kontrol edin. (" + e.getMessage() + ")", true);
         } catch (JSONException e) {
             throw new ApiException("Sunucu yanıtı anlaşılamadı.");
         } finally {

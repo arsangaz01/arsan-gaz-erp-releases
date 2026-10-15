@@ -83,6 +83,7 @@ internal static class WebPanelEndpoints
 
             context.Items["panelUser"] = user.UserName;
             context.Items["panelAccount"] = user;
+            CurrentActor.Name = user.UserName + " (Panel)";
             if (user.Role != PanelRoles.Admin && (context.Request.Path.Value ?? string.Empty).Contains("/panel/api/yonetim", StringComparison.OrdinalIgnoreCase))
             {
                 return Results.Json(new { error = "Yönetim bölümü yalnızca Yönetici içindir." }, statusCode: StatusCodes.Status403Forbidden);
@@ -375,7 +376,8 @@ internal static class WebPanelEndpoints
                     Customer = m.Customer?.CompanyName,
                     Plate = m.VehiclePlate,
                     Fullness = CylinderTracking.FullnessName(m.IsFull),
-                    Note = m.Description
+                    Note = m.Description,
+                    m.PerformedBy
                 })
             });
         }).Requires(Perm.CylinderView);
@@ -986,6 +988,7 @@ internal static class WebPanelEndpoints
         Plate = m.VehiclePlate,
         Fullness = CylinderTracking.FullnessName(m.IsFull),
         Note = m.Description,
+        m.PerformedBy,
         Warning = m.Description?.Contains("Uyarı onaylandı", StringComparison.Ordinal) == true
     };
 

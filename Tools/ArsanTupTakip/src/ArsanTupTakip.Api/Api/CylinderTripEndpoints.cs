@@ -5,14 +5,15 @@ namespace ArsanTupTakip.Api;
 
 internal sealed record TripStartRequest(string? Note, List<string?>? Plates);
 internal sealed record TripVehicleRequest(int TripId, string? Plate);
-internal sealed record TripLoadRequest(int TripId, string? Plate, List<string?>? Codes);
-internal sealed record TripDeliverRequest(int TripId, int? CustomerId, List<string?>? Codes, string? Note);
+// OfflineAt: when the phone saved the operation without a connection; it is sent later from the phone's queue.
+internal sealed record TripLoadRequest(int TripId, string? Plate, List<string?>? Codes, DateTime? OfflineAt = null);
+internal sealed record TripDeliverRequest(int TripId, int? CustomerId, List<string?>? Codes, string? Note, DateTime? OfflineAt = null);
 internal sealed record TripStopAddRequest(int TripId, string? Plate, int CustomerId);
 internal sealed record TripStopMoveRequest(int TripId, int StopId, int Direction);
 internal sealed record TripStopRequest(int TripId, int StopId);
 internal sealed record TripStopDoneRequest(int TripId, int StopId, bool Done, string? Note);
 internal sealed record CustomerLocationRequest(double Latitude, double Longitude, double? Accuracy);
-internal sealed record TripPickupRequest(int TripId, string? Plate, int? CustomerId, List<string?>? Codes, string? Note);
+internal sealed record TripPickupRequest(int TripId, string? Plate, int? CustomerId, List<string?>? Codes, string? Note, DateTime? OfflineAt = null);
 internal sealed record TripReturnRequest(int TripId, string? Plate, List<string?>? Codes, string? Note);
 internal sealed record TripCloseRequest(int TripId);
 internal sealed record TripReasonRequest(int TripId, List<int>? CylinderIds, string? Reason, string? Note, int? CustomerId = null);
@@ -107,7 +108,7 @@ internal static class CylinderTripEndpoints
             try
             {
                 TripLoadResult result = await new CylinderTripService().LoadCylindersAsync(
-                    request.TripId, DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate), request.Codes ?? [], "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                    request.TripId, DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate), request.Codes ?? [], Source(context, request.OfflineAt));
                 return Results.Ok(new
                 {
                     message = $"{result.Added} tüp sefere yüklendi." + (result.Skipped > 0 ? $" {result.Skipped} atlandı." : string.Empty),
@@ -128,7 +129,7 @@ internal static class CylinderTripEndpoints
             {
                 CylinderTripService service = new();
                 List<CylinderBulkResult> results = await service.DeliverCylindersAsync(
-                    request.TripId, request.Codes ?? [], request.CustomerId, request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                    request.TripId, request.Codes ?? [], request.CustomerId, request.Note, Source(context, request.OfflineAt));
                 int ok = results.Count(r => r.Ok);
                 string failures = string.Join("\n", results.Where(r => !r.Ok).Select(r => $"{r.Code}: {r.Message}"));
                 string message = $"{ok}/{results.Count} tüp teslim kaydedildi." + (failures.Length > 0 ? "\n" + failures : string.Empty);
@@ -158,7 +159,7 @@ internal static class CylinderTripEndpoints
             {
                 TripPickupResult result = await new CylinderTripService().PickupCylindersAsync(
                     request.TripId, DriverVehicle.PlateFor(User(context).FixedPlate, request.Plate), request.CustomerId, request.Codes ?? [],
-                    request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                    request.Note, Source(context, request.OfflineAt));
                 int ok = result.Results.Count(r => r.Ok);
                 string details = string.Join("\n", result.Results.Where(r => !r.Ok || r.Message.Contains('⚠')).Select(r => r.Ok ? r.Message : $"{r.Code}: {r.Message}"));
                 string completed = ok > 0 ? await CompleteRequestsAsync(request.CustomerId!.Value, CustomerRequests.Pickup, request.TripId) : string.Empty;
@@ -365,6 +366,10 @@ internal static class CylinderTripEndpoints
     }
 
     private static WebPanelUser User(HttpContext context) => (WebPanelUser)context.Items["panelAccount"]!;
+
+    internal static string Source(HttpContext context, DateTime? offlineAt) =>
+        "Mobil (" + MobileEndpoints.DeviceName(context) + ")"
+        + (offlineAt is DateTime at ? $" · çevrimdışı kaydedildi {at.ToLocalTime():dd.MM.yyyy HH:mm}" : string.Empty);
 
     internal static readonly string[] RouteEditors = [Perm.TripRoute];
 

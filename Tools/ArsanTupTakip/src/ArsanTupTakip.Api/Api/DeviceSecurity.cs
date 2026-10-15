@@ -250,6 +250,7 @@ internal sealed class DeviceAuthMiddleware(RequestDelegate next, DeviceStore dev
         context.Items["device"] = session;
         context.Items["panelAccount"] = user;
         context.Items["panelUser"] = user.UserName;
+        CurrentActor.Name = user.UserName + " (Mobil)";
         await next(context);
     }
 }
