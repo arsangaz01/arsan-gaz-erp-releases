@@ -53,9 +53,8 @@ public sealed class CylinderTripPage : ContentPage
     private readonly VerticalStackLayout _route = new() { Spacing = 10 };
     private readonly Label _routeInfo = Ui.Note(string.Empty);
     private readonly Label _groupsTotal = Ui.Note(string.Empty);
-    private readonly Entry _customerSearch = new() { Placeholder = "Müşteri adı, kodu veya şehri", ReturnType = ReturnType.Search };
-    private readonly Button _customerSearchButton;
-    private readonly Picker _customer = new() { Title = "Teslim müşterisi" };
+    private readonly Label _customerLabel = new() { FontSize = 18, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap };
+    private CustomerItem? _selectedCustomer;
     private readonly Border _customerSection;
     // Simple view for drivers: only the trip line, the steps and scanning; everything else sits under "Ayrıntılar".
     private readonly Label _tripLine = new() { FontSize = 18, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap };
@@ -72,7 +71,6 @@ public sealed class CylinderTripPage : ContentPage
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
     private readonly List<string> _scanned = [];
     private List<ActiveTripSummary> _trips = [];
-    private List<CustomerItem> _customers = [];
 
     public CylinderTripPage()
     {
@@ -98,10 +96,11 @@ public sealed class CylinderTripPage : ContentPage
         {
             int index = i;
             string label = _modes[i].Kind == 3 ? _modes[i].Label : $"{i + 1}. {_modes[i].Label}";
-            Button button = Ui.Secondary($"{StepIcon(_modes[i].Kind)}  {label}", (_, _) =>
+            Button button = Ui.Secondary($"{StepIcon(_modes[i].Kind)}  {label}", async (_, _) =>
             {
                 _mode.SelectedIndex = index;
                 ApplyMode();
+                await StartStepAsync();
             });
             _stepButtons.Add(button);
             if (_modes[i].Kind == 3)
@@ -124,7 +123,6 @@ public sealed class CylinderTripPage : ContentPage
             await RefreshRouteAsync();
         };
         _groupPlate.SelectedIndexChanged += async (_, _) => await RefreshGroupsAsync();
-        Ui.LiveSearch(_customerSearch, SearchCustomersAsync);
 
         _proximityBox.Children.Add(new HorizontalStackLayout
         {
@@ -146,10 +144,11 @@ public sealed class CylinderTripPage : ContentPage
 
         _resultCard = Ui.Card(_result);
         _resultCard.IsVisible = false;
-        _customerSearchButton = Ui.Secondary("🔎 Müşteri ara", async (_, _) => await SearchCustomersAsync());
         _todaySection = Ui.Section("🗓️ Bugünkü sefer planım", _todayPlan);
         _todaySection.IsVisible = false;
-        _customerSection = Ui.Section("👤 HANGİ MÜŞTERİ?", _customerSearch, _customerSearchButton, _customer);
+        _customerSection = Ui.Section("👤 HANGİ MÜŞTERİ?", _customerLabel,
+            Ui.Secondary("🔎 Müşteri ara / değiştir", async (_, _) => await PickCustomerThenScanAsync()));
+        ShowCustomer();
         bool finish = ApiClient.Instance.Can(Perm.TripReturn) || ApiClient.Instance.Can(Perm.TripClose);
         bool canStart = ApiClient.Instance.Can(Perm.TripStart);
         _tripPickers = new VerticalStackLayout { Spacing = 4, IsVisible = false, Children = { _trip, _vehicle } };
@@ -157,9 +156,6 @@ public sealed class CylinderTripPage : ContentPage
         _startBig.FontSize = 20;
         _startBig.MinimumHeightRequest = 72;
         _startBig.IsVisible = false;
-        Button scan = Ui.Primary("📷  BARKOD OKUT", async (_, _) => await ScanAsync());
-        scan.FontSize = 18;
-        scan.MinimumHeightRequest = 60;
         Button save = Ui.Primary("✅  KAYDET", async (_, _) => await SubmitAsync());
         save.FontSize = 18;
         save.MinimumHeightRequest = 60;
@@ -172,7 +168,7 @@ public sealed class CylinderTripPage : ContentPage
             {
                 Ui.Card(new VerticalStackLayout { Spacing = 10, Children = { _mode, steps, _stepHint } }),
                 _customerSection,
-                Ui.Card(new VerticalStackLayout { Spacing = 10, Children = { scan, _code, _scannedText, save } }),
+                Ui.Card(new VerticalStackLayout { Spacing = 10, Children = { _scannedText, _code, save } }),
                 _busy,
                 _resultCard,
                 Ui.Section(
@@ -198,8 +194,9 @@ public sealed class CylinderTripPage : ContentPage
                 Ui.Section(
                     "OKUTMA SEÇENEKLERİ",
                     Ui.ActionRow(
-                        Ui.Secondary("📷 Toplu okut", async (_, _) => await ScanManyAsync()),
-                        Ui.Secondary("Kodu ekle", (_, _) => AddManual())),
+                        Ui.Secondary("📷 Tek okut", async (_, _) => await ScanAsync()),
+                        Ui.Secondary("📷 Toplu okut", async (_, _) => await ScanManyAsync())),
+                    Ui.Secondary("Kodu ekle", (_, _) => AddManual()),
                     Ui.Secondary("🗑️ Okutulanları temizle", (_, _) => { _scanned.Clear(); RefreshScanned(); }),
                     checkButton ?? (View)new ContentView()),
                 _todaySection,
@@ -263,7 +260,7 @@ public sealed class CylinderTripPage : ContentPage
 
     private string? SelectedPlate => _vehicle.SelectedItem as string;
 
-    private CustomerItem? SelectedCustomer => _customer.SelectedIndex >= 0 && _customer.SelectedIndex < _customers.Count ? _customers[_customer.SelectedIndex] : null;
+    private CustomerItem? SelectedCustomer => _selectedCustomer;
 
     private int SelectedMode => _mode.SelectedIndex >= 0 && _mode.SelectedIndex < _modes.Length ? _modes[_mode.SelectedIndex].Kind : 3;
 
@@ -277,12 +274,60 @@ public sealed class CylinderTripPage : ContentPage
 
         _stepHint.Text = SelectedMode switch
         {
-            LoadMode => "👉 Araca koyduğunuz tüpleri okutun, sonra KAYDET'e basın.",
-            DeliverMode => "👉 Müşteriyi bulun, verdiğiniz tüpleri okutun, KAYDET'e basın.",
-            PickupMode => "👉 Müşteriyi bulun, aldığınız boş tüpleri okutun, KAYDET'e basın.",
-            ReturnMode => "👉 Araçtan inen bütün tüpleri (dolu ve boş) okutun, KAYDET'e basın.",
+            LoadMode => "👉 Düğmeye dokunun, kamera açılır: araca koyduğunuz tüpleri okutun, sonra KAYDET'e basın.",
+            DeliverMode => "👉 Düğmeye dokunun: müşteriyi seçin, kamera açılır, verdiğiniz tüpleri okutun, KAYDET'e basın.",
+            PickupMode => "👉 Düğmeye dokunun: müşteriyi seçin, kamera açılır, aldığınız boşları okutun, KAYDET'e basın.",
+            ReturnMode => "👉 Düğmeye dokunun, kamera açılır: araçtan inen bütün tüpleri (dolu ve boş) okutun, KAYDET'e basın.",
             _ => "👉 Araçtaki tüpleri okutun; yük listesiyle karşılaştırılır."
         };
+    }
+
+    // A tapped step goes straight to its work: loading/unloading opens the camera (the vehicle is already chosen),
+    // delivery and pickup first open the customer search, then the camera.
+    private async Task StartStepAsync()
+    {
+        if (SelectedTrip is null)
+        {
+            return;
+        }
+
+        switch (SelectedMode)
+        {
+            case LoadMode or ReturnMode:
+                await ScanManyAsync();
+                break;
+            case DeliverMode or PickupMode:
+                await PickCustomerThenScanAsync();
+                break;
+        }
+    }
+
+    private async Task PickCustomerThenScanAsync()
+    {
+        string title = SelectedMode == PickupMode ? "Boş alınan müşteri" : "Teslim müşterisi";
+        CustomerItem? customer = await CustomerPickPage.OpenAsync(Navigation, title);
+        if (customer is null)
+        {
+            return;
+        }
+
+        _selectedCustomer = customer;
+        ShowCustomer();
+        await ScanManyAsync();
+    }
+
+    private void ShowCustomer()
+    {
+        if (_selectedCustomer is CustomerItem customer)
+        {
+            _customerLabel.Text = "✅ " + customer.Name + (string.IsNullOrWhiteSpace(customer.City) ? string.Empty : $"  ·  📍 {customer.City}");
+            _customerLabel.TextColor = Ui.Good;
+        }
+        else
+        {
+            _customerLabel.Text = "Müşteri seçilmedi";
+            _customerLabel.TextColor = Ui.Muted;
+        }
     }
 
     private void SelectMode(int kind)
@@ -338,6 +383,7 @@ public sealed class CylinderTripPage : ContentPage
                 if (await DisplayAlertAsync("Teslim kaydedildi", message + "\n\nBu müşteriden boş tüp aldınız mı?", "Evet, boşları okut", "Hayır, sonraki müşteri"))
                 {
                     SelectMode(PickupMode);
+                    await ScanManyAsync();
                 }
                 else
                 {
@@ -365,13 +411,10 @@ public sealed class CylinderTripPage : ContentPage
 
     private void NextCustomer()
     {
-        _customerSearch.Text = string.Empty;
-        _customers = [];
-        _customer.ItemsSource = null;
-        _customer.SelectedIndex = -1;
-        _customer.Title = "Teslim müşterisi";
+        _selectedCustomer = null;
+        ShowCustomer();
         SelectMode(DeliverMode);
-        _stepHint.Text = "👉 Sıradaki müşteriyi bulun, tüpleri okutun, KAYDET'e basın. Teslimatlar bitince "
+        _stepHint.Text = "👉 Sıradaki müşteri için \"Müşteriye teslim\"e dokunun. Teslimatlar bitince "
             + (HasMode(ReturnMode) ? $"depoda {Step(ReturnMode)}." : "depoya dönün.");
     }
 
@@ -567,9 +610,27 @@ public sealed class CylinderTripPage : ContentPage
         _tripLine.Text = $"🚚 {SelectedPlate ?? "Araç seçin"}";
         _tripTiles.Content = Ui.TileGrid(
         [
-            Ui.StatTile("🛢️", loaded.ToString(), "Araçta tüp", Ui.Accent),
-            Ui.StatTile("🤝", (SelectedTrip?.DeliveredTotal ?? 0).ToString(), "Bu seferde teslim", Ui.Good)
+            Tappable(Ui.StatTile("🛢️", loaded.ToString(), "Araçta tüp", Ui.Accent, "Dokunun: tüpler ›"),
+                () => OpenCylindersAsync(SelectedPlate, TripCylindersPage.OnVehicle, "Araçta tüp", "🛢️", Ui.Accent)),
+            Tappable(Ui.StatTile("🤝", (SelectedTrip?.DeliveredTotal ?? 0).ToString(), "Bu seferde teslim", Ui.Good, "Dokunun: tüpler ›"),
+                () => OpenCylindersAsync(null, TripCylindersPage.Delivered, "Bu seferde teslim", "🤝", Ui.Good))
         ]);
+    }
+
+    private static View Tappable(View view, Func<Task> onTap)
+    {
+        TapGestureRecognizer tap = new();
+        tap.Tapped += async (_, _) => await onTap();
+        view.GestureRecognizers.Add(tap);
+        return view;
+    }
+
+    private async Task OpenCylindersAsync(string? plate, string state, string title, string icon, Color color)
+    {
+        if (SelectedTrip is ActiveTripSummary trip)
+        {
+            await TripCylindersPage.OpenAsync(Navigation, trip.Id, plate, state, title, icon, color);
+        }
     }
 
     private async Task RefreshGroupsAsync()
@@ -687,57 +748,6 @@ public sealed class CylinderTripPage : ContentPage
         catch (Exception exception)
         {
             await DisplayAlertAsync("Sefer", exception.Message, "Tamam");
-        }
-        finally
-        {
-            _busy.IsVisible = false;
-        }
-    }
-
-    private async Task SearchCustomersAsync(bool live = false)
-    {
-        string query = (_customerSearch.Text ?? string.Empty).Trim();
-        if (query.Length < Ui.LiveSearchMinLength)
-        {
-            if (!live)
-            {
-                await DisplayAlertAsync("Müşteri", "En az 2 karakter yazın.", "Tamam");
-            }
-
-            return;
-        }
-
-        _busy.IsVisible = true;
-        try
-        {
-            var found = await ApiClient.Instance.CustomersAsync(query);
-            if (live && query != (_customerSearch.Text ?? string.Empty).Trim())
-            {
-                return;
-            }
-
-            _customers = found;
-            _customer.ItemsSource = _customers.Select(c => $"{c.Name} ({c.Code})").ToList();
-            _customer.Title = found.Count == 0 ? "Teslim müşterisi" : $"Teslim müşterisi — {found.Count} sonuç, seçmek için dokunun";
-            if (found.Count == 1)
-            {
-                _customer.SelectedIndex = 0;
-            }
-            else if (!live && found.Count == 0)
-            {
-                await DisplayAlertAsync("Müşteri", $"'{query}' ile eşleşen müşteri bulunamadı.", "Tamam");
-            }
-            else if (!live)
-            {
-                _customer.Focus();
-            }
-        }
-        catch (Exception exception)
-        {
-            if (!live)
-            {
-                await DisplayAlertAsync("Müşteri", exception.Message, "Tamam");
-            }
         }
         finally
         {
@@ -1297,9 +1307,8 @@ public sealed class CylinderTripPage : ContentPage
     // The scan section switches to delivery for this customer; "Müşteriden boş alım" keeps the same customer.
     private void UseStop(TripStopItem stop)
     {
-        _customers = [new CustomerItem(stop.CustomerId, string.Empty, stop.CustomerName, stop.City, null, true, 0)];
-        _customer.ItemsSource = _customers.Select(c => c.Name).ToList();
-        _customer.SelectedIndex = 0;
+        _selectedCustomer = new CustomerItem(stop.CustomerId, string.Empty, stop.CustomerName, stop.City, null, true, 0);
+        ShowCustomer();
         int deliver = Array.FindIndex(_modes, m => m.Kind == DeliverMode);
         if (deliver >= 0 && SelectedMode is not (DeliverMode or PickupMode))
         {
