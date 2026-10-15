@@ -1361,7 +1361,7 @@ public sealed class CylinderTripPage : ContentPage
             return;
         }
 
-        CustomerItem? customer = await PickCustomerAsync("Rotaya eklenecek müşteriyi arayın (en az 2 harf).", "Vazgeç");
+        CustomerItem? customer = await CustomerPickPage.OpenAsync(Navigation, "Rotaya müşteri ekle");
         if (customer is not null)
         {
             await AddStopAsync(trip.Id, plate, customer.Id);
@@ -1521,7 +1521,7 @@ public sealed class CylinderTripPage : ContentPage
         string? note = null;
         if (reason.AsksCustomer)
         {
-            CustomerItem? customer = await PickCustomerAsync();
+            CustomerItem? customer = await CustomerPickPage.OpenAsync(Navigation, "Tüpün kaldığı müşteri");
             customerId = customer?.Id;
         }
 
@@ -1553,46 +1553,4 @@ public sealed class CylinderTripPage : ContentPage
         }
     }
 
-    private async Task<CustomerItem?> PickCustomerAsync(
-        string prompt = "Tüpün kaldığı müşteriyi arayın (en az 2 harf). Boş bırakırsanız adı elle yazarsınız.", string cancel = "Elle yaz")
-    {
-        while (true)
-        {
-            string? query = await DisplayPromptAsync("Müşteri", prompt, "Ara", cancel);
-            query = query?.Trim();
-            if (string.IsNullOrEmpty(query))
-            {
-                return null;
-            }
-
-            if (query.Length < Ui.LiveSearchMinLength)
-            {
-                continue;
-            }
-
-            List<CustomerItem> found;
-            try
-            {
-                _busy.IsVisible = true;
-                found = await ApiClient.Instance.CustomersAsync(query);
-            }
-            catch (Exception exception)
-            {
-                await DisplayAlertAsync("Müşteri", exception.Message, "Tamam");
-                return null;
-            }
-            finally
-            {
-                _busy.IsVisible = false;
-            }
-
-            List<string> items = found.Select(c => $"{c.Name} ({c.Code})").ToList();
-            string? picked = await DisplayActionSheetAsync(found.Count == 0 ? "Müşteri bulunamadı" : "Müşteri seçin", "Yeniden ara", null, items.ToArray());
-            int index = picked is null ? -1 : items.IndexOf(picked);
-            if (index >= 0)
-            {
-                return found[index];
-            }
-        }
-    }
 }

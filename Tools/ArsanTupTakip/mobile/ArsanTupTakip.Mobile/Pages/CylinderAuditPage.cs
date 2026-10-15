@@ -5,8 +5,13 @@ namespace ArsanTupTakip.Mobile.Pages;
 // On-site count: the cylinders scanned at a customer are compared with what the records say is there.
 public sealed class CylinderAuditPage : ContentPage
 {
-    private readonly Entry _customerSearch = new() { Placeholder = "Müşteri ara (ad, kod, şehir)", ReturnType = ReturnType.Search };
-    private readonly Picker _customer = new() { Title = "Sayım yapılacak müşteri" };
+    private readonly Label _customerInfo = new()
+    {
+        FontSize = 15,
+        FontFamily = "OpenSansSemibold",
+        LineBreakMode = LineBreakMode.WordWrap,
+        Text = "🔎 Sayım yapılacak müşteriyi arayıp seçin."
+    };
     private readonly Entry _code = new() { Placeholder = "Barkod veya seri no (elle)", ReturnType = ReturnType.Done };
     private readonly Entry _note = new() { Placeholder = "Not (isteğe bağlı)" };
     private readonly Label _expected = Ui.Note(string.Empty);
@@ -16,19 +21,17 @@ public sealed class CylinderAuditPage : ContentPage
     private readonly Button _stockButton;
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
     private readonly List<string> _scanned = [];
-    private List<CustomerItem> _customers = [];
+    private CustomerItem? _selectedCustomer;
 
     public CylinderAuditPage()
     {
         Title = "Müşteride sayım";
-        Ui.LiveSearch(_customerSearch, SearchCustomersAsync);
-        _customer.SelectedIndexChanged += (_, _) => ShowExpected();
         _code.Completed += (_, _) => AddManual();
         _resultCard = Ui.Card(_result);
         _resultCard.IsVisible = false;
         _stockButton = Ui.Secondary("📋 Müşterideki tüpleri gör", async (_, _) =>
         {
-            if (SelectedCustomer is CustomerItem customer)
+            if (_selectedCustomer is CustomerItem customer)
             {
                 await Navigation.PushAsync(new CustomerStockPage(customer));
             }
@@ -47,9 +50,8 @@ public sealed class CylinderAuditPage : ContentPage
                     Ui.Note("Müşteriyi seçin, sahadaki tüpleri okutun ve sayımı kaydedin. Kayıtlarla karşılaştırılıp eksik ve fazla tüpler listelenir; tüplerin durumu değiştirilmez."),
                     Ui.Section(
                         "1 · Müşteri",
-                        _customerSearch,
-                        Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
-                        _customer,
+                        _customerInfo,
+                        Ui.Primary("🔎 Müşteri ara / seç", async (_, _) => await PickCustomerAsync()),
                         _expected,
                         _stockButton),
                     Ui.Section(
@@ -72,12 +74,31 @@ public sealed class CylinderAuditPage : ContentPage
         RefreshScanned();
     }
 
-    private CustomerItem? SelectedCustomer => _customer.SelectedIndex >= 0 ? _customers[_customer.SelectedIndex] : null;
-
-    private void ShowExpected()
+    private void ShowSelected()
     {
-        _expected.Text = SelectedCustomer is CustomerItem customer ? $"Kayıtlara göre {customer.Name} müşterisinde {customer.Cylinders} tüp var." : string.Empty;
-        _stockButton.IsVisible = SelectedCustomer is not null && ApiClient.Instance.Can(Perm.CylinderView);
+        if (_selectedCustomer is not CustomerItem customer)
+        {
+            _customerInfo.Text = "🔎 Sayım yapılacak müşteriyi arayıp seçin.";
+            _expected.Text = string.Empty;
+            _stockButton.IsVisible = false;
+            return;
+        }
+
+        _customerInfo.Text = $"{customer.Name}\n{customer.Subtitle}";
+        _expected.Text = $"Kayıtlara göre {customer.Name} müşterisinde {customer.Cylinders} tüp var.";
+        _stockButton.IsVisible = ApiClient.Instance.Can(Perm.CylinderView);
+    }
+
+    private async Task PickCustomerAsync()
+    {
+        CustomerItem? picked = await CustomerPickPage.OpenAsync(Navigation, "Sayım müşterisi");
+        if (picked is null)
+        {
+            return;
+        }
+
+        _selectedCustomer = picked;
+        ShowSelected();
     }
 
     private void RefreshScanned() =>
@@ -114,30 +135,9 @@ public sealed class CylinderAuditPage : ContentPage
         }
     }
 
-    private Task SearchCustomersAsync(bool live = false) => Ui.RunAsync(this, _busy, async () =>
-    {
-        string query = _customerSearch.Text ?? string.Empty;
-        var found = await ApiClient.Instance.CustomersAsync(query);
-        if (live && query != (_customerSearch.Text ?? string.Empty))
-        {
-            return;
-        }
-
-        _customers = found;
-        _customer.ItemsSource = _customers.Select(c => $"{c.Name} ({c.Code}) · {c.Cylinders} tüp").ToList();
-        if (_customers.Count == 1)
-        {
-            _customer.SelectedIndex = 0;
-        }
-        else if (_customers.Count == 0 && !live)
-        {
-            await DisplayAlertAsync("Müşteri", "Eşleşen müşteri yok.", "Tamam");
-        }
-    }, quiet: live);
-
     private async Task SubmitAsync()
     {
-        if (SelectedCustomer is not CustomerItem customer)
+        if (_selectedCustomer is not CustomerItem customer)
         {
             await DisplayAlertAsync("Sayım", "Önce müşteriyi seçin.", "Tamam");
             return;

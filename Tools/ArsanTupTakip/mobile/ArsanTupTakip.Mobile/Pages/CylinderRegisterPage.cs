@@ -20,10 +20,15 @@ public sealed class CylinderRegisterPage : ContentPage
     private readonly Picker _fullness = new() { Title = "Dolu / boş" };
     private readonly CheckBox _hasTestDate = new() { Color = Ui.Accent };
     private readonly DatePicker _testDate = new() { Date = DateTime.Today.AddYears(1), Format = "dd.MM.yyyy", IsEnabled = false };
-    private readonly Entry _customerSearch = new() { Placeholder = "Müşteri ara (ad, şehir, telefon)", ReturnType = ReturnType.Search };
-    private readonly Picker _customer = new() { Title = "Müşteri" };
+    private readonly Label _customerInfo = new()
+    {
+        FontSize = 15,
+        FontFamily = "OpenSansSemibold",
+        LineBreakMode = LineBreakMode.WordWrap,
+        Text = "Depoda (müşteri yok) — isterseniz müşteri seçin."
+    };
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
-    private List<CustomerItem> _customers = [];
+    private CustomerItem? _selectedCustomer;
     private bool _saved;
 
     // Leaving for the new-customer form is not leaving the registration.
@@ -39,8 +44,6 @@ public sealed class CylinderRegisterPage : ContentPage
         _fullness.SelectedIndex = 0;
         _gas.SelectedIndexChanged += (_, _) => _otherGas.IsVisible = Equals(_gas.SelectedItem, OtherGas);
         _hasTestDate.CheckedChanged += (_, e) => _testDate.IsEnabled = e.Value;
-        Ui.LiveSearch(_customerSearch, SearchCustomersAsync);
-        ShowCustomers();
 
         Grid capacityRow = new()
         {
@@ -72,11 +75,11 @@ public sealed class CylinderRegisterPage : ContentPage
                     Ui.Section("Tüp bilgisi", _gas, _otherGas, capacityRow, _fullness, testRow),
                     Ui.Section("Müşteri (isteğe bağlı)",
                         Ui.Note("Seçerseniz tüp doğrudan bu müşteriye teslim edilmiş olarak kaydedilir. Listede yoksa yeni müşteri açabilirsiniz."),
-                        _customerSearch,
+                        _customerInfo,
+                        Ui.Primary("🔎 Müşteri ara / seç", async (_, _) => await PickCustomerAsync()),
                         Ui.ActionRow(
-                            Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
-                            Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync())),
-                        _customer),
+                            Ui.Secondary("Depoda bırak", (_, _) => ClearCustomer()),
+                            Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync()))),
                     Ui.Primary("Kaydet", async (_, _) => await SaveAsync()),
                     _busy
                 }
@@ -122,26 +125,28 @@ public sealed class CylinderRegisterPage : ContentPage
         }
     }
 
-    private Task SearchCustomersAsync(bool live = false) => Ui.RunAsync(this, _busy, async () =>
+    private void ShowSelectedCustomer() =>
+        _customerInfo.Text = _selectedCustomer is CustomerItem c
+            ? $"{c.Name}\n{c.Subtitle}"
+            : "Depoda (müşteri yok) — isterseniz müşteri seçin.";
+
+    private void ClearCustomer()
     {
-        string query = _customerSearch.Text ?? string.Empty;
-        var found = await ApiClient.Instance.CustomersAsync(query);
-        if (live && query != (_customerSearch.Text ?? string.Empty))
+        _selectedCustomer = null;
+        ShowSelectedCustomer();
+    }
+
+    private async Task PickCustomerAsync()
+    {
+        CustomerItem? picked = await CustomerPickPage.OpenAsync(Navigation, "Müşteri seçin");
+        if (picked is null)
         {
             return;
         }
 
-        _customers = found;
-        ShowCustomers();
-        if (_customers.Count == 0 && !live)
-        {
-            await DisplayAlertAsync("Müşteri", "Eşleşen müşteri yok.", "Tamam");
-        }
-        else if (_customers.Count == 1)
-        {
-            _customer.SelectedIndex = 1;
-        }
-    }, quiet: live);
+        _selectedCustomer = picked;
+        ShowSelectedCustomer();
+    }
 
     private async Task NewCustomerAsync()
     {
@@ -149,7 +154,7 @@ public sealed class CylinderRegisterPage : ContentPage
         _customerFormOpen = true;
         try
         {
-            created = await CustomerCreatePage.CreateAsync(Navigation, _customerSearch.Text);
+            created = await CustomerCreatePage.CreateAsync(Navigation, _selectedCustomer?.Name);
         }
         finally
         {
@@ -161,21 +166,9 @@ public sealed class CylinderRegisterPage : ContentPage
             return;
         }
 
-        _customers = [created];
-        _customerSearch.Text = created.Name;
-        ShowCustomers();
-        _customer.SelectedIndex = 1;
+        _selectedCustomer = created;
+        ShowSelectedCustomer();
     }
-
-    private void ShowCustomers()
-    {
-        _customer.ItemsSource = new[] { "Depoda (müşteri yok)" }
-            .Concat(_customers.Select(c => c.Name + (string.IsNullOrWhiteSpace(c.City) ? string.Empty : " · " + c.City)))
-            .ToList();
-        _customer.SelectedIndex = 0;
-    }
-
-    private CustomerItem? SelectedCustomer => _customer.SelectedIndex > 0 ? _customers[_customer.SelectedIndex - 1] : null;
 
     private string GasType => Equals(_gas.SelectedItem, OtherGas) ? (_otherGas.Text ?? string.Empty).Trim() : _gas.SelectedItem as string ?? string.Empty;
 
@@ -206,7 +199,7 @@ public sealed class CylinderRegisterPage : ContentPage
                 (string)_unit.SelectedItem,
                 Fullness[Math.Max(0, _fullness.SelectedIndex)].Value,
                 _hasTestDate.IsChecked ? _testDate.Date : null,
-                SelectedCustomer?.Id);
+                _selectedCustomer?.Id);
             _saved = true;
             await DisplayAlertAsync("Kaydedildi", message, "Tamam");
             await Navigation.PopAsync();

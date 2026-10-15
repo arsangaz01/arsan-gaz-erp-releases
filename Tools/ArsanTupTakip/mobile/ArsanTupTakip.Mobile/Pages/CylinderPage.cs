@@ -30,8 +30,13 @@ public sealed class CylinderPage : ContentPage
     private readonly Entry _batchCode = new() { Placeholder = "Barkod veya seri no (elle ekle)", ReturnType = ReturnType.Done };
     private readonly Label _detail = new() { FontSize = 14 };
     private readonly Picker _action = new() { Title = "Hareket" };
-    private readonly Entry _customerSearch = new() { Placeholder = "Müşteri ara (ad, kod, şehir)", ReturnType = ReturnType.Search };
-    private readonly Picker _customer = new() { Title = "Müşteri seçin" };
+    private readonly Label _customerInfo = new()
+    {
+        FontSize = 15,
+        FontFamily = "OpenSansSemibold",
+        LineBreakMode = LineBreakMode.WordWrap,
+        Text = "🔎 Teslim müşterisini arayıp seçin."
+    };
     private readonly Entry _plate = new() { Placeholder = "Plaka (ör. 01 ABC 123, boş bırakılabilir)" };
     private readonly Picker _knownPlates = new() { Title = "Kayıtlı araçlar" };
     private readonly Picker _fullness = new() { Title = "Dolu / boş" };
@@ -47,7 +52,7 @@ public sealed class CylinderPage : ContentPage
     private readonly VerticalStackLayout _vehiclePanel;
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
     private readonly List<string> _batch = [];
-    private List<CustomerItem> _customers = [];
+    private CustomerItem? _selectedCustomer;
     private CylinderInfo? _current;
     private bool _platesLoaded;
 
@@ -80,7 +85,6 @@ public sealed class CylinderPage : ContentPage
         };
         _code.Completed += async (_, _) => await OnCodeEnteredAsync();
         _batchCode.Completed += async (_, _) => await OnCodeEnteredAsync();
-        Ui.LiveSearch(_customerSearch, SearchCustomersAsync);
         _batchMode.Toggled += (_, _) => ApplyMode();
 
         _pendingPanel = Ui.Card(new VerticalStackLayout
@@ -95,11 +99,9 @@ public sealed class CylinderPage : ContentPage
             IsVisible = false,
             Children =
             {
-                _customerSearch,
-                Ui.ActionRow(
-                    Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()),
-                    Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync()).ShowIf(ApiClient.Instance.Can(Perm.CustomerAdd))),
-                _customer
+                _customerInfo,
+                Ui.Primary("🔎 Müşteri ara / seç", async (_, _) => await PickCustomerAsync()),
+                Ui.Secondary("➕ Yeni müşteri", async (_, _) => await NewCustomerAsync()).ShowIf(ApiClient.Instance.Can(Perm.CustomerAdd))
             }
         };
         _fullness.IsVisible = ApiClient.Instance.Can(Perm.MoveFullness);
@@ -408,8 +410,13 @@ public sealed class CylinderPage : ContentPage
         _action.SelectedIndex = index;
         if (Actions[index].Status == CustomerStatus)
         {
-            await DisplayAlertAsync("Müşteriye teslim", "Aşağıdan müşteriyi arayıp seçin, sonra Kaydet'e basın.", "Tamam");
-            _customerSearch.Focus();
+            await PickCustomerAsync();
+            if (_selectedCustomer is null)
+            {
+                return;
+            }
+
+            await MoveAsync(confirm: true);
             return;
         }
 
@@ -422,39 +429,33 @@ public sealed class CylinderPage : ContentPage
         await MoveAsync(confirm: false);
     }
 
-    private async Task NewCustomerAsync()
+    private void ShowSelectedCustomer() =>
+        _customerInfo.Text = _selectedCustomer is CustomerItem c
+            ? $"{c.Name}\n{c.Subtitle}"
+            : "🔎 Teslim müşterisini arayıp seçin.";
+
+    private async Task PickCustomerAsync()
     {
-        if (await CustomerCreatePage.CreateAsync(Navigation, _customerSearch.Text) is not CustomerItem created)
+        CustomerItem? picked = await CustomerPickPage.OpenAsync(Navigation, "Teslim müşterisi");
+        if (picked is null)
         {
             return;
         }
 
-        _customers = [created];
-        _customerSearch.Text = created.Name;
-        _customer.ItemsSource = _customers.Select(c => c.Name + (string.IsNullOrWhiteSpace(c.City) ? string.Empty : " · " + c.City)).ToList();
-        _customer.SelectedIndex = 0;
+        _selectedCustomer = picked;
+        ShowSelectedCustomer();
     }
 
-    private Task SearchCustomersAsync(bool live = false) => Ui.RunAsync(this, _busy, async () =>
+    private async Task NewCustomerAsync()
     {
-        string query = _customerSearch.Text ?? string.Empty;
-        var found = await ApiClient.Instance.CustomersAsync(query);
-        if (live && query != (_customerSearch.Text ?? string.Empty))
+        if (await CustomerCreatePage.CreateAsync(Navigation, _selectedCustomer?.Name) is not CustomerItem created)
         {
             return;
         }
 
-        _customers = found;
-        _customer.ItemsSource = _customers.Select(c => c.Name + (string.IsNullOrWhiteSpace(c.City) ? string.Empty : " · " + c.City)).ToList();
-        if (_customers.Count == 1)
-        {
-            _customer.SelectedIndex = 0;
-        }
-        else if (_customers.Count == 0 && !live)
-        {
-            await DisplayAlertAsync("Müşteri", "Eşleşen müşteri yok.", "Tamam");
-        }
-    }, quiet: live);
+        _selectedCustomer = created;
+        ShowSelectedCustomer();
+    }
 
     private async Task MoveAsync(bool confirm)
     {
@@ -465,7 +466,7 @@ public sealed class CylinderPage : ContentPage
             return;
         }
 
-        CustomerItem? customer = status == CustomerStatus && _customer.SelectedIndex >= 0 ? _customers[_customer.SelectedIndex] : null;
+        CustomerItem? customer = status == CustomerStatus ? _selectedCustomer : null;
         if (status == CustomerStatus && customer is null)
         {
             await DisplayAlertAsync("Tüp", "Müşteriye teslim için müşteri seçin. Bağlantı yoksa önce bağlantılıyken müşteriyi aratın.", "Tamam");

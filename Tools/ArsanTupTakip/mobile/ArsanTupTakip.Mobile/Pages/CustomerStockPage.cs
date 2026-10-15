@@ -5,36 +5,36 @@ namespace ArsanTupTakip.Mobile.Pages;
 // What one customer holds: count per gas type and size, days since delivery and every cylinder's barcode. Read-only.
 public sealed class CustomerStockPage : ContentPage
 {
-    private readonly Entry _customerSearch = new() { Placeholder = "Müşteri ara (ad, kod, şehir)", ReturnType = ReturnType.Search };
-    private readonly Picker _customer = new() { Title = "Müşteri seçin" };
+    private readonly Label _customerInfo = new()
+    {
+        FontSize = 15,
+        FontFamily = "OpenSansSemibold",
+        LineBreakMode = LineBreakMode.WordWrap,
+        Text = "🔎 Önce müşteriyi arayıp seçin."
+    };
     private readonly SearchBar _filter = new() { Placeholder = "Barkod, seri no veya gaz ara", IsVisible = false };
     private readonly VerticalStackLayout _summary = new() { Spacing = 8 };
     private readonly VerticalStackLayout _groups = new() { Spacing = 8 };
     private readonly VerticalStackLayout _cylinders = new() { Spacing = 8 };
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
     private readonly List<(string Key, Border Card)> _groupCards = [];
-    private List<CustomerItem> _customers = [];
     private CustomerStockResponse? _stock;
     private string? _picked;
+    private readonly bool _pickOnOpen;
 
     public CustomerStockPage(CustomerItem? customer = null)
     {
         Title = customer is null ? "Müşteri Stoku" : customer.Name;
         Ui.ApplyPageChrome(this);
-        Ui.LiveSearch(_customerSearch, SearchCustomersAsync);
-        _customer.SelectedIndexChanged += async (_, _) =>
-        {
-            if (_customer.SelectedIndex >= 0 && _customer.SelectedIndex < _customers.Count)
-            {
-                await LoadAsync(_customers[_customer.SelectedIndex].Id);
-            }
-        };
+        _pickOnOpen = customer is null;
         _filter.TextChanged += (_, _) => ShowCylinders();
 
         VerticalStackLayout stack = new() { Padding = new Thickness(16, 12, 16, 24), Spacing = 14 };
         if (customer is null)
         {
-            stack.Children.Add(Ui.Section("Müşteri", _customerSearch, Ui.Secondary("Müşteri ara", async (_, _) => await SearchCustomersAsync()), _customer));
+            stack.Children.Add(Ui.Section("Müşteri",
+                _customerInfo,
+                Ui.Primary("🔎 Müşteri ara / seç", async (_, _) => await PickCustomerAsync())));
         }
 
         stack.Children.Add(_busy);
@@ -54,28 +54,30 @@ public sealed class CustomerStockPage : ContentPage
                 }
             };
         }
+        else
+        {
+            Loaded += async (_, _) =>
+            {
+                if (_pickOnOpen && _stock is null)
+                {
+                    await PickCustomerAsync();
+                }
+            };
+        }
     }
 
-    private Task SearchCustomersAsync(bool live = false) => Ui.RunAsync(this, _busy, async () =>
+    private async Task PickCustomerAsync()
     {
-        string query = _customerSearch.Text ?? string.Empty;
-        var found = await ApiClient.Instance.CustomersAsync(query);
-        if (live && query != (_customerSearch.Text ?? string.Empty))
+        CustomerItem? picked = await CustomerPickPage.OpenAsync(Navigation, "Müşteri stoku");
+        if (picked is null)
         {
             return;
         }
 
-        _customers = found;
-        _customer.ItemsSource = _customers.Select(c => $"{c.Name} · {c.Cylinders} tüp").ToList();
-        if (_customers.Count == 1)
-        {
-            _customer.SelectedIndex = 0;
-        }
-        else if (_customers.Count == 0 && !live)
-        {
-            await DisplayAlertAsync("Müşteri", "Eşleşen müşteri yok.", "Tamam");
-        }
-    }, quiet: live);
+        Title = picked.Name;
+        _customerInfo.Text = $"{picked.Name}\n{picked.Subtitle}";
+        await LoadAsync(picked.Id);
+    }
 
     private Task LoadAsync(int customerId) => Ui.RunAsync(this, _busy, async () =>
     {

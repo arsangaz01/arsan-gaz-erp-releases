@@ -244,7 +244,9 @@ async function loadOptions() {
 }
 
 function customerLabel(c) {
-  return `${c.name}${c.city ? " · " + c.city : ""}${c.cylinders ? ` (${c.cylinders} tüp)` : ""}`;
+  // Same facts as the mobile coloured picker cards: code, city and cylinder count.
+  return [c.name, c.code ? "#" + c.code : null, c.city ? "📍 " + c.city : null, (c.cylinders || 0) + " tüp"]
+    .filter(Boolean).join(" · ");
 }
 
 // Search box + select pair for picking a customer.
