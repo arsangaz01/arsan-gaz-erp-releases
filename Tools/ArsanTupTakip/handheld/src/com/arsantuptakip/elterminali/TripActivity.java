@@ -77,24 +77,48 @@ public final class TripActivity extends BaseActivity {
             current = modeKinds.get(0);
         }
 
+        page.addView(note("Yukarıdan aşağıya sırayla ilerleyin: seferi seçin, ne yaptığınızı seçin, tüpleri okutup kaydedin."));
+
+        page.addView(heading("1 · SEFER VE ARAÇ"));
         if (Api.can("sefer-baslat")) {
-            page.addView(button("Sefer başlat", v -> startTrip()));
+            page.addView(button("Yeni sefer başlat", v -> startTrip()));
         }
 
-        page.addView(heading("Sefer ve araç"));
         tripSpinner = new Spinner(this);
         vehicleSpinner = new Spinner(this);
         overview = note("");
         page.addView(tripSpinner);
-        page.addView(overview);
         page.addView(vehicleSpinner);
+        page.addView(overview);
         Button addVehicle = button("Sefere araç ekle", v -> addVehicle());
         page.addView(Api.can("sefer-baslat") && Api.fixedPlate() == null
             ? row(button("Yenile", v -> refreshTrips(null)), addVehicle)
             : button("Yenile", v -> refreshTrips(null)));
 
+        page.addView(heading("2 · NE YAPIYORSUNUZ?"));
+        for (int i = 0; i < modeKinds.size(); i++) {
+            final int kind = modeKinds.get(i);
+            Button step = button((i + 1) + ". " + modeLabels.get(i), v -> selectMode(kind));
+            modeButtons.add(step);
+            modeBackgrounds.add(step.getBackground());
+            modeTextColors.add(step.getTextColors());
+            page.addView(step);
+        }
+
+        stepHint = text("", 16, true);
+        stepHint.setTextColor(ACCENT);
+        page.addView(stepHint);
+
+        customerBox = vertical();
+        customerBox.addView(heading("HANGİ MÜŞTERİ?"));
+        customerSearch = searchField("Müşteri adı, kodu veya şehri", this::findCustomer);
+        customerText = text("Müşteri seçilmedi.", 16, true);
+        customerBox.addView(customerText);
+        customerBox.addView(row(customerSearch, button("Müşteri ara", v -> findCustomer())));
+        page.addView(customerBox);
+
         if (routes) {
-            page.addView(heading("Rota (müşteri sırası)"));
+            page.addView(heading("ROTA (MÜŞTERİ SIRASI)"));
             routeText = note("");
             routeBox = vertical();
             page.addView(routeText);
@@ -102,30 +126,7 @@ public final class TripActivity extends BaseActivity {
             page.addView(button("Rotaya müşteri ekle", v -> addStop()));
         }
 
-        page.addView(heading("Okutma"));
-        List<View> pair = new ArrayList<View>();
-        for (int i = 0; i < modeKinds.size(); i++) {
-            final int kind = modeKinds.get(i);
-            Button step = button((i + 1) + ". " + modeLabels.get(i), v -> selectMode(kind));
-            modeButtons.add(step);
-            modeBackgrounds.add(step.getBackground());
-            modeTextColors.add(step.getTextColors());
-            pair.add(step);
-            if (pair.size() == 2 || i == modeKinds.size() - 1) {
-                page.addView(row(pair.toArray(new View[pair.size()])));
-                pair.clear();
-            }
-        }
-
-        stepHint = text("", 16, true);
-        stepHint.setTextColor(ACCENT);
-        page.addView(stepHint);
-        customerBox = vertical();
-        customerSearch = searchField("Müşteri adı veya kodu", this::findCustomer);
-        customerText = text("Müşteri seçilmedi.", 16, true);
-        customerBox.addView(customerText);
-        customerBox.addView(row(customerSearch, button("Müşteri ara", v -> findCustomer())));
-        page.addView(customerBox);
+        page.addView(heading("3 · TÜPLERİ OKUT VE KAYDET"));
         code = scanField("Barkodu okutun", this::addCode);
         page.addView(code);
         page.addView(row(button("Kodu ekle", v -> submit(code, this::addCode)), button("Listeyi temizle", v -> {
@@ -138,19 +139,21 @@ public final class TripActivity extends BaseActivity {
         result = text("", 16, false);
         page.addView(result);
 
-        page.addView(heading("Yük listesi"));
+        if (Api.can("sefer-donus") || Api.can("sefer-kapat")) {
+            page.addView(heading("4 · SEFERİ BİTİR"));
+            page.addView(note("Araç depoda boşaltıldıktan sonra: okutulmayan tüp varsa gerekçe yazın, seferi kapatın."));
+            page.addView(button("Okutulmayan tüplere gerekçe yaz", v -> explainMissing(false, null)));
+            if (Api.can("sefer-kapat")) {
+                page.addView(button("Seferi kapat", v -> closeTrip(true)));
+            }
+        }
+
+        page.addView(heading("YÜK LİSTESİ"));
         loadText = note("");
         loadBox = vertical();
         page.addView(loadText);
         page.addView(loadBox);
         page.addView(row(button("Yük listesini yenile", v -> refreshLoad()), button("Kontrol", v -> save(CHECK))));
-        if (Api.can("sefer-donus") || Api.can("sefer-kapat")) {
-            page.addView(button("Okutulmayan tüplere gerekçe yaz", v -> explainMissing(false, null)));
-        }
-
-        if (Api.can("sefer-kapat")) {
-            page.addView(button("Seferi kapat", v -> closeTrip(true)));
-        }
 
         tripSpinner.setOnItemSelectedListener(new Selected(this::tripChanged));
         vehicleSpinner.setOnItemSelectedListener(new Selected(() -> {
@@ -358,7 +361,7 @@ public final class TripActivity extends BaseActivity {
         String previous = plate() != null ? plate() : Api.fixedPlate();
         plates.clear();
         if (t == null) {
-            overview.setText("Aktif sefer yok." + (Api.can("sefer-baslat") ? " \"Sefer başlat\" ile başlatın." : ""));
+            overview.setText("Aktif sefer yok." + (Api.can("sefer-baslat") ? " \"Yeni sefer başlat\" ile başlatın." : ""));
             vehicleSpinner.setAdapter(adapter(plates));
             refreshRoute();
             refreshLoad();
