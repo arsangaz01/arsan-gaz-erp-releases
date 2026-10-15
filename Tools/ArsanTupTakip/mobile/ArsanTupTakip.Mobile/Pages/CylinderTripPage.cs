@@ -65,6 +65,12 @@ public sealed class CylinderTripPage : ContentPage
     {
         Title = "Sefer";
         Ui.ApplyPageChrome(this);
+        // Handheld scanners (e.g. Honeywell EDA50 keyboard wedge) type the code and press Enter.
+        _code.Completed += (_, _) =>
+        {
+            AddManual();
+            _code.Focus();
+        };
         foreach (var mode in _modes)
         {
             _mode.Items.Add(mode.Label);
