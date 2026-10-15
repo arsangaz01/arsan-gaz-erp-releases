@@ -27,14 +27,31 @@ public sealed class ScanPage : ContentPage
         _allowMany = allowMany;
         _known = new HashSet<string>(known ?? [], StringComparer.OrdinalIgnoreCase);
         Title = "Barkod okut";
+        // Dense QR on curved glossy cylinders needs more frames, TryHarder, and enough pixels;
+        // default preview resolution is often too soft for small stickers.
         _reader = new CameraBarcodeReaderView
         {
             Options = new BarcodeReaderOptions
             {
                 Formats = BarcodeFormat.QrCode | BarcodeFormat.Code128 | BarcodeFormat.Code39 | BarcodeFormat.Ean13 | BarcodeFormat.Ean8 | BarcodeFormat.DataMatrix,
                 AutoRotate = true,
-                Multiple = false
-            }
+                TryHarder = true,
+                TryInverted = true,
+                Multiple = true,
+                DelayBetweenAnalyzingFrames = 80,
+                InitialDelayBeforeAnalyzingFrames = 200,
+                CameraResolutionSelector = resolutions =>
+                {
+                    // Prefer ~1920×1080 for small dense QR; fall back to closest available.
+                    const int target = 1920 * 1080;
+                    return resolutions
+                        .OrderBy(r => Math.Abs((r.Width * r.Height) - target))
+                        .ThenByDescending(r => r.Width * r.Height)
+                        .First();
+                }
+            },
+            // Mild zoom fills the frame with the sticker without over-cropping the finder pattern.
+            ZoomFactor = 0.35f
         };
         _reader.BarcodesDetected += OnDetected;
 
@@ -45,9 +62,18 @@ public sealed class ScanPage : ContentPage
         Button photo = new() { Text = "🖼 Fotoğraftan" };
         photo.Clicked += async (_, _) => await ReadFromPhotoAsync();
 
+        Label tip = new()
+        {
+            Text = "Eğri/parlak QR: feneri açın, 15–25 cm uzaklaşın veya Fotoğraftan deneyin.",
+            FontSize = 13,
+            TextColor = Colors.White,
+            HorizontalTextAlignment = TextAlignment.Center,
+            Margin = new Thickness(12, 4, 12, 0)
+        };
+
         Grid buttons = new()
         {
-            Padding = new Thickness(12, 12, 12, 20),
+            Padding = new Thickness(12, 8, 12, 20),
             ColumnSpacing = 8,
             ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star)]
         };
@@ -57,7 +83,13 @@ public sealed class ScanPage : ContentPage
 
         Grid root = new()
         {
-            RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star), new RowDefinition(GridLength.Auto)],
+            RowDefinitions =
+            [
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Star),
+                new RowDefinition(GridLength.Auto)
+            ],
             BackgroundColor = Colors.Black
         };
         if (continuous)
@@ -67,8 +99,9 @@ public sealed class ScanPage : ContentPage
 
         _counter.IsVisible = continuous;
         root.Add(_counter, 0, 0);
-        root.Add(_reader, 0, 1);
-        root.Add(buttons, 0, 2);
+        root.Add(tip, 0, 1);
+        root.Add(_reader, 0, 2);
+        root.Add(buttons, 0, 3);
         Content = root;
     }
 
@@ -132,8 +165,17 @@ public sealed class ScanPage : ContentPage
 
     private void OnDetected(object? sender, BarcodeDetectionEventArgs e)
     {
-        string? value = e.Results?.FirstOrDefault()?.Value?.Trim();
-        if (string.IsNullOrWhiteSpace(value) || _result.Task.IsCompleted)
+        if (_result.Task.IsCompleted || e.Results is null || e.Results.Length == 0)
+        {
+            return;
+        }
+
+        List<string> values = e.Results
+            .Select(r => r.Value?.Trim() ?? string.Empty)
+            .Where(v => v.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (values.Count == 0)
         {
             return;
         }
@@ -142,9 +184,15 @@ public sealed class ScanPage : ContentPage
         {
             if (_live is not null)
             {
-                if (!_liveBusy && !_codes.Contains(value, StringComparer.OrdinalIgnoreCase))
+                if (!_liveBusy)
                 {
-                    await SendLiveAsync([value]);
+                    List<string> fresh = values
+                        .Where(v => !_codes.Contains(v, StringComparer.OrdinalIgnoreCase))
+                        .ToList();
+                    if (fresh.Count > 0)
+                    {
+                        await SendLiveAsync(fresh);
+                    }
                 }
 
                 return;
@@ -152,19 +200,29 @@ public sealed class ScanPage : ContentPage
 
             if (_continuous)
             {
-                if (_codes.Contains(value, StringComparer.OrdinalIgnoreCase))
+                string? last = null;
+                foreach (string value in values)
                 {
-                    return;
+                    if (_codes.Contains(value, StringComparer.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    _codes.Add(value);
+                    last = value;
                 }
 
-                _codes.Add(value);
-                _counter.Text = $"✅ {_codes.Count} tüp okundu · son: {value}";
-                Buzz();
+                if (last is not null)
+                {
+                    _counter.Text = $"✅ {_codes.Count} tüp okundu · son: {last}";
+                    Buzz();
+                }
+
                 return;
             }
 
             Buzz();
-            await CloseAsync([value]);
+            await CloseAsync([values[0]]);
         });
     }
 
@@ -278,8 +336,8 @@ public sealed class ScanPage : ContentPage
         if (found.Count == 0)
         {
             await DisplayAlertAsync("Barkod bulunamadı", imageCount == 1
-                ? "Görüntüde okunabilir barkod veya QR kod yok. Barkodun net, düz ve tamamen göründüğü bir fotoğraf deneyin."
-                : $"{imageCount} resmin hiçbirinde okunabilir barkod veya QR kod yok. Barkodun net, düz ve tamamen göründüğü fotoğraflar deneyin.", "Tamam");
+                ? "Görüntüde okunabilir barkod veya QR kod yok. Parlamayı azaltın (fener veya gölge), etiketi düz tutmaya çalışın; net ve yakından bir fotoğraf deneyin."
+                : $"{imageCount} resmin hiçbirinde okunabilir barkod veya QR kod yok. Parlamayı azaltıp net, yakından fotoğraflar deneyin.", "Tamam");
             return;
         }
 
