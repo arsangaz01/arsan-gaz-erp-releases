@@ -263,7 +263,7 @@ public sealed record StockCountResponse(string Message, StockCountInfo? Count);
 
 public sealed record StockCountScanResponse(string Outcome, string Message, string? Group, StockCountInfo Count);
 
-public sealed record TripVehicleSummary(string Plate, int LoadedCount, bool OnTrip, DateTime? ReturnedAt);
+public sealed record TripVehicleSummary(string Plate, int LoadedCount, bool OnTrip, DateTime? ReturnedAt, int OnVehicle = 0);
 
 public sealed record ActiveTripSummary(
     int Id,

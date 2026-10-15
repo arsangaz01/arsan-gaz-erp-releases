@@ -263,7 +263,7 @@ public final class TripActivity extends BaseActivity {
         for (int i = 0; p != null && vehicles != null && i < vehicles.length(); i++) {
             JSONObject v = vehicles.optJSONObject(i);
             if (p.equalsIgnoreCase(Api.str(v, "plate"))) {
-                loaded = v.optInt("loadedCount");
+                loaded = v.optInt("onVehicle", v.optInt("loadedCount"));
             }
         }
 
@@ -458,7 +458,7 @@ public final class TripActivity extends BaseActivity {
             }
 
             if (v.optBoolean("onTrip")) {
-                lines.add("Araç " + p + " · " + v.optInt("loadedCount") + " tüp (seferde)");
+                lines.add("Araç " + p + " · " + v.optInt("loadedCount") + " yüklendi · araçta " + v.optInt("onVehicle"));
             }
         }
 
@@ -480,7 +480,7 @@ public final class TripActivity extends BaseActivity {
             String p = plate();
             for (int i = 0; p != null && vehicles != null && i < vehicles.length(); i++) {
                 JSONObject v = vehicles.optJSONObject(i);
-                if (p.equalsIgnoreCase(Api.str(v, "plate")) && v.optBoolean("onTrip") && v.optInt("loadedCount") > 0) {
+                if (p.equalsIgnoreCase(Api.str(v, "plate")) && v.optBoolean("onTrip") && v.optInt("onVehicle", v.optInt("loadedCount")) > 0) {
                     selectMode(modeKinds.contains(RETURN) ? RETURN : DELIVER);
                 }
             }

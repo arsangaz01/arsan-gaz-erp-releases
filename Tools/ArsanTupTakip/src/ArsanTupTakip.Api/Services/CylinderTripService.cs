@@ -8,7 +8,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ArsanTupTakip.Services;
 
-public sealed record TripVehicleSummary(string Plate, int LoadedCount, bool OnTrip, DateTime? ReturnedAt);
+// OnVehicle = cylinders of this trip still on the vehicle (neither delivered nor returned).
+public sealed record TripVehicleSummary(string Plate, int LoadedCount, bool OnTrip, DateTime? ReturnedAt, int OnVehicle = 0);
 
 public sealed record ActiveTripSummary(
     int Id,
@@ -790,6 +791,10 @@ public sealed class CylinderTripService
         Dictionary<string, int> loadedByPlate = trip.Cylinders
             .GroupBy(x => x.VehiclePlate, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, int> openByPlate = trip.Cylinders
+            .Where(IsOpen)
+            .GroupBy(x => x.VehiclePlate, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
 
         List<TripVehicleSummary> vehicles = trip.Vehicles
             .OrderBy(x => x.Plate, StringComparer.Create(System.Globalization.CultureInfo.GetCultureInfo("tr-TR"), true))
@@ -797,12 +802,13 @@ public sealed class CylinderTripService
                 v.Plate,
                 loadedByPlate.GetValueOrDefault(v.Plate),
                 v.ReturnedAt is null,
-                v.ReturnedAt))
+                v.ReturnedAt,
+                openByPlate.GetValueOrDefault(v.Plate)))
             .ToList();
 
         foreach (KeyValuePair<string, int> extra in loadedByPlate.Where(x => vehicles.All(v => !string.Equals(v.Plate, x.Key, StringComparison.OrdinalIgnoreCase))))
         {
-            vehicles.Add(new TripVehicleSummary(extra.Key, extra.Value, true, null));
+            vehicles.Add(new TripVehicleSummary(extra.Key, extra.Value, true, null, openByPlate.GetValueOrDefault(extra.Key)));
         }
 
         return new ActiveTripSummary(

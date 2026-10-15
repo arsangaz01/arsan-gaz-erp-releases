@@ -462,7 +462,7 @@ public sealed class CylinderTripPage : ContentPage
             if (_firstTrip)
             {
                 _firstTrip = false;
-                if (SelectedTrip?.Vehicles.FirstOrDefault(v => string.Equals(v.Plate, SelectedPlate, StringComparison.OrdinalIgnoreCase)) is { OnTrip: true, LoadedCount: > 0 })
+                if (SelectedTrip?.Vehicles.FirstOrDefault(v => string.Equals(v.Plate, SelectedPlate, StringComparison.OrdinalIgnoreCase)) is { OnTrip: true, OnVehicle: > 0 })
                 {
                     SelectMode(HasMode(ReturnMode) ? ReturnMode : DeliverMode);
                 }
@@ -494,7 +494,7 @@ public sealed class CylinderTripPage : ContentPage
         ];
         foreach (TripVehicleSummary vehicle in trip.Vehicles.Where(v => v.OnTrip))
         {
-            lines.Add($"🚚 {vehicle.Plate} · {vehicle.LoadedCount} tüp (seferde)");
+            lines.Add($"🚚 {vehicle.Plate} · {vehicle.LoadedCount} yüklendi · araçta {vehicle.OnVehicle}");
         }
 
         if (trip.Vehicles.All(v => !v.OnTrip))
@@ -559,7 +559,7 @@ public sealed class CylinderTripPage : ContentPage
             return;
         }
 
-        int loaded = SelectedTrip?.Vehicles.FirstOrDefault(v => string.Equals(v.Plate, SelectedPlate, StringComparison.OrdinalIgnoreCase))?.LoadedCount ?? 0;
+        int loaded = SelectedTrip?.Vehicles.FirstOrDefault(v => string.Equals(v.Plate, SelectedPlate, StringComparison.OrdinalIgnoreCase))?.OnVehicle ?? 0;
         _tripLine.Text = $"🚚 {SelectedPlate ?? "Araç seçin"}";
         _tripTiles.Content = Ui.TileGrid(
         [
