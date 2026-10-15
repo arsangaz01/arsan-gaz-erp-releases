@@ -3,6 +3,9 @@ package com.arsantuptakip.elterminali;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -23,7 +26,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-// Same trip flow as the phone app's "Sefer" page: load, deliver, pick up empties, return, check, reasons and close.
+// Same trip flow as the phone app's "Sefer" page, as numbered steps: load the vehicle, deliver to one customer after
+// another (optionally taking their empties), unload the vehicle at the depot (remaining fulls and collected empties),
+// then close the trip with reasons for anything unscanned.
 public final class TripActivity extends BaseActivity {
     private static final int LOAD = 0;
     private static final int DELIVER = 1;
@@ -38,9 +43,14 @@ public final class TripActivity extends BaseActivity {
     private final List<String> scanned = new ArrayList<String>();
     private boolean routes;
 
+    private final List<Button> modeButtons = new ArrayList<Button>();
+    private final List<Drawable> modeBackgrounds = new ArrayList<Drawable>();
+    private final List<ColorStateList> modeTextColors = new ArrayList<ColorStateList>();
+    private int current = CHECK;
+    private boolean firstTrip = true;
     private Spinner tripSpinner;
     private Spinner vehicleSpinner;
-    private Spinner modeSpinner;
+    private TextView stepHint;
     private TextView overview;
     private EditText customerSearch;
     private LinearLayout customerBox;
@@ -59,11 +69,13 @@ public final class TripActivity extends BaseActivity {
         super.onCreate(state);
         setTitle("Sefer");
         routes = Api.can("sefer-rota");
-        addMode("Yükleme", LOAD, "sefer-yukle");
-        addMode(Api.can("sefer-bos-alim") ? "Müşteriye teslim (dolu)" : "Müşteriye teslim", DELIVER, "sefer-teslim");
-        addMode("Müşteriden boş alım", PICKUP, "sefer-bos-alim");
-        addMode("Depo dönüşü", RETURN, "sefer-donus");
-        addMode("Kontrol", CHECK, "sefer-goruntule");
+        addMode("Araca yükle", LOAD, "sefer-yukle");
+        addMode("Müşteriye teslim", DELIVER, "sefer-teslim");
+        addMode("Müşteriden boş al", PICKUP, "sefer-bos-alim");
+        addMode("Aracı boşalt (depo)", RETURN, "sefer-donus");
+        if (!modeKinds.isEmpty()) {
+            current = modeKinds.get(0);
+        }
 
         if (Api.can("sefer-baslat")) {
             page.addView(button("Sefer başlat", v -> startTrip()));
@@ -91,9 +103,23 @@ public final class TripActivity extends BaseActivity {
         }
 
         page.addView(heading("Okutma"));
-        modeSpinner = new Spinner(this);
-        modeSpinner.setAdapter(adapter(modeLabels));
-        page.addView(modeSpinner);
+        List<View> pair = new ArrayList<View>();
+        for (int i = 0; i < modeKinds.size(); i++) {
+            final int kind = modeKinds.get(i);
+            Button step = button((i + 1) + ". " + modeLabels.get(i), v -> selectMode(kind));
+            modeButtons.add(step);
+            modeBackgrounds.add(step.getBackground());
+            modeTextColors.add(step.getTextColors());
+            pair.add(step);
+            if (pair.size() == 2 || i == modeKinds.size() - 1) {
+                page.addView(row(pair.toArray(new View[pair.size()])));
+                pair.clear();
+            }
+        }
+
+        stepHint = text("", 16, true);
+        stepHint.setTextColor(ACCENT);
+        page.addView(stepHint);
         customerBox = vertical();
         customerSearch = searchField("Müşteri adı veya kodu", this::findCustomer);
         customerText = text("Müşteri seçilmedi.", 16, true);
@@ -108,7 +134,7 @@ public final class TripActivity extends BaseActivity {
         })));
         scannedText = text("", 16, false);
         page.addView(scannedText);
-        page.addView(button("Kaydet / kontrol et", v -> save()));
+        page.addView(button("Kaydet", v -> save(mode())));
         result = text("", 16, false);
         page.addView(result);
 
@@ -117,13 +143,13 @@ public final class TripActivity extends BaseActivity {
         loadBox = vertical();
         page.addView(loadText);
         page.addView(loadBox);
-        page.addView(button("Yük listesini yenile", v -> refreshLoad()));
+        page.addView(row(button("Yük listesini yenile", v -> refreshLoad()), button("Kontrol", v -> save(CHECK))));
         if (Api.can("sefer-teslim") || Api.can("sefer-donus") || Api.can("sefer-kapat")) {
             page.addView(button("Okutulmayan tüplere gerekçe yaz", v -> explainMissing(false, null)));
         }
 
         if (Api.can("sefer-kapat")) {
-            page.addView(button("Seferi kapat", v -> closeTrip()));
+            page.addView(button("Seferi kapat", v -> closeTrip(true)));
         }
 
         tripSpinner.setOnItemSelectedListener(new Selected(this::tripChanged));
@@ -131,7 +157,6 @@ public final class TripActivity extends BaseActivity {
             refreshRoute();
             refreshLoad();
         }));
-        modeSpinner.setOnItemSelectedListener(new Selected(this::modeChanged));
         modeChanged();
         showScanned();
         refreshTrips(null);
@@ -180,14 +205,33 @@ public final class TripActivity extends BaseActivity {
     }
 
     private int mode() {
-        int index = modeSpinner.getSelectedItemPosition();
-        return index >= 0 && index < modeKinds.size() ? modeKinds.get(index) : CHECK;
+        return current;
     }
 
     private void selectMode(int kind) {
+        if (modeKinds.contains(kind)) {
+            current = kind;
+            modeChanged();
+        }
+    }
+
+    private String step(int kind) {
         int index = modeKinds.indexOf(kind);
-        if (index >= 0) {
-            modeSpinner.setSelection(index);
+        return index < 0 ? "" : "\"" + (index + 1) + ". " + modeLabels.get(index) + "\"";
+    }
+
+    private String hint(int kind) {
+        switch (kind) {
+            case LOAD:
+                return "Araca yüklediğiniz tüpleri okutun, sonra \"Kaydet\".";
+            case DELIVER:
+                return "Müşteriyi seçin, verdiğiniz dolu tüpleri okutun, \"Kaydet\". Her müşteri için tekrarlayın.";
+            case PICKUP:
+                return "Müşteriyi seçin, aldığınız boş tüpleri okutun, \"Kaydet\".";
+            case RETURN:
+                return "Depoda araçtan indirdiğiniz bütün tüpleri (kalan dolular ve müşterilerden alınan boşlar) okutun, \"Kaydet\". Ardından sefer kapatılır.";
+            default:
+                return "Sefer işlemi için yetkiniz yok.";
         }
     }
 
@@ -202,7 +246,25 @@ public final class TripActivity extends BaseActivity {
     }
 
     private void modeChanged() {
-        customerBox.setVisibility(mode() == DELIVER || mode() == PICKUP ? View.VISIBLE : View.GONE);
+        boolean needsCustomer = mode() == DELIVER || mode() == PICKUP;
+        customerBox.setVisibility(needsCustomer ? View.VISIBLE : View.GONE);
+        for (int i = 0; i < modeButtons.size(); i++) {
+            Button b = modeButtons.get(i);
+            if (modeKinds.get(i) == current) {
+                b.setBackgroundColor(ACCENT);
+                b.setTextColor(Color.WHITE);
+            } else {
+                b.setBackground(modeBackgrounds.get(i));
+                b.setTextColor(modeTextColors.get(i));
+            }
+        }
+
+        stepHint.setText(hint(current));
+        if (needsCustomer && customer == null) {
+            customerSearch.requestFocus();
+        } else {
+            code.requestFocus();
+        }
     }
 
     private void findCustomer() {
@@ -331,6 +393,17 @@ public final class TripActivity extends BaseActivity {
             vehicleSpinner.setSelection(keep);
         }
 
+        if (firstTrip) {
+            firstTrip = false;
+            String p = plate();
+            for (int i = 0; p != null && vehicles != null && i < vehicles.length(); i++) {
+                JSONObject v = vehicles.optJSONObject(i);
+                if (p.equalsIgnoreCase(Api.str(v, "plate")) && v.optBoolean("onTrip") && v.optInt("loadedCount") > 0) {
+                    selectMode(DELIVER);
+                }
+            }
+        }
+
         refreshRoute();
         refreshLoad();
     }
@@ -421,7 +494,7 @@ public final class TripActivity extends BaseActivity {
         });
     }
 
-    private void save() {
+    private void save(final int kind) {
         final JSONObject t = trip();
         if (t == null) {
             alert("Sefer", "Aktif sefer seçin.");
@@ -430,7 +503,6 @@ public final class TripActivity extends BaseActivity {
 
         final int tripId = t.optInt("id");
         final String p = plate();
-        final int kind = mode();
         if ((kind == LOAD || kind == RETURN || kind == PICKUP) && p == null) {
             alert("Sefer", "Yükleme, boş alım ve dönüş için araç seçin.");
             return;
@@ -472,14 +544,67 @@ public final class TripActivity extends BaseActivity {
         }, shown -> {
             result.setText(shown[0]);
             result.setTextColor(shown[1] != null ? RED : MUTED);
-            if (shown[1] != null) {
-                alert("Sefer uyarısı", shown[0]);
-            }
-
             scanned.clear();
             showScanned();
             refreshTrips(tripId);
+            next(kind, shown);
         });
+    }
+
+    // Leads the driver to the next step: after loading to delivery, after a delivery to the empties of the same
+    // customer or the next customer, after unloading the vehicle to closing the trip.
+    private void next(int kind, String[] shown) {
+        boolean failed = shown[0] != null && shown[0].startsWith("0/");
+        if (failed || shown[1] != null && kind != RETURN) {
+            alert(failed ? "Kaydedilemedi" : "Sefer uyarısı", shown[0]);
+            return;
+        }
+
+        switch (kind) {
+            case LOAD:
+                if (modeKinds.contains(DELIVER)) {
+                    selectMode(DELIVER);
+                    alert("Yükleme kaydedildi", shown[0] + "\n\nŞimdi " + step(DELIVER) + ": müşteriyi seçip teslim ettiğiniz tüpleri okutun.");
+                }
+                break;
+            case DELIVER:
+                if (modeKinds.contains(PICKUP)) {
+                    new AlertDialog.Builder(this).setTitle("Teslim kaydedildi").setMessage(shown[0] + "\n\nBu müşteriden boş tüp aldınız mı?")
+                        .setPositiveButton("Evet, boşları okut", (dialog, which) -> selectMode(PICKUP))
+                        .setNegativeButton("Hayır, sonraki müşteri", (dialog, which) -> nextCustomer())
+                        .setCancelable(false)
+                        .show();
+                } else {
+                    alert("Teslim kaydedildi", shown[0]);
+                    nextCustomer();
+                }
+                break;
+            case PICKUP:
+                alert("Boş alım kaydedildi", shown[0]);
+                nextCustomer();
+                break;
+            case RETURN:
+                if (Api.can("sefer-kapat")) {
+                    new AlertDialog.Builder(this).setTitle(shown[1] != null ? "Araç boşaltıldı — uyarı" : "Araç boşaltıldı")
+                        .setMessage(shown[0] + "\n\nSefer şimdi kapatılsın mı?")
+                        .setPositiveButton("Seferi kapat", (dialog, which) -> closeTrip(false))
+                        .setNegativeButton("Daha sonra", null)
+                        .show();
+                } else if (shown[1] != null) {
+                    alert("Sefer uyarısı", shown[0]);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void nextCustomer() {
+        setCustomer(null);
+        customerSearch.setText("");
+        selectMode(DELIVER);
+        stepHint.setText("Sıradaki müşteriyi seçin ve teslim ettiğiniz tüpleri okutun. Teslimatlar bitince depoda "
+            + (modeKinds.contains(RETURN) ? step(RETURN) : "aracı boşaltın") + ".");
     }
 
     // [text, non-null when the server raised alerts]
@@ -657,20 +782,26 @@ public final class TripActivity extends BaseActivity {
         });
     }
 
-    private void closeTrip() {
+    // ask: confirm first, and point to unloading when a vehicle of the trip has not been unloaded yet.
+    private void closeTrip(boolean ask) {
         final JSONObject t = trip();
         if (t == null) {
             alert("Sefer", "Aktif sefer seçin.");
             return;
         }
 
-        confirm("Seferi kapat", Api.str(t, "title") + " kapatılsın mı? Okutulmayan tüpler gerekçeleriyle yöneticiye bildirilir.", "Kapat", () -> {
+        final Runnable go = () -> {
             Runnable close = () -> call(() -> Api.post("/api/sefer/kapat", body("tripId", t.optInt("id"))), closed -> {
                 JSONObject r = closed.optJSONObject("reconcile");
                 boolean alerts = r != null && r.optBoolean("hasAlerts");
                 result.setText(Api.str(closed, "message"));
                 result.setTextColor(alerts ? RED : MUTED);
                 alert(alerts ? "Sefer kapatıldı — uyarı" : "Sefer kapatıldı", Api.str(closed, "message"));
+                setCustomer(null);
+                if (!modeKinds.isEmpty()) {
+                    selectMode(modeKinds.get(0));
+                }
+
                 refreshTrips(null);
             });
             if (t.optBoolean("requireReasons")) {
@@ -678,7 +809,40 @@ public final class TripActivity extends BaseActivity {
             } else {
                 close.run();
             }
-        });
+        };
+        if (!ask) {
+            go.run();
+            return;
+        }
+
+        List<String> loaded = new ArrayList<String>();
+        JSONArray vehicles = t.optJSONArray("vehicles");
+        for (int i = 0; vehicles != null && i < vehicles.length(); i++) {
+            JSONObject v = vehicles.optJSONObject(i);
+            if (v.optBoolean("onTrip")) {
+                loaded.add(Api.str(v, "plate"));
+            }
+        }
+
+        if (!loaded.isEmpty() && modeKinds.contains(RETURN)) {
+            new AlertDialog.Builder(this).setTitle("Araç boşaltılmadı")
+                .setMessage(TextUtils.join(", ", loaded) + " henüz boşaltılmadı. Önce depoda " + step(RETURN)
+                    + " ile indirdiğiniz tüpleri (kalan dolular ve boşlar) okutun, sonra seferi kapatın.")
+                .setPositiveButton("Aracı boşalt", (dialog, which) -> {
+                    int index = plates.indexOf(loaded.get(0));
+                    if (index >= 0) {
+                        vehicleSpinner.setSelection(index);
+                    }
+
+                    selectMode(RETURN);
+                })
+                .setNeutralButton("Yine de kapat", (dialog, which) -> go.run())
+                .setNegativeButton("Vazgeç", null)
+                .show();
+            return;
+        }
+
+        confirm("Seferi kapat", Api.str(t, "title") + " kapatılsın mı? Okutulmayan tüpler gerekçeleriyle yöneticiye bildirilir.", "Kapat", go);
     }
 
     // Asks a reason for every cylinder loaded but neither delivered nor scanned back. With forClose it repeats until
