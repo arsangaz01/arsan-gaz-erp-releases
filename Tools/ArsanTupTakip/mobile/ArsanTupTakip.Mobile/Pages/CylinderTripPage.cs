@@ -315,6 +315,7 @@ public sealed class CylinderTripPage : ContentPage
         _customers = [];
         _customer.ItemsSource = null;
         _customer.SelectedIndex = -1;
+        _customer.Title = "Teslim müşterisi";
         SelectMode(DeliverMode);
         _stepHint.Text = "Sıradaki müşteriyi seçin ve teslim ettiğiniz tüpleri okutun. Teslimatlar bitince "
             + (HasMode(ReturnMode) ? $"depoda {Step(ReturnMode)}." : "depoya dönün; aracı depoda operatör boşaltıp seferi kapatır.");
@@ -634,6 +635,19 @@ public sealed class CylinderTripPage : ContentPage
 
             _customers = found;
             _customer.ItemsSource = _customers.Select(c => $"{c.Name} ({c.Code})").ToList();
+            _customer.Title = found.Count == 0 ? "Teslim müşterisi" : $"Teslim müşterisi — {found.Count} sonuç, seçmek için dokunun";
+            if (found.Count == 1)
+            {
+                _customer.SelectedIndex = 0;
+            }
+            else if (!live && found.Count == 0)
+            {
+                await DisplayAlertAsync("Müşteri", $"'{query}' ile eşleşen müşteri bulunamadı.", "Tamam");
+            }
+            else if (!live)
+            {
+                _customer.Focus();
+            }
         }
         catch (Exception exception)
         {
