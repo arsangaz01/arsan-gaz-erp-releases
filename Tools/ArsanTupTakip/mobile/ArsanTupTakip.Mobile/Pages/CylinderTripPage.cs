@@ -43,7 +43,11 @@ public sealed class CylinderTripPage : ContentPage
     private readonly Label _overview = new() { FontSize = 14, LineBreakMode = LineBreakMode.WordWrap };
     private readonly Picker _trip = new() { Title = "Aktif sefer" };
     private readonly Picker _vehicle = new() { Title = "Sefer aracı" };
-    private readonly Picker _mode = new() { Title = "İşlem" };
+    // Holds the chosen step; the numbered step buttons below replace it on screen.
+    private readonly Picker _mode = new() { Title = "İşlem", IsVisible = false };
+    private readonly List<Button> _stepButtons = [];
+    private readonly Label _stepHint = new() { FontSize = 14, FontFamily = "OpenSansSemibold", TextColor = Ui.AccentDark, LineBreakMode = LineBreakMode.WordWrap };
+    private bool _firstTrip = true;
     private readonly Picker _groupPlate = new() { Title = "Araç filtresi" };
     private readonly ContentView _groups = new();
     private readonly VerticalStackLayout _route = new() { Spacing = 10 };
@@ -74,6 +78,23 @@ public sealed class CylinderTripPage : ContentPage
         foreach (var mode in _modes)
         {
             _mode.Items.Add(mode.Label);
+        }
+
+        for (int i = 0; i < _modes.Length; i++)
+        {
+            int index = i;
+            string label = _modes[i].Kind == 3 ? _modes[i].Label : $"{i + 1}. {_modes[i].Label}";
+            _stepButtons.Add(Ui.Secondary(label, (_, _) =>
+            {
+                _mode.SelectedIndex = index;
+                ApplyMode();
+            }));
+        }
+
+        VerticalStackLayout steps = new() { Spacing = 8 };
+        for (int i = 0; i < _stepButtons.Count; i += 2)
+        {
+            steps.Children.Add(Ui.ActionRow([.. _stepButtons.Skip(i).Take(2)]));
         }
 
         _mode.SelectedIndex = 0;
@@ -145,6 +166,8 @@ public sealed class CylinderTripPage : ContentPage
                     Ui.Section(
                         "Okutma",
                         _mode,
+                        steps,
+                        _stepHint,
                         _customerSearch,
                         _customerSearchButton,
                         _customer,
@@ -202,6 +225,99 @@ public sealed class CylinderTripPage : ContentPage
         _customerSearch.IsVisible = deliver;
         _customerSearchButton.IsVisible = deliver;
         _customer.IsVisible = deliver;
+        for (int i = 0; i < _stepButtons.Count; i++)
+        {
+            Ui.Highlight(_stepButtons[i], i == _mode.SelectedIndex);
+        }
+
+        _stepHint.Text = SelectedMode switch
+        {
+            LoadMode => "Araca yüklediğiniz tüpleri okutun, sonra \"Kaydet\".",
+            DeliverMode => "Müşteriyi seçin, verdiğiniz dolu tüpleri okutun, \"Kaydet\". Her müşteri için tekrarlayın.",
+            PickupMode => "Müşteriyi seçin, aldığınız boş tüpleri okutun, \"Kaydet\".",
+            ReturnMode => "Depoda araçtan inen bütün tüpleri (kalan dolular ve müşterilerden alınan boşlar) okutun, \"Kaydet\". Ardından sefer kapatılır.",
+            _ => "Araçtaki tüpleri okutup yük listesiyle karşılaştırın."
+        };
+    }
+
+    private void SelectMode(int kind)
+    {
+        int index = Array.FindIndex(_modes, m => m.Kind == kind);
+        if (index >= 0)
+        {
+            _mode.SelectedIndex = index;
+            ApplyMode();
+        }
+    }
+
+    private bool HasMode(int kind) => _modes.Any(m => m.Kind == kind);
+
+    private string Step(int kind)
+    {
+        int index = Array.FindIndex(_modes, m => m.Kind == kind);
+        return index < 0 ? string.Empty : $"\"{index + 1}. {_modes[index].Label}\"";
+    }
+
+    // Leads on after a saved scan: loading → delivery, delivery → empties of the same customer or the next customer,
+    // unloading the vehicle → closing the trip.
+    private async Task NextStepAsync(int mode, string message, TripReconcileResponse? reconcile)
+    {
+        bool failed = message.StartsWith("0/", StringComparison.Ordinal) || message.StartsWith("0 tüp", StringComparison.Ordinal);
+        if (failed)
+        {
+            await DisplayAlertAsync("Kaydedilemedi", message, "Tamam");
+            return;
+        }
+
+        if (reconcile?.HasAlerts == true && mode != ReturnMode)
+        {
+            return;
+        }
+
+        switch (mode)
+        {
+            case LoadMode when HasMode(DeliverMode):
+                SelectMode(DeliverMode);
+                await DisplayAlertAsync("Yükleme kaydedildi", $"{message}\n\nŞimdi {Step(DeliverMode)}: müşteriyi seçip teslim ettiğiniz tüpleri okutun.", "Tamam");
+                break;
+            case DeliverMode when HasMode(PickupMode):
+                if (await DisplayAlertAsync("Teslim kaydedildi", message + "\n\nBu müşteriden boş tüp aldınız mı?", "Evet, boşları okut", "Hayır, sonraki müşteri"))
+                {
+                    SelectMode(PickupMode);
+                }
+                else
+                {
+                    NextCustomer();
+                }
+
+                break;
+            case DeliverMode:
+                await DisplayAlertAsync("Teslim kaydedildi", message, "Tamam");
+                NextCustomer();
+                break;
+            case PickupMode:
+                await DisplayAlertAsync("Boş alım kaydedildi", message, "Tamam");
+                NextCustomer();
+                break;
+            case ReturnMode when ApiClient.Instance.Can(Perm.TripClose):
+                if (await DisplayAlertAsync(reconcile?.HasAlerts == true ? "Araç boşaltıldı — uyarı" : "Araç boşaltıldı", message + "\n\nSefer şimdi kapatılsın mı?", "Seferi kapat", "Daha sonra"))
+                {
+                    await CloseTripAsync(ask: false);
+                }
+
+                break;
+        }
+    }
+
+    private void NextCustomer()
+    {
+        _customerSearch.Text = string.Empty;
+        _customers = [];
+        _customer.ItemsSource = null;
+        _customer.SelectedIndex = -1;
+        SelectMode(DeliverMode);
+        _stepHint.Text = "Sıradaki müşteriyi seçin ve teslim ettiğiniz tüpleri okutun. Teslimatlar bitince "
+            + (HasMode(ReturnMode) ? $"depoda {Step(ReturnMode)}." : "depoya dönün; aracı depoda operatör boşaltıp seferi kapatır.");
     }
 
     private void RefreshScanned() =>
@@ -291,6 +407,14 @@ public sealed class CylinderTripPage : ContentPage
 
             ShowOverview();
             RefreshVehicles();
+            if (_firstTrip)
+            {
+                _firstTrip = false;
+                if (SelectedTrip?.Vehicles.FirstOrDefault(v => string.Equals(v.Plate, SelectedPlate, StringComparison.OrdinalIgnoreCase)) is { OnTrip: true, LoadedCount: > 0 })
+                {
+                    SelectMode(HasMode(ReturnMode) ? ReturnMode : DeliverMode);
+                }
+            }
         }
         catch (Exception exception)
         {
@@ -597,6 +721,8 @@ public sealed class CylinderTripPage : ContentPage
             RefreshScanned();
             await RefreshTripsAsync(tripId);
             await RefreshRouteAsync();
+            _busy.IsVisible = false;
+            await NextStepAsync(mode, message, reconcile);
         }
         catch (Exception exception)
         {
@@ -626,7 +752,7 @@ public sealed class CylinderTripPage : ContentPage
         _resultCard.IsVisible = true;
     }
 
-    private async Task CloseTripAsync()
+    private async Task CloseTripAsync(bool ask = true)
     {
         if (SelectedTrip is null)
         {
@@ -634,8 +760,31 @@ public sealed class CylinderTripPage : ContentPage
         }
 
         ActiveTripSummary trip = SelectedTrip;
-        bool ok = await DisplayAlertAsync("Seferi kapat", $"{trip.Title} kapatılsın mı? Okutulmayan tüpler gerekçeleriyle yöneticiye bildirilir.", "Kapat", "İptal");
-        if (!ok)
+        if (ask && HasMode(ReturnMode) && trip.Vehicles.FirstOrDefault(v => v.OnTrip) is TripVehicleSummary loaded)
+        {
+            const string unload = "Aracı boşalt";
+            const string anyway = "Yine de kapat";
+            string? choice = await DisplayActionSheetAsync(
+                $"{loaded.Plate} henüz boşaltılmadı. Önce depoda {Step(ReturnMode)} ile araçtan inen tüpleri (kalan dolular ve boşlar) okutun, sonra seferi kapatın.",
+                "Vazgeç", null, unload, anyway);
+            if (choice == unload)
+            {
+                if (_vehicle.ItemsSource is List<string> plates && plates.FindIndex(p => string.Equals(p, loaded.Plate, StringComparison.OrdinalIgnoreCase)) is int index and >= 0)
+                {
+                    _vehicle.SelectedIndex = index;
+                }
+
+                SelectMode(ReturnMode);
+                _code.Focus();
+                return;
+            }
+
+            if (choice != anyway)
+            {
+                return;
+            }
+        }
+        else if (ask && !await DisplayAlertAsync("Seferi kapat", $"{trip.Title} kapatılsın mı? Okutulmayan tüpler gerekçeleriyle yöneticiye bildirilir.", "Kapat", "İptal"))
         {
             return;
         }

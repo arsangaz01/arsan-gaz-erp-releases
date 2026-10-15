@@ -554,7 +554,7 @@ public final class TripActivity extends BaseActivity {
     // Leads the driver to the next step: after loading to delivery, after a delivery to the empties of the same
     // customer or the next customer, after unloading the vehicle to closing the trip.
     private void next(int kind, String[] shown) {
-        boolean failed = shown[0] != null && shown[0].startsWith("0/");
+        boolean failed = shown[0] != null && (shown[0].startsWith("0/") || shown[0].startsWith("0 tüp"));
         if (failed || shown[1] != null && kind != RETURN) {
             alert(failed ? "Kaydedilemedi" : "Sefer uyarısı", shown[0]);
             return;

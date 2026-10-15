@@ -171,6 +171,21 @@ public static class Ui
         return button;
     }
 
+    // Step buttons made with Secondary: the chosen one looks like a primary button.
+    public static void Highlight(Button button, bool selected)
+    {
+        if (selected)
+        {
+            button.BackgroundColor = Accent;
+            button.TextColor = Colors.White;
+        }
+        else
+        {
+            button.SetAppThemeColor(Button.BackgroundColorProperty, SecondaryLight, SecondaryDark);
+            button.TextColor = AccentDark;
+        }
+    }
+
     public static Button Compact(string text, EventHandler onClick)
     {
         Button button = new()
