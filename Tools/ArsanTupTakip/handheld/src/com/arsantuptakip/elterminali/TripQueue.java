@@ -40,7 +40,8 @@ final class TripQueue {
         JSONArray ops = read();
         int count = 0;
         for (int i = 0; i < ops.length(); i++) {
-            if (ops.optJSONObject(i).optInt("tripId") == tripId) {
+            JSONObject row = ops.optJSONObject(i);
+            if (row != null && row.optInt("tripId") == tripId) {
                 count++;
             }
         }
@@ -126,10 +127,11 @@ final class TripQueue {
         write(left);
     }
 
-    // An expired login, a forced password change, a parallel change (409) and rate limits are retried later; any
-    // other 4xx answer means the server will never accept this operation.
+    // An expired login, forced password change, 403 (yetki/oturum), parallel change (409) and rate limits are
+    // retried later; other 4xx answers mean the server will never accept this operation.
     private static boolean permanent(Api.ApiException e) {
-        return e.status >= 400 && e.status < 500 && e.status != 401 && e.status != 408 && e.status != 409 && e.status != 429
+        return e.status >= 400 && e.status < 500
+            && e.status != 401 && e.status != 403 && e.status != 408 && e.status != 409 && e.status != 429
             && !e.mustChangePassword && !e.sessionEnded;
     }
 
