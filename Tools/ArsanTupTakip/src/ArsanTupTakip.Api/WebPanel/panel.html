@@ -515,13 +515,13 @@ tr.alarm-row td { background:#fef2f2; }
         </div>
         <div>
           <h2>Karekod Yazdır</h2>
-          <p>Üç adım: kod ekle → karekod önizlemesini kontrol et → TSC yazıcıya bas.</p>
+          <p>TA310 barkodu kendisi üretir (TSPL QRCODE). Önizleme ekranda; basınca yazıcıya komut gider.</p>
         </div>
       </div>
       <div class="lb-steps">
         <div class="lb-step on" id="lb-step-1"><b>1 · Barkod ekle</b>Kayıtlı tüp, yeni numara veya ürün</div>
         <div class="lb-step" id="lb-step-2"><b>2 · Önizle</b>Etiket sağda gerçek boyuta yakın görünür</div>
-        <div class="lb-step" id="lb-step-3"><b>3 · Yazdır</b>TSC yazıcısını seçin · kenar boşluğu yok · %100</div>
+        <div class="lb-step" id="lb-step-3"><b>3 · TA310</b>TSPL ile bas · yazıcı karekodu kendi çizer</div>
       </div>
       <div id="lb-msg" class="msg hidden"></div>
 
@@ -610,9 +610,15 @@ tr.alarm-row td { background:#fef2f2; }
             <div id="lb-previews" class="lb-previews"></div>
           </div>
         </div>
+        <div class="filters" style="margin-top:10px">
+          <label>TA310 yazıcı adı<input id="lb-printer" maxlength="80" value="TSC TA310" style="width:min(220px,100%)" title="Windows'taki yazıcı adı"></label>
+          <span id="lb-agent-status" class="hint" style="margin:0">Yerel TSPL ajanı kontrol ediliyor…</span>
+        </div>
         <div class="lb-print-bar">
-          <button class="primary" id="lb-print" type="button">🖨️ Yazdır</button>
-          <span class="hint" style="margin:0">Yazdırma penceresinde TSC yazıcısını seçin. Kenar boşluğu: Yok · Ölçek: %100. Ayarlar bu bilgisayarda hatırlanır.</span>
+          <button class="primary" id="lb-print-tspl" type="button">🖨️ TA310'a bas (TSPL)</button>
+          <button class="secondary" id="lb-download-tspl" type="button">TSPL indir</button>
+          <button class="secondary" id="lb-print" type="button">Tarayıcıdan yazdır</button>
+          <span class="hint" style="margin:0;flex:1;min-width:200px">Önerilen: TSPL — yazıcı QRCODE komutuyla karekodu kendi üretir (bulanık resim yok). Bir kez <code>Tools/ArsanTupTakip/tools/TsplPrintAgent.ps1</code> çalıştırın; ajan yeşil olunca tek tıkla basılır. Ayarlar bu bilgisayarda hatırlanır.</span>
         </div>
       </div>
       <iframe id="lb-print-frame" title="Yazdırma" style="position:fixed;right:0;bottom:0;width:0;height:0;border:0" aria-hidden="true"></iframe>
