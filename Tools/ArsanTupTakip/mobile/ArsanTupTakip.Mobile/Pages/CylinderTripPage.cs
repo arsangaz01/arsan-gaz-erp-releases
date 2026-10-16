@@ -58,6 +58,9 @@ public sealed class CylinderTripPage : ContentPage
     private readonly HorizontalStackLayout _fullReturnRow;
     private readonly Label _customerLabel = new() { FontSize = 18, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap };
     private CustomerItem? _selectedCustomer;
+    // One-step undo of the last local action only (last barcode or last customer pick) — not a server reverse.
+    private readonly Stack<TripUndo> _undo = new();
+    private readonly record struct TripUndo(bool Customer, string? Code, CustomerItem? PreviousCustomer);
     private readonly Border _customerSection;
     // Simple view for drivers: only the trip line, the steps and scanning; everything else sits under "Ayrıntılar".
     private readonly Label _tripLine = new() { FontSize = 18, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap };
@@ -178,6 +181,8 @@ public sealed class CylinderTripPage : ContentPage
         Button save = Ui.Primary("✅  KAYDET", async (_, _) => await SubmitAsync());
         save.FontSize = 18;
         save.MinimumHeightRequest = 60;
+        Button undoLast = Ui.Secondary("↩️  Geri al", async (_, _) => await UndoLastAsync());
+        undoLast.MinimumHeightRequest = 48;
 
         _workArea = new VerticalStackLayout
         {
@@ -187,7 +192,7 @@ public sealed class CylinderTripPage : ContentPage
             {
                 Ui.Card(new VerticalStackLayout { Spacing = 10, Children = { _mode, steps, _stepHint } }),
                 _customerSection,
-                Ui.Card(new VerticalStackLayout { Spacing = 10, Children = { _scannedText, _code, _fullReturnRow, save } }),
+                Ui.Card(new VerticalStackLayout { Spacing = 10, Children = { _scannedText, _code, _fullReturnRow, undoLast, save } }),
                 _busy,
                 _resultCard,
                 Ui.Section(
@@ -216,7 +221,8 @@ public sealed class CylinderTripPage : ContentPage
                         Ui.Secondary("📷 Tek okut", async (_, _) => await ScanAsync()),
                         Ui.Secondary("📷 Toplu okut", async (_, _) => await ScanManyAsync())),
                     Ui.Secondary("Kodu ekle", (_, _) => AddManual()),
-                    Ui.Secondary("🗑️ Okutulanları temizle", (_, _) => { _scanned.Clear(); RefreshScanned(); }),
+                    Ui.Secondary("🗑️ Okutulanları temizle", (_, _) => { ClearScanned(trackUndo: false); }),
+                    Ui.Secondary("↩️ Son işlemi geri al", async (_, _) => await UndoLastAsync()),
                     checkButton ?? (View)new ContentView()),
                 _todaySection,
                 Ui.Section(
@@ -338,6 +344,7 @@ public sealed class CylinderTripPage : ContentPage
             return;
         }
 
+        PushCustomerUndo();
         _selectedCustomer = customer;
         ShowCustomer();
         await ScanManyAsync();
@@ -442,11 +449,68 @@ public sealed class CylinderTripPage : ContentPage
 
     private void NextCustomer()
     {
+        _undo.Clear();
         _selectedCustomer = null;
         ShowCustomer();
         SelectMode(DeliverMode);
         _stepHint.Text = "👉 Sıradaki müşteri için \"Müşteriye teslim\"e dokunun. Teslimatlar bitince "
             + (HasMode(ReturnMode) ? $"depoda {Step(ReturnMode)}." : "depoya dönün.");
+    }
+
+    private void PushCustomerUndo() => _undo.Push(new TripUndo(true, null, _selectedCustomer));
+
+    private void PushScanUndo(string code) => _undo.Push(new TripUndo(false, code, null));
+
+    private void ClearScanned(bool trackUndo)
+    {
+        if (!trackUndo)
+        {
+            // Drop scan undos; keep customer undos so "Geri al" can still deselect the customer.
+            List<TripUndo> customers = [.. _undo.Where(s => s.Customer)]; // newest first
+            _undo.Clear();
+            for (int i = customers.Count - 1; i >= 0; i--)
+            {
+                _undo.Push(customers[i]);
+            }
+        }
+
+        _scanned.Clear();
+        RefreshScanned();
+    }
+
+    private async Task UndoLastAsync()
+    {
+        if (_undo.Count == 0)
+        {
+            await DisplayAlertAsync("Geri al", "Geri alınacak son işlem yok.", "Tamam");
+            return;
+        }
+
+        TripUndo step = _undo.Pop();
+        if (step.Customer)
+        {
+            _selectedCustomer = step.PreviousCustomer;
+            ShowCustomer();
+            ShowInfo(step.PreviousCustomer is null
+                ? "Müşteri seçimi geri alındı."
+                : $"Müşteri geri alındı → {step.PreviousCustomer.Name}");
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(step.Code))
+        {
+            for (int i = _scanned.Count - 1; i >= 0; i--)
+            {
+                if (string.Equals(_scanned[i], step.Code, StringComparison.OrdinalIgnoreCase))
+                {
+                    _scanned.RemoveAt(i);
+                    break;
+                }
+            }
+
+            RefreshScanned();
+            ShowInfo($"Son okutma geri alındı: {step.Code}");
+        }
     }
 
     // After the last delivery the vehicle is empty: offer to close so the summary moves to Tamamlanmış seferler.
@@ -493,6 +557,7 @@ public sealed class CylinderTripPage : ContentPage
             if (!_scanned.Contains(code, StringComparer.OrdinalIgnoreCase))
             {
                 _scanned.Add(code);
+                PushScanUndo(code);
             }
         }
 
@@ -783,6 +848,7 @@ public sealed class CylinderTripPage : ContentPage
         (TripStartResponse trip, string? firstPlate) = started.Value;
 
         _mode.SelectedIndex = 0;
+        _undo.Clear();
         _scanned.Clear();
         RefreshScanned();
         await RefreshTripsAsync(trip.Id);
@@ -928,6 +994,7 @@ public sealed class CylinderTripPage : ContentPage
                 string queued = $"İnternet yok: {codes.Count} tüp telefonda kaydedildi ({waiting} kayıt bekliyor). Bağlantı gelince kendiliğinden gönderilir.";
                 Ui.Banner(_resultCard, _result, "📴", queued, Ui.Warn);
                 Ui.Buzz();
+                _undo.Clear();
                 _scanned.Clear();
                 RefreshScanned();
                 UpdatePendingLine();
@@ -942,6 +1009,7 @@ public sealed class CylinderTripPage : ContentPage
                 await DisplayAlertAsync("Sefer uyarısı", reconcile.Message, "Tamam");
             }
 
+            _undo.Clear();
             _scanned.Clear();
             RefreshScanned();
             _fullReturn.IsToggled = false;
@@ -1400,6 +1468,7 @@ public sealed class CylinderTripPage : ContentPage
     // The scan section switches to delivery for this customer; "Müşteriden boş alım" keeps the same customer.
     private void UseStop(TripStopItem stop)
     {
+        PushCustomerUndo();
         _selectedCustomer = new CustomerItem(stop.CustomerId, string.Empty, stop.CustomerName, stop.City, null, true, 0);
         ShowCustomer();
         int deliver = Array.FindIndex(_modes, m => m.Kind == DeliverMode);
@@ -1408,8 +1477,7 @@ public sealed class CylinderTripPage : ContentPage
             _mode.SelectedIndex = deliver;
         }
 
-        _scanned.Clear();
-        RefreshScanned();
+        ClearScanned(trackUndo: false);
         ShowInfo(_pickup
             ? $"{stop.CustomerName} seçildi. Verdiğiniz dolu tüpleri \"Müşteriye teslim (dolu)\", aldığınız boşları \"Müşteriden boş alım\" ile okutun."
             : $"{stop.CustomerName} seçildi. Teslim ettiğiniz tüpleri okutun.");
