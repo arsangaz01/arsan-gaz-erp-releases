@@ -71,14 +71,39 @@ function Get-PrinterNames {
   }
 }
 
-function Send-Json($res, $code, $obj) {
+function Get-AllowedOrigin([string]$origin) {
+  if ([string]::IsNullOrWhiteSpace($origin)) { return $null }
+  $o = $origin.Trim().TrimEnd('/')
+  $allowed = @(
+    'https://arsantuptakip.com',
+    'https://www.arsantuptakip.com',
+    'http://127.0.0.1',
+    'http://localhost'
+  )
+  foreach ($a in $allowed) {
+    if ($o -eq $a -or $o.StartsWith($a + ':', [StringComparison]::OrdinalIgnoreCase)) { return $origin }
+  }
+  # Panel path bases (e.g. https://arsantuptakip.com/tuptakip) — Origin header has no path, only scheme+host.
+  return $null
+}
+
+function Add-Cors($res, $req) {
+  $origin = Get-AllowedOrigin ([string]$req.Headers['Origin'])
+  if ($origin) {
+    $res.AddHeader("Access-Control-Allow-Origin", $origin)
+    $res.AddHeader("Vary", "Origin")
+  }
+  $res.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+  $res.AddHeader("Access-Control-Allow-Headers", "Content-Type")
+  $res.AddHeader("Access-Control-Allow-Private-Network", "true")
+}
+
+function Send-Json($res, $req, $code, $obj) {
   $json = ($obj | ConvertTo-Json -Compress -Depth 6)
   $bytes = [Text.Encoding]::UTF8.GetBytes($json)
   $res.StatusCode = $code
   $res.ContentType = "application/json; charset=utf-8"
-  $res.AddHeader("Access-Control-Allow-Origin", "*")
-  $res.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-  $res.AddHeader("Access-Control-Allow-Headers", "Content-Type")
+  Add-Cors $res $req
   $res.ContentLength64 = $bytes.Length
   $res.OutputStream.Write($bytes, 0, $bytes.Length)
   $res.OutputStream.Close()
@@ -105,21 +130,19 @@ while ($listener.IsListening) {
   try {
     if ($req.HttpMethod -eq "OPTIONS") {
       $res.StatusCode = 204
-      $res.AddHeader("Access-Control-Allow-Origin", "*")
-      $res.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-      $res.AddHeader("Access-Control-Allow-Headers", "Content-Type")
+      Add-Cors $res $req
       $res.Close()
       continue
     }
 
     $path = $req.Url.AbsolutePath.TrimEnd('/').ToLowerInvariant()
     if ($req.HttpMethod -eq "GET" -and ($path -eq "" -or $path -eq "/health")) {
-      Send-Json $res 200 @{ ok = $true; printer = $DefaultPrinter; printers = @(Get-PrinterNames) }
+      Send-Json $res $req 200 @{ ok = $true; printer = $DefaultPrinter; printers = @(Get-PrinterNames) }
       continue
     }
 
     if ($req.HttpMethod -eq "GET" -and $path -eq "/printers") {
-      Send-Json $res 200 @{ printers = @(Get-PrinterNames) }
+      Send-Json $res $req 200 @{ printers = @(Get-PrinterNames) }
       continue
     }
 
@@ -131,23 +154,23 @@ while ($listener.IsListening) {
       $printer = if ($data.printer) { [string]$data.printer } else { $DefaultPrinter }
       $tspl = [string]$data.tspl
       if ([string]::IsNullOrWhiteSpace($tspl)) {
-        Send-Json $res 400 @{ ok = $false; error = "tspl boş" }
+        Send-Json $res $req 400 @{ ok = $false; error = "tspl boş" }
         continue
       }
       $bytes = [Text.Encoding]::UTF8.GetBytes($tspl)
       $err = [TsplRawPrinter]::Send($printer, $bytes)
       if ($err) {
         Write-Host "$(Get-Date -Format HH:mm:ss) HATA $printer — $err"
-        Send-Json $res 500 @{ ok = $false; error = $err }
+        Send-Json $res $req 500 @{ ok = $false; error = $err }
       } else {
         Write-Host "$(Get-Date -Format HH:mm:ss) OK $printer — $($bytes.Length) bayt TSPL"
-        Send-Json $res 200 @{ ok = $true; printer = $printer; bytes = $bytes.Length }
+        Send-Json $res $req 200 @{ ok = $true; printer = $printer; bytes = $bytes.Length }
       }
       continue
     }
 
-    Send-Json $res 404 @{ ok = $false; error = "bilinmeyen yol" }
+    Send-Json $res $req 404 @{ ok = $false; error = "bilinmeyen yol" }
   } catch {
-    try { Send-Json $res 500 @{ ok = $false; error = $_.Exception.Message } } catch { $res.Abort() }
+    try { Send-Json $res $req 500 @{ ok = $false; error = $_.Exception.Message } } catch { $res.Abort() }
   }
 }

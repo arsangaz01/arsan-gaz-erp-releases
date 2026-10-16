@@ -41,6 +41,7 @@ internal static class WebPanelEndpoints
 
     private const int MaxMovementRows = 500;
     private const int MaxExportRows = 20_000;
+    private const int MaxCylinderRows = 5000;
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
 
     public static void Map(WebApplication app)
@@ -58,7 +59,7 @@ internal static class WebPanelEndpoints
                 headers["Referrer-Policy"] = "no-referrer";
                 headers["Cache-Control"] = "no-store";
                 headers["Content-Security-Policy"] =
-                    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'";
+                    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:39201; frame-ancestors 'none'; form-action 'self'; base-uri 'none'";
             }
 
             await next(context);
@@ -350,12 +351,16 @@ internal static class WebPanelEndpoints
                 query = query.Where(c => c.Status == CylinderStatus.Customer && c.LastMovementAt != null && c.LastMovementAt < limit);
             }
 
-            List<Cylinder> rows = await query.OrderBy(c => c.SerialNumber).Take(5000).ToListAsync();
+            // Search before Take so a match outside the first 5000 serials is still found (same as TupTakip).
             string term = (q ?? string.Empty).Trim();
+            List<Cylinder> rows = await (term.Length == 0
+                ? query.OrderBy(c => c.SerialNumber).Take(MaxCylinderRows)
+                : query.OrderBy(c => c.SerialNumber)).ToListAsync();
             DateTime today = DateTime.Today;
             return Results.Ok(rows
                 .Where(c => term.Length == 0 || Contains(c.SerialNumber, term) || Contains(c.Barcode, term) || Contains(c.GasType, term)
                     || Contains(c.CurrentCustomer?.CompanyName, term) || Contains(c.OwnerCustomer?.CompanyName, term) || Contains(c.VehiclePlate, term))
+                .Take(MaxCylinderRows)
                 .Select(c => new
                 {
                     c.Id,

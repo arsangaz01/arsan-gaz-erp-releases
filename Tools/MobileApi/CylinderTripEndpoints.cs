@@ -288,13 +288,9 @@ internal static class CylinderTripEndpoints
             return true;
         }
 
-        if (!string.IsNullOrWhiteSpace(trip.ClosedBy))
-        {
-            return string.Equals(trip.ClosedBy, user.UserName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        return trip.CreatedBy is not null
-            && trip.CreatedBy.Contains(user.UserName, StringComparison.OrdinalIgnoreCase);
+        // First-app panel users have no FixedPlate; without ClosedBy, hide the trip (no CreatedBy substring leak).
+        return !string.IsNullOrWhiteSpace(trip.ClosedBy)
+            && string.Equals(trip.ClosedBy, user.UserName, StringComparison.OrdinalIgnoreCase);
     }
 
     internal static object ReasonCatalog() =>

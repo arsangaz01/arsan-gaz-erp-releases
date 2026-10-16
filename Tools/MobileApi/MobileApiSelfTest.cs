@@ -643,12 +643,12 @@ internal static class MobileApiSelfTest
         {
         }
 
-        TripCloseResult closed = await trips.CloseTripAsync(trip.Id, "Web panel (yonetici)");
+        TripCloseResult closed = await trips.CloseTripAsync(trip.Id, "yonetici");
         Check(closed.MissingCylinders.Count == 4, "kapanışta eksik tüp listesi hatalı");
         CylinderTripEndpoints.NotifyManagers(closed);
         string? notice = TelegramNotifier.Captured.FirstOrDefault(t => t.Contains($"#{trip.Id}"));
         Check(notice is not null, "yöneticiye sefer bildirimi oluşmadı");
-        foreach (string expected in new[] { plate, "Ali Sürücü", "AK-F3", "Müşteri: Akış Müşteri", "Kayıp / bulunamadı", "depoda arandı", "müşteriden boş alındı", "Web panel (yonetici)" })
+        foreach (string expected in new[] { plate, "Ali Sürücü", "AK-F3", "Müşteri: Akış Müşteri", "Kayıp / bulunamadı", "depoda arandı", "müşteriden boş alındı", "yonetici" })
         {
             Check(notice!.Contains(expected), "bildirimde eksik bilgi: " + expected);
         }
@@ -656,9 +656,9 @@ internal static class MobileApiSelfTest
         Check(!notice!.Contains("05551112233"), "bildirimde müşteri telefonu var");
         Check((await trips.MissingReportAsync()).Count(m => m.TripId == trip.Id) == 4, "kayıp kontrol listesinde sefer eksikleri yok");
 
-        // Closed-trip history: ClosedBy is stored; Yönetici/Operatör (seeAll) see the trip, other accounts only what they closed.
-        Check((await trips.ClosedTripsAsync(null, 40, seeAll: true)).Any(t => t.Id == trip.Id && t.ClosedBy == "Web panel (yonetici)"), "tamamlanmış sefer listesinde kapatan yok");
-        Check((await trips.ClosedTripsAsync(null, 40, seeAll: false, userName: "Web panel (yonetici)")).Any(t => t.Id == trip.Id), "kapatan hesap kendi seferini göremedi");
+        // Closed-trip history: ClosedBy is the panel username; seeAll sees all, others only their own closes.
+        Check((await trips.ClosedTripsAsync(null, 40, seeAll: true)).Any(t => t.Id == trip.Id && t.ClosedBy == "yonetici"), "tamamlanmış sefer listesinde kapatan yok");
+        Check((await trips.ClosedTripsAsync(null, 40, seeAll: false, userName: "yonetici")).Any(t => t.Id == trip.Id), "kapatan hesap kendi seferini göremedi");
         Check(!(await trips.ClosedTripsAsync(null, 40, seeAll: false, userName: "baska-sofor")).Any(t => t.Id == trip.Id), "başka hesap kapatılmış seferi gördü");
         Check((await trips.ClosedTripsAsync(null, 40, seeAll: false)).Count == 0, "kimliksiz hesap tamamlanmış seferleri gördü");
 

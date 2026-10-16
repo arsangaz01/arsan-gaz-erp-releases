@@ -44,8 +44,9 @@ internal static class WebPanelEndpoints
                 headers["X-Frame-Options"] = "DENY";
                 headers["Referrer-Policy"] = "no-referrer";
                 headers["Cache-Control"] = "no-store";
+                // Local TsplPrintAgent (TA310 RAW) is called from the browser; CSP must allow that loopback origin.
                 headers["Content-Security-Policy"] =
-                    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'";
+                    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:39201; frame-ancestors 'none'; form-action 'self'; base-uri 'none'";
             }
 
             await next(context);
