@@ -67,12 +67,8 @@ public partial class App : Application
                 return;
             }
 
-            DatabaseService databaseService = new();
-            await databaseService.InitializeAsync();
-            await CylinderSchemaService.EnsureAsync();
-            await new CrmSchemaService().EnsureAsync();
-            await CollectionReminderService.EnsureSchemaAsync();
-            _ = await new MojibakeRepairService().RepairAsync();
+            // At Windows logon the DB/VPN/network is often not ready yet; retry before failing the splash.
+            await InitializeDatabaseWithRetryAsync();
             _collectionReminders = new CollectionReminderMonitor(Dispatcher);
             _collectionReminders.Start();
             _ = Task.Run(() =>
@@ -103,12 +99,89 @@ public partial class App : Application
             splash.Close(TimeSpan.Zero);
             LogError("Başlatma", exception);
             MessageBox.Show(
-                "Uygulama başlatılamadı:" + Environment.NewLine + exception.Message,
+                "Uygulama başlatılamadı:" + Environment.NewLine + DescribeStartupFailure(exception),
                 "Arsan Gaz ERP",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown();
         }
+    }
+
+    private static async Task InitializeDatabaseWithRetryAsync()
+    {
+        const int maxAttempts = 18; // ~90 s with 5 s delay — covers late VPN / Postgres after logon
+        Exception? last = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                DatabaseService databaseService = new();
+                await databaseService.InitializeAsync();
+                await CylinderSchemaService.EnsureAsync();
+                await new CrmSchemaService().EnsureAsync();
+                await CollectionReminderService.EnsureSchemaAsync();
+                _ = await new MojibakeRepairService().RepairAsync();
+                return;
+            }
+            catch (Exception exception) when (IsTransientStartupFailure(exception) && attempt < maxAttempts)
+            {
+                last = exception;
+                LogMessage("Başlatma", $"Veritabanı henüz hazır değil (deneme {attempt}/{maxAttempts}): {exception.Message}");
+                await Task.Delay(TimeSpan.FromSeconds(5));
+            }
+        }
+
+        throw last ?? new InvalidOperationException("Veritabanı başlatılamadı.");
+    }
+
+    private static bool IsTransientStartupFailure(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            string message = current.Message ?? string.Empty;
+            if (message.Contains("transient failure", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("actively refused", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("network is unreachable", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("No such host", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("could not connect", StringComparison.OrdinalIgnoreCase) ||
+                (message.Contains("connection", StringComparison.OrdinalIgnoreCase) &&
+                 (message.Contains("fail", StringComparison.OrdinalIgnoreCase) ||
+                  message.Contains("reset", StringComparison.OrdinalIgnoreCase) ||
+                  message.Contains("refused", StringComparison.OrdinalIgnoreCase))))
+            {
+                return true;
+            }
+
+            if (current is TimeoutException or System.Net.Sockets.SocketException or IOException)
+            {
+                return true;
+            }
+
+            string typeName = current.GetType().FullName ?? current.GetType().Name;
+            if (typeName.Contains("Npgsql", StringComparison.Ordinal) ||
+                typeName.Contains("Postgres", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string DescribeStartupFailure(Exception exception)
+    {
+        if (IsTransientStartupFailure(exception))
+        {
+            return "Veritabanına bağlanılamadı. Bilgisayar yeni açıldığında ağ/VPN veya sunucu henüz hazır olmayabilir."
+                + Environment.NewLine
+                + "Birkaç saniye bekleyip ERP'yi yeniden açın."
+                + Environment.NewLine + Environment.NewLine
+                + "Ayrıntı: " + exception.Message;
+        }
+
+        return exception.Message;
     }
 
     protected override void OnExit(ExitEventArgs e)

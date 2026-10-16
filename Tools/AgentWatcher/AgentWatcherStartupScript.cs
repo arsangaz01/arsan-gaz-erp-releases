@@ -14,7 +14,8 @@ internal static class AgentWatcherStartupScript
 
         StringBuilder script = new();
         script.AppendLine("@echo off");
-        script.AppendLine("timeout /t 8 /nobreak >nul");
+        // Give VPN / network / Postgres time after Windows logon before launching services.
+        script.AppendLine("timeout /t 20 /nobreak >nul");
         script.AppendLine($"set \"WATCHER_EXE={Path.GetFullPath(watcherExecutable)}\"");
         script.AppendLine("if not exist \"%WATCHER_EXE%\" exit /b 1");
         script.AppendLine("for %%I in (\"%WATCHER_EXE%\") do set \"WATCHER_DIR=%%~dpI\"");
@@ -27,6 +28,8 @@ internal static class AgentWatcherStartupScript
             string fullErpPath = Path.GetFullPath(erpExecutable);
             script.AppendLine($"set \"ERP_EXE={fullErpPath}\"");
             script.AppendLine("if exist \"%ERP_EXE%\" (");
+            // Extra wait so the database is more likely reachable when ERP opens at logon.
+            script.AppendLine("  timeout /t 40 /nobreak >nul");
             script.AppendLine("  for %%I in (\"%ERP_EXE%\") do set \"ERP_DIR=%%~dpI\"");
             script.AppendLine("  if \"%ERP_DIR:~-1%\"==\"\\\" set \"ERP_DIR=%ERP_DIR:~0,-1%\"");
             // Title must come before /MIN /D (start ["title"] [/D path] [/MIN] command).
