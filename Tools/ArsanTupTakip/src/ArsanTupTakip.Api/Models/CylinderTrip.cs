@@ -18,6 +18,8 @@ public sealed class CylinderTrip
     public DateTime? ClosedAt { get; set; }
     public string? Note { get; set; }
     public string? CreatedBy { get; set; }
+    // User name who closed the trip (field finish or depot close); used to scope "Tamamlanmış seferler" for depot accounts.
+    public string? ClosedBy { get; set; }
     // Set on trips started since reasons became mandatory; older open trips can still be closed without them.
     public bool RequireReasons { get; set; }
     public uint Version { get; set; }

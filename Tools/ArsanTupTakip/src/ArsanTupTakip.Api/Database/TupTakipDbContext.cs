@@ -90,7 +90,8 @@ public static class TupTakipDatabase
         CREATE INDEX IF NOT EXISTS ix_stockcounts_startedat ON tuptakip.stockcounts (startedat);
         CREATE UNIQUE INDEX IF NOT EXISTS ix_stockcounts_open_location ON tuptakip.stockcounts (location) WHERE closedat IS NULL;
         ALTER TABLE tuptakip.cylindertrips
-            ADD COLUMN IF NOT EXISTS requirereasons boolean NOT NULL DEFAULT false;
+            ADD COLUMN IF NOT EXISTS requirereasons boolean NOT NULL DEFAULT false,
+            ADD COLUMN IF NOT EXISTS closedby text NULL;
         ALTER TABLE tuptakip.cylindertripcylinders
             ADD COLUMN IF NOT EXISTS missingreason text NULL,
             ADD COLUMN IF NOT EXISTS missingnote text NULL,

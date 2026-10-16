@@ -647,7 +647,7 @@ internal static class WebPanelEndpoints
         {
             try
             {
-                TripCloseResult result = await new CylinderTripService().CloseTripAsync(id, $"Web panel ({context.Items["panelUser"]})");
+                TripCloseResult result = await new CylinderTripService().CloseTripAsync(id, (string)context.Items["panelUser"]!);
                 WebPanelAudit.Write((string)context.Items["panelUser"]!, "Sefer kapatıldı", $"Sefer #{id}", result.Reconcile.HasAlerts ? result.Reconcile.AlertText : null, WebPanelAuth.ClientIp(context));
                 CylinderTripEndpoints.NotifyManagers(result);
                 return Results.Ok(new { message = result.Message, hasAlerts = result.Reconcile.HasAlerts });
