@@ -74,7 +74,7 @@ public final class PlanActivity extends BaseActivity {
                 String place = StockActivity.join(", ", Api.str(stop, "address"), Api.str(stop, "district"), Api.str(stop, "city"));
                 page.addView(note((place.length() == 0 ? "Adres kayıtlı değil" : place)
                     + (Api.str(stop, "note") == null ? "" : "\nNot: " + Api.str(stop, "note"))));
-                if (!stop.isNull("latitude") && stop.has("latitude")) {
+                if (hasCoordinates(stop)) {
                     page.addView(button("Haritada aç", new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
@@ -86,7 +86,17 @@ public final class PlanActivity extends BaseActivity {
         }
     }
 
+    private static boolean hasCoordinates(JSONObject stop) {
+        return stop != null
+            && stop.has("latitude") && !stop.isNull("latitude")
+            && stop.has("longitude") && !stop.isNull("longitude");
+    }
+
     private void openMap(JSONObject stop) {
+        if (!hasCoordinates(stop)) {
+            alert("Harita", "Bu durak için enlem/boylam eksik.");
+            return;
+        }
         String point = String.format(Locale.US, "%.6f,%.6f", stop.optDouble("latitude"), stop.optDouble("longitude"));
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("geo:" + point + "?q=" + point + "(" + Uri.encode(Api.str(stop, "customerName")) + ")")));

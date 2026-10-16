@@ -2672,13 +2672,16 @@ function buildTsplDocument(items, s) {
     const infoX = pad + qrDots + gap;
     const infoW = Math.max(tsplMm(12), w - pad - infoX);
     let y = pad + tsplMm(0.5);
-    if (s.title) y = tsplWriteBlock(lines, infoX, y, infoW, 11, s.title, 1);
+    // Customer-owned: brand = owner (GÜNEŞ GAZ / KOYUNCU); company stock keeps Üst yazı (ARSAN GAZ).
+    const brand = String(item.owner || s.title || "").trim();
+    if (brand) y = tsplWriteBlock(lines, infoX, y, infoW, 11, brand, 1);
     if (s.gas && item.gas) y = tsplWriteBlock(lines, infoX, y, infoW, 9, String(item.gas), 2);
     if (s.serial && item.serial && item.serial !== item.code) y = tsplWriteBlock(lines, infoX, y, infoW, 7, String(item.serial), 1);
     if (s.test && item.stt) y = tsplWriteBlock(lines, infoX, y, infoW, 7, "STT: " + item.stt, 1);
     if (s.test && (item.gtt || item.test)) y = tsplWriteBlock(lines, infoX, y, infoW, 7, "GTT: " + (item.gtt || item.test), 1);
     if (item.extra) y = tsplWriteBlock(lines, infoX, y, infoW, 7, String(item.extra), 1);
-    if (item.owner) tsplWriteBlock(lines, infoX, y, infoW, 7, String(item.owner), 2);
+    const ownerLine = String(item.owner || "").trim();
+    if (ownerLine && ownerLine !== brand) tsplWriteBlock(lines, infoX, y, infoW, 7, ownerLine, 2);
     lines.push(`PRINT 1,${s.copies}\r\n`);
   }
   return lines.join("");
@@ -2851,10 +2854,13 @@ function labelHtml(item, s) {
   const serialLine = s.serial && item.serial && item.serial !== item.code ? String(item.serial) : "";
   const stt = s.test && item.stt ? "STT: " + item.stt : "";
   const gtt = s.test && (item.gtt || item.test) ? "GTT: " + (item.gtt || item.test) : "";
-  // Prefer gas without repeating litre; capacity/owner as separate lines so each can shrink.
+  // Prefer gas without repeating litre; capacity as its own line so each can shrink.
+  // Customer-owned cylinders: brand = owner (like field stickers); company stock uses Üst yazı.
   const gasLine = s.gas && item.gas ? String(item.gas) : "";
   const capLine = item.extra || "";
-  const ownerLine = item.owner || "";
+  const brand = String(item.owner || s.title || "").trim();
+  const ownerLine = String(item.owner || "").trim();
+  const showOwnerAgain = ownerLine && ownerLine !== brand;
   const brandFs = Math.max(2.2, Math.min(4.0, s.h / 8));
   const gasFs = Math.max(2.0, Math.min(3.4, s.h / 9));
   const metaFs = Math.max(1.7, Math.min(2.8, s.h / 11));
@@ -2864,13 +2870,13 @@ function labelHtml(item, s) {
     + (showCode ? labelCodeUnderQrHtml(item.code, qrW) : "")
     + `</div>`
     + `<div class="info" style="width:${infoW.toFixed(2)}mm">`
-    + (s.title ? labelInfoBlock(s.title, infoW, brandFs, 1.6, 1, "brand") : "")
+    + (brand ? labelInfoBlock(brand, infoW, brandFs, 1.6, 1, "brand") : "")
     + (gasLine ? labelInfoBlock(gasLine, infoW, gasFs, 1.5, 2, "gas") : "")
     + (serialLine ? labelInfoBlock(serialLine, infoW, metaFs, 1.4, 1, "meta") : "")
     + (stt ? labelInfoBlock(stt, infoW, metaFs, 1.4, 1, "meta") : "")
     + (gtt ? labelInfoBlock(gtt, infoW, metaFs, 1.4, 1, "meta") : "")
     + (capLine ? labelInfoBlock(capLine, infoW, metaFs, 1.4, 1, "meta") : "")
-    + (ownerLine ? labelInfoBlock(ownerLine, infoW, metaFs, 1.35, 2, "meta") : "")
+    + (showOwnerAgain ? labelInfoBlock(ownerLine, infoW, metaFs, 1.35, 2, "meta") : "")
     + `</div></div>`;
 }
 

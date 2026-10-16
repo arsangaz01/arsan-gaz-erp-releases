@@ -64,7 +64,7 @@ public final class HomeActivity extends BaseActivity {
         if (Api.can("sefer-goruntule")) {
             add(plate == null ? "🚚 Sefer" : "🚚 Sevkiyat / sefer", TripActivity.class);
             add("✅ Tamamlanmış seferler", HistoryActivity.class);
-            if (Api.can("sefer-rota") && Api.can("musteri-konum-kaydet")) {
+            if (Api.can("sefer-rota")) {
                 add("📋 Bugünkü sefer planım", PlanActivity.class);
             }
         }
