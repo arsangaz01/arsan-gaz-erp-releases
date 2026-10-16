@@ -20,6 +20,7 @@ public sealed class HomePage : ContentPage
         new("Tüp Bilgisi", null, Icons.ManageSearch, "#0F766E", "#14B8A6", "tup-goruntule", false, p => p.OpenAsync("Tüp Bilgisi", () => new CylinderInfoPage())),
         new("Tüp Durumu", null, Icons.Dashboard, "#3730A3", "#6366F1", "tup-goruntule", false, p => p.OpenAsync("Tüp Durumu", () => new CylinderStatusPage())),
         new("Sefer", "Yükleme, teslim ve dönüş", Icons.Route, "#1E3A8A", "#0D9488", "sefer-goruntule", true, p => p.OpenAsync("Sefer", () => new CylinderTripPage())),
+        new("Tamamlanmış Seferler", null, Icons.History, "#1E3A8A", "#0D9488", "sefer-goruntule", false, p => p.OpenAsync("Tamamlanmış Seferler", () => new CompletedTripsPage())),
         new("Araç İşlemleri", null, Icons.LocalShipping, "#0E7490", "#22D3EE", "arac-goruntule", false, p => p.OpenAsync("Araç İşlemleri", () => new VehiclePage())),
         new("Müşteride Sayım", null, Icons.FactCheck, "#155E75", "#0891B2", "tup-sayim", false, p => p.OpenAsync("Müşteride Sayım", () => new CylinderAuditPage())),
         new("CRM Firmalar", null, Icons.Handshake, "#4338CA", "#7C3AED", "crm-goruntule", false, p => p.OpenAsync("CRM", () => new CrmPage(followUps: false))),

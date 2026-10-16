@@ -248,6 +248,10 @@ internal static class MobileEndpoints
 
             bool showCustomer = PanelRoles.Has(Account(context), PanelPermissions.CustomerView);
             string? customer = showCustomer ? cylinder.CurrentCustomer?.CompanyName : null;
+            // Customer-owned cylinder (müşteri malı): the owner is a customer name, so it needs the same permission.
+            string? owner = showCustomer && cylinder.OwnerCustomerId is int ownerId
+                ? await db.Customers.AsNoTracking().Where(x => x.Id == ownerId).Select(x => x.CompanyName).FirstOrDefaultAsync()
+                : null;
             string location = cylinder.Status switch
             {
                 CylinderStatus.Customer => customer is null
@@ -269,6 +273,7 @@ internal static class MobileEndpoints
                 Fullness = CylinderTracking.FullnessName(cylinder.IsFull),
                 Location = location,
                 Customer = customer,
+                Owner = owner,
                 Plate = cylinder.VehiclePlate,
                 Trip = trip is null ? null : $"{trip.Trip.Title} (yükleme {trip.LoadedAt.ToString("dd.MM.yyyy HH:mm", Turkish)})",
                 DaysThere = CylinderTracking.DaysSince(cylinder.LastMovementAt, today),

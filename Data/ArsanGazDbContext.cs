@@ -47,6 +47,7 @@ public sealed class ArsanGazDbContext : DbContext
   b.Entity<Cylinder>().HasIndex(x=>x.SerialNumber).IsUnique();
   b.Entity<Cylinder>().HasIndex(x=>x.Barcode).IsUnique();
   b.Entity<Cylinder>().HasOne(x=>x.CurrentCustomer).WithMany(x=>x.Cylinders).HasForeignKey(x=>x.CurrentCustomerId).OnDelete(DeleteBehavior.SetNull);
+  b.Entity<Cylinder>().HasOne(x=>x.OwnerCustomer).WithMany().HasForeignKey(x=>x.OwnerCustomerId).OnDelete(DeleteBehavior.SetNull);
   b.Entity<Cylinder>().HasIndex(x=>x.Status);
   b.Entity<CylinderAudit>().HasIndex(x=>new { x.CustomerId, x.AuditedAt });
   b.Entity<CylinderTrip>().HasIndex(x=>x.Status);

@@ -18,6 +18,8 @@ public sealed class CylinderTrip
     public DateTime? ClosedAt { get; set; }
     public string? Note { get; set; }
     public string? CreatedBy { get; set; }
+    // Account (user name) that closed the trip; used for the "Tamamlanmış seferler" visibility rule.
+    public string? ClosedBy { get; set; }
     // Set on trips started since reasons became mandatory; older open trips can still be closed without them.
     public bool RequireReasons { get; set; }
     public ICollection<CylinderTripVehicle> Vehicles { get; set; } = new List<CylinderTripVehicle>();

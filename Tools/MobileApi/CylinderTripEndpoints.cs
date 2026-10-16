@@ -18,6 +18,50 @@ internal static class CylinderTripEndpoints
     {
         app.MapGet("/api/sefer/aktif", async () => Results.Ok(await new CylinderTripService().ActiveTripsAsync())).Requires(PanelPermissions.TripView);
 
+        // Closed trips: Yönetici/Operatör see all; other accounts only see trips they closed (legacy rows: started by them).
+        app.MapGet("/api/sefer/gecmis", async (HttpContext context, int? adet) =>
+        {
+            WebPanelUser user = Account(context);
+            bool seeAll = SeesAllClosedTrips(user);
+            List<TripListItem> trips = await new CylinderTripService().ClosedTripsAsync(
+                null, adet ?? 40, seeAll, seeAll ? null : user.UserName);
+            return Results.Ok(trips.Select(HistoryRow));
+        }).Requires(PanelPermissions.TripView);
+
+        app.MapGet("/api/sefer/{tripId:int}/detay", async (int tripId, HttpContext context) =>
+        {
+            TripDetail? detail = await new CylinderTripService().TripDetailAsync(tripId);
+            if (detail is null)
+            {
+                return Results.NotFound(new { error = "Sefer bulunamadı." });
+            }
+
+            if (!MayViewClosedOrActive(Account(context), detail.Trip))
+            {
+                return Results.Json(new { error = "Bu seferi görme yetkiniz yok." }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            return Results.Ok(new
+            {
+                Trip = HistoryRow(detail.Trip),
+                Cylinders = detail.Cylinders.Select(c => new
+                {
+                    c.CylinderId,
+                    c.SerialNumber,
+                    c.GasType,
+                    c.Plate,
+                    Loaded = c.LoadedAt.ToString("dd.MM.yyyy HH:mm"),
+                    Delivered = c.DeliveredAt?.ToString("dd.MM.yyyy HH:mm"),
+                    Returned = c.ReturnedAt?.ToString("dd.MM.yyyy HH:mm"),
+                    c.Missing,
+                    c.ReasonLabel,
+                    c.Note,
+                    c.IsPickup,
+                    c.PickupCustomer
+                })
+            });
+        }).Requires(PanelPermissions.TripView);
+
         app.MapPost("/api/sefer/baslat", async (TripStartRequest request, HttpContext context) =>
         {
             try
@@ -134,7 +178,8 @@ internal static class CylinderTripEndpoints
         {
             try
             {
-                TripCloseResult result = await new CylinderTripService().CloseTripAsync(request.TripId, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                // The account name (not the device) is stored as ClosedBy: it decides who sees the trip in "Tamamlanmış seferler".
+                TripCloseResult result = await new CylinderTripService().CloseTripAsync(request.TripId, Account(context).UserName);
                 NotifyManagers(result);
                 return Results.Ok(new
                 {
@@ -208,6 +253,48 @@ internal static class CylinderTripEndpoints
                 return Results.BadRequest(new { error = exception.Message });
             }
         }).Requires(PanelPermissions.TripClose);
+    }
+
+    private static WebPanelUser Account(HttpContext context) => (WebPanelUser)context.Items["panelAccount"]!;
+
+    private static readonly System.Globalization.CultureInfo Turkish = System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
+
+    private static object HistoryRow(TripListItem t) => new
+    {
+        t.Id,
+        Number = "#" + t.Id,
+        t.Title,
+        Started = t.StartedAt.ToString("dd.MM.yyyy HH:mm", Turkish),
+        Closed = t.ClosedAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
+        Plates = t.Vehicles.Select(v => v.Plate).ToList(),
+        t.Loaded,
+        t.Delivered,
+        t.Returned,
+        t.PickedUp,
+        t.OnVehicle,
+        t.Missing,
+        t.Note,
+        t.ClosedBy
+    };
+
+    // Yönetici and Operatör see every closed trip; the other accounts only their own.
+    private static bool SeesAllClosedTrips(WebPanelUser user) =>
+        user.Role is PanelRoles.Admin or PanelRoles.Operator;
+
+    private static bool MayViewClosedOrActive(WebPanelUser user, TripListItem trip)
+    {
+        if (SeesAllClosedTrips(user) || trip.Active)
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(trip.ClosedBy))
+        {
+            return string.Equals(trip.ClosedBy, user.UserName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return trip.CreatedBy is not null
+            && trip.CreatedBy.Contains(user.UserName, StringComparison.OrdinalIgnoreCase);
     }
 
     internal static object ReasonCatalog() =>

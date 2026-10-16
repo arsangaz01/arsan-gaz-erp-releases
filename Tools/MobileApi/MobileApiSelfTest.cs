@@ -655,6 +655,27 @@ internal static class MobileApiSelfTest
 
         Check(!notice!.Contains("05551112233"), "bildirimde müşteri telefonu var");
         Check((await trips.MissingReportAsync()).Count(m => m.TripId == trip.Id) == 4, "kayıp kontrol listesinde sefer eksikleri yok");
+
+        // Closed-trip history: ClosedBy is stored; Yönetici/Operatör (seeAll) see the trip, other accounts only what they closed.
+        Check((await trips.ClosedTripsAsync(null, 40, seeAll: true)).Any(t => t.Id == trip.Id && t.ClosedBy == "Web panel (yonetici)"), "tamamlanmış sefer listesinde kapatan yok");
+        Check((await trips.ClosedTripsAsync(null, 40, seeAll: false, userName: "Web panel (yonetici)")).Any(t => t.Id == trip.Id), "kapatan hesap kendi seferini göremedi");
+        Check(!(await trips.ClosedTripsAsync(null, 40, seeAll: false, userName: "baska-sofor")).Any(t => t.Id == trip.Id), "başka hesap kapatılmış seferi gördü");
+        Check((await trips.ClosedTripsAsync(null, 40, seeAll: false)).Count == 0, "kimliksiz hesap tamamlanmış seferleri gördü");
+
+        // Cylinder ownership (müşteri malı) round-trips through the model and the schema.
+        await using (ArsanGazDbContext db = new())
+        {
+            Cylinder owned = await db.Cylinders.FirstAsync(c => c.SerialNumber == "AK-F1");
+            owned.OwnerCustomerId = customerId;
+            await db.SaveChangesAsync();
+        }
+
+        await using (ArsanGazDbContext db = new())
+        {
+            Cylinder owned = await db.Cylinders.AsNoTracking().Include(c => c.OwnerCustomer).FirstAsync(c => c.SerialNumber == "AK-F1");
+            Check(owned.OwnerCustomer?.Id == customerId, "tüp sahibi (OwnerCustomer) kaydedilmedi");
+            Check(await db.Cylinders.AsNoTracking().CountAsync(c => c.OwnerCustomerId == null) > 0, "sahipsiz (firma malı) tüp sayılamadı");
+        }
     }
 
     private static void SqliteCleanup()

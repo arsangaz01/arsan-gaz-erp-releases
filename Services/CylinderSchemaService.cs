@@ -103,6 +103,7 @@ SELECT DISTINCT p.Plate, 1, datetime('now', 'localtime') FROM (
 
             await AddColumnAsync(connection, cylinderColumns, "Cylinders", "IsFull", "INTEGER NULL", cancellationToken);
             await AddColumnAsync(connection, cylinderColumns, "Cylinders", "VehiclePlate", "TEXT NULL", cancellationToken);
+            await AddColumnAsync(connection, cylinderColumns, "Cylinders", "OwnerCustomerId", "INTEGER NULL", cancellationToken);
 
             HashSet<string> movementColumns = await ColumnsAsync(connection, "CylinderMovements", cancellationToken);
             await AddColumnAsync(connection, movementColumns, "CylinderMovements", "VehiclePlate", "TEXT NULL", cancellationToken);
@@ -125,6 +126,8 @@ SELECT DISTINCT p.Plate, 1, datetime('now', 'localtime') FROM (
 
             await AddColumnAsync(connection, await ColumnsAsync(connection, "CylinderTrips", cancellationToken), "CylinderTrips",
                 "RequireReasons", "INTEGER NOT NULL DEFAULT 0", cancellationToken);
+            await AddColumnAsync(connection, await ColumnsAsync(connection, "CylinderTrips", cancellationToken), "CylinderTrips",
+                "ClosedBy", "TEXT NULL", cancellationToken);
 
             // Two users loading the same cylinder onto a trip at once must not create two rows. Skipped (and retried at
             // the next start) while old duplicate rows exist, so existing data is never deleted.

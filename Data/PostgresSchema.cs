@@ -46,6 +46,9 @@ ALTER TABLE CylinderTripCylinders ADD COLUMN IF NOT EXISTS CheckedBy text NULL;
 ALTER TABLE CylinderTripCylinders ADD COLUMN IF NOT EXISTS IsPickup boolean NOT NULL DEFAULT FALSE;
 ALTER TABLE CylinderTripCylinders ADD COLUMN IF NOT EXISTS PickupCustomer text NULL;
 ALTER TABLE CylinderTrips ADD COLUMN IF NOT EXISTS RequireReasons boolean NOT NULL DEFAULT FALSE;
+ALTER TABLE CylinderTrips ADD COLUMN IF NOT EXISTS ClosedBy text NULL;
+ALTER TABLE Cylinders ADD COLUMN IF NOT EXISTS OwnerCustomerId integer NULL CONSTRAINT fk_cylinders_customers_ownercustomerid REFERENCES Customers(Id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS ix_cylinders_ownercustomerid ON Cylinders(OwnerCustomerId);
 CREATE INDEX IF NOT EXISTS ix_cylindertripcylinders_tripid_cylinderid ON CylinderTripCylinders(TripId, CylinderId);
 CREATE INDEX IF NOT EXISTS ix_cylindertripcylinders_cylinderid ON CylinderTripCylinders(CylinderId);
 CREATE TABLE IF NOT EXISTS Vehicles (

@@ -265,6 +265,18 @@ async function loadSummary() {
     }
     $("stats").replaceChildren(...stats);
 
+    const own = data.ownership || {};
+    const ownership = [];
+    ownership.push(stat(own.companyOwned || 0, "Firma malı", "Sahip müşteri atanmamış", () => openFiltered({ sahip: "firma" })));
+    ownership.push(stat(own.customerOwned || 0, "Müşteri malı", `${own.ownerCustomerCount || 0} farklı sahip`, () => openFiltered({ sahip: "musteri" })));
+    for (const row of own.topOwners || []) {
+      ownership.push(stat(row.count, "🏷️ " + row.name, "Müşteri malı tüpler", () => openFiltered({ sahipId: row.id, sahipLabel: row.name })));
+    }
+    if (own.otherOwners > 0) {
+      ownership.push(stat(own.otherOwners, "Diğer sahipler", "Listedeki ilk 12 dışı", () => openFiltered({ sahip: "musteri" })));
+    }
+    $("ownership").replaceChildren(...(ownership.length ? ownership : [el("div", { class: "muted" }, "Sahiplik özeti yok.")]));
+
     $("vehicles").replaceChildren(...(o.vehicles.length === 0
       ? [el("div", { class: "muted" }, "Araçta tüp yok.")]
       : o.vehicles.map((v) => stat(v.count, "🚚 " + v.plate, "Araçtaki tüpler", () => openFiltered({ durum: 2, plaka: v.plate })))));
@@ -287,7 +299,21 @@ function openFiltered(filter) {
   $("f-doluluk").value = "";
   $("f-uzun").checked = !!filter.uzun;
   $("f-pasif").checked = !!filter.pasif;
+  setOwnerFilter(filter.sahip || "", filter.sahipId || "", filter.sahipLabel || "");
   openTab("tupler");
+}
+
+function setOwnerFilter(sahip, sahipId, label) {
+  const select = $("f-sahip");
+  // Keep static options; inject a one-off owner option when coming from the homepage tile.
+  [...select.querySelectorAll("option[data-owner]")].forEach((o) => o.remove());
+  if (sahipId) {
+    const opt = el("option", { value: "id:" + sahipId, "data-owner": "1" }, label ? ("Sahip: " + label) : ("Sahip #" + sahipId));
+    select.appendChild(opt);
+    select.value = "id:" + sahipId;
+  } else {
+    select.value = sahip || "";
+  }
 }
 
 $("f-ara").addEventListener("click", loadCylinders);
@@ -302,6 +328,9 @@ async function loadCylinders() {
   if ($("f-doluluk").value) query.set("doluluk", $("f-doluluk").value);
   if ($("f-uzun").checked) query.set("uzun", "true");
   if ($("f-pasif").checked) query.set("pasif", "true");
+  const sahip = $("f-sahip").value;
+  if (sahip.startsWith("id:")) query.set("sahipId", sahip.slice(3));
+  else if (sahip) query.set("sahip", sahip);
   try {
     const rows = await api("/panel/api/tupler?" + query);
     $("cyl-count").textContent = `${rows.length} tüp`;
@@ -312,7 +341,8 @@ async function loadCylinders() {
       el("td", {}, r.capacity),
       el("td", {}, badge(r.status, r.statusName)),
       el("td", {}, r.fullness),
-      el("td", {}, r.customer || r.plate || "-"),
+      el("td", {}, r.customer || r.plate || "-",
+        r.owner ? el("div", { class: "muted" }, "Sahip: " + r.owner) : null),
       el("td", {}, r.lastMovement || "-", r.daysThere !== null && r.status === 3
         ? el("div", { class: r.daysThere >= options.longDays ? "warn-text" : "muted" }, `${r.daysThere} gündür müşteride`) : null),
       el("td", { class: r.testOverdue ? "bad-text" : "" }, r.testDue || "-")));
@@ -384,6 +414,7 @@ async function openDetail(id) {
     ["Son hareket", c.lastMovement ? `${c.lastMovement}${c.daysThere !== null ? ` (${c.daysThere} gün önce)` : ""}` : "-"],
     ["Test tarihi", c.testDue ? c.testDue.split("-").reverse().join(".") : "-"], ["Kayıt", c.isActive ? `Aktif · ${c.created}` : "Pasif"]
   ];
+  if (c.owner) info.push(["Tüpün sahibi", "Müşteri malı · " + c.owner]);
   $("d-info").replaceChildren(...info.map(([k, v]) => el("div", {}, el("span", {}, k), v)));
   $("e-gas").value = c.gasType;
   $("e-cap").value = String(c.capacity).replace(".", ",");

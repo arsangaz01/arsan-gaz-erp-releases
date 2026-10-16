@@ -84,6 +84,7 @@ public sealed class CylinderTripPage : ContentPage
                         Ui.ActionRow(
                             Ui.Secondary("Kodu ekle", (_, _) => AddManual()),
                             Ui.Secondary("Listeyi temizle", (_, _) => { _scanned.Clear(); RefreshScanned(); })),
+                        Ui.Secondary("↩️ Son okutmayı geri al", async (_, _) => await UndoLastScanAsync()),
                         _scannedText,
                         Ui.Allowed(Ui.Primary("Kaydet / kontrol et", async (_, _) => await SubmitAsync()), "sefer-yukle|sefer-teslim"),
                         Ui.Allowed(Ui.Secondary("Okutulmayan tüplere gerekçe yaz", async (_, _) => await ExplainMissingAsync()), "sefer-teslim")),
@@ -121,6 +122,21 @@ public sealed class CylinderTripPage : ContentPage
 
     private void RefreshScanned() =>
         _scannedText.Text = _scanned.Count == 0 ? "Henüz tüp okutulmadı." : $"{_scanned.Count} tüp:\n{string.Join(", ", _scanned)}";
+
+    // One-step undo of the last code in the local list only (nothing has been sent to the server yet).
+    private async Task UndoLastScanAsync()
+    {
+        if (_scanned.Count == 0)
+        {
+            await DisplayAlertAsync("Geri al", "Geri alınacak okutma yok.", "Tamam");
+            return;
+        }
+
+        string code = _scanned[^1];
+        _scanned.RemoveAt(_scanned.Count - 1);
+        RefreshScanned();
+        _scannedText.Text += $"\n↩️ Son okutma geri alındı: {code}";
+    }
 
     private void AddManual()
     {
