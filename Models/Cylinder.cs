@@ -17,6 +17,9 @@ public sealed class Cylinder
  public DateTime? LastMovementAt { get; set; }
  public DateTime? TestDueDate { get; set; }
  public bool IsActive { get; set; } = true;
+ // Set when the cylinder belongs to a customer (müşteri malı) instead of the company.
+ public int? OwnerCustomerId { get; set; }
+ public Customer? OwnerCustomer { get; set; }
  public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
  public ICollection<CylinderMovement> Movements { get; set; } = new List<CylinderMovement>();
 }

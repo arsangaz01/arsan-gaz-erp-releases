@@ -85,10 +85,10 @@ internal sealed class ServerAgentHost(ServerAgentOptions options)
                 relayState = heartbeat is null ? "Worker sürümünde röle yok" : $"sinyal {DateTime.Now:HH:mm}";
                 if (heartbeat is { Deferred.Count: > 0 } && bot is not null)
                 {
-                    List<long> handled = [];
+                    // ACK before side effects so a crash cannot re-run publish/deploy commands.
                     foreach (RelayDeferredCommand command in heartbeat.Deferred.OrderBy(item => item.UpdateId))
                     {
-                        handled.Add(command.UpdateId);
+                        await relay.AcknowledgeAsync([command.UpdateId], cancellationToken);
                         if (command.ChatId != options.ChatId)
                         {
                             continue;
@@ -106,8 +106,6 @@ internal sealed class ServerAgentHost(ServerAgentOptions options)
 
                         await bot.SendMessageAsync($"☁️ Dinleyici yokken gönderdiğiniz emir işlendi:\n{Shorten(command.Text, 300)}\n\n{reply}", cancellationToken);
                     }
-
-                    await relay.AcknowledgeAsync(handled, cancellationToken);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

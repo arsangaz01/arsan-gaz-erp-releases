@@ -234,6 +234,11 @@ public sealed class CylinderInfoPage : ContentPage
             card.Barcode == card.SerialNumber ? card.Barcode : $"{card.Barcode} · seri {card.SerialNumber}"));
         rows.Children.Add(Row(Icons.WaterDrop, "Gaz / kapasite", $"{card.GasType} · {card.Capacity}"));
         rows.Children.Add(Row(Icons.LocationOn, "Konum", card.Location));
+        if (!string.IsNullOrWhiteSpace(card.Owner))
+        {
+            rows.Children.Add(Row(Icons.Handshake, "Tüpün sahibi", "Müşteri malı · " + card.Owner));
+        }
+
         if (card.Trip is not null)
         {
             rows.Children.Add(Row(Icons.Route, "Sefer", card.Trip));

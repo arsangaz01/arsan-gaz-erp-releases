@@ -596,14 +596,9 @@ internal static class CylinderTripEndpoints
             return string.Equals(trip.ClosedBy, user.UserName, StringComparison.OrdinalIgnoreCase);
         }
 
-        if (user.FixedPlate is string own
-            && trip.Vehicles.Any(v => string.Equals(v.Plate, own, StringComparison.OrdinalIgnoreCase)))
-        {
-            return true;
-        }
-
-        return trip.CreatedBy is not null
-            && trip.CreatedBy.Contains(user.UserName, StringComparison.OrdinalIgnoreCase);
+        // Legacy rows without ClosedBy: only fixed-plate vehicles, never CreatedBy substring.
+        return user.FixedPlate is string own
+            && trip.Vehicles.Any(v => string.Equals(v.Plate, own, StringComparison.OrdinalIgnoreCase));
     }
 
     // null = allowed. Fixed-plate drivers may finish only when that vehicle is empty.

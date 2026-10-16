@@ -133,11 +133,11 @@ public sealed class CylinderTripService
             {
                 string whoLower = who.ToLowerInvariant();
                 // Prefer ClosedBy; older rows without it fall back to fixed plate or CreatedBy.
+                // No CreatedBy.Contains: CreatedBy is often "Mobil (cihaz)" and substring match leaks other users' trips.
                 query = query.Where(x =>
                     (x.ClosedBy != null && x.ClosedBy.ToLower() == whoLower)
                     || (x.ClosedBy == null && normalized != null
-                        && (x.Vehicles.Any(v => v.Plate == normalized) || x.Cylinders.Any(c => c.VehiclePlate == normalized)))
-                    || (x.ClosedBy == null && x.CreatedBy != null && x.CreatedBy.ToLower().Contains(whoLower)));
+                        && (x.Vehicles.Any(v => v.Plate == normalized) || x.Cylinders.Any(c => c.VehiclePlate == normalized))));
             }
             else if (normalized is not null)
             {
@@ -819,16 +819,26 @@ public sealed class CylinderTripService
         List<CylinderTripCylinder> open = trip.Cylinders.Where(IsOpen)
             .OrderBy(x => x.VehiclePlate, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.SerialNumber, StringComparer.OrdinalIgnoreCase).ToList();
 
-        trip.Status = CylinderTripStatus.Closed;
-        trip.ClosedAt = DateTime.Now;
-        if (!string.IsNullOrWhiteSpace(closedBy))
+        string? who = string.IsNullOrWhiteSpace(closedBy) ? null
+            : closedBy.Trim().Length > 80 ? closedBy.Trim()[..80] : closedBy.Trim();
+        DateTime closedAt = DateTime.Now;
+        int claimed = await db.CylinderTrips
+            .Where(t => t.Id == tripId && t.Status == CylinderTripStatus.Active)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(t => t.Status, CylinderTripStatus.Closed)
+                .SetProperty(t => t.ClosedAt, closedAt)
+                .SetProperty(t => t.ClosedBy, who));
+        if (claimed == 0)
         {
-            trip.ClosedBy = closedBy.Trim().Length > 80 ? closedBy.Trim()[..80] : closedBy.Trim();
+            throw new InvalidOperationException("Sefer zaten kapatılmış.");
         }
 
+        trip.Status = CylinderTripStatus.Closed;
+        trip.ClosedAt = closedAt;
+        trip.ClosedBy = who;
         foreach (CylinderTripVehicle vehicle in trip.Vehicles.Where(x => x.ReturnedAt is null))
         {
-            vehicle.ReturnedAt = trip.ClosedAt;
+            vehicle.ReturnedAt = closedAt;
         }
 
         await db.SaveChangesAsync();
@@ -850,7 +860,7 @@ public sealed class CylinderTripService
             message += Environment.NewLine + "Okutulmayan tüpler ve gerekçeleri yöneticiye bildirildi.";
         }
 
-        return new TripCloseResult(tripId, reconcile, message, trip.Title, closedBy, missing);
+        return new TripCloseResult(tripId, reconcile, message, trip.Title, who, missing);
     }
 
     private static ActiveTripSummary TripSummary(CylinderTrip trip)

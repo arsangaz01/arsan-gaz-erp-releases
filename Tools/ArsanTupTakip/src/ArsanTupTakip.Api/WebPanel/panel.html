@@ -263,6 +263,11 @@ tr.alarm-row td { background:#fef2f2; }
     <section data-page="ozet">
       <div class="grid" id="stats"></div>
       <div class="card" style="margin-top:16px">
+        <h2>Tüp sahipliği</h2>
+        <p class="muted" style="margin:0 0 10px">Firma malı (sahipsiz kayıt) ve müşteri malı tüpler. Kutuya tıklayınca Tüpler listesi o filtreyle açılır.</p>
+        <div id="ownership" class="grid"></div>
+      </div>
+      <div class="card" style="margin-top:16px">
         <h2>Araçlardaki tüpler</h2>
         <div id="vehicles" class="grid"></div>
       </div>
@@ -277,6 +282,7 @@ tr.alarm-row td { background:#fef2f2; }
         <div class="filters">
           <label>Ara<input id="f-q" placeholder="Seri no, barkod, gaz, müşteri, plaka"></label>
           <label>Durum<select id="f-durum"><option value="">Tümü</option></select></label>
+          <label>Sahip<select id="f-sahip"><option value="">Tümü</option><option value="firma">Firma malı</option><option value="musteri">Müşteri malı (tümü)</option></select></label>
           <label>Dolu/Boş<select id="f-doluluk"><option value="">Tümü</option><option value="dolu">Dolu</option><option value="bos">Boş</option><option value="bilinmiyor">Bilinmiyor</option></select></label>
           <label>Test tarihi<select id="f-test"><option value="">Tümü</option><option value="gecmis">Geçmiş</option><option value="yakin">30 gün içinde</option><option value="yok">Girilmemiş</option></select></label>
           <label>Plaka<select id="f-plaka"><option value="">Tümü</option></select></label>

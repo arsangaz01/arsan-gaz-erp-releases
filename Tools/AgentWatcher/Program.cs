@@ -3664,10 +3664,10 @@ internal sealed partial class ControlCenterForm : Form
             return;
         }
 
-        List<long> handled = [];
+        // ACK each update before running it so a crash mid-batch cannot re-run publish/side-effect commands.
         foreach (CloudDeferredCommand command in heartbeat.Deferred.OrderBy(item => item.UpdateId))
         {
-            handled.Add(command.UpdateId);
+            await CloudTelegramRelay.AcknowledgeAsync([command.UpdateId], cancellationToken);
             if (command.ChatId != allowedChatId)
             {
                 continue;
@@ -3688,8 +3688,6 @@ internal sealed partial class ControlCenterForm : Form
                 $"💻 Bilgisayar açıldı; kapalıyken gönderdiğiniz emir işlendi:\n{LimitText(command.Text, 300)}\n\n{reply}",
                 cancellationToken);
         }
-
-        await CloudTelegramRelay.AcknowledgeAsync(handled, cancellationToken);
     }
 
     async Task EnableCloudRelayAsync()

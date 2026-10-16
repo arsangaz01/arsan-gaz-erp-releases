@@ -205,6 +205,39 @@ Durum: site, veritabanı (PostgreSQL), Telegram dinleme Oracle sunucusunda; PC'd
   Hangi build'in kurulu olduğu doğrulanmadı. Bridge'in sonucunu `cursor-journal.md` sonundan kontrol et.
 - Ders: Mobil derlemeleri aynı anda iki ajanla aynı klasörde çalıştırma.
 
+## ArsanTüpTakip — yanlış işlem düzeltme yolu (plan, 16 Ekim 2026, istek 89870)
+Bugün geri alma yok (açık depo sayımı Undo + sefer eksik kontrol undo hariç). Pratik yol: panelden telafi hareketi.
+Planlı aşamalar (henüz kodlanmadı; onay bekleniyor):
+1) Düzeltme hareketi tipi + zorunlu not/referans + denetim (düşük risk)
+2) Aktif seferde tek tık: stok + sefer satırı senkron düzeltme (orta risk)
+3) Void/ters hareket + kapanmış sefer (yüksek risk, sonra)
+Öncelik saha: yanlış müşteri teslimi → yanlış boş alım → yanlış yükleme → dolum → kapanmış sefer.
+
+## ArsanTüpTakip — TSC TA310 etiket yazdırma (16 Ekim 2026, kullanıcı: "takınca deneyeceğiz not et")
+- Panel 1.6.17: etiketler TSPL `QRCODE` ile basılır (yazıcı karekodu kendi üretir); tarayıcı SVG yazdırma yedek.
+- Bu PC'de kurulu sürücü: TSC/Seagull V3 **2024.2.0.0**, 300 dpi, veri tipi **RAW** (`RAW_ONLY`).
+- Yazıcı adı `TSC TA310` ama port şu an **`FILE:`** — USB'ye takılı değil; gerçek basım için USB bağlanıp port USB'ye alınacak.
+- Yerel ajan: `Tools/ArsanTupTakip/tools/TsplPrintAgent.ps1` (127.0.0.1:39201).
+- Kullanıcı notu: yazıcıyı takınca denenecek; takılınca port kontrolü + TSPL test etiketi yapılacak.
+
+## ArsanTüpTakip — müşteri malı etiket üst yazısı = sahip adı (BEKLEMEDE, 16 Ekim 2026)
+Kullanıcı: "Müşteri tüpleri koyuncu güneş gibi" → sonra "Bu işlemi beklemeye al sonra yapılacaklar listesine ekle".
+- Amaç: Müşteri malı tüp etiketinde üst marka satırı **sahip adı** olsun (ör. GÜNEŞ GAZ / KOYUNCU); firma malında **ARSAN GAZ** kalsın. Örnek saha etiketi gibi.
+- Durum: Yerelde kod taslağı var, **commit edilmedi, yayınlanmadı** (beklemeye alındı).
+  - `Tools/ArsanTupTakip/src/ArsanTupTakip.Api/WebPanel/panel.js` — `labelHtml` + TSPL `buildTsplDocument`: `brand = item.owner || s.title`; sahip marka olunca alt satırda tekrar etme
+  - `panel.html` — üst yazı alanına ipucu
+- Sonra yapılacak: kodu gözden geçir → test (önizleme + TSPL) → onayla → API/panel deploy → Ctrl+F5.
+- Not: `%LOCALAPPDATA%\ArsanGazERP\AgentWatcherData\Notes\tuptakip-etiket-sahip-ust-yazi.md`
+
+## Birinci uygulamaya (ERP + MobileApi + MobileApp) TupTakip özellik aktarımı (16 Ekim 2026)
+- Yapıldı (kodda; yayınlanmadı): tüp sahipliği (`Cylinder.OwnerCustomerId`, SQLite + PostgreSQL şema), `CylinderTrip.ClosedBy`,
+  `ClosedTripsAsync`, `/api/sefer/gecmis` + `/api/sefer/{id}/detay` (Yönetici/Operatör hepsini, diğerleri kendi kapattıklarını görür),
+  site paneli `/ozet` sahiplik bölümü + `/tupler` sahip filtresi, `/api/tup/bilgi` Owner, mobil "Tamamlanmış Seferler" ekranı,
+  Tüp Bilgisi'nde sahip satırı, sefer ekranında "Son okutmayı geri al". El terminali (handheld) aktarılmadı.
+- Sürümler: MobileApi csproj 1.4.1, `MobileReleaseInfo.ApiVersion` 1.14.0.
+- Etiket marka (sahip adı üst yazısı) HÂLÂ BEKLEMEDE; ilk uygulamaya da aktarılmadı.
+
+
 ## Kampanya
 - Hazır: gruplar, onay kaydı (ret kaydı ezilmez), e-posta (Gmail), yarı otomatik WhatsApp, mobil Kampanya sekmesi, zamanlayıcı (AgentWatcher).
 - Eksik (kullanıcı): Gmail uygulama şifresi; otomatik WhatsApp için Meta şablonu. E-posta PDF ek sınırı 2,5 MB.

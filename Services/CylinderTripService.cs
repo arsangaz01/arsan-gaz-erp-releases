@@ -80,7 +80,8 @@ public sealed record TripListItem(
     int MissingUnexplained = 0,
     int MissingUnchecked = 0,
     int PickedUp = 0,
-    bool RequireReasons = false);
+    bool RequireReasons = false,
+    string? ClosedBy = null);
 
 public sealed record TripCylinderView(
     int CylinderId, string SerialNumber, string GasType, string Plate, DateTime LoadedAt, DateTime? DeliveredAt, DateTime? ReturnedAt, bool Missing,
@@ -129,6 +130,49 @@ public sealed class CylinderTripService
         }
 
         List<CylinderTrip> trips = await query.OrderByDescending(x => x.StartedAt).ThenByDescending(x => x.Id).Take(take).ToListAsync();
+        return trips.Select(TripView).ToList();
+    }
+
+    // Closed trips for the phone "Tamamlanmış seferler" list.
+    // seeAll: Yönetici/Operatör. Otherwise only trips this account closed (legacy: own plate / started).
+    public async Task<List<TripListItem>> ClosedTripsAsync(string? plate, int take = 40, bool seeAll = false, string? userName = null)
+    {
+        string? normalized = CylinderTracking.NormalizePlate(plate);
+        string? who = string.IsNullOrWhiteSpace(userName) ? null : userName.Trim();
+        take = Math.Clamp(take, 1, 100);
+        await using ArsanGazDbContext db = new();
+        IQueryable<CylinderTrip> query = db.CylinderTrips.AsNoTracking()
+            .Where(x => x.Status == CylinderTripStatus.Closed)
+            .Include(x => x.Vehicles)
+            .Include(x => x.Cylinders);
+        if (!seeAll)
+        {
+            if (who is not null)
+            {
+                string whoLower = who.ToLowerInvariant();
+                // Prefer ClosedBy; older rows without it fall back to fixed plate or CreatedBy.
+                // No CreatedBy.Contains: CreatedBy is often "Mobil (cihaz)" and substring match leaks other users' trips.
+                query = query.Where(x =>
+                    (x.ClosedBy != null && x.ClosedBy.ToLower() == whoLower)
+                    || (x.ClosedBy == null && normalized != null
+                        && (x.Vehicles.Any(v => v.Plate == normalized) || x.Cylinders.Any(c => c.VehiclePlate == normalized))));
+            }
+            else if (normalized is not null)
+            {
+                query = query.Where(x => x.Vehicles.Any(v => v.Plate == normalized) || x.Cylinders.Any(c => c.VehiclePlate == normalized));
+            }
+            else
+            {
+                // Depot account without a name filter and without a plate: show nothing rather than everyone's history.
+                return [];
+            }
+        }
+
+        List<CylinderTrip> trips = await query
+            .OrderByDescending(x => x.ClosedAt ?? x.StartedAt)
+            .ThenByDescending(x => x.Id)
+            .Take(take)
+            .ToListAsync();
         return trips.Select(TripView).ToList();
     }
 
@@ -244,7 +288,7 @@ public sealed class CylinderTripService
             vehicles, trip.Cylinders.Count(x => !x.IsPickup), trip.Cylinders.Count(x => x.DeliveredAt is not null), trip.Cylinders.Count(x => x.ReturnedAt is not null),
             vehicles.Sum(x => x.OnVehicle), vehicles.Sum(x => x.Missing), missingByGas,
             missingRows.Count(x => x.MissingReason is null), missingRows.Count(x => x.MissingReason is not null && x.CheckedAt is null),
-            trip.Cylinders.Count(x => x.IsPickup), trip.RequireReasons);
+            trip.Cylinders.Count(x => x.IsPickup), trip.RequireReasons, trip.ClosedBy);
     }
 
     // Writes where / why loaded (or picked up) cylinders were neither delivered nor scanned back at the depot. Works on
@@ -816,11 +860,27 @@ public sealed class CylinderTripService
             throw new TripReasonsRequiredException(unexplained);
         }
 
+        string? who = string.IsNullOrWhiteSpace(closedBy) ? null
+            : closedBy.Trim().Length > 80 ? closedBy.Trim()[..80] : closedBy.Trim();
+        DateTime closedAt = DateTime.Now;
+        // Atomic claim so two concurrent closes cannot both send manager notices / overwrite ClosedBy.
+        int claimed = await db.CylinderTrips
+            .Where(t => t.Id == tripId && t.Status == CylinderTripStatus.Active)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(t => t.Status, CylinderTripStatus.Closed)
+                .SetProperty(t => t.ClosedAt, closedAt)
+                .SetProperty(t => t.ClosedBy, who));
+        if (claimed == 0)
+        {
+            throw new InvalidOperationException("Sefer zaten kapatılmış.");
+        }
+
         trip.Status = CylinderTripStatus.Closed;
-        trip.ClosedAt = DateTime.Now;
+        trip.ClosedAt = closedAt;
+        trip.ClosedBy = who;
         foreach (CylinderTripVehicle vehicle in trip.Vehicles.Where(x => x.ReturnedAt is null))
         {
-            vehicle.ReturnedAt = trip.ClosedAt;
+            vehicle.ReturnedAt = closedAt;
         }
 
         await db.SaveChangesAsync();
@@ -842,7 +902,7 @@ public sealed class CylinderTripService
             message += Environment.NewLine + "Okutulmayan tüplerin gerekçeleri yöneticilere bildirildi.";
         }
 
-        return new TripCloseResult(tripId, reconcile, message, trip.Title, closedBy, missing);
+        return new TripCloseResult(tripId, reconcile, message, trip.Title, who, missing);
     }
 
     private static async Task<string?> CustomerNameAsync(int customerId)

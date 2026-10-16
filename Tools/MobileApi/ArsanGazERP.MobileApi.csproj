@@ -8,7 +8,7 @@
     <RootNamespace>ArsanGazERP.MobileApi</RootNamespace>
     <AssemblyName>ArsanGazERP.MobileApi</AssemblyName>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <Version>1.4.0</Version>
+    <Version>1.4.1</Version>
   </PropertyGroup>
 
   <!-- Linux sunucu derlemesi: dotnet publish -p:ArsanLinux=true -c Release -->
