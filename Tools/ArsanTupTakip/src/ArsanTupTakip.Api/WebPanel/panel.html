@@ -143,6 +143,50 @@ tr.alarm-row td { background:#fef2f2; }
 .vehicle-pick label { display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:10px; padding:8px 10px; cursor:pointer; font-size:14px; color:var(--text); }
 .vehicle-pick label.busy { opacity:.6; }
 .panel-deploy-footer { text-align:center; padding:8px 18px 18px; font-size:11px; color:#9ca3af; }
+.lb-hero { display:flex; gap:16px; align-items:center; padding:18px 20px; border-radius:16px; margin-bottom:16px;
+  background:linear-gradient(135deg,#1e3a8a 0%,#0369a1 55%,#0ea5e9 100%); color:#fff; box-shadow:0 8px 24px rgba(30,58,138,.25); }
+.lb-hero-icon { width:56px; height:56px; border-radius:14px; background:rgba(255,255,255,.15); display:flex; align-items:center; justify-content:center; flex:none; }
+.lb-hero h2 { margin:0; font-size:22px; font-weight:700; letter-spacing:0; text-transform:none; color:#fff; }
+.lb-hero p { margin:4px 0 0; font-size:14px; opacity:.9; }
+.lb-steps { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
+.lb-step { flex:1; min-width:140px; padding:10px 12px; border-radius:12px; background:#fff; border:1px solid var(--line); font-size:13px; color:var(--muted); }
+.lb-step b { display:block; color:var(--navy); font-size:14px; margin-bottom:2px; }
+.lb-step.on { border-color:#7dd3fc; background:var(--sea-light); color:var(--navy); }
+.lb-mode { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.lb-mode button { flex:1; min-width:120px; padding:12px 14px; border-radius:12px; border:2px solid var(--line); background:#fff; cursor:pointer; font:inherit; font-weight:600; color:var(--navy); text-align:left; }
+.lb-mode button small { display:block; font-weight:400; color:var(--muted); font-size:12px; margin-top:2px; }
+.lb-mode button.active { border-color:var(--sea); background:var(--sea-light); box-shadow:0 0 0 3px rgba(2,132,199,.15); }
+.lb-mode button:active { transform:scale(0.98); }
+.lb-panel { display:none; }
+.lb-panel.on { display:block; }
+.lb-presets { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.lb-presets button { border-radius:99px; padding:6px 12px; font-size:13px; }
+.lb-presets button.active { background:var(--navy); color:#fff; border-color:var(--navy); }
+.lb-studio { display:grid; grid-template-columns:minmax(240px,1fr) minmax(280px,1.2fr); gap:14px; }
+@media (max-width:800px) { .lb-studio { grid-template-columns:1fr; } }
+.lb-chips { display:flex; flex-direction:column; gap:8px; max-height:420px; overflow:auto; }
+.lb-chip { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:#fafafa; }
+.lb-chip .code { font-weight:700; font-family:ui-monospace, Consolas, monospace; font-size:15px; color:var(--navy); }
+.lb-chip .meta { flex:1; font-size:12px; color:var(--muted); }
+.lb-chip .err { color:#b91c1c; font-size:12px; }
+.lb-preview-wrap { background:linear-gradient(180deg,#cbd5e1 0%,#e2e8f0 100%); border-radius:16px; padding:16px; min-height:200px; border:1px solid #94a3b8; }
+.lb-preview-wrap h3 { margin:0 0 10px; font-size:13px; color:#334155; text-transform:uppercase; letter-spacing:.04em; }
+.lb-previews { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-content:flex-start; max-height:380px; overflow:auto; }
+.lb-preview-card { background:#fff; box-shadow:0 4px 14px rgba(15,23,42,.18); border-radius:4px; overflow:hidden; }
+.lb-preview-card.warn { outline:2px solid #f59e0b; }
+.lb-preview-card.bad { outline:2px solid #ef4444; }
+.lb-preview-card .label { width:100%; height:100%; box-sizing:border-box; padding:1.5mm; display:flex; flex-direction:column; justify-content:space-between;
+  font-family:Arial, Helvetica, sans-serif; color:#000; background:#fff; overflow:hidden; }
+.lb-preview-card .row { display:flex; justify-content:space-between; gap:1mm; font-size:2.4mm; line-height:1.2; white-space:nowrap; overflow:hidden; }
+.lb-preview-card .row.b { font-weight:bold; }
+.lb-preview-card .bar { flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; min-height:0; }
+.lb-preview-card .bar svg { display:block; fill:#000; max-width:100%; max-height:100%; }
+.lb-preview-card .code { text-align:center; font-size:2.5mm; line-height:1.2; letter-spacing:.3mm; font-weight:bold; }
+.lb-empty { text-align:center; padding:28px 12px; color:#475569; }
+.lb-empty .big { font-size:40px; line-height:1; margin-bottom:8px; }
+.lb-print-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+.lb-print-bar .primary { font-size:16px; padding:12px 22px; border-radius:12px; }
+.lb-count-pill { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:99px; background:var(--sea-light); color:var(--navy); font-weight:600; font-size:13px; }
 .perm-groups { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:10px; margin-top:6px; }
 .perm-group { border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
 .perm-group h4 { margin:0 0 6px; font-size:13px; color:var(--navy); display:flex; align-items:center; gap:8px; }
@@ -449,65 +493,105 @@ tr.alarm-row td { background:#fef2f2; }
     </section>
 
     <section data-page="barkod" class="hidden">
+      <div class="lb-hero">
+        <div class="lb-hero-icon" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="2" height="16" fill="#fff"/><rect x="7" y="4" width="1" height="16" fill="#fff"/><rect x="10" y="4" width="3" height="16" fill="#fff"/><rect x="15" y="4" width="1" height="16" fill="#fff"/><rect x="18" y="4" width="3" height="16" fill="#fff"/></svg>
+        </div>
+        <div>
+          <h2>Barkod Yazdır</h2>
+          <p>Üç adım: barkod ekle → önizlemeyi kontrol et → TSC yazıcıya bas.</p>
+        </div>
+      </div>
+      <div class="lb-steps">
+        <div class="lb-step on" id="lb-step-1"><b>1 · Barkod ekle</b>Kayıtlı tüp, yeni numara veya ürün</div>
+        <div class="lb-step" id="lb-step-2"><b>2 · Önizle</b>Etiket sağda gerçek boyuta yakın görünür</div>
+        <div class="lb-step" id="lb-step-3"><b>3 · Yazdır</b>TSC yazıcısını seçin · kenar boşluğu yok · %100</div>
+      </div>
       <div id="lb-msg" class="msg hidden"></div>
+
       <div class="card">
-        <h2>Etiket ayarları</h2>
+        <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--navy)">1 · Barkod ekle</h2>
+        <div class="lb-mode" role="tablist">
+          <button type="button" class="active" data-lb-mode="search" id="lb-mode-search">🔍 Kayıtlı tüp<small>Sistemdeki barkodu bas</small></button>
+          <button type="button" data-lb-mode="new" id="lb-mode-new">➕ Yeni numara<small>AG000001 gibi ardışık kod</small></button>
+          <button type="button" data-lb-mode="product" id="lb-mode-product">📦 Üründen<small>Kayıtlı şablonla hızlı bas</small></button>
+        </div>
+
+        <div class="lb-panel on" id="lb-panel-search">
+          <div class="filters">
+            <label>Ara<input id="lb-q" placeholder="Seri no, barkod, gaz, müşteri" style="width:min(320px,100%)"></label>
+            <button class="secondary" id="lb-search" type="button">Ara</button>
+            <button class="primary" id="lb-add-selected" type="button">Seçilenleri ekle</button>
+          </div>
+          <div class="table-wrap" style="margin-top:10px"><table id="lb-results"></table></div>
+        </div>
+
+        <div class="lb-panel" id="lb-panel-new">
+          <div class="filters">
+            <label>Önek<input id="lb-prefix" maxlength="10" placeholder="ör. AG" style="width:100px"></label>
+            <label>Başlangıç no<input id="lb-start" type="number" min="0" step="1" value="1" style="width:120px"></label>
+            <label>Adet<input id="lb-count" type="number" min="1" max="500" step="1" value="1" style="width:90px"></label>
+            <label>Basamak<input id="lb-digits" type="number" min="1" max="10" step="1" value="6" style="width:80px"></label>
+            <button class="secondary" id="lb-next" type="button" title="Bu önekle kayıtlı en büyük numaradan sonrakini getirir">Sıradaki boş no</button>
+            <button class="primary" id="lb-generate" type="button">Oluştur ve ekle</button>
+          </div>
+          <div class="hint">Örnek: AG + 1 + 6 basamak → AG000001. Türkçe karakter kullanılamaz. Zaten kayıtlı numaralar eklenmez.</div>
+        </div>
+
+        <div class="lb-panel" id="lb-panel-product">
+          <div class="toolbar" style="margin-bottom:8px">
+            <button class="secondary small" id="lt-new" type="button">+ Ürün kaydet</button>
+            <button class="secondary small" id="lt-edit" type="button">Düzenle</button>
+            <button class="secondary small" id="lt-delete" type="button">Sil</button>
+          </div>
+          <div class="filters">
+            <label>Ürün<select id="lt-select" style="min-width:220px"></select></label>
+            <label>Seri no<input id="lt-serial" placeholder="ör. 124" style="width:140px"></label>
+            <label>Adet<input id="lt-count" type="number" min="1" max="500" step="1" value="1" style="width:80px"></label>
+            <button class="secondary" id="lt-next" type="button">Sıradaki boş no</button>
+            <button class="primary" id="lt-generate" type="button">Oluştur ve ekle</button>
+          </div>
+          <div class="hint" id="lt-info"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--navy)">2 · Önizleme ve ayarlar</h2>
+        <div class="lb-presets" id="lb-presets">
+          <button type="button" class="secondary" data-w="50" data-h="30">50×30 mm</button>
+          <button type="button" class="secondary" data-w="40" data-h="25">40×25 mm</button>
+          <button type="button" class="secondary" data-w="70" data-h="40">70×40 mm</button>
+          <button type="button" class="secondary" data-w="100" data-h="50">100×50 mm</button>
+        </div>
         <div class="filters">
           <label>Genişlik (mm)<input id="lb-w" type="number" min="20" max="104" step="1" value="50" style="width:90px"></label>
           <label>Yükseklik (mm)<input id="lb-h" type="number" min="10" max="200" step="1" value="30" style="width:90px"></label>
-          <label>Kopya (her barkod)<input id="lb-copies" type="number" min="1" max="20" step="1" value="1" style="width:90px"></label>
+          <label>Kopya<input id="lb-copies" type="number" min="1" max="20" step="1" value="1" style="width:70px"></label>
           <label>Üst yazı<input id="lb-title" maxlength="40" value="ARSAN GAZ" style="width:160px"></label>
-          <label><span><input type="checkbox" id="lb-f-gas" checked> Gaz + kapasite</span></label>
-          <label><span><input type="checkbox" id="lb-f-serial" checked> Seri no</span></label>
-          <label><span><input type="checkbox" id="lb-f-test" checked> Test tarihi</span></label>
-          <label><span><input type="checkbox" id="lb-f-text" checked> Barkod altında kod</span></label>
+          <label class="check"><input type="checkbox" id="lb-f-gas" checked> Gaz</label>
+          <label class="check"><input type="checkbox" id="lb-f-serial" checked> Seri</label>
+          <label class="check"><input type="checkbox" id="lb-f-test" checked> Test</label>
+          <label class="check"><input type="checkbox" id="lb-f-text" checked> Kod yazısı</label>
         </div>
-        <div class="hint">Yazıcı: TSC TA310 (300 dpi). Yazdır'a basınca etiket önizlemesi açılır ve bilgisayarın yazdırma penceresi gelir; orada TSC yazıcısını seçin. İlk kullanımda: TSC Windows sürücüsünü kurun, sürücünün "Yazdırma tercihleri"nde kağıt boyutunu buradaki etiket ölçüsüyle aynı yapın, yazdırma penceresinde "Kenar boşluğu: Yok" ve "Ölçek: %100" seçin. Ayarlar bu bilgisayarda hatırlanır.</div>
+        <div class="lb-studio" style="margin-top:14px">
+          <div>
+            <div class="toolbar" style="margin-bottom:8px">
+              <h2 style="margin:0;text-transform:none;letter-spacing:0;font-size:14px;color:var(--navy)">Liste <span id="lb-count-text" class="lb-count-pill hidden"></span></h2>
+              <button class="secondary small" id="lb-clear" type="button">Temizle</button>
+            </div>
+            <div id="lb-list" class="lb-chips"></div>
+          </div>
+          <div class="lb-preview-wrap">
+            <h3>Etiket önizlemesi</h3>
+            <div id="lb-previews" class="lb-previews"></div>
+          </div>
+        </div>
+        <div class="lb-print-bar">
+          <button class="primary" id="lb-print" type="button">🖨️ Yazdır</button>
+          <span class="hint" style="margin:0">Yazdırma penceresinde TSC yazıcısını seçin. Kenar boşluğu: Yok · Ölçek: %100. Ayarlar bu bilgisayarda hatırlanır.</span>
+        </div>
       </div>
-      <div class="card">
-        <div class="toolbar"><h2>Kayıtlı ürünler</h2>
-          <button class="secondary small" id="lt-new" type="button">Yeni ürün kaydet</button>
-          <button class="secondary small" id="lt-edit" type="button">Düzenle</button>
-          <button class="secondary small" id="lt-delete" type="button">Sil</button>
-        </div>
-        <div class="filters">
-          <label>Ürün<select id="lt-select" style="min-width:240px"></select></label>
-          <label>Seri no<input id="lt-serial" placeholder="ör. 124 veya AG000124" style="width:170px"></label>
-          <label>Adet (ardışık)<input id="lt-count" type="number" min="1" max="500" step="1" value="1" style="width:90px"></label>
-          <button class="secondary" id="lt-next" type="button" title="Bu ürünün önekiyle kayıtlı en büyük numaradan sonrakini getirir">Sıradaki boş no</button>
-          <button class="primary" id="lt-generate" type="button">Barkod oluştur ve listeye ekle</button>
-        </div>
-        <div class="hint" id="lt-info"></div>
-        <div class="hint">Çalışan bir barkodu ürün olarak kaydedin (ör. AG000123 → önek AG, 6 basamak); etiket ölçüsü ve yazılar da ürünle saklanır. Sonra ürünü seçip yalnızca seri numarasını yazarak yeni barkod oluşturun. Aşağıdaki listede bir etiketin yanındaki "Ürün olarak kaydet" ile de kaydedebilirsiniz. Ürünler sunucuda tutulur, her bilgisayardan görünür.</div>
-      </div>
-      <div class="card">
-        <h2>Kayıtlı tüplerden ekle</h2>
-        <div class="filters">
-          <label>Ara<input id="lb-q" placeholder="Seri no, barkod, gaz, müşteri" style="width:240px"></label>
-          <button class="secondary" id="lb-search" type="button">Ara</button>
-          <button class="secondary" id="lb-add-selected" type="button">Seçilenleri listeye ekle</button>
-        </div>
-        <div class="table-wrap"><table id="lb-results"></table></div>
-      </div>
-      <div class="card">
-        <h2>Yeni barkod numarası oluştur (elle)</h2>
-        <div class="filters">
-          <label>Önek<input id="lb-prefix" maxlength="10" placeholder="ör. AG" style="width:100px"></label>
-          <label>Başlangıç no<input id="lb-start" type="number" min="0" step="1" value="1" style="width:120px"></label>
-          <label>Adet<input id="lb-count" type="number" min="1" max="500" step="1" value="10" style="width:90px"></label>
-          <label>Basamak<input id="lb-digits" type="number" min="1" max="10" step="1" value="6" style="width:80px"></label>
-          <button class="secondary" id="lb-next" type="button" title="Bu önekle kayıtlı en büyük numaradan sonrakini getirir">Sıradaki boş no</button>
-          <button class="secondary" id="lb-generate" type="button">Oluştur ve listeye ekle</button>
-        </div>
-        <div class="hint">Örnek: önek AG, başlangıç 1, basamak 6 → AG000001, AG000002… Bir tüpte zaten barkod/seri no olarak kayıtlı numaralar listeye eklenmez ve uyarı verilir. Yeni numaralar yalnızca etiket olarak basılır; tüp kaydı "Yeni tüp" sekmesinden veya mobilde etiketi okutarak yapılır. Türkçe karakter (ç, ğ, ı, ö, ş, ü) kullanılamaz.</div>
-      </div>
-      <div class="card">
-        <div class="toolbar"><h2>Yazdırılacak etiketler <span id="lb-count-text" class="hint"></span></h2>
-          <button class="secondary small" id="lb-clear" type="button">Listeyi temizle</button>
-          <button class="primary" id="lb-print" type="button">Yazdır</button>
-        </div>
-        <div class="table-wrap"><table id="lb-list"></table></div>
-      </div>
+      <iframe id="lb-print-frame" title="Yazdırma" style="position:fixed;right:0;bottom:0;width:0;height:0;border:0" aria-hidden="true"></iframe>
     </section>
 
     <section data-page="yonetim" class="hidden">
