@@ -252,11 +252,30 @@ internal static class WebPanelEndpoints
             int review = await db.Cylinders.AsNoTracking().CountAsync(c => c.NeedsReview);
             int testOverdue = await db.Cylinders.AsNoTracking().CountAsync(c => c.IsActive && c.TestDueDate != null && c.TestDueDate < today);
             int testSoon = await db.Cylinders.AsNoTracking().CountAsync(c => c.IsActive && c.TestDueDate != null && c.TestDueDate >= today && c.TestDueDate <= today.AddDays(TestSoonDays));
+            int companyOwned = await db.Cylinders.AsNoTracking().CountAsync(c => c.IsActive && c.OwnerCustomerId == null);
+            int customerOwned = await db.Cylinders.AsNoTracking().CountAsync(c => c.IsActive && c.OwnerCustomerId != null);
+            // Top owners by cylinder count for the homepage ownership grid (click → Tüpler filter).
+            const int ownerTiles = 12;
+            var ownerGroups = await (
+                from c in db.Cylinders.AsNoTracking()
+                join o in db.Customers.AsNoTracking() on c.OwnerCustomerId equals o.Id
+                where c.IsActive && c.OwnerCustomerId != null
+                group c by new { Id = o.Id, o.CompanyName } into g
+                select new { id = g.Key.Id, name = g.Key.CompanyName, count = g.Count() })
+                .OrderByDescending(x => x.count).ThenBy(x => x.name)
+                .ToListAsync();
+            List<object> topOwners = ownerGroups.Take(ownerTiles).Cast<object>().ToList();
+            int otherOwners = ownerGroups.Skip(ownerTiles).Sum(x => x.count);
+            int ownerCustomerCount = ownerGroups.Count;
             List<object> recent = (await MovementQuery(db).Take(10).ToListAsync()).Select(MovementRow).ToList();
-            return Results.Ok(new { overview, todayMoves, weekMoves, inactive, review, testOverdue, testSoon, testSoonDays = TestSoonDays, recent });
+            return Results.Ok(new
+            {
+                overview, todayMoves, weekMoves, inactive, review, testOverdue, testSoon, testSoonDays = TestSoonDays, recent,
+                ownership = new { companyOwned, customerOwned, ownerCustomerCount, topOwners, otherOwners }
+            });
         }).Requires(Perm.Summary);
 
-        api.MapGet("/tupler", async (string? q, int? durum, string? plaka, int? musteri, string? doluluk, bool? uzun, bool? pasif, bool? inceleme, string? test) =>
+        api.MapGet("/tupler", async (string? q, int? durum, string? plaka, int? musteri, string? doluluk, bool? uzun, bool? pasif, bool? inceleme, string? test, string? sahip, int? sahipId) =>
         {
             await using TupTakipDbContext db = new();
             IQueryable<Cylinder> query = db.Cylinders.AsNoTracking().Include(c => c.CurrentCustomer).Include(c => c.OwnerCustomer);
@@ -274,6 +293,20 @@ internal static class WebPanelEndpoints
             if (musteri is int customerId)
             {
                 query = query.Where(c => c.CurrentCustomerId == customerId && c.Status == CylinderStatus.Customer);
+            }
+
+            // sahip=firma → company stock; sahip=musteri → any customer-owned; sahipId → that owner.
+            if (sahipId is int ownerId && ownerId > 0)
+            {
+                query = query.Where(c => c.OwnerCustomerId == ownerId);
+            }
+            else if (string.Equals(sahip, "firma", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(c => c.OwnerCustomerId == null);
+            }
+            else if (string.Equals(sahip, "musteri", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(c => c.OwnerCustomerId != null);
             }
 
             if (doluluk is "dolu" or "bos" or "bilinmiyor")
@@ -303,7 +336,7 @@ internal static class WebPanelEndpoints
             DateTime today = DateTime.Today;
             return Results.Ok(rows
                 .Where(c => term.Length == 0 || Contains(c.SerialNumber, term) || Contains(c.Barcode, term) || Contains(c.ManufacturerSerial, term) || Contains(c.GasType, term)
-                    || Contains(c.CurrentCustomer?.CompanyName, term) || Contains(c.VehiclePlate, term))
+                    || Contains(c.CurrentCustomer?.CompanyName, term) || Contains(c.OwnerCustomer?.CompanyName, term) || Contains(c.VehiclePlate, term))
                 .Take(MaxCylinderRows)
                 .Select(c => new
                 {
