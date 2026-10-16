@@ -36,21 +36,30 @@ internal static class WorkflowEvidenceVerifier
         try
         {
             using JsonDocument report = JsonDocument.Parse(File.ReadAllText(reportPath));
-            if (!report.RootElement.TryGetProperty("CheckedAtLocal", out JsonElement checkedElement)
-                || checkedElement.ValueKind != JsonValueKind.String
-                || !report.RootElement.TryGetProperty("Checks", out JsonElement checks)
+            if (!report.RootElement.TryGetProperty("Checks", out JsonElement checks)
                 || checks.ValueKind != JsonValueKind.Array)
             {
                 return null;
             }
 
-            DateTime checkedLocal = checkedElement.GetDateTime();
-            DateTimeOffset checkedUtc = checkedLocal.Kind switch
+            DateTimeOffset checkedUtc;
+            if (report.RootElement.TryGetProperty("CheckedAtUtc", out JsonElement checkedUtcElement)
+                && checkedUtcElement.ValueKind == JsonValueKind.String
+                && DateTimeOffset.TryParse(checkedUtcElement.GetString(), out DateTimeOffset parsedUtc))
             {
-                DateTimeKind.Utc => new DateTimeOffset(checkedLocal),
-                DateTimeKind.Local => new DateTimeOffset(checkedLocal),
-                _ => new DateTimeOffset(DateTime.SpecifyKind(checkedLocal, DateTimeKind.Local))
-            };
+                checkedUtc = parsedUtc.ToUniversalTime();
+            }
+            else if (report.RootElement.TryGetProperty("CheckedAtLocal", out JsonElement checkedElement)
+                && checkedElement.ValueKind == JsonValueKind.String
+                && DateTimeOffset.TryParse(checkedElement.GetString(), out DateTimeOffset parsedLocal))
+            {
+                checkedUtc = parsedLocal.ToUniversalTime();
+            }
+            else
+            {
+                return null;
+            }
+
             if (checkedUtc <= new DateTimeOffset(DateTime.SpecifyKind(resultUtc, DateTimeKind.Utc)))
             {
                 return null;

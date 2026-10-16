@@ -33,3 +33,8 @@ test("request the IDE chat has started is never taken over", () => {
   const claim = { pid: 1111, claimedUtc: iso(-3_600_000) };
   assert.equal(claimTakeoverReason({ claim, started: true, ideStatus: null, nowMs: now }), null);
 });
+
+test("claim without pid is taken over immediately", () => {
+  const claim = { claimedUtc: iso(-10_000) };
+  assert.match(claimTakeoverReason({ claim, started: false, ideStatus: liveIde, nowMs: now }), /pid eksik/);
+});

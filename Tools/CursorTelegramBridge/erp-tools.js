@@ -81,6 +81,9 @@ class ErpMcpClient {
   }
 
   request(method, params) {
+    if (!this.child?.stdin?.writable) {
+      return Promise.reject(new Error("ERP MCP süreci kapalı; yeniden başlatın."));
+    }
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -88,7 +91,13 @@ class ErpMcpClient {
         reject(new Error(`ERP MCP isteği zaman aşımına uğradı (${method}).`));
       }, CALL_TIMEOUT_MS);
       this.pending.set(id, { resolve, reject, timer });
-      this.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+      try {
+        this.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+      } catch (error) {
+        this.pending.delete(id);
+        clearTimeout(timer);
+        reject(error);
+      }
     });
   }
 
@@ -103,7 +112,15 @@ class ErpMcpClient {
 
   async callTool(name, args) {
     await this.start();
-    return this.request("tools/call", { name, arguments: args ?? {} });
+    try {
+      return await this.request("tools/call", { name, arguments: args ?? {} });
+    } catch (error) {
+      const detail = String(error?.message ?? error);
+      if (!/kapalı|EPIPE|EOF|write after end/i.test(detail)) throw error;
+      this.stop();
+      await this.start();
+      return this.request("tools/call", { name, arguments: args ?? {} });
+    }
   }
 
   stop() {

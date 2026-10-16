@@ -194,7 +194,10 @@ function claimTakeoverReason({ claim, started, ideStatus, nowMs }) {
   if (started) return null;
   if (!isHeartbeatFresh(ideStatus, nowMs)) return "IDE izleyicisi çalışmıyor";
   const claimPid = Number(claim?.pid);
-  if (Number.isInteger(claimPid) && claimPid > 0 && Number(ideStatus?.pid) !== claimPid) {
+  if (!Number.isInteger(claimPid) || claimPid <= 0) {
+    return "IDE sahiplenme pid eksik";
+  }
+  if (Number(ideStatus?.pid) !== claimPid) {
     return "isteği sahiplenen IDE izleyicisi kapanmış";
   }
   const claimed = Date.parse(claim?.claimedUtc ?? "");

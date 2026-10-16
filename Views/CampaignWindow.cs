@@ -263,8 +263,11 @@ public sealed partial class CampaignWindow : Window
     private Task SaveBusinessAccountAsync()
     {
         if (Channel != CampaignChannel.WhatsApp) throw new InvalidOperationException("Önce WhatsApp kanalını seçin.");
+        WhatsAppBusinessService whatsApp = new();
+        if (!whatsApp.IsConfigured)
+            throw new InvalidOperationException("Önce WhatsApp ayarlarından erişim jetonunu kaydedin; WABA kimliği tek başına yazılamaz.");
         if (!Confirm("WABA kimliği şifreli yerel WhatsApp ayarlarına yazılacak. Bu işlem sağlayıcıya istek veya müşteriye mesaj göndermez. Devam edilsin mi?")) return Task.CompletedTask;
-        new WhatsAppBusinessService().SetBusinessAccountId(businessAccount.Text);
+        whatsApp.SetBusinessAccountId(businessAccount.Text);
         verifiedTemplate = null;
         detail.Text = "WABA kaydedildi. Şablonu doğrulama düğmesiyle kontrol edin.";
         return Task.CompletedTask;

@@ -5,6 +5,7 @@
 
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { maskPii } = require("./pii-mask");
 
 const MAX_FACTS = 80;
 const MAX_FACT_LENGTH = 400;
@@ -33,7 +34,7 @@ async function listFacts(dataRoot) {
 }
 
 async function rememberFact(dataRoot, fact) {
-  const text = String(fact ?? "").replace(/\s+/g, " ").trim();
+  const text = maskPii(String(fact ?? "").replace(/\s+/g, " ").trim());
   if (!text) throw new Error("Kaydedilecek bilgi boş.");
   if (text.length > MAX_FACT_LENGTH) throw new Error(`Bilgi en fazla ${MAX_FACT_LENGTH} karakter olabilir; kısaltın.`);
   const facts = await listFacts(dataRoot);
@@ -56,8 +57,15 @@ async function forgetFact(dataRoot, key) {
   const source = path.join(directory, `${name}.md`);
   const targetDirectory = path.join(directory, FORGOTTEN_FOLDER);
   await fs.mkdir(targetDirectory, { recursive: true });
+  let target = path.join(targetDirectory, `${name}.md`);
   try {
-    await fs.rename(source, path.join(targetDirectory, `${name}.md`));
+    await fs.access(target);
+    target = path.join(targetDirectory, `${name}-${Date.now()}.md`);
+  } catch {
+    /* target free */
+  }
+  try {
+    await fs.rename(source, target);
   } catch (error) {
     if (error.code === "ENOENT") throw new Error("Bu anahtarla bir bilgi yok.");
     throw error;
@@ -68,7 +76,7 @@ async function forgetFact(dataRoot, key) {
 async function buildMemoryContext(dataRoot) {
   const facts = await listFacts(dataRoot);
   if (facts.length === 0) return "";
-  return facts.map((fact) => `- [${fact.key}] ${fact.text}`).join("\n");
+  return facts.map((fact) => `- [${fact.key}] ${maskPii(fact.text)}`).join("\n");
 }
 
 function textResult(text, isError = false) {

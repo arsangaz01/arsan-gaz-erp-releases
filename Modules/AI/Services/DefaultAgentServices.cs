@@ -131,13 +131,20 @@ public sealed class SalesForecastService : ISalesForecastService
             .Where(quote => quote.Currency == "TRY" &&
                             quote.Status != "Kazanıldı" && quote.Status != "Kaybedildi")
             .SumAsync(quote => (decimal?)quote.TotalAmount, ct) ?? 0m;
+        int otherCurrencyOpenQuotes = await db.Quotes.CountAsync(
+            quote => quote.Currency != "TRY" &&
+                     quote.Status != "Kazanıldı" && quote.Status != "Kaybedildi",
+            ct);
         int paymentCount = await db.Payments.CountAsync(payment => payment.PaymentDate >= threeMonthsAgo, ct);
         decimal historicalMonthlyAverage = collectedInPeriod / 3m;
         decimal expected = historicalMonthlyAverage + (openQuoteValue * 0.30m);
         decimal confidence = paymentCount < 3 ? 0.25m : paymentCount < 10 ? 0.45m : 0.60m;
         string summary = paymentCount == 0 && openQuoteValue == 0m
             ? "Henüz yeterli tahsilat veya açık teklif verisi yok; güvenilir tahmin üretilemedi."
-            : $"Önümüzdeki ay için yaklaşık {expected:N2} TRY. Hesap: son 3 ayın aylık ortalama tahsilatı ({historicalMonthlyAverage:N2} TRY) + açık tekliflerin ihtiyatlı %30 ağırlığı ({openQuoteValue:N2} TRY). Güven: {confidence:P0}; bu bir istatistiksel garanti değildir.";
+            : $"Önümüzdeki ay için yaklaşık {expected:N2} TRY. Hesap: son 3 ayın aylık ortalama tahsilatı ({historicalMonthlyAverage:N2} TRY) + açık TRY tekliflerin ihtiyatlı %30 ağırlığı ({openQuoteValue:N2} TRY). Güven: {confidence:P0}; bu bir istatistiksel garanti değildir."
+              + (otherCurrencyOpenQuotes == 0
+                  ? ""
+                  : $" Ayrıca {otherCurrencyOpenQuotes} açık teklif TRY dışı (tahmine dahil değil).");
         return new SalesForecastDto(expected, confidence, summary);
     }
 }

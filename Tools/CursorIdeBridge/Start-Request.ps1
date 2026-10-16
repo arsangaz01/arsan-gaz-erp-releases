@@ -10,6 +10,7 @@ $utf8 = New-Object System.Text.UTF8Encoding($false)
 if (Test-Path (Join-Path $inbox "$Id.completion.json")) { Write-Output "TAKEN $Id zaten tamamlanmis"; exit 2 }
 if (Test-Path (Join-Path $inbox "$Id.dispatch.json")) { Write-Output "TAKEN $Id yedek kopru (bridge.js) devraldi"; exit 2 }
 if (-not (Test-Path (Join-Path $inbox "$Id.request.json"))) { Write-Output "TAKEN $Id istek dosyasi yok"; exit 2 }
+if (-not (Test-Path (Join-Path $inbox "$Id.ide-claim.json"))) { Write-Output "TAKEN $Id ide-claim yok"; exit 2 }
 
 $marker = @{ id = $Id; startedUtc = (Get-Date).ToUniversalTime().ToString('o'); pid = $PID } | ConvertTo-Json -Compress
 [IO.File]::WriteAllText((Join-Path $inbox "$Id.ide-started.json"), $marker, $utf8)

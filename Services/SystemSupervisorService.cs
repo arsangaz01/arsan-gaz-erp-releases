@@ -9,7 +9,11 @@ using Microsoft.EntityFrameworkCore;
 namespace ArsanGazERP.Services;
 
 public sealed record SupervisorCheck(string Name, bool IsHealthy, string Details);
-public sealed record SupervisorReport(DateTime CheckedAtLocal, bool IsHealthy, IReadOnlyList<SupervisorCheck> Checks);
+public sealed record SupervisorReport(
+    DateTime CheckedAtLocal,
+    bool IsHealthy,
+    IReadOnlyList<SupervisorCheck> Checks,
+    DateTimeOffset? CheckedAtUtc = null);
 
 public sealed class SystemSupervisorService : IDisposable
 {
@@ -140,7 +144,8 @@ public sealed class SystemSupervisorService : IDisposable
 
         checks.Add(await EnsureAgentWatcherRunningAsync(cancellationToken));
 
-        return new SupervisorReport(DateTime.Now, checks.All(check => check.IsHealthy), checks);
+        DateTimeOffset nowUtc = DateTimeOffset.UtcNow;
+        return new SupervisorReport(nowUtc.LocalDateTime, checks.All(check => check.IsHealthy), checks, nowUtc);
     }
 
     private static async Task<SupervisorCheck> EnsureAgentWatcherRunningAsync(CancellationToken cancellationToken)

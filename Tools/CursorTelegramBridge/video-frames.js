@@ -25,6 +25,8 @@ const DEFAULTS = {
 };
 const FRAMES_DIR_SUFFIX = ".frames";
 const FRAMES_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+/** Serialize extractFrames per absolute video path so parallel calls do not rm/mkdir race. */
+const extractGates = new Map();
 
 function isVideo(filePath, mimeType) {
   if (typeof mimeType === "string" && mimeType.toLowerCase().startsWith("video/")) return true;
@@ -200,6 +202,22 @@ function lastLine(text) {
 
 // Returns the manifest: { source, durationSec, width, height, sheets: [{path, timestamps}], keyFrames: [{path, timeSec, kind}] }.
 async function extractFrames(videoPath, overrides = {}) {
+  const gateKey = path.resolve(videoPath);
+  while (extractGates.has(gateKey)) {
+    await extractGates.get(gateKey);
+  }
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  extractGates.set(gateKey, gate);
+  try {
+    return await extractFramesUnlocked(videoPath, overrides);
+  } finally {
+    extractGates.delete(gateKey);
+    release();
+  }
+}
+
+async function extractFramesUnlocked(videoPath, overrides = {}) {
   const options = { ...DEFAULTS, ...overrides };
   const ffmpeg = options.ffmpegPath ?? findFfmpeg();
   if (!ffmpeg) throw new Error("ffmpeg bulunamadı (FFMPEG_PATH, PATH, winget veya /usr/bin/ffmpeg)");
