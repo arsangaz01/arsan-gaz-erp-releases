@@ -2512,6 +2512,8 @@ const LABEL_DOT_MM = 25.4 / 300;
 const LABEL_SETTINGS_KEY = "arsan-etiket-ayar";
 let labelList = [];
 let labelResults = [];
+let labelCatalog = null; // full active cylinder snapshot for category chips
+let labelActiveCat = "";
 
 // Symbol values (start … checksum, stop). Code B for letters; an all-digit code or a trailing run of 4+ digits
 // (e.g. AG000001) switches to Code C, two digits per symbol, which keeps the bars wider on small labels.
@@ -2638,7 +2640,7 @@ function updateLabelSteps() {
   $("lb-step-3").classList.toggle("on", labelList.length > 0);
 }
 
-function renderLabelList() {
+function refreshLabelPreviews() {
   const s = labelSettings();
   const pill = $("lb-count-text");
   if (labelList.length) {
@@ -2649,30 +2651,13 @@ function renderLabelList() {
   }
   updateLabelSteps();
   syncLabelPresets();
-  const list = $("lb-list");
   const previews = $("lb-previews");
   if (!labelList.length) {
-    list.replaceChildren(el("div", { class: "lb-empty" },
-      el("div", { class: "big" }, "🏷️"),
-      el("div", {}, "Liste boş"),
-      el("div", { class: "hint" }, "Yukarıdan kayıtlı tüp arayın veya yeni numara oluşturun.")));
     previews.replaceChildren(el("div", { class: "lb-empty" },
       el("div", { class: "big" }, "👁️"),
       el("div", {}, "Önizleme burada görünecek")));
     return;
   }
-  list.replaceChildren(...labelList.map((item, index) => {
-    const check = labelBarcodeSvg(item.code, s.w - 4, 10);
-    return el("div", { class: "lb-chip" },
-      el("div", {},
-        el("div", { class: "code" }, item.code),
-        el("div", { class: "meta" }, [item.gas, item.serial && item.serial !== item.code ? "Seri " + item.serial : "", item.test ? "Test " + item.test : "", item.source].filter(Boolean).join(" · ")),
-        check.error ? el("div", { class: "err" }, check.error) : check.narrow ? el("div", { class: "err" }, "Çizgiler ince — daha geniş etiket deneyin") : null),
-      el("button", { class: "secondary small", type: "button", title: "Ürün olarak kaydet",
-        onclick: () => openTemplateDialog(null, { sample: item.code, gas: item.gas, test: item.test }) }, "Ürün"),
-      el("button", { class: "secondary small", type: "button", onclick: () => { labelList.splice(index, 1); renderLabelList(); } }, "Çıkar"));
-  }));
-  // Real label size in mm, then CSS scale so it fits the preview pane without distorting bar widths.
   const scale = Math.min(2.4, Math.max(1.15, 160 / Math.max(s.w, s.h)));
   previews.replaceChildren(...labelList.slice(0, 12).map((item) => {
     const check = labelBarcodeSvg(item.code, s.w - 4, 10);
@@ -2694,6 +2679,44 @@ function renderLabelList() {
   if (labelList.length > 12) {
     previews.append(el("div", { class: "hint" }, `+${labelList.length - 12} etiket daha (yazdırmada hepsi basılır)`));
   }
+}
+
+function renderLabelList() {
+  const s = labelSettings();
+  const list = $("lb-list");
+  if (!labelList.length) {
+    list.replaceChildren(el("div", { class: "lb-empty" },
+      el("div", { class: "big" }, "🏷️"),
+      el("div", {}, "Liste boş"),
+      el("div", { class: "hint" }, "Yukarıdan kategori seçin, ara veya yeni numara oluşturun.")));
+    refreshLabelPreviews();
+    return;
+  }
+  list.replaceChildren(...labelList.map((item, index) => {
+    const check = labelBarcodeSvg(item.code, s.w - 4, 10);
+    const field = (key, label, cls) => {
+      const input = el("input", { value: item[key] || "", class: cls || "" });
+      input.addEventListener("input", () => { item[key] = input.value; refreshLabelPreviews(); });
+      input.addEventListener("change", () => { item[key] = input.value.trim(); refreshLabelPreviews(); });
+      return el("label", {}, label, input);
+    };
+    const warn = check.error
+      ? el("div", { class: "err" }, check.error)
+      : check.narrow ? el("div", { class: "err" }, "Çizgiler ince — daha geniş etiket deneyin") : null;
+    return el("div", { class: "lb-chip" },
+      el("div", { class: "lb-chip-top" },
+        el("div", { style: "flex:1;font-size:12px;color:var(--muted)" }, item.source || "Etiket"),
+        el("button", { class: "secondary small", type: "button", title: "Ürün olarak kaydet",
+          onclick: () => openTemplateDialog(null, { sample: item.code, gas: item.gas, test: item.test }) }, "Ürün"),
+        el("button", { class: "secondary small", type: "button", onclick: () => { labelList.splice(index, 1); renderLabelList(); } }, "Çıkar")),
+      el("div", { class: "fields" },
+        field("code", "Barkod", "code"),
+        field("serial", "Seri no"),
+        field("gas", "Gaz / litre"),
+        field("test", "Test")),
+      warn);
+  }));
+  refreshLabelPreviews();
 }
 
 function printLabelDocument(html) {
@@ -2727,22 +2750,132 @@ function addLabels(items) {
   return added;
 }
 
+function labelCylinderKey(c) {
+  return `${c.gasType || "?"} · ${c.capacity || "?"}`.trim();
+}
+
+function labelCylinderItem(c) {
+  return {
+    code: (c.barcode || c.serialNumber || "").trim(),
+    gas: labelCylinderKey(c),
+    serial: c.serialNumber || "",
+    test: c.testDue || "",
+    source: "Kayıtlı tüp"
+  };
+}
+
+function hideLabelResults() {
+  labelResults = [];
+  labelActiveCat = "";
+  $("lb-results").replaceChildren();
+  $("lb-results-box").classList.add("hidden");
+  for (const btn of $("lb-cats").querySelectorAll(".lb-cat")) btn.classList.remove("active");
+}
+
+function showLabelResults(rows, title) {
+  labelResults = rows;
+  $("lb-results-title").textContent = title || `${rows.length} tüp`;
+  const all = el("input", { type: "checkbox", title: "Tümünü seç" });
+  all.addEventListener("change", () => { for (const c of $("lb-results").querySelectorAll("input[data-i]")) c.checked = all.checked; });
+  const head = el("tr", {}, el("th", {}, all), ...["Barkod", "Seri no", "Gaz / litre", "Test", "Durum / yer"].map((h) => el("th", {}, h)));
+  const body = rows.map((c, i) => el("tr", {},
+    el("td", {}, el("input", { type: "checkbox", "data-i": i })),
+    el("td", {}, c.barcode || c.serialNumber || ""),
+    el("td", {}, c.serialNumber || ""),
+    el("td", {}, labelCylinderKey(c)),
+    el("td", {}, c.testDue || ""),
+    el("td", {}, c.customer || c.plate || c.statusName || "")));
+  $("lb-results").replaceChildren(head, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6 }, "Kayıt bulunamadı."))]));
+  $("lb-results-box").classList.remove("hidden");
+}
+
+function renderLabelCategories() {
+  const cats = $("lb-cats");
+  if (!labelCatalog) {
+    cats.replaceChildren(el("div", { class: "hint" }, "Kategoriler yükleniyor…"));
+    return;
+  }
+  const groups = new Map();
+  for (const c of labelCatalog) {
+    const key = labelCylinderKey(c);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  }
+  const keys = [...groups.keys()].sort((a, b) => a.localeCompare(b, "tr"));
+  if (!keys.length) {
+    cats.replaceChildren(el("div", { class: "hint" }, "Aktif tüp yok."));
+    return;
+  }
+  cats.replaceChildren(...keys.map((key) => {
+    const n = groups.get(key).length;
+    const btn = el("button", { type: "button", class: "lb-cat" + (labelActiveCat === key ? " active" : "") },
+      el("b", {}, key), el("small", {}, `${n} tüp · dokunun`));
+    btn.addEventListener("click", () => {
+      labelActiveCat = key;
+      $("lb-q").value = "";
+      showLabelResults(groups.get(key), key + ` · ${n} tüp`);
+      renderLabelCategories();
+    });
+    return btn;
+  }));
+}
+
+async function ensureLabelCatalog() {
+  if (labelCatalog) {
+    renderLabelCategories();
+    return;
+  }
+  try {
+    labelCatalog = await api("/panel/api/tupler");
+    renderLabelCategories();
+  } catch (error) {
+    $("lb-cats").replaceChildren(el("div", { class: "hint" }, "Kategoriler alınamadı: " + error.message));
+  }
+}
+
 async function searchLabelCylinders() {
+  const term = $("lb-q").value.trim();
+  if (!term) {
+    hideLabelResults();
+    show($("lb-msg"), "Boş arama tüm tüpleri açmaz. Gaz/litre kategorisine dokunun veya seri-barkod yazın.", "warn");
+    await ensureLabelCatalog();
+    return;
+  }
   const ticket = newRequest("labels");
   try {
-    const rows = await api("/panel/api/tupler?q=" + encodeURIComponent($("lb-q").value.trim()));
+    const rows = await api("/panel/api/tupler?q=" + encodeURIComponent(term));
     if (isStale("labels", ticket)) return;
-    labelResults = rows;
-    const all = el("input", { type: "checkbox", title: "Tümünü seç" });
-    all.addEventListener("change", () => { for (const c of $("lb-results").querySelectorAll("input[data-i]")) c.checked = all.checked; });
-    const head = el("tr", {}, el("th", {}, all), ...["Barkod", "Seri no", "Gaz / kapasite", "Test", "Durum / yer"].map((h) => el("th", {}, h)));
-    const body = rows.map((c, i) => el("tr", {},
-      el("td", {}, el("input", { type: "checkbox", "data-i": i })), el("td", {}, c.barcode || c.serialNumber), el("td", {}, c.serialNumber),
-      el("td", {}, `${c.gasType} ${c.capacity}`), el("td", {}, c.testDue || ""), el("td", {}, c.customer || c.plate || c.statusName)));
-    $("lb-results").replaceChildren(head, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6 }, "Kayıt bulunamadı."))]));
+    labelActiveCat = "";
+    showLabelResults(rows, `"${term}" · ${rows.length} sonuç`);
+    renderLabelCategories();
+    hide($("lb-msg"));
   } catch (error) {
     show($("lb-msg"), error.message);
   }
+}
+
+function addSelectedLabelCylinders() {
+  const picked = [...$("lb-results").querySelectorAll("input[data-i]:checked")]
+    .map((c) => labelResults[Number(c.dataset.i)])
+    .filter(Boolean);
+  if (!picked.length) {
+    show($("lb-msg"), "Önce listeden en az bir tüp işaretleyin.", "warn");
+    return;
+  }
+  const items = picked.map(labelCylinderItem).filter((i) => i.code);
+  if (!items.length) {
+    show($("lb-msg"), "Seçilen tüplerde barkod/seri no yok.", "warn");
+    return;
+  }
+  const added = addLabels(items);
+  hideLabelResults();
+  show($("lb-msg"),
+    added
+      ? `${added} tüp yazdırma listesine eklendi. Aşağıda bilgileri düzenleyebilirsiniz.`
+        + (added < items.length ? ` (${items.length - added} zaten listedeydi.)` : "")
+      : "Seçilenler zaten yazdırma listesinde.",
+    added ? "ok" : "warn");
+  $("lb-list").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 let labelTemplates = [];
@@ -2896,19 +3029,19 @@ function initLabels() {
     });
   }
   for (const id of ["lb-w", "lb-h", "lb-copies", "lb-title", "lb-f-gas", "lb-f-serial", "lb-f-test", "lb-f-text"]) {
-    $(id).addEventListener("change", () => { saveLabelSettings(); renderLabelList(); });
-    $(id).addEventListener("input", () => { if (id === "lb-w" || id === "lb-h" || id === "lb-title") renderLabelList(); });
+    $(id).addEventListener("change", () => { saveLabelSettings(); refreshLabelPreviews(); });
+    $(id).addEventListener("input", () => { if (id === "lb-w" || id === "lb-h" || id === "lb-title") refreshLabelPreviews(); });
   }
   $("lb-search").addEventListener("click", searchLabelCylinders);
-  $("lb-q").addEventListener("keydown", (e) => { if (e.key === "Enter") searchLabelCylinders(); });
-  $("lb-add-selected").addEventListener("click", () => {
-    const picked = [...$("lb-results").querySelectorAll("input[data-i]:checked")].map((c) => labelResults[Number(c.dataset.i)]);
-    if (!picked.length) { show($("lb-msg"), "Önce listeden tüp seçin.", "warn"); return; }
-    const added = addLabels(picked.map((c) => ({
-      code: c.barcode || c.serialNumber, gas: `${c.gasType} ${c.capacity}`.trim(), serial: c.serialNumber, test: c.testDue || "", source: "Kayıtlı tüp"
-    })));
-    show($("lb-msg"), `${added} tüp listeye eklendi` + (added < picked.length ? ` (${picked.length - added} zaten listedeydi).` : "."), "ok");
-  });
+  $("lb-q").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); searchLabelCylinders(); } });
+  $("lb-add-selected").addEventListener("click", addSelectedLabelCylinders);
+  $("lb-results-close").addEventListener("click", () => { hideLabelResults(); hide($("lb-msg")); });
+  // Load litre/gas categories when the search mode is shown (not a full dump into the table).
+  const searchMode = document.querySelector('[data-lb-mode="search"]');
+  if (searchMode) {
+    searchMode.addEventListener("click", () => { void ensureLabelCatalog(); });
+  }
+  void ensureLabelCatalog();
   $("lb-next").addEventListener("click", async () => {
     try {
       const result = await api("/panel/api/etiket/sonraki?onek=" + encodeURIComponent($("lb-prefix").value.trim()));

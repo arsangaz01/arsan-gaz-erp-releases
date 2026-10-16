@@ -165,10 +165,21 @@ tr.alarm-row td { background:#fef2f2; }
 .lb-studio { display:grid; grid-template-columns:minmax(240px,1fr) minmax(280px,1.2fr); gap:14px; }
 @media (max-width:800px) { .lb-studio { grid-template-columns:1fr; } }
 .lb-chips { display:flex; flex-direction:column; gap:8px; max-height:420px; overflow:auto; }
-.lb-chip { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:#fafafa; }
-.lb-chip .code { font-weight:700; font-family:ui-monospace, Consolas, monospace; font-size:15px; color:var(--navy); }
-.lb-chip .meta { flex:1; font-size:12px; color:var(--muted); }
+.lb-chip { display:flex; flex-direction:column; gap:8px; padding:12px; border:1px solid var(--line); border-radius:12px; background:#fafafa; }
+.lb-chip-top { display:flex; align-items:flex-start; gap:8px; flex-wrap:wrap; }
+.lb-chip .fields { display:grid; grid-template-columns:repeat(2,minmax(120px,1fr)); gap:8px; width:100%; }
+.lb-chip .fields label { display:flex; flex-direction:column; gap:2px; font-size:11px; color:var(--muted); margin:0; }
+.lb-chip .fields input { font-size:13px; padding:6px 8px; border-radius:8px; border:1px solid var(--line); font-family:inherit; }
+.lb-chip .fields input.code { font-weight:700; font-family:ui-monospace, Consolas, monospace; color:var(--navy); }
 .lb-chip .err { color:#b91c1c; font-size:12px; }
+.lb-cats { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.lb-cat { border:1px solid var(--line); background:#fff; border-radius:12px; padding:10px 12px; cursor:pointer; font:inherit; text-align:left; min-width:140px; flex:1 1 140px; }
+.lb-cat:hover, .lb-cat.active { border-color:var(--sea); background:var(--sea-light); }
+.lb-cat b { display:block; color:var(--navy); font-size:14px; }
+.lb-cat small { color:var(--muted); font-size:12px; }
+.lb-results-box { margin-top:10px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; }
+.lb-results-box.hidden { display:none; }
+.lb-results-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 12px; background:#f8fafc; border-bottom:1px solid var(--line); font-size:13px; }
 .lb-preview-wrap { background:linear-gradient(180deg,#cbd5e1 0%,#e2e8f0 100%); border-radius:16px; padding:16px; min-height:200px; border:1px solid #94a3b8; }
 .lb-preview-wrap h3 { margin:0 0 10px; font-size:13px; color:#334155; text-transform:uppercase; letter-spacing:.04em; }
 .lb-previews { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-content:flex-start; max-height:380px; overflow:auto; }
@@ -518,12 +529,20 @@ tr.alarm-row td { background:#fef2f2; }
         </div>
 
         <div class="lb-panel on" id="lb-panel-search">
+          <div class="hint">Önce gaz / litre kategorisini seçin veya seri-barkod yazıp Ara'ya basın. Boş arama tüm listeyi açmaz.</div>
           <div class="filters">
             <label>Ara<input id="lb-q" placeholder="Seri no, barkod, gaz, müşteri" style="width:min(320px,100%)"></label>
             <button class="secondary" id="lb-search" type="button">Ara</button>
             <button class="primary" id="lb-add-selected" type="button">Seçilenleri ekle</button>
           </div>
-          <div class="table-wrap" style="margin-top:10px"><table id="lb-results"></table></div>
+          <div id="lb-cats" class="lb-cats"></div>
+          <div id="lb-results-box" class="lb-results-box hidden">
+            <div class="lb-results-head">
+              <span id="lb-results-title">Sonuçlar</span>
+              <button class="secondary small" id="lb-results-close" type="button">Listeyi kapat</button>
+            </div>
+            <div class="table-wrap"><table id="lb-results"></table></div>
+          </div>
         </div>
 
         <div class="lb-panel" id="lb-panel-new">
