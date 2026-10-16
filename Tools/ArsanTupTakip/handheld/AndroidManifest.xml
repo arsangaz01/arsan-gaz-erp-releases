@@ -2,8 +2,8 @@
 <!-- Driver screens for old handhelds (Honeywell EDA50, Android 4.4) that cannot run the MAUI app (minSdk 21). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.arsantuptakip.elterminali"
-    android:versionCode="16"
-    android:versionName="1.0.15">
+    android:versionCode="17"
+    android:versionName="1.0.16">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -23,6 +23,7 @@
         </activity>
         <activity android:name=".HomeActivity" />
         <activity android:name=".TripActivity" android:windowSoftInputMode="stateHidden|adjustResize" />
+        <activity android:name=".HistoryActivity" />
         <activity android:name=".InfoActivity" android:windowSoftInputMode="stateHidden|adjustResize" />
         <activity android:name=".StockActivity" android:windowSoftInputMode="stateHidden|adjustResize" />
         <activity android:name=".CountActivity" android:windowSoftInputMode="stateHidden|adjustResize" />
