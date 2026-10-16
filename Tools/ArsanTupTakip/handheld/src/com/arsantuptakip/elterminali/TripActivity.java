@@ -22,8 +22,10 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.List;
 
 // Same trip flow as the phone app's "Sefer" page, as numbered steps: load the vehicle, deliver to one customer after
@@ -41,7 +43,21 @@ public final class TripActivity extends BaseActivity {
     private final List<JSONObject> trips = new ArrayList<JSONObject>();
     private final List<String> plates = new ArrayList<String>();
     private final List<String> scanned = new ArrayList<String>();
+    // One-step undo of the last local action (last barcode or last customer pick) — not a server reverse.
+    private final Deque<UndoStep> undo = new ArrayDeque<UndoStep>();
     private boolean routes;
+
+    private static final class UndoStep {
+        final boolean customer;
+        final String code;
+        final JSONObject previousCustomer;
+
+        UndoStep(boolean customer, String code, JSONObject previousCustomer) {
+            this.customer = customer;
+            this.code = code;
+            this.previousCustomer = previousCustomer;
+        }
+    }
 
     private final List<Button> modeButtons = new ArrayList<Button>();
     private final List<Drawable> modeBackgrounds = new ArrayList<Drawable>();
@@ -140,6 +156,7 @@ public final class TripActivity extends BaseActivity {
         fullReturn.setTextColor(WARN);
         fullReturn.setVisibility(View.GONE);
         work.addView(fullReturn);
+        work.addView(button("↩️ Geri al", v -> undoLast()));
         work.addView(big(button("✅ KAYDET", v -> save(mode()))));
         result = text("", 16, false);
         work.addView(result);
@@ -175,10 +192,8 @@ public final class TripActivity extends BaseActivity {
         }
 
         details.addView(heading("OKUTMA SEÇENEKLERİ"));
-        details.addView(row(button("Kodu ekle", v -> submit(code, this::addCode)), button("Okutulanları temizle", v -> {
-            scanned.clear();
-            showScanned();
-        })));
+        details.addView(row(button("Kodu ekle", v -> submit(code, this::addCode)), button("Okutulanları temizle", v -> clearScannedKeepCustomerUndo())));
+        details.addView(button("↩️ Son işlemi geri al", v -> undoLast()));
 
         if (routes) {
             details.addView(heading("ROTA (MÜŞTERİ SIRASI)"));
@@ -373,6 +388,7 @@ public final class TripActivity extends BaseActivity {
     private void findCustomer() {
         pickCustomer(customerSearch.getText().toString(), c -> {
             if (c != null) {
+                pushCustomerUndo();
                 setCustomer(c);
                 code.requestFocus();
             }
@@ -384,6 +400,59 @@ public final class TripActivity extends BaseActivity {
         customerText.setText(value == null ? "Müşteri seçilmedi." : "Müşteri: " + Api.str(value, "name"));
     }
 
+    private void pushCustomerUndo() {
+        undo.push(new UndoStep(true, null, customer));
+    }
+
+    private void pushScanUndo(String code) {
+        undo.push(new UndoStep(false, code, null));
+    }
+
+    private void clearScannedKeepCustomerUndo() {
+        List<UndoStep> customers = new ArrayList<UndoStep>();
+        for (UndoStep step : undo) {
+            if (step.customer) {
+                customers.add(step); // newest first
+            }
+        }
+
+        undo.clear();
+        for (int i = customers.size() - 1; i >= 0; i--) {
+            undo.push(customers.get(i));
+        }
+
+        scanned.clear();
+        showScanned();
+    }
+
+    private void undoLast() {
+        if (undo.isEmpty()) {
+            alert("Geri al", "Geri alınacak son işlem yok.");
+            return;
+        }
+
+        UndoStep step = undo.pop();
+        if (step.customer) {
+            setCustomer(step.previousCustomer);
+            banner(result, "↩️", step.previousCustomer == null
+                ? "Müşteri seçimi geri alındı."
+                : "Müşteri geri alındı → " + Api.str(step.previousCustomer, "name"), ACCENT);
+            return;
+        }
+
+        if (step.code != null) {
+            for (int i = scanned.size() - 1; i >= 0; i--) {
+                if (scanned.get(i).equalsIgnoreCase(step.code)) {
+                    scanned.remove(i);
+                    break;
+                }
+            }
+
+            showScanned();
+            banner(result, "↩️", "Son okutma geri alındı: " + step.code, ACCENT);
+        }
+    }
+
     private void addCode(String value) {
         for (String existing : scanned) {
             if (existing.equalsIgnoreCase(value)) {
@@ -393,6 +462,7 @@ public final class TripActivity extends BaseActivity {
         }
 
         scanned.add(value);
+        pushScanUndo(value);
         showScanned();
     }
 
@@ -673,6 +743,7 @@ public final class TripActivity extends BaseActivity {
             if (shown.length > 2) {
                 banner(result, "📴", shown[0], WARN);
                 buzz();
+                undo.clear();
                 scanned.clear();
                 showScanned();
                 next(kind, new String[] { shown[0], null });
@@ -689,6 +760,7 @@ public final class TripActivity extends BaseActivity {
             }
 
             buzz();
+            undo.clear();
             scanned.clear();
             showScanned();
             fullReturn.setChecked(false);
@@ -819,6 +891,7 @@ public final class TripActivity extends BaseActivity {
     }
 
     private void nextCustomer() {
+        undo.clear();
         setCustomer(null);
         customerSearch.setText("");
         selectMode(DELIVER);
@@ -967,13 +1040,13 @@ public final class TripActivity extends BaseActivity {
 
     // The scan section switches to delivery for this customer; "Müşteriden boş alım" keeps the same customer.
     private void useStop(JSONObject s) {
+        pushCustomerUndo();
         setCustomer(body("id", s.optInt("customerId"), "name", Api.str(s, "customerName")));
         if (mode() != DELIVER && mode() != PICKUP) {
             selectMode(DELIVER);
         }
 
-        scanned.clear();
-        showScanned();
+        clearScannedKeepCustomerUndo();
         banner(result, "👤", Api.str(s, "customerName") + " seçildi. Tüpleri okutup KAYDET'e basın.", ACCENT);
         code.requestFocus();
     }

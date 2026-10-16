@@ -27,8 +27,8 @@
 		<ApplicationId>com.arsantuptakip.mobil</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>1.6.21</ApplicationDisplayVersion>
-		<ApplicationVersion>42</ApplicationVersion>
+		<ApplicationDisplayVersion>1.6.22</ApplicationDisplayVersion>
+		<ApplicationVersion>43</ApplicationVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
 	</PropertyGroup>
 
