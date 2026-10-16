@@ -73,8 +73,12 @@ public final class HomeActivity extends BaseActivity {
             add("👥 Müşteri stok bilgisi", StockActivity.class);
         }
 
-        if (!Api.can("sefer-goruntule") && !Api.can("tup-goruntule")) {
-            page.addView(note("Bu kullanıcıya el terminalindeki ekranlar için yetki verilmemiş. Yöneticiden sefer veya tüp görüntüleme yetkisi isteyin."));
+        if (Api.can("depo-sayim")) {
+            add("📦 Depo sayımı", CountActivity.class);
+        }
+
+        if (!Api.can("sefer-goruntule") && !Api.can("tup-goruntule") && !Api.can("depo-sayim")) {
+            page.addView(note("Bu kullanıcıya el terminalindeki ekranlar için yetki verilmemiş. Yöneticiden sefer, tüp veya depo sayımı yetkisi isteyin."));
         }
 
         page.addView(heading("Hesap"));

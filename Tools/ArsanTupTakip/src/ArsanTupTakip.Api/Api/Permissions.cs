@@ -88,7 +88,7 @@ internal static class Perm
             P(CylinderEdit, "Tüp bilgilerini düzenleme", "Gaz türü, kapasite, birim ve test tarihini değiştirebilir.", CylinderView),
             P(CylinderDeactivate, "Tüpü pasife alma / aktif etme", "Tüpü kullanım dışı bırakabilir veya yeniden aktif edebilir.", CylinderView),
             P(CylinderAudit, "Müşteride sayım", "Mobilde müşterideki tüpleri okutup sistemle karşılaştırır."),
-            P(StockCount, "Depo sayımı", "Mobilde ana depodaki tüpleri barkodla okutarak sayar, sayımı bitirir; panelde Sayım Raporları sekmesini görür."),
+            P(StockCount, "Depo sayımı", "Telefonda ve el terminalinde ana depodaki tüpleri barkodla okutarak sayar (dolu/boş ayrı), sayımı bitirir; panelde Sayım Raporları sekmesini görür. Yalnızca Yönetici ve Operatör."),
             P(LabelPrint, "Barkod etiketi yazdırma (yalnızca web)", "Web panelde Barkod Yazdır sekmesi: kayıtlı tüplerin veya yeni numaraların barkod etiketini oluşturur ve bilgisayara bağlı etiket yazıcısından (TSC) yazdırır. Varsayılan olarak Yönetici ve Operatör'de vardır.", PanelLogin, CylinderView)
         ]),
         new("Tüp hareketleri", [
@@ -154,14 +154,17 @@ internal static class Perm
     private static readonly string[] ViewerDefaults =
         [PanelLogin, MobileLogin, Summary, Reports, CylinderView, MovementHistory, Export, CustomerView, TripView, VehicleView];
 
-    // Phone only: loading, deliveries and pickups, cylinder info, customer stock and the depot count. Unloading the vehicle
-    // and closing the trip are done at the depot by an operator (AdminChosen).
+    // Phone/handheld: loading, deliveries and pickups, cylinder info, customer stock. Depot count is Operator/Admin only.
+    // Unloading the vehicle and closing the trip are done at the depot by an operator (AdminChosen).
     // CylinderView covers the cylinder info screen, the customer stock screen and the customer picker without phones.
     private static readonly string[] DriverDefaults =
-        [MobileLogin, CylinderView, StockCount, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute, CustomerLocation];
+        [MobileLogin, CylinderView, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute, CustomerLocation];
 
     // Only a Yönetici or an Operatör may hold these, and only a Yönetici may grant or revoke them.
     internal static readonly string[] AdminChosen = [TripReturn, TripClose];
+
+    // Depot count stays with Yönetici/Operatör even if someone tries to grant it to a driver or viewer.
+    internal static readonly string[] OperatorOnly = [StockCount];
 
     internal static IReadOnlyList<string> RoleDefaults(string? role) => role switch
     {
@@ -207,6 +210,7 @@ internal static class Perm
         if (role != PanelRoles.Operator)
         {
             set.ExceptWith(AdminChosen);
+            set.ExceptWith(OperatorOnly);
         }
 
         bool changed = true;

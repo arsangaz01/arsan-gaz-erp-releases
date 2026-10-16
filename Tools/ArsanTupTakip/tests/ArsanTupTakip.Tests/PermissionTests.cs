@@ -85,7 +85,9 @@ internal static class PermissionTests
         HashSet<string> wanted = Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.MoveScrap] = false, [Perm.AuditLog] = true });
         foreach (string role in new[] { PanelRoles.Operator, PanelRoles.Viewer })
         {
-            HashSet<string> forRole = role == PanelRoles.Operator ? wanted : [.. wanted.Except(Perm.AdminChosen)];
+            HashSet<string> forRole = role == PanelRoles.Operator
+                ? wanted
+                : [.. wanted.Except(Perm.AdminChosen).Except(Perm.OperatorOnly)];
             Dictionary<string, bool> diff = Perm.Diff(role, forRole);
             Check(Perm.Effective(role, diff).SetEquals(forRole), $"{role} için seçilen yetkiler farklar olarak saklanıp aynen geri gelmeli.");
         }
@@ -96,15 +98,16 @@ internal static class PermissionTests
     private static void DriverRoleAndFixedVehicle()
     {
         HashSet<string> driver = Perm.Effective(PanelRoles.Driver, null);
-        string[] expected = [Perm.MobileLogin, Perm.CylinderView, Perm.StockCount, Perm.TripView, Perm.TripStart, Perm.TripLoad, Perm.TripDeliver, Perm.TripPickup, Perm.TripRoute,
+        string[] expected = [Perm.MobileLogin, Perm.CylinderView, Perm.TripView, Perm.TripStart, Perm.TripLoad, Perm.TripDeliver, Perm.TripPickup, Perm.TripRoute,
             Perm.CustomerLocation];
-        Check(driver.SetEquals(expected), "Şoför varsayılanı yalnızca mobil giriş, tüp bilgisi/müşteri stoku, depo sayımı ve sefer akışı olmalı: " + string.Join(", ", driver.Order()));
+        Check(driver.SetEquals(expected), "Şoför varsayılanı yalnızca mobil giriş, tüp bilgisi/müşteri stoku ve sefer akışı olmalı: " + string.Join(", ", driver.Order()));
         Check(!driver.Contains(Perm.PanelLogin) && !driver.Contains(Perm.ManageUsers) && !driver.Contains(Perm.ManageDevices) && !driver.Contains(Perm.AuditLog),
             "Şoför panele giremez ve yönetim yetkisi yoktur.");
         Check(!driver.Contains(Perm.CylinderRegister) && !driver.Contains(Perm.CylinderEdit) && !driver.Contains(Perm.CylinderAudit) && Perm.AnyMove.All(m => !driver.Contains(m))
             && !driver.Contains(Perm.VehicleAdd) && !driver.Contains(Perm.VehicleView) && !driver.Contains(Perm.Reports) && !driver.Contains(Perm.Summary)
-            && !driver.Contains(Perm.Export) && !driver.Contains(Perm.LabelPrint) && !driver.Contains(Perm.CustomerView) && !driver.Contains(Perm.TripLossCheck),
-            "Şoförde tüp kaydı, hareket, müşteride sayım, araç, rapor, Excel, barkod ve müşteri telefonları olmamalı.");
+            && !driver.Contains(Perm.Export) && !driver.Contains(Perm.LabelPrint) && !driver.Contains(Perm.CustomerView) && !driver.Contains(Perm.TripLossCheck)
+            && !driver.Contains(Perm.StockCount),
+            "Şoförde tüp kaydı, hareket, müşteride/depo sayımı, araç, rapor, Excel, barkod ve müşteri telefonları olmamalı.");
         Check(!CylinderTripEndpoints.ReasonWriters.Any(driver.Contains), "Şoför okutulmayan tüplere gerekçe yazamamalı; gerekçeyi aracı depoda boşaltan operatör yazar.");
         Dictionary<string, bool> both = Perm.AdminChosen.ToDictionary(k => k, _ => true);
         HashSet<string> op = Perm.Effective(PanelRoles.Operator, null);
@@ -112,14 +115,18 @@ internal static class PermissionTests
             && !Perm.AdminChosen.Any(Perm.Effective(PanelRoles.Driver, both).Contains) && !Perm.AdminChosen.Any(Perm.Effective(PanelRoles.Viewer, both).Contains)
             && !Perm.Effective(PanelRoles.Operator, new Dictionary<string, bool> { [Perm.TripReturn] = false }).Contains(Perm.TripReturn),
             "Aracı boşaltma ve seferi kapatma yalnızca Yönetici ve Operatör'de olabilmeli; Operatör'den kaldırılabilmeli, şoföre ve izleyiciye verilememeli.");
+        Check(op.Contains(Perm.StockCount) && Perm.Effective(PanelRoles.Admin, null).Contains(Perm.StockCount)
+            && !Perm.Effective(PanelRoles.Driver, new Dictionary<string, bool> { [Perm.StockCount] = true }).Contains(Perm.StockCount)
+            && !Perm.Effective(PanelRoles.Viewer, new Dictionary<string, bool> { [Perm.StockCount] = true }).Contains(Perm.StockCount),
+            "Depo sayımı yalnızca Yönetici ve Operatör'de olmalı; şoföre/izleyiciye verilememeli.");
         Check(Perm.CustomerPicker.Any(driver.Contains), "Şoför müşteri seçebilmeli (teslim ve müşteri stoku).");
         Check(PanelRoles.Normalize("SOFOR") == PanelRoles.Driver && PanelRoles.Normalize("şoför") == PanelRoles.Driver && PanelRoles.Normalize("Şoför") == PanelRoles.Driver,
             "Şoför rol adı Türkçe karakterli/karaktersiz eşleşmeli.");
         Check(PanelRoles.Description(PanelRoles.Driver).Length > 0 && PanelRoles.All.Contains(PanelRoles.Driver), "Şoför rolü listede ve açıklamalı olmalı.");
 
         HashSet<string> plus = Perm.Effective(PanelRoles.Driver, Perm.Diff(PanelRoles.Driver, [.. driver, Perm.CylinderAudit]));
-        HashSet<string> minus = Perm.Effective(PanelRoles.Driver, Perm.Diff(PanelRoles.Driver, driver.Where(p => p != Perm.StockCount)));
-        Check(plus.Contains(Perm.CylinderAudit) && !minus.Contains(Perm.StockCount) && minus.Contains(Perm.TripStart),
+        HashSet<string> minus = Perm.Effective(PanelRoles.Driver, Perm.Diff(PanelRoles.Driver, driver.Where(p => p != Perm.TripStart)));
+        Check(plus.Contains(Perm.CylinderAudit) && !minus.Contains(Perm.TripStart) && minus.Contains(Perm.TripLoad),
             "Yönetici şoföre tek tek yetki ekleyip çıkarabilmeli.");
 
         Check(DriverVehicle.StartPlates("34 ABC 123", null) is ["34 ABC 123"] && DriverVehicle.StartPlates("34 ABC 123", ["34abc123"]) is ["34 ABC 123"],
@@ -505,18 +512,18 @@ internal static class PermissionTests
         }
 
         List<string> granted = [.. Perm.Effective(driver), Perm.CylinderAudit];
-        Check(auth.UpdateUser(admin, ip, driver.Id, driver.DisplayName, driver.Role, true, granted.Where(p => p != Perm.StockCount).ToList()) is null,
-            "Yönetici şoföre müşteride sayım ekleyip depo sayımını kaldırabilmeli.");
+        Check(auth.UpdateUser(admin, ip, driver.Id, driver.DisplayName, driver.Role, true, granted) is null,
+            "Yönetici şoföre müşteride sayım ekleyebilmeli.");
         using (HttpResponseMessage me = await Send(http, HttpMethod.Get, "api/ben", token))
         {
             HashSet<string> now = [.. (await Json(me)).GetProperty("permissions").EnumerateArray().Select(p => p.GetString()!)];
             Check(me.StatusCode == HttpStatusCode.OK && now.Contains(Perm.CylinderAudit) && !now.Contains(Perm.StockCount),
-                "Telefon yeniden giriş yapmadan /api/ben ile değişen yetkileri görmeli.");
+                "Telefon yeniden giriş yapmadan /api/ben ile değişen yetkileri görmeli; depo sayımı şoföre verilemez.");
         }
 
         using (HttpResponseMessage count = await Send(http, HttpMethod.Get, "api/depo-sayim/aktif", token))
         {
-            Check(count.StatusCode == HttpStatusCode.Forbidden, "Kaldırılan depo sayımı yetkisi telefonda hemen reddedilmeli.");
+            Check(count.StatusCode == HttpStatusCode.Forbidden, "Şoför depo sayımı uç noktasına erişememeli.");
         }
 
         Check(auth.UpdateUser(admin, ip, driver.Id, driver.DisplayName, driver.Role, true, null, "") is null && WebPanelUserStore.Find(driver.Id)!.FixedPlate is null,
