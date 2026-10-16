@@ -292,6 +292,47 @@ public sealed record TripLoadResponse(string Message, int Added, int Skipped, Li
 
 public sealed record TripCloseResponse(string Message, int TripId, TripReconcileResponse Reconcile);
 
+public sealed record ClosedTripItem(
+    int Id,
+    string Number,
+    string Title,
+    string Started,
+    string? Closed,
+    List<string> Plates,
+    int Loaded,
+    int Delivered,
+    int Returned,
+    int PickedUp = 0,
+    int OnVehicle = 0,
+    int Missing = 0,
+    string? Note = null);
+
+public sealed record ClosedTripCylinder(
+    int CylinderId,
+    string SerialNumber,
+    string GasType,
+    string Plate,
+    string Loaded,
+    string? Delivered,
+    string? Returned,
+    bool Missing,
+    string? ReasonLabel,
+    string? Note,
+    bool Pickup);
+
+public sealed record ClosedTripCustomer(
+    int CustomerId,
+    string CustomerName,
+    int Delivered,
+    int Collected,
+    int Holds,
+    int HoldsFull,
+    int HoldsEmpty,
+    int Net,
+    string Text);
+
+public sealed record ClosedTripDetail(ClosedTripItem Trip, List<ClosedTripCylinder> Cylinders, List<ClosedTripCustomer> Customers);
+
 public sealed record TripMissingReasonItem(string Key, string Label, bool NoteRequired, bool AsksCustomer = false);
 
 public sealed record TripOpenCylinder(
@@ -756,6 +797,12 @@ public sealed class ApiClient
 
     public Task<List<ActiveTripSummary>> ActiveTripsAsync() => GetAsync<List<ActiveTripSummary>>("/api/sefer/aktif");
 
+    public Task<List<ClosedTripItem>> ClosedTripsAsync(int? take = null) =>
+        GetAsync<List<ClosedTripItem>>("/api/sefer/gecmis" + (take is int n ? "?adet=" + n : string.Empty));
+
+    public Task<ClosedTripDetail> ClosedTripDetailAsync(int tripId) =>
+        GetAsync<ClosedTripDetail>("/api/sefer/" + tripId + "/detay");
+
     public Task<TripStartResponse> StartTripAsync(string? note, IReadOnlyList<string>? plates) =>
         PostAsync<TripStartResponse>("/api/sefer/baslat", new { note, plates });
 
@@ -811,7 +858,7 @@ public sealed class ApiClient
         GetAsync<TripReconcileResponse>("/api/sefer/" + tripId + "/kontrol" + (string.IsNullOrEmpty(plate) ? string.Empty : "?plaka=" + Uri.EscapeDataString(plate)));
 
     public Task<TripCloseResponse> CloseTripAsync(int tripId) =>
-        PostAsync<TripCloseResponse>("/api/sefer/kapat", new { tripId });
+        PostAsync<TripCloseResponse>(Can(Perm.TripClose) ? "/api/sefer/kapat" : "/api/sefer/bitir", new { tripId });
 
     public Task<List<TripMissingReasonItem>> TripMissingReasonsAsync() => GetAsync<List<TripMissingReasonItem>>("/api/sefer/gerekceler");
 

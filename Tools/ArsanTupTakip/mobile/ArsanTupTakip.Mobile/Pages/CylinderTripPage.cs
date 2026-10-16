@@ -65,6 +65,7 @@ public sealed class CylinderTripPage : ContentPage
     private readonly ContentView _tripTiles = new() { IsVisible = false };
     private readonly VerticalStackLayout _tripPickers;
     private readonly Button _startBig;
+    private readonly Button _finishSimple;
     private readonly VerticalStackLayout _workArea;
     private readonly VerticalStackLayout _detailsBox;
     private readonly Entry _code = new() { Placeholder = "Barkod veya seri no", ReturnType = ReturnType.Done };
@@ -152,13 +153,18 @@ public sealed class CylinderTripPage : ContentPage
         _customerSection = Ui.Section("👤 HANGİ MÜŞTERİ?", _customerLabel,
             Ui.Secondary("🔎 Müşteri ara / değiştir", async (_, _) => await PickCustomerThenScanAsync()));
         ShowCustomer();
-        bool finish = ApiClient.Instance.Can(Perm.TripReturn) || ApiClient.Instance.Can(Perm.TripClose);
+        bool finish = ApiClient.Instance.Can(Perm.TripReturn) || ApiClient.Instance.Can(Perm.TripClose)
+            || ApiClient.Instance.Account?.IsDriver == true;
         bool canStart = ApiClient.Instance.Can(Perm.TripStart);
         _tripPickers = new VerticalStackLayout { Spacing = 4, IsVisible = false, Children = { _trip, _vehicle } };
         _startBig = Ui.Primary("🚚  SEFER BAŞLAT", async (_, _) => await StartTripAsync());
         _startBig.FontSize = 20;
         _startBig.MinimumHeightRequest = 72;
         _startBig.IsVisible = false;
+        _finishSimple = Ui.Primary("🏁  SEFERİ BİTİR", async (_, _) => await CloseTripAsync());
+        _finishSimple.FontSize = 18;
+        _finishSimple.MinimumHeightRequest = 60;
+        _finishSimple.IsVisible = false;
         _fullReturnRow = new HorizontalStackLayout
         {
             Spacing = 8,
@@ -187,7 +193,7 @@ public sealed class CylinderTripPage : ContentPage
                 Ui.Section(
                     "🏁 SEFERİ BİTİR",
                     Ui.Secondary("📝 Okutulmayan tüplere gerekçe yaz", async (_, _) => await ExplainMissingAsync(false)),
-                    Ui.Primary("🏁 Seferi kapat", async (_, _) => await CloseTripAsync()).ShowIf(ApiClient.Instance.Can(Perm.TripClose))).ShowIf(finish)
+                    Ui.Primary("🏁 Seferi kapat", async (_, _) => await CloseTripAsync())).ShowIf(finish)
             }
         };
 
@@ -246,6 +252,7 @@ public sealed class CylinderTripPage : ContentPage
                 {
                     _startBig,
                     Ui.Card(new VerticalStackLayout { Spacing = 8, Children = { _tripLine, _pendingLine, _tripTiles, _tripPickers } }),
+                    _finishSimple,
                     _workArea,
                     details,
                     _detailsBox
@@ -405,15 +412,19 @@ public sealed class CylinderTripPage : ContentPage
                     SelectMode(PickupMode);
                     await ScanManyAsync();
                 }
-                else
+                else if (!await OfferFinishIfEmptyAsync())
                 {
                     NextCustomer();
                 }
 
                 break;
             case DeliverMode:
-                await DisplayAlertAsync("Teslim kaydedildi", message, "Tamam");
-                NextCustomer();
+                if (!await OfferFinishIfEmptyAsync())
+                {
+                    await DisplayAlertAsync("Teslim kaydedildi", message, "Tamam");
+                    NextCustomer();
+                }
+
                 break;
             case PickupMode:
                 await DisplayAlertAsync("Boş alım kaydedildi", message, "Tamam");
@@ -436,6 +447,28 @@ public sealed class CylinderTripPage : ContentPage
         SelectMode(DeliverMode);
         _stepHint.Text = "👉 Sıradaki müşteri için \"Müşteriye teslim\"e dokunun. Teslimatlar bitince "
             + (HasMode(ReturnMode) ? $"depoda {Step(ReturnMode)}." : "depoya dönün.");
+    }
+
+    // After the last delivery the vehicle is empty: offer to close so the summary moves to Tamamlanmış seferler.
+    private async Task<bool> OfferFinishIfEmptyAsync()
+    {
+        int onVehicle = SelectedTrip?.Vehicles.FirstOrDefault(v => string.Equals(v.Plate, SelectedPlate, StringComparison.OrdinalIgnoreCase))?.OnVehicle ?? 0;
+        if (!CanFinishTrip(onVehicle))
+        {
+            return false;
+        }
+
+        if (!await DisplayAlertAsync(
+                "Teslimler bitti",
+                "Araçta işlem yapılacak tüp kalmadı. Seferi bitirip özeti Tamamlanmış seferler'e taşıyalım mı?",
+                "Seferi bitir",
+                "Daha sonra"))
+        {
+            return false;
+        }
+
+        await CloseTripAsync(ask: false);
+        return true;
     }
 
     private void RefreshScanned() =>
@@ -626,15 +659,46 @@ public sealed class CylinderTripPage : ContentPage
             return;
         }
 
-        int loaded = SelectedTrip?.Vehicles.FirstOrDefault(v => string.Equals(v.Plate, SelectedPlate, StringComparison.OrdinalIgnoreCase))?.OnVehicle ?? 0;
-        _tripLine.Text = $"🚚 {SelectedPlate ?? "Araç seçin"}";
-        _tripTiles.Content = Ui.TileGrid(
+        int onVehicle = SelectedTrip?.Vehicles.FirstOrDefault(v => string.Equals(v.Plate, SelectedPlate, StringComparison.OrdinalIgnoreCase))?.OnVehicle ?? 0;
+        int delivered = SelectedTrip?.DeliveredTotal ?? 0;
+        _tripLine.Text = $"🚚 {SelectedPlate ?? "Araç seçin"}" + (SelectedTrip is null ? string.Empty : $" · #{SelectedTrip.Id}");
+        // When the vehicle is empty after deliveries, drop the "Bu seferde teslim" tile — that summary moves to
+        // Ana sayfa → Tamamlanmış seferler once the trip is closed.
+        List<View> tiles =
         [
-            Tappable(Ui.StatTile("🛢️", loaded.ToString(), "Araçta tüp", Ui.Accent, "Dokunun: tüpler ›"),
-                () => OpenCylindersAsync(SelectedPlate, TripCylindersPage.OnVehicle, "Araçta tüp", "🛢️", Ui.Accent)),
-            Tappable(Ui.StatTile("🤝", (SelectedTrip?.DeliveredTotal ?? 0).ToString(), "Bu seferde teslim", Ui.Good, "Dokunun: tüpler ›"),
-                () => OpenCylindersAsync(null, TripCylindersPage.Delivered, "Bu seferde teslim", "🤝", Ui.Good))
-        ]);
+            Tappable(Ui.StatTile("🛢️", onVehicle.ToString(), "Araçta tüp", Ui.Accent, "Dokunun: tüpler ›"),
+                () => OpenCylindersAsync(SelectedPlate, TripCylindersPage.OnVehicle, "Araçta tüp", "🛢️", Ui.Accent))
+        ];
+        if (onVehicle > 0 || delivered == 0)
+        {
+            tiles.Add(Tappable(Ui.StatTile("🤝", delivered.ToString(), "Bu seferde teslim", Ui.Good, "Dokunun: tüpler ›"),
+                () => OpenCylindersAsync(null, TripCylindersPage.Delivered, "Bu seferde teslim", "🤝", Ui.Good)));
+        }
+        else
+        {
+            _tripLine.Text += "\nTeslimler bitti — seferi bitirin; özet Tamamlanmış seferler'de kalır.";
+        }
+
+        _tripTiles.Content = Ui.TileGrid(tiles);
+        _finishSimple.IsVisible = CanFinishTrip(onVehicle);
+    }
+
+    private bool CanFinishTrip(int onVehicle)
+    {
+        if (SelectedTrip is null || onVehicle > 0)
+        {
+            return false;
+        }
+
+        if (ApiClient.Instance.Can(Perm.TripClose))
+        {
+            return true;
+        }
+
+        AccountInfo? account = ApiClient.Instance.Account;
+        return account?.IsDriver == true
+            && !string.IsNullOrEmpty(account.FixedPlate)
+            && SelectedTrip.Vehicles.Any(v => string.Equals(v.Plate, account.FixedPlate, StringComparison.OrdinalIgnoreCase));
     }
 
     private static View Tappable(View view, Func<Task> onTap)
@@ -1064,8 +1128,15 @@ public sealed class CylinderTripPage : ContentPage
             TripCloseResponse closed = await ApiClient.Instance.CloseTripAsync(trip.Id);
             ProximityAlerts.Stop();
             ShowResult(closed.Message, closed.Reconcile);
-            await DisplayAlertAsync(closed.Reconcile.HasAlerts ? "Sefer kapatıldı — uyarı" : "Sefer kapatıldı", closed.Message, "Tamam");
+            await DisplayAlertAsync(
+                closed.Reconcile.HasAlerts ? "Sefer kapatıldı — uyarı" : "Sefer kapatıldı",
+                closed.Message + "\n\nÖzet Ana sayfa → Tamamlanmış seferler'de (#" + trip.Id + ").",
+                "Tamam");
             await RefreshTripsAsync();
+            if (Navigation.NavigationStack.Count > 1)
+            {
+                await Navigation.PopAsync();
+            }
         }
         catch (Exception exception)
         {

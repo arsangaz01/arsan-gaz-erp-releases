@@ -69,6 +69,61 @@ internal static class CylinderTripEndpoints
     {
         app.MapGet("/api/sefer/aktif", async () => Results.Ok(await new CylinderTripService().ActiveTripsAsync())).Requires(Perm.TripView);
 
+        // Closed trips for the phone home screen; drivers with a fixed plate see only that vehicle's history.
+        app.MapGet("/api/sefer/gecmis", async (HttpContext context, int? adet) =>
+        {
+            WebPanelUser user = User(context);
+            List<TripListItem> trips = await new CylinderTripService().ClosedTripsAsync(user.FixedPlate, adet ?? 40);
+            return Results.Ok(trips.Select(HistoryRow));
+        }).Requires(Perm.TripView);
+
+        app.MapGet("/api/sefer/{tripId:int}/detay", async (int tripId, HttpContext context) =>
+        {
+            TripDetail? detail = await new CylinderTripService().TripDetailAsync(tripId);
+            if (detail is null)
+            {
+                return Results.NotFound(new { error = "Sefer bulunamadı." });
+            }
+
+            WebPanelUser user = User(context);
+            if (user.FixedPlate is string plate
+                && !detail.Trip.Vehicles.Any(v => string.Equals(v.Plate, plate, StringComparison.OrdinalIgnoreCase)))
+            {
+                return Results.Json(new { error = "Bu sefer sabit aracınıza ait değil." }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            return Results.Ok(new
+            {
+                Trip = HistoryRow(detail.Trip),
+                Cylinders = detail.Cylinders.Select(c => new
+                {
+                    c.CylinderId,
+                    c.SerialNumber,
+                    c.GasType,
+                    c.Plate,
+                    Loaded = c.LoadedAt.ToString("dd.MM.yyyy HH:mm"),
+                    Delivered = c.DeliveredAt?.ToString("dd.MM.yyyy HH:mm"),
+                    Returned = c.ReturnedAt?.ToString("dd.MM.yyyy HH:mm"),
+                    c.Missing,
+                    c.ReasonLabel,
+                    c.Note,
+                    c.Pickup
+                }),
+                Customers = (detail.Customers ?? []).Select(c => new
+                {
+                    c.CustomerId,
+                    c.CustomerName,
+                    c.Delivered,
+                    c.Collected,
+                    c.Holds,
+                    c.HoldsFull,
+                    c.HoldsEmpty,
+                    c.Net,
+                    c.Text
+                })
+            });
+        }).Requires(Perm.TripView);
+
         app.MapPost("/api/sefer/baslat", async (TripStartRequest request, HttpContext context) =>
         {
             try
@@ -224,6 +279,36 @@ internal static class CylinderTripEndpoints
                 return Results.BadRequest(new { error = exception.Message });
             }
         }).Requires(Perm.TripClose);
+
+        // Drivers (no TripClose): finish only when their fixed vehicle has no cylinders left on board.
+        app.MapPost("/api/sefer/bitir", async (TripCloseRequest request, HttpContext context) =>
+        {
+            try
+            {
+                (int Status, string Error)? refused = await RefuseFieldFinishAsync(User(context), request.TripId);
+                if (refused.HasValue)
+                {
+                    return Results.Json(new { error = refused.Value.Error }, statusCode: refused.Value.Status);
+                }
+
+                TripCloseResult result = await new CylinderTripService().CloseTripAsync(request.TripId, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                NotifyManagers(result);
+                return Results.Ok(new
+                {
+                    result.Message,
+                    result.TripId,
+                    reconcile = TripReconcileDto(result.Reconcile)
+                });
+            }
+            catch (TripReasonsRequiredException exception)
+            {
+                return ReasonsRequired(exception);
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(Perm.TripView);
 
         // Route (visiting order) of a trip vehicle. A driver with a fixed vehicle sees and edits only that vehicle's stops.
         app.MapGet("/api/sefer/{tripId:int}/rota", async (int tripId, string? plaka, HttpContext context) =>
@@ -464,4 +549,55 @@ internal static class CylinderTripEndpoints
         loadedButNotAccountedFor = reconcile.LoadedButNotAccountedFor,
         unexplainedMissing = reconcile.UnexplainedMissing
     };
+
+    private static readonly System.Globalization.CultureInfo Turkish = System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
+
+    private static object HistoryRow(TripListItem t) => new
+    {
+        t.Id,
+        Number = "#" + t.Id,
+        t.Title,
+        Started = t.StartedAt.ToString("dd.MM.yyyy HH:mm", Turkish),
+        Closed = t.ClosedAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
+        Plates = t.Vehicles.Select(v => v.Plate).ToList(),
+        t.Loaded,
+        t.Delivered,
+        t.Returned,
+        t.PickedUp,
+        t.OnVehicle,
+        t.Missing,
+        t.Note
+    };
+
+    // null = allowed. Fixed-plate drivers may finish only when that vehicle is empty.
+    private static async Task<(int Status, string Error)?> RefuseFieldFinishAsync(WebPanelUser user, int tripId)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(user.FixedPlate))
+            {
+                return (StatusCodes.Status403Forbidden, "Sahada sefer bitirme yalnızca sabit araçlı hesaplar içindir.");
+            }
+
+            string plate = user.FixedPlate;
+            ActiveTripSummary? trip = (await new CylinderTripService().ActiveTripsAsync()).FirstOrDefault(t => t.Id == tripId);
+            TripVehicleSummary? vehicle = trip?.Vehicles.FirstOrDefault(v => string.Equals(v.Plate, plate, StringComparison.OrdinalIgnoreCase));
+            if (trip is null || vehicle is null)
+            {
+                return (StatusCodes.Status403Forbidden, "Açık sefer bulunamadı veya sabit aracınıza ait değil.");
+            }
+
+            if (vehicle.OnVehicle > 0)
+            {
+                return (StatusCodes.Status400BadRequest,
+                    $"Araçta hâlâ {vehicle.OnVehicle} tüp varken seferi yalnızca depo kapatabilir. Önce teslim edin veya depoya boşaltın.");
+            }
+
+            return null;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return (StatusCodes.Status403Forbidden, "Açık sefer bulunamadı veya sabit aracınıza ait değil.");
+        }
+    }
 }

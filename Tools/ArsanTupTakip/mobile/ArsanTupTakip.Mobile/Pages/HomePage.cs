@@ -59,6 +59,9 @@ public sealed class HomePage : ContentPage
             {
                 tiles.Add(new Tile(Icons.Shipping, "Sevkiyat başlat", plate is null ? "Sefer, yükleme, teslim, dönüş" : $"Araç: {plate}", true,
                     Color.FromArgb("#B45309"), Color.FromArgb("#78350F"), OpenTripAsync, _tripTitle));
+                tiles.Add(new Tile(Icons.FactCheck, "Tamamlanmış seferler", "Bitmiş seferler · numara ve özet", true,
+                    Color.FromArgb("#0F766E"), Color.FromArgb("#134E4A"),
+                    () => Open("sefer-gecmis", () => new CompletedTripsPage())));
                 if (planTile is not null)
                 {
                     tiles.Add(planTile);
@@ -99,6 +102,8 @@ public sealed class HomePage : ContentPage
         if (!_driver && api.Can(Perm.TripView))
         {
             tiles.Add(new Tile(Icons.Shipping, "Sefer", "Yükle, teslim et, dönüş", true, Color.FromArgb("#312E81"), navy, () => Open("sefer", () => new CylinderTripPage())));
+            tiles.Add(new Tile(Icons.FactCheck, "Tamamlanmış seferler", "Bitmiş seferler · numara ve özet", true,
+                Color.FromArgb("#0F766E"), navy, () => Open("sefer-gecmis", () => new CompletedTripsPage())));
             if (planTile is not null)
             {
                 tiles.Add(planTile);

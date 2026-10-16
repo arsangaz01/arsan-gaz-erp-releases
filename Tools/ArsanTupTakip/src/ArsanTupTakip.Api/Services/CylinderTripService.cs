@@ -114,6 +114,29 @@ public sealed class CylinderTripService
         return trips.Select(TripView).ToList();
     }
 
+    // Closed trips for the phone "Tamamlanmış seferler" list; optional plate keeps a depot driver on their own vehicle.
+    public async Task<List<TripListItem>> ClosedTripsAsync(string? plate, int take = 40)
+    {
+        string? normalized = CylinderTracking.NormalizePlate(plate);
+        take = Math.Clamp(take, 1, 100);
+        await using TupTakipDbContext db = new();
+        IQueryable<CylinderTrip> query = db.CylinderTrips.AsNoTracking()
+            .Where(x => x.Status == CylinderTripStatus.Closed)
+            .Include(x => x.Vehicles)
+            .Include(x => x.Cylinders);
+        if (normalized is not null)
+        {
+            query = query.Where(x => x.Vehicles.Any(v => v.Plate == normalized) || x.Cylinders.Any(c => c.VehiclePlate == normalized));
+        }
+
+        List<CylinderTrip> trips = await query
+            .OrderByDescending(x => x.ClosedAt ?? x.StartedAt)
+            .ThenByDescending(x => x.Id)
+            .Take(take)
+            .ToListAsync();
+        return trips.Select(TripView).ToList();
+    }
+
     public async Task<TripDetail?> TripDetailAsync(int tripId)
     {
         await using TupTakipDbContext db = new();

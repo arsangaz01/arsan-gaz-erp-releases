@@ -487,12 +487,20 @@ internal static class PermissionTests
             (HttpMethod.Get, "api/musterideki-tupler", null), (HttpMethod.Get, "api/musteri/1/stok", null), (HttpMethod.Post, "api/musteri", new { name = "X" }),
             (HttpMethod.Post, "api/arac-kayit", new { plate = "34 TST 02" }), (HttpMethod.Get, "api/arac-kayit/1", null),
             (HttpMethod.Get, "api/depo-sayim/1/excel", null), (HttpMethod.Get, "api/depo-sayim/1/pdf", null),
-            (HttpMethod.Post, "api/sefer/donus", new { tripId = 1, plate = "34 ABC 123", codes = new[] { "X1" } }), (HttpMethod.Post, "api/sefer/kapat", new { tripId = 1 }),
+            (HttpMethod.Post, "api/sefer/donus", new { tripId = 1, plate = "34 ABC 123", codes = new[] { "X1" } }),
+            (HttpMethod.Post, "api/sefer/kapat", new { tripId = 1 }),
             (HttpMethod.Post, "api/sefer/gerekce", new { tripId = 1, cylinderIds = new[] { 1 }, reason = "kayip", note = "x" })
         })
         {
             using HttpResponseMessage denied = await Send(http, method, path, token, body);
             Check(denied.StatusCode == HttpStatusCode.Forbidden, $"Şoför {path} uç noktasına erişememeli ({(int)denied.StatusCode}).");
+        }
+
+        // Field finish (/bitir) stays TripView but refuses a missing trip with 403.
+        using (HttpResponseMessage finish = await Send(http, HttpMethod.Post, "api/sefer/bitir", token, new { tripId = 999999 }))
+        {
+            Check(finish.StatusCode == HttpStatusCode.Forbidden,
+                $"Şoför olmayan seferi bitirememeli ({(int)finish.StatusCode}): {await finish.Content.ReadAsStringAsync()}");
         }
 
         using (HttpResponseMessage reasons = await Send(http, HttpMethod.Get, "api/sefer/gerekceler", token))
