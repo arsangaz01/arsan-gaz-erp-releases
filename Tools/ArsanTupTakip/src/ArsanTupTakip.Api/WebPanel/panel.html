@@ -186,13 +186,15 @@ tr.alarm-row td { background:#fef2f2; }
 .lb-preview-card { background:#fff; box-shadow:0 4px 14px rgba(15,23,42,.18); border-radius:4px; overflow:hidden; }
 .lb-preview-card.warn { outline:2px solid #f59e0b; }
 .lb-preview-card.bad { outline:2px solid #ef4444; }
-.lb-preview-card .label { width:100%; height:100%; box-sizing:border-box; padding:1.5mm; display:flex; flex-direction:column; justify-content:space-between;
+.lb-preview-card .label { width:100%; height:100%; box-sizing:border-box; padding:1.5mm; display:flex; flex-direction:row; gap:2mm; align-items:stretch;
   font-family:Arial, Helvetica, sans-serif; color:#000; background:#fff; overflow:hidden; }
-.lb-preview-card .row { display:flex; justify-content:space-between; gap:1mm; font-size:2.4mm; line-height:1.2; white-space:nowrap; overflow:hidden; }
-.lb-preview-card .row.b { font-weight:bold; }
-.lb-preview-card .bar { flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; min-height:0; }
-.lb-preview-card .bar svg { display:block; fill:#000; max-width:100%; max-height:100%; }
-.lb-preview-card .code { text-align:center; font-size:2.5mm; line-height:1.2; letter-spacing:.3mm; font-weight:bold; }
+.lb-preview-card .qr { flex:none; display:flex; align-items:center; justify-content:center; }
+.lb-preview-card .qr svg { display:block; width:100%; height:100%; }
+.lb-preview-card .info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:0.4mm; overflow:hidden; }
+.lb-preview-card .info .brand { font-weight:700; font-size:2.8mm; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lb-preview-card .info .gas { font-size:2.5mm; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lb-preview-card .info .meta { font-size:2.2mm; line-height:1.2; color:#222; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lb-preview-card .info .code { font-weight:800; font-size:3.4mm; line-height:1.1; letter-spacing:.1mm; margin-top:0.6mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .lb-empty { text-align:center; padding:28px 12px; color:#475569; }
 .lb-empty .big { font-size:40px; line-height:1; margin-bottom:8px; }
 .lb-print-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
@@ -244,7 +246,7 @@ tr.alarm-row td { background:#fef2f2; }
       <button data-tab="talepler" data-perm="musteri-talepleri">Müşteri Talepleri</button>
       <button data-tab="sayimlar" data-perm="depo-sayim|tup-sayim|raporlar">Sayım Raporları</button>
       <button data-tab="yeni" data-perm="tup-kayit">Yeni tüp</button>
-      <button data-tab="barkod" data-perm="barkod-yazdir">Barkod Yazdır</button>
+      <button data-tab="barkod" data-perm="barkod-yazdir">Karekod Yazdır</button>
       <button data-tab="yonetim" data-admin-only>Yönetim</button>
     </nav>
     <div class="spacer"></div>
@@ -506,11 +508,11 @@ tr.alarm-row td { background:#fef2f2; }
     <section data-page="barkod" class="hidden">
       <div class="lb-hero">
         <div class="lb-hero-icon" aria-hidden="true">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="2" height="16" fill="#fff"/><rect x="7" y="4" width="1" height="16" fill="#fff"/><rect x="10" y="4" width="3" height="16" fill="#fff"/><rect x="15" y="4" width="1" height="16" fill="#fff"/><rect x="18" y="4" width="3" height="16" fill="#fff"/></svg>
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" stroke="#fff" stroke-width="2"/><rect x="13" y="3" width="8" height="8" stroke="#fff" stroke-width="2"/><rect x="3" y="13" width="8" height="8" stroke="#fff" stroke-width="2"/><rect x="13" y="13" width="3" height="3" fill="#fff"/><rect x="18" y="13" width="3" height="3" fill="#fff"/><rect x="13" y="18" width="3" height="3" fill="#fff"/><rect x="18" y="18" width="3" height="3" fill="#fff"/></svg>
         </div>
         <div>
-          <h2>Barkod Yazdır</h2>
-          <p>Üç adım: barkod ekle → önizlemeyi kontrol et → TSC yazıcıya bas.</p>
+          <h2>Karekod Yazdır</h2>
+          <p>Üç adım: kod ekle → karekod önizlemesini kontrol et → TSC yazıcıya bas.</p>
         </div>
       </div>
       <div class="lb-steps">
@@ -1016,6 +1018,7 @@ tr.alarm-row td { background:#fef2f2; }
   </div>
 </dialog>
 
+<script src="{{BASE}}/panel/qrcode.js"></script>
 <script src="{{BASE}}/panel/app.js"></script>
 </body>
 </html>

@@ -54,6 +54,7 @@ internal static class WebPanelEndpoints
         app.MapGet("/", (HttpContext context) => Results.Redirect(context.Request.PathBase + "/panel"));
         app.MapGet("/panel", (HttpContext context) => Asset("panel.html", "text/html; charset=utf-8", context));
         app.MapGet("/panel/app.js", (HttpContext context) => Asset("panel.js", "text/javascript; charset=utf-8", context));
+        app.MapGet("/panel/qrcode.js", (HttpContext context) => Asset("qrcode.min.js", "text/javascript; charset=utf-8", context));
 
         app.MapPost("/panel/giris", async (PanelLoginRequest request, HttpContext context) =>
         {
@@ -258,7 +259,7 @@ internal static class WebPanelEndpoints
         api.MapGet("/tupler", async (string? q, int? durum, string? plaka, int? musteri, string? doluluk, bool? uzun, bool? pasif, bool? inceleme, string? test) =>
         {
             await using TupTakipDbContext db = new();
-            IQueryable<Cylinder> query = db.Cylinders.AsNoTracking().Include(c => c.CurrentCustomer);
+            IQueryable<Cylinder> query = db.Cylinders.AsNoTracking().Include(c => c.CurrentCustomer).Include(c => c.OwnerCustomer);
             query = inceleme == true ? query.Where(c => c.NeedsReview) : query.Where(c => c.IsActive == (pasif != true));
             if (durum is int status && Enum.IsDefined((CylinderStatus)status))
             {
@@ -321,6 +322,8 @@ internal static class WebPanelEndpoints
                     LastMovement = c.LastMovementAt?.ToString("dd.MM.yyyy HH:mm", Turkish),
                     DaysThere = CylinderTracking.DaysSince(c.LastMovementAt, today),
                     TestDue = c.TestDueDate?.ToString("dd.MM.yyyy", Turkish),
+                    LastTest = c.LastTestDate?.ToString("dd.MM.yyyy", Turkish),
+                    Owner = c.OwnerCustomer?.CompanyName,
                     TestOverdue = c.TestDueDate != null && c.TestDueDate < today
                 }));
         }).Requires(Perm.CylinderView);

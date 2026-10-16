@@ -2501,54 +2501,13 @@ $("delete-form").addEventListener("submit", async (event) => {
   }
 });
 
-// ---- Barkod Yazdır: Code 128 labels drawn as SVG and printed through the computer's label printer driver (TSC TA310).
-const CODE128 = ("212222,222122,222221,121223,121322,131222,122213,122312,132212,221213,221312,231212,112232,122132,122231,113222,123122,123221,"
-  + "223211,221132,221231,213212,223112,312131,311222,321122,321221,312212,322112,322211,212123,212321,232121,111323,131123,131321,112313,132113,"
-  + "132311,211313,231113,231311,112133,112331,132131,113123,113321,133121,313121,211331,231131,213113,213311,213131,311123,311321,331121,312113,"
-  + "312311,332111,314111,221411,431111,111224,111422,121124,121421,141122,141221,112214,112412,122114,122411,142112,142211,241211,221114,413111,"
-  + "241112,134111,111242,121142,121241,114212,124112,124211,411212,421112,421211,212141,214121,412121,111143,111341,131141,114113,114311,411113,"
-  + "411311,113141,114131,311141,411131,211412,211214,211232,2331112").split(",");
+// ---- Karekod Yazdır: QR labels (left QR + right text, like field cylinder stickers) for TSC TA310.
 const LABEL_DOT_MM = 25.4 / 300;
 const LABEL_SETTINGS_KEY = "arsan-etiket-ayar";
 let labelList = [];
 let labelResults = [];
 let labelCatalog = null; // full active cylinder snapshot for category chips
 let labelActiveCat = "";
-
-// Symbol values (start … checksum, stop). Code B for letters; an all-digit code or a trailing run of 4+ digits
-// (e.g. AG000001) switches to Code C, two digits per symbol, which keeps the bars wider on small labels.
-function code128Values(text) {
-  if (!text || [...text].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) > 126)) return null;
-  const values = [];
-  const pairs = (digits) => { for (let i = 0; i < digits.length; i += 2) values.push(Number(digits.slice(i, i + 2))); };
-  const tail = (/\d+$/.exec(text) || [""])[0];
-  if (tail.length === text.length && text.length >= 4) {
-    const even = text.length - (text.length % 2);
-    values.push(105);
-    pairs(text.slice(0, even));
-    if (even < text.length) values.push(100, text.charCodeAt(even) - 32);
-  } else if (tail.length >= 4) {
-    const split = text.length - (tail.length - (tail.length % 2));
-    values.push(104, ...[...text.slice(0, split)].map((c) => c.charCodeAt(0) - 32), 99);
-    pairs(text.slice(split));
-  } else {
-    values.push(104, ...[...text].map((c) => c.charCodeAt(0) - 32));
-  }
-  const check = values.reduce((sum, v, i) => sum + v * (i === 0 ? 1 : i), 0) % 103;
-  return [...values, check, 106];
-}
-
-// Bars as [startModule, widthModules] plus total width in modules including 10-module quiet zones.
-function code128Bars(text) {
-  const values = code128Values(text);
-  if (!values) return null;
-  const bars = [];
-  let x = 10;
-  for (const v of values) {
-    [...CODE128[v]].forEach((w, i) => { if (i % 2 === 0) bars.push([x, Number(w)]); x += Number(w); });
-  }
-  return { bars, modules: x + 10 };
-}
 
 const xmlEsc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -2573,51 +2532,87 @@ function loadLabelSettings() {
   $("lb-f-gas").checked = !!s.gas; $("lb-f-serial").checked = !!s.serial; $("lb-f-test").checked = !!s.test; $("lb-f-text").checked = !!s.text;
 }
 
-// Narrowest bar = whole printer dots so every bar prints with the same width; null when the code does not fit the label.
-function labelBarcodeSvg(code, widthMm, heightMm) {
-  const symbol = code128Bars(code);
-  if (!symbol) return { error: "Barkodda Türkçe karakter veya desteklenmeyen işaret var." };
-  const dots = Math.floor(widthMm / (symbol.modules * LABEL_DOT_MM));
-  if (dots < 1) return { error: `Kod bu etiket genişliğine sığmıyor (en az ${Math.ceil(symbol.modules * LABEL_DOT_MM)} mm gerekir).` };
-  const width = symbol.modules * dots * LABEL_DOT_MM;
-  const rects = symbol.bars.map(([x, w]) => `<rect x="${x}" y="0" width="${w}" height="100"/>`).join("");
+// Builds a QR matrix for the cylinder code (UTF-8 byte mode). Error M keeps modules larger on small labels.
+function labelQrMatrix(code) {
+  const text = String(code || "").trim();
+  if (!text) return { error: "Barkod boş." };
+  if (typeof qrcode !== "function") return { error: "Karekod kütüphanesi yüklenemedi; sayfayı yenileyin." };
+  try {
+    if (qrcode.stringToBytesFuncs && qrcode.stringToBytesFuncs["UTF-8"]) {
+      qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
+    }
+    const qr = qrcode(0, "M");
+    qr.addData(text, "Byte");
+    qr.make();
+    const n = qr.getModuleCount();
+    const cells = [];
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) if (qr.isDark(r, c)) cells.push([c, r]);
+    }
+    return { n, cells };
+  } catch (error) {
+    return { error: "Karekod oluşturulamadı: " + (error.message || error) };
+  }
+}
+
+function labelBarcodeSvg(code, sizeMm) {
+  const matrix = labelQrMatrix(code);
+  if (matrix.error) return { error: matrix.error };
+  const quiet = 2;
+  const modules = matrix.n + 2 * quiet;
+  const dots = Math.floor(sizeMm / (modules * LABEL_DOT_MM));
+  if (dots < 1) return { error: `Karekod bu etikete sığmıyor (en az ${Math.ceil(modules * LABEL_DOT_MM)} mm kare gerekir).` };
+  const mm = modules * dots * LABEL_DOT_MM;
+  const rects = matrix.cells.map(([x, y]) => `<rect x="${x + quiet}" y="${y + quiet}" width="1" height="1"/>`).join("");
   return {
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${symbol.modules} 100" preserveAspectRatio="none" shape-rendering="crispEdges" style="width:${width.toFixed(3)}mm;height:${heightMm.toFixed(2)}mm">${rects}</svg>`,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${modules} ${modules}" shape-rendering="crispEdges" style="width:${mm.toFixed(3)}mm;height:${mm.toFixed(3)}mm">${rects}</svg>`,
+    sizeMm: mm,
     narrow: dots < 2
   };
 }
 
+// Field-style sticker (örnek tüp etiketi + eski yazdırma formu): QR left; brand, gas, serial, STT/GTT, bold code, owner/extra.
 function labelHtml(item, s) {
   const pad = 1.5;
-  const small = Math.max(1.8, Math.min(3.2, s.h / 11));
-  const head = s.title || (s.gas && item.gas);
-  const foot = (s.serial && item.serial && item.serial !== item.code) || (s.test && item.test);
-  const textLines = (head ? 1 : 0) + (foot ? 1 : 0) + (s.text ? 1 : 0);
-  const barHeight = Math.max(5, s.h - 2 * pad - textLines * (small * 1.25) - 0.5);
-  const bar = labelBarcodeSvg(item.code, s.w - 2 * pad - 1, barHeight);
-  const row = (left, right, bold) => `<div class="row${bold ? " b" : ""}"><span>${xmlEsc(left)}</span><span>${xmlEsc(right)}</span></div>`;
+  const qrSide = Math.max(8, Math.min(s.h - 2 * pad, s.w * 0.42));
+  const qr = labelBarcodeSvg(item.code, qrSide);
+  const showCode = s.text || !(s.title || s.gas || s.serial || s.test);
+  const serialLine = s.serial && item.serial && item.serial !== item.code ? String(item.serial) : "";
+  const stt = s.test && item.stt ? "STT: " + item.stt : "";
+  const gtt = s.test && (item.gtt || item.test) ? "GTT: " + (item.gtt || item.test) : "";
+  const extra = [item.extra, item.owner].filter(Boolean).join(" · ");
   return `<div class="label">`
-    + (head ? row(s.title, s.gas ? item.gas || "" : "", true) : "")
-    + `<div class="bar">${bar.svg || `<b>${xmlEsc(bar.error)}</b>`}</div>`
-    + (s.text ? `<div class="code">${xmlEsc(item.code)}</div>` : "")
-    + (foot ? row(s.serial && item.serial && item.serial !== item.code ? "Seri: " + item.serial : "", s.test && item.test ? "Test: " + item.test : "") : "")
-    + `</div>`;
+    + `<div class="qr">${qr.svg || `<b style="font-size:2mm">${xmlEsc(qr.error)}</b>`}</div>`
+    + `<div class="info">`
+    + (s.title ? `<div class="brand">${xmlEsc(s.title)}</div>` : "")
+    + (s.gas && item.gas ? `<div class="gas">${xmlEsc(item.gas)}</div>` : "")
+    + (serialLine ? `<div class="meta">${xmlEsc(serialLine)}</div>` : "")
+    + (stt ? `<div class="meta">${xmlEsc(stt)}</div>` : "")
+    + (gtt ? `<div class="meta">${xmlEsc(gtt)}</div>` : "")
+    + (showCode ? `<div class="code">${xmlEsc(item.code)}</div>` : "")
+    + (extra ? `<div class="meta">${xmlEsc(extra)}</div>` : "")
+    + `</div></div>`;
 }
 
 function labelDocument(items, s) {
-  const small = Math.max(1.8, Math.min(3.2, s.h / 11));
+  const brandFs = Math.max(2.4, Math.min(4.2, s.h / 8));
+  const gasFs = Math.max(2.2, Math.min(3.6, s.h / 9));
+  const metaFs = Math.max(1.9, Math.min(3.0, s.h / 11));
+  const codeFs = Math.max(2.8, Math.min(5.0, s.h / 6.5));
   const pages = items.flatMap((item) => Array(s.copies).fill(labelHtml(item, s))).join("");
-  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Barkod etiketleri (${items.length * s.copies})</title><style>
+  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Karekod etiketleri (${items.length * s.copies})</title><style>
 @page { size: ${s.w}mm ${s.h}mm; margin: 0; }
 html, body { margin: 0; padding: 0; background: #fff; }
-.label { width: ${s.w}mm; height: ${s.h}mm; box-sizing: border-box; padding: 1.5mm; overflow: hidden; display: flex; flex-direction: column;
-  justify-content: space-between; font-family: Arial, Helvetica, sans-serif; color: #000; page-break-after: always; break-after: page; }
+.label { width: ${s.w}mm; height: ${s.h}mm; box-sizing: border-box; padding: 1.5mm; overflow: hidden; display: flex; flex-direction: row;
+  gap: 2mm; align-items: stretch; font-family: Arial, Helvetica, sans-serif; color: #000; page-break-after: always; break-after: page; }
 .label:last-child { page-break-after: auto; break-after: auto; }
-.row { display: flex; justify-content: space-between; gap: 1mm; font-size: ${small.toFixed(2)}mm; line-height: 1.2; white-space: nowrap; overflow: hidden; }
-.row.b { font-weight: bold; }
-.bar { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.bar svg { display: block; fill: #000; }
-.code { text-align: center; font-size: ${(small * 1.05).toFixed(2)}mm; line-height: 1.2; letter-spacing: .3mm; font-weight: bold; }
+.qr { flex: none; display: flex; align-items: center; justify-content: center; }
+.qr svg { display: block; }
+.info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.45mm; overflow: hidden; }
+.brand { font-weight: 700; font-size: ${brandFs.toFixed(2)}mm; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gas { font-size: ${gasFs.toFixed(2)}mm; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { font-size: ${metaFs.toFixed(2)}mm; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.code { font-weight: 800; font-size: ${codeFs.toFixed(2)}mm; line-height: 1.1; letter-spacing: .08mm; margin-top: 0.5mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media screen { body { background: #ccc; padding: 10px; } .label { background: #fff; margin: 0 auto 8px; outline: 1px dashed #888; } }
 </style></head><body>${pages}</body></html>`;
 }
@@ -2660,7 +2655,7 @@ function refreshLabelPreviews() {
   }
   const scale = Math.min(2.4, Math.max(1.15, 160 / Math.max(s.w, s.h)));
   previews.replaceChildren(...labelList.slice(0, 12).map((item) => {
-    const check = labelBarcodeSvg(item.code, s.w - 4, 10);
+    const check = labelBarcodeSvg(item.code, Math.max(8, Math.min(s.h - 3, s.w * 0.42)));
     const shell = el("div", { style: `width:${(s.w * scale).toFixed(2)}mm;height:${(s.h * scale).toFixed(2)}mm;position:relative;flex:none` });
     const card = el("div", { class: "lb-preview-card" + (check.error ? " bad" : check.narrow ? " warn" : ""),
       style: `width:${s.w}mm;height:${s.h}mm;transform:scale(${scale.toFixed(3)});transform-origin:top left;position:absolute;left:0;top:0` });
@@ -2693,7 +2688,7 @@ function renderLabelList() {
     return;
   }
   list.replaceChildren(...labelList.map((item, index) => {
-    const check = labelBarcodeSvg(item.code, s.w - 4, 10);
+    const check = labelBarcodeSvg(item.code, Math.max(8, Math.min(s.h - 3, s.w * 0.42)));
     const field = (key, label, cls) => {
       const input = el("input", { value: item[key] || "", class: cls || "" });
       input.addEventListener("input", () => { item[key] = input.value; refreshLabelPreviews(); });
@@ -2702,7 +2697,7 @@ function renderLabelList() {
     };
     const warn = check.error
       ? el("div", { class: "err" }, check.error)
-      : check.narrow ? el("div", { class: "err" }, "Çizgiler ince — daha geniş etiket deneyin") : null;
+      : check.narrow ? el("div", { class: "err" }, "Karekod noktaları ince — daha büyük etiket deneyin") : null;
     return el("div", { class: "lb-chip" },
       el("div", { class: "lb-chip-top" },
         el("div", { style: "flex:1;font-size:12px;color:var(--muted)" }, item.source || "Etiket"),
@@ -2710,10 +2705,13 @@ function renderLabelList() {
           onclick: () => openTemplateDialog(null, { sample: item.code, gas: item.gas, test: item.test }) }, "Ürün"),
         el("button", { class: "secondary small", type: "button", onclick: () => { labelList.splice(index, 1); renderLabelList(); } }, "Çıkar")),
       el("div", { class: "fields" },
-        field("code", "Barkod", "code"),
+        field("code", "Barkod no", "code"),
         field("serial", "Seri no"),
-        field("gas", "Gaz / litre"),
-        field("test", "Test")),
+        field("gas", "Kategori (gaz / litre)"),
+        field("stt", "STT (son test)"),
+        field("gtt", "GTT (gelecek test)"),
+        field("owner", "Ürün sahibi"),
+        field("extra", "Hacim / basınç (ör. 10.6M3 · 200BAR)")),
       warn);
   }));
   refreshLabelPreviews();
@@ -2755,11 +2753,17 @@ function labelCylinderKey(c) {
 }
 
 function labelCylinderItem(c) {
+  // STT/GTT naming matches the legacy print dialog and field cylinder stickers.
+  const gtt = c.testDue || "";
   return {
     code: (c.barcode || c.serialNumber || "").trim(),
     gas: labelCylinderKey(c),
     serial: c.serialNumber || "",
-    test: c.testDue || "",
+    test: gtt,
+    stt: c.lastTest || "",
+    gtt,
+    owner: c.owner || "",
+    extra: c.capacity || "",
     source: "Kayıtlı tüp"
   };
 }
@@ -3065,7 +3069,7 @@ function initLabels() {
   $("lb-print").addEventListener("click", async () => {
     const s = labelSettings();
     if (!labelList.length) { show($("lb-msg"), "Yazdırılacak etiket yok. Önce barkod ekleyin.", "warn"); return; }
-    const bad = labelList.filter((i) => labelBarcodeSvg(i.code, s.w - 4, 10).error);
+    const bad = labelList.filter((i) => labelBarcodeSvg(i.code, Math.max(8, Math.min(s.h - 3, s.w * 0.42))).error);
     if (bad.length) { show($("lb-msg"), `Basılamayan barkod var: ${bad.map((i) => i.code).join(", ")}. Listeden çıkarın veya etiket genişliğini artırın.`); return; }
     printLabelDocument(labelDocument(labelList, s));
     show($("lb-msg"), `${labelList.length * s.copies} etiket yazdırma penceresine gönderildi. Yazıcı olarak TSC'yi seçin · kenar boşluğu Yok · ölçek %100.`, "ok");
