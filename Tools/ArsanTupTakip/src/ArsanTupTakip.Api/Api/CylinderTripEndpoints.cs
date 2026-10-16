@@ -69,11 +69,13 @@ internal static class CylinderTripEndpoints
     {
         app.MapGet("/api/sefer/aktif", async () => Results.Ok(await new CylinderTripService().ActiveTripsAsync())).Requires(Perm.TripView);
 
-        // Closed trips for the phone home screen; drivers with a fixed plate see only that vehicle's history.
+        // Closed trips: Yönetici/Operatör see all; depot/şoför accounts only see trips they closed (or legacy own plate).
         app.MapGet("/api/sefer/gecmis", async (HttpContext context, int? adet) =>
         {
             WebPanelUser user = User(context);
-            List<TripListItem> trips = await new CylinderTripService().ClosedTripsAsync(user.FixedPlate, adet ?? 40);
+            bool seeAll = SeesAllClosedTrips(user);
+            List<TripListItem> trips = await new CylinderTripService().ClosedTripsAsync(
+                user.FixedPlate, adet ?? 40, seeAll, seeAll ? null : user.UserName);
             return Results.Ok(trips.Select(HistoryRow));
         }).Requires(Perm.TripView);
 
@@ -86,10 +88,9 @@ internal static class CylinderTripEndpoints
             }
 
             WebPanelUser user = User(context);
-            if (user.FixedPlate is string plate
-                && !detail.Trip.Vehicles.Any(v => string.Equals(v.Plate, plate, StringComparison.OrdinalIgnoreCase)))
+            if (!MayViewClosedOrActive(user, detail.Trip))
             {
-                return Results.Json(new { error = "Bu sefer sabit aracınıza ait değil." }, statusCode: StatusCodes.Status403Forbidden);
+                return Results.Json(new { error = "Bu seferi görme yetkiniz yok." }, statusCode: StatusCodes.Status403Forbidden);
             }
 
             return Results.Ok(new
@@ -261,7 +262,8 @@ internal static class CylinderTripEndpoints
         {
             try
             {
-                TripCloseResult result = await new CylinderTripService().CloseTripAsync(request.TripId, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                WebPanelUser closer = User(context);
+                TripCloseResult result = await new CylinderTripService().CloseTripAsync(request.TripId, closer.UserName);
                 NotifyManagers(result);
                 return Results.Ok(new
                 {
@@ -285,13 +287,14 @@ internal static class CylinderTripEndpoints
         {
             try
             {
-                (int Status, string Error)? refused = await RefuseFieldFinishAsync(User(context), request.TripId);
+                WebPanelUser closer = User(context);
+                (int Status, string Error)? refused = await RefuseFieldFinishAsync(closer, request.TripId);
                 if (refused.HasValue)
                 {
                     return Results.Json(new { error = refused.Value.Error }, statusCode: refused.Value.Status);
                 }
 
-                TripCloseResult result = await new CylinderTripService().CloseTripAsync(request.TripId, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                TripCloseResult result = await new CylinderTripService().CloseTripAsync(request.TripId, closer.UserName);
                 NotifyManagers(result);
                 return Results.Ok(new
                 {
@@ -566,8 +569,42 @@ internal static class CylinderTripEndpoints
         t.PickedUp,
         t.OnVehicle,
         t.Missing,
-        t.Note
+        t.Note,
+        t.ClosedBy
     };
+
+    // Yönetici and Operatör see every closed trip; şoför/depo accounts only their own.
+    private static bool SeesAllClosedTrips(WebPanelUser user) =>
+        user.Role is PanelRoles.Admin or PanelRoles.Operator;
+
+    private static bool MayViewClosedOrActive(WebPanelUser user, TripListItem trip)
+    {
+        if (SeesAllClosedTrips(user) || trip.Active)
+        {
+            // Active trip detail still respects fixed plate when set.
+            if (trip.Active && user.FixedPlate is string plate
+                && !trip.Vehicles.Any(v => string.Equals(v.Plate, plate, StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(trip.ClosedBy))
+        {
+            return string.Equals(trip.ClosedBy, user.UserName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (user.FixedPlate is string own
+            && trip.Vehicles.Any(v => string.Equals(v.Plate, own, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return trip.CreatedBy is not null
+            && trip.CreatedBy.Contains(user.UserName, StringComparison.OrdinalIgnoreCase);
+    }
 
     // null = allowed. Fixed-plate drivers may finish only when that vehicle is empty.
     private static async Task<(int Status, string Error)?> RefuseFieldFinishAsync(WebPanelUser user, int tripId)
