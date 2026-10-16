@@ -2571,25 +2571,44 @@ function labelBarcodeSvg(code, sizeMm) {
   };
 }
 
-// Field-style sticker (örnek tüp etiketi + eski yazdırma formu): QR left; brand, gas, serial, STT/GTT, bold code, owner/extra.
+// Fit the full barcode under the QR: scale font to column width; wrap long codes (e.g. GUID) to 2 lines.
+function labelCodeUnderQrHtml(code, widthMm) {
+  const text = String(code || "").trim();
+  if (!text) return "";
+  const lines = text.length > 22
+    ? [text.slice(0, Math.ceil(text.length / 2)), text.slice(Math.ceil(text.length / 2))]
+    : [text];
+  const longest = Math.max(...lines.map((l) => l.length));
+  let fs = widthMm / Math.max(longest * 0.62, 6);
+  fs = Math.max(1.05, Math.min(2.3, fs));
+  return `<div class="qr-code" style="width:${widthMm.toFixed(2)}mm;font-size:${fs.toFixed(2)}mm;line-height:1.12">`
+    + lines.map((l) => `<div>${xmlEsc(l)}</div>`).join("")
+    + `</div>`;
+}
+
+// Field sticker: left = QR + full barcode under it; right = brand / gas / serial / STT / GTT / owner.
 function labelHtml(item, s) {
   const pad = 1.5;
-  const qrSide = Math.max(8, Math.min(s.h - 2 * pad, s.w * 0.42));
+  const codeH = s.text ? Math.min(5.5, Math.max(2.8, s.h * 0.16)) : 0;
+  const qrSide = Math.max(8, Math.min(s.h - 2 * pad - codeH, s.w * 0.42));
   const qr = labelBarcodeSvg(item.code, qrSide);
-  const showCode = s.text || !(s.title || s.gas || s.serial || s.test);
+  const qrW = qr.sizeMm || qrSide;
+  const showCode = !!s.text; // "Kod yazısı" checkbox
   const serialLine = s.serial && item.serial && item.serial !== item.code ? String(item.serial) : "";
   const stt = s.test && item.stt ? "STT: " + item.stt : "";
   const gtt = s.test && (item.gtt || item.test) ? "GTT: " + (item.gtt || item.test) : "";
   const extra = [item.extra, item.owner].filter(Boolean).join(" · ");
   return `<div class="label">`
+    + `<div class="qr-col">`
     + `<div class="qr">${qr.svg || `<b style="font-size:2mm">${xmlEsc(qr.error)}</b>`}</div>`
+    + (showCode ? labelCodeUnderQrHtml(item.code, qrW) : "")
+    + `</div>`
     + `<div class="info">`
     + (s.title ? `<div class="brand">${xmlEsc(s.title)}</div>` : "")
     + (s.gas && item.gas ? `<div class="gas">${xmlEsc(item.gas)}</div>` : "")
     + (serialLine ? `<div class="meta">${xmlEsc(serialLine)}</div>` : "")
     + (stt ? `<div class="meta">${xmlEsc(stt)}</div>` : "")
     + (gtt ? `<div class="meta">${xmlEsc(gtt)}</div>` : "")
-    + (showCode ? `<div class="code">${xmlEsc(item.code)}</div>` : "")
     + (extra ? `<div class="meta">${xmlEsc(extra)}</div>` : "")
     + `</div></div>`;
 }
@@ -2598,7 +2617,6 @@ function labelDocument(items, s) {
   const brandFs = Math.max(2.4, Math.min(4.2, s.h / 8));
   const gasFs = Math.max(2.2, Math.min(3.6, s.h / 9));
   const metaFs = Math.max(1.9, Math.min(3.0, s.h / 11));
-  const codeFs = Math.max(2.8, Math.min(5.0, s.h / 6.5));
   const pages = items.flatMap((item) => Array(s.copies).fill(labelHtml(item, s))).join("");
   return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Karekod etiketleri (${items.length * s.copies})</title><style>
 @page { size: ${s.w}mm ${s.h}mm; margin: 0; }
@@ -2606,13 +2624,15 @@ html, body { margin: 0; padding: 0; background: #fff; }
 .label { width: ${s.w}mm; height: ${s.h}mm; box-sizing: border-box; padding: 1.5mm; overflow: hidden; display: flex; flex-direction: row;
   gap: 2mm; align-items: stretch; font-family: Arial, Helvetica, sans-serif; color: #000; page-break-after: always; break-after: page; }
 .label:last-child { page-break-after: auto; break-after: auto; }
-.qr { flex: none; display: flex; align-items: center; justify-content: center; }
+.qr-col { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5mm; max-width: 46%; }
+.qr { display: flex; align-items: center; justify-content: center; }
 .qr svg { display: block; }
+.qr-code { text-align: center; font-weight: 700; font-family: Arial, Helvetica, sans-serif; letter-spacing: 0; word-break: break-all; overflow: hidden; }
+.qr-code div { white-space: nowrap; overflow: hidden; }
 .info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.45mm; overflow: hidden; }
 .brand { font-weight: 700; font-size: ${brandFs.toFixed(2)}mm; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gas { font-size: ${gasFs.toFixed(2)}mm; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .meta { font-size: ${metaFs.toFixed(2)}mm; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.code { font-weight: 800; font-size: ${codeFs.toFixed(2)}mm; line-height: 1.1; letter-spacing: .08mm; margin-top: 0.5mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media screen { body { background: #ccc; padding: 10px; } .label { background: #fff; margin: 0 auto 8px; outline: 1px dashed #888; } }
 </style></head><body>${pages}</body></html>`;
 }

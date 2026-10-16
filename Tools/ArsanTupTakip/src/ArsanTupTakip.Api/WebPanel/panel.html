@@ -188,13 +188,15 @@ tr.alarm-row td { background:#fef2f2; }
 .lb-preview-card.bad { outline:2px solid #ef4444; }
 .lb-preview-card .label { width:100%; height:100%; box-sizing:border-box; padding:1.5mm; display:flex; flex-direction:row; gap:2mm; align-items:stretch;
   font-family:Arial, Helvetica, sans-serif; color:#000; background:#fff; overflow:hidden; }
-.lb-preview-card .qr { flex:none; display:flex; align-items:center; justify-content:center; }
-.lb-preview-card .qr svg { display:block; width:100%; height:100%; }
+.lb-preview-card .qr-col { flex:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.5mm; max-width:46%; }
+.lb-preview-card .qr { display:flex; align-items:center; justify-content:center; }
+.lb-preview-card .qr svg { display:block; }
+.lb-preview-card .qr-code { text-align:center; font-weight:700; letter-spacing:0; overflow:hidden; }
+.lb-preview-card .qr-code div { white-space:nowrap; overflow:hidden; }
 .lb-preview-card .info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:0.4mm; overflow:hidden; }
 .lb-preview-card .info .brand { font-weight:700; font-size:2.8mm; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .lb-preview-card .info .gas { font-size:2.5mm; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .lb-preview-card .info .meta { font-size:2.2mm; line-height:1.2; color:#222; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.lb-preview-card .info .code { font-weight:800; font-size:3.4mm; line-height:1.1; letter-spacing:.1mm; margin-top:0.6mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .lb-empty { text-align:center; padding:28px 12px; color:#475569; }
 .lb-empty .big { font-size:40px; line-height:1; margin-bottom:8px; }
 .lb-print-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
