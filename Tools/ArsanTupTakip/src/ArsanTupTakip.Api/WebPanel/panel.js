@@ -2571,52 +2571,99 @@ function labelBarcodeSvg(code, sizeMm) {
   };
 }
 
+// Scale font so text fits widthMm (approx. Latin/digit width ≈ 0.55×fontSize).
+function labelFitFs(text, widthMm, prefer, min) {
+  const t = String(text || "");
+  if (!t) return prefer;
+  return Math.max(min, Math.min(prefer, widthMm / (t.length * 0.55)));
+}
+
+// Wrap at spaces / · / - when a single line would be too long for the column.
+function labelWrapLines(text, widthMm, fs, maxLines) {
+  const t = String(text || "").trim();
+  if (!t) return [];
+  const chars = Math.max(6, Math.floor(widthMm / (fs * 0.55)));
+  if (t.length <= chars) return [t];
+  const parts = t.split(/(\s+|·|-)/).filter((p) => p.length);
+  const lines = [];
+  let cur = "";
+  for (const p of parts) {
+    if ((cur + p).length <= chars || !cur) cur += p;
+    else { lines.push(cur.trim()); cur = p.trimStart(); if (lines.length >= maxLines - 1) break; }
+  }
+  if (cur && lines.length < maxLines) lines.push(cur.trim());
+  else if (cur && lines.length) lines[lines.length - 1] = (lines[lines.length - 1] + cur).trim();
+  // Hard-split leftover if still too long (GUID-like).
+  return lines.flatMap((line) => {
+    if (line.length <= chars + 2) return [line];
+    const out = [];
+    for (let i = 0; i < line.length && out.length < maxLines; i += chars) out.push(line.slice(i, i + chars));
+    return out;
+  }).slice(0, maxLines);
+}
+
+function labelInfoBlock(text, widthMm, prefer, min, maxLines, cls) {
+  const t = String(text || "").trim();
+  if (!t) return "";
+  let fs = labelFitFs(t, widthMm, prefer, min);
+  let lines = labelWrapLines(t, widthMm, fs, maxLines);
+  // If wrapping still overflows a line, shrink further to the longest line.
+  const longest = Math.max(...lines.map((l) => l.length), 1);
+  fs = Math.max(min, Math.min(fs, widthMm / (longest * 0.55)));
+  return `<div class="${cls}" style="font-size:${fs.toFixed(2)}mm">${lines.map((l) => `<div>${xmlEsc(l)}</div>`).join("")}</div>`;
+}
+
 // Fit the full barcode under the QR: scale font to column width; wrap long codes (e.g. GUID) to 2 lines.
 function labelCodeUnderQrHtml(code, widthMm) {
   const text = String(code || "").trim();
   if (!text) return "";
-  const lines = text.length > 22
-    ? [text.slice(0, Math.ceil(text.length / 2)), text.slice(Math.ceil(text.length / 2))]
-    : [text];
-  const longest = Math.max(...lines.map((l) => l.length));
-  let fs = widthMm / Math.max(longest * 0.62, 6);
-  fs = Math.max(1.05, Math.min(2.3, fs));
-  return `<div class="qr-code" style="width:${widthMm.toFixed(2)}mm;font-size:${fs.toFixed(2)}mm;line-height:1.12">`
+  const prefer = 2.3;
+  const fs = labelFitFs(text.length > 22 ? text.slice(0, Math.ceil(text.length / 2)) : text, widthMm, prefer, 1.05);
+  const lines = labelWrapLines(text, widthMm, fs, 2);
+  const longest = Math.max(...lines.map((l) => l.length), 1);
+  const finalFs = Math.max(1.05, Math.min(prefer, widthMm / (longest * 0.62)));
+  return `<div class="qr-code" style="width:${widthMm.toFixed(2)}mm;font-size:${finalFs.toFixed(2)}mm;line-height:1.12">`
     + lines.map((l) => `<div>${xmlEsc(l)}</div>`).join("")
     + `</div>`;
 }
 
-// Field sticker: left = QR + full barcode under it; right = brand / gas / serial / STT / GTT / owner.
+// Field sticker: left = QR + full barcode under it; right = brand / gas / serial / STT / GTT / owner (auto-fit, no …).
 function labelHtml(item, s) {
   const pad = 1.5;
+  const gap = 2;
   const codeH = s.text ? Math.min(5.5, Math.max(2.8, s.h * 0.16)) : 0;
   const qrSide = Math.max(8, Math.min(s.h - 2 * pad - codeH, s.w * 0.42));
   const qr = labelBarcodeSvg(item.code, qrSide);
   const qrW = qr.sizeMm || qrSide;
-  const showCode = !!s.text; // "Kod yazısı" checkbox
+  const infoW = Math.max(12, s.w - 2 * pad - qrW - gap);
+  const showCode = !!s.text;
   const serialLine = s.serial && item.serial && item.serial !== item.code ? String(item.serial) : "";
   const stt = s.test && item.stt ? "STT: " + item.stt : "";
   const gtt = s.test && (item.gtt || item.test) ? "GTT: " + (item.gtt || item.test) : "";
-  const extra = [item.extra, item.owner].filter(Boolean).join(" · ");
+  // Prefer gas without repeating litre; capacity/owner as separate lines so each can shrink.
+  const gasLine = s.gas && item.gas ? String(item.gas) : "";
+  const capLine = item.extra || "";
+  const ownerLine = item.owner || "";
+  const brandFs = Math.max(2.2, Math.min(4.0, s.h / 8));
+  const gasFs = Math.max(2.0, Math.min(3.4, s.h / 9));
+  const metaFs = Math.max(1.7, Math.min(2.8, s.h / 11));
   return `<div class="label">`
     + `<div class="qr-col">`
     + `<div class="qr">${qr.svg || `<b style="font-size:2mm">${xmlEsc(qr.error)}</b>`}</div>`
     + (showCode ? labelCodeUnderQrHtml(item.code, qrW) : "")
     + `</div>`
-    + `<div class="info">`
-    + (s.title ? `<div class="brand">${xmlEsc(s.title)}</div>` : "")
-    + (s.gas && item.gas ? `<div class="gas">${xmlEsc(item.gas)}</div>` : "")
-    + (serialLine ? `<div class="meta">${xmlEsc(serialLine)}</div>` : "")
-    + (stt ? `<div class="meta">${xmlEsc(stt)}</div>` : "")
-    + (gtt ? `<div class="meta">${xmlEsc(gtt)}</div>` : "")
-    + (extra ? `<div class="meta">${xmlEsc(extra)}</div>` : "")
+    + `<div class="info" style="width:${infoW.toFixed(2)}mm">`
+    + (s.title ? labelInfoBlock(s.title, infoW, brandFs, 1.6, 1, "brand") : "")
+    + (gasLine ? labelInfoBlock(gasLine, infoW, gasFs, 1.5, 2, "gas") : "")
+    + (serialLine ? labelInfoBlock(serialLine, infoW, metaFs, 1.4, 1, "meta") : "")
+    + (stt ? labelInfoBlock(stt, infoW, metaFs, 1.4, 1, "meta") : "")
+    + (gtt ? labelInfoBlock(gtt, infoW, metaFs, 1.4, 1, "meta") : "")
+    + (capLine ? labelInfoBlock(capLine, infoW, metaFs, 1.4, 1, "meta") : "")
+    + (ownerLine ? labelInfoBlock(ownerLine, infoW, metaFs, 1.35, 2, "meta") : "")
     + `</div></div>`;
 }
 
 function labelDocument(items, s) {
-  const brandFs = Math.max(2.4, Math.min(4.2, s.h / 8));
-  const gasFs = Math.max(2.2, Math.min(3.6, s.h / 9));
-  const metaFs = Math.max(1.9, Math.min(3.0, s.h / 11));
   const pages = items.flatMap((item) => Array(s.copies).fill(labelHtml(item, s))).join("");
   return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Karekod etiketleri (${items.length * s.copies})</title><style>
 @page { size: ${s.w}mm ${s.h}mm; margin: 0; }
@@ -2627,12 +2674,13 @@ html, body { margin: 0; padding: 0; background: #fff; }
 .qr-col { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5mm; max-width: 46%; }
 .qr { display: flex; align-items: center; justify-content: center; }
 .qr svg { display: block; }
-.qr-code { text-align: center; font-weight: 700; font-family: Arial, Helvetica, sans-serif; letter-spacing: 0; word-break: break-all; overflow: hidden; }
+.qr-code { text-align: center; font-weight: 700; font-family: Arial, Helvetica, sans-serif; letter-spacing: 0; overflow: hidden; }
 .qr-code div { white-space: nowrap; overflow: hidden; }
-.info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.45mm; overflow: hidden; }
-.brand { font-weight: 700; font-size: ${brandFs.toFixed(2)}mm; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gas { font-size: ${gasFs.toFixed(2)}mm; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.meta { font-size: ${metaFs.toFixed(2)}mm; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.35mm; overflow: hidden; }
+.brand { font-weight: 700; line-height: 1.12; overflow: hidden; }
+.brand div, .gas div, .meta div { white-space: nowrap; overflow: hidden; }
+.gas { line-height: 1.12; overflow: hidden; }
+.meta { line-height: 1.15; overflow: hidden; }
 @media screen { body { background: #ccc; padding: 10px; } .label { background: #fff; margin: 0 auto 8px; outline: 1px dashed #888; } }
 </style></head><body>${pages}</body></html>`;
 }
@@ -2774,10 +2822,11 @@ function labelCylinderKey(c) {
 
 function labelCylinderItem(c) {
   // STT/GTT naming matches the legacy print dialog and field cylinder stickers.
+  // Keep gas type and capacity separate so each line can shrink/wrap without "…".
   const gtt = c.testDue || "";
   return {
     code: (c.barcode || c.serialNumber || "").trim(),
-    gas: labelCylinderKey(c),
+    gas: (c.gasType || "").trim(),
     serial: c.serialNumber || "",
     test: gtt,
     stt: c.lastTest || "",
