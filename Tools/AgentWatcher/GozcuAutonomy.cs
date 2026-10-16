@@ -180,9 +180,17 @@ internal sealed class GozcuAutonomy
     {
         lock (sync)
         {
-            if (State.Cycle is not { } cycle || cycle.Id != id) return true;
-            return cycle.Terminal || (!persistenceFault && policy().Enabled && !policy().Paused &&
-                !Running && clock() >= cycle.RetryAfterUtc);
+            // Orphan gozcu-cycle-*.task.json for a previous cycle must not enter the queue
+            // (RunAsync would throw id mismatch and leave .error.json noise).
+            if (id.StartsWith(QueuePrefix, StringComparison.Ordinal))
+            {
+                if (State.Cycle is not { } cycle || cycle.Id != id)
+                    return false;
+                return cycle.Terminal || (!persistenceFault && policy().Enabled && !policy().Paused &&
+                    !Running && clock() >= cycle.RetryAfterUtc);
+            }
+
+            return true;
         }
     }
 

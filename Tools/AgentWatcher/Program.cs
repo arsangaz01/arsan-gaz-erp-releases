@@ -4346,9 +4346,10 @@ internal sealed partial class ControlCenterForm : Form
         }
 
         queueProcessingTask = localWorkGate.RunQueueAsync(ProcessQueueCoreAsync, closing.Token);
-        // Keep heartbeat, session-report/start-notice and outbox ticks alive while any queued task runs
-        // (Copilot tasks have no wait deadline). Shutdown still drains the actual queueProcessingTask.
-        if (!waitForAutonomy && activeTask is not null)
+        // Keep heartbeat / outbox / autonomy ticks alive while a queued task runs (Copilot can take minutes).
+        // activeTask is set inside ProcessQueueCoreAsync, so waiting for "activeTask != null" never fires on first kick.
+        // Shutdown and UI drains still pass waitForAutonomy: true and await the real queueProcessingTask.
+        if (!waitForAutonomy)
         {
             _ = ProcessQueueSafelyAsync(queueProcessingTask);
             return Task.CompletedTask;
@@ -4435,6 +4436,15 @@ internal sealed partial class ControlCenterForm : Form
                     DateTime.UtcNow);
                 if (dispatch is null)
                 {
+                    if (item.Workflow.State is WorkflowState.Failed or WorkflowState.Blocked)
+                    {
+                        string blocker = item.Workflow.Blocker ?? item.Workflow.State.ToString();
+                        MoveActiveTaskToTerminalState(".error.json", item, item.Workflow.State.ToString(), blocker);
+                        Append($"Workflow {item.Id} deneme başlatılamadı ({item.Workflow.State}): {blocker}");
+                        finalStatus = item.Workflow.State.ToString();
+                        return;
+                    }
+
                     item.Status = "İnceleme Bekliyor";
                     await PersistWorkflowReviewAsync(file, item, cancellationToken);
                     finalStatus = item.Workflow.State.ToString();
@@ -4469,6 +4479,14 @@ internal sealed partial class ControlCenterForm : Form
                 await QueueTelegramWorkflowNoticeAsync(item, TelegramWorkflowStage.Review);
                 Append($"Workflow {item.Id} Copilot sonucunu correlated olarak aldı; bağımsız insan incelemesi bekliyor.");
                 finalStatus = item.Status;
+                return;
+            }
+            if (item.Workflow is { State: WorkflowState.Blocked or WorkflowState.Failed })
+            {
+                string blocker = item.Workflow.Blocker ?? item.Workflow.State.ToString();
+                MoveActiveTaskToTerminalState(".error.json", item, item.Workflow.State.ToString(), blocker);
+                Append($"Workflow {item.Id} tamamlanmadı ({item.Workflow.State}): {blocker}");
+                finalStatus = item.Workflow.State.ToString();
                 return;
             }
             item.Status = "Tamamlandı";
@@ -4937,7 +4955,7 @@ internal sealed partial class ControlCenterForm : Form
 
                     if (item.Workflow is not null)
                     {
-                        WorkflowOrchestrator.RecordBridgeCompletion(
+                        bool accepted = WorkflowOrchestrator.RecordBridgeCompletion(
                             item.Workflow,
                             new WorkflowBridgeCompletion(
                                 completion.Id,
@@ -4945,6 +4963,12 @@ internal sealed partial class ControlCenterForm : Form
                                 completion.Status,
                                 completion.Report),
                             DateTime.UtcNow);
+                        if (!accepted || item.Workflow.State is not WorkflowState.AwaitingReview)
+                        {
+                            string blocker = item.Workflow.Blocker
+                                ?? $"Workflow completion kabul edilmedi (state={item.Workflow.State}).";
+                            throw new InvalidDataException(blocker);
+                        }
                     }
 
                     return completion.Report;

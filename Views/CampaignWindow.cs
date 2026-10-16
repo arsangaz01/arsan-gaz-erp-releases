@@ -18,6 +18,7 @@ public sealed partial class CampaignWindow : Window
     private ApprovalPreview? approval;
     private WhatsAppTemplateApproval? verifiedTemplate;
     private readonly List<Guid> attachmentIds = [];
+    private int[] editorContactIds = [];
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap };
     private readonly TextBox name = new() { Text = "Tanıtım kampanyası" };
     private readonly ComboBox channel = new() { ItemsSource = Enum.GetValues<CampaignChannel>(), SelectedIndex = 0 };
@@ -139,7 +140,25 @@ public sealed partial class CampaignWindow : Window
     private CampaignChannel Channel => (CampaignChannel)(channel.SelectedItem ?? throw new InvalidOperationException("Kanal seçin."));
     private CampaignPopulation Population => (CampaignPopulation)(population.SelectedItem ?? throw new InvalidOperationException("Alıcı kaynağı seçin."));
     private CampaignSnapshot Current => current ?? throw new InvalidOperationException("Önce taslağı kaydedin veya kampanya seçin.");
-    private AudienceSelection Selection => new(Population, contacts.SelectedItems.Cast<CampaignContactOption>().Select(c => c.ContactId).ToArray(), all.IsChecked == true);
+    private AudienceSelection Selection
+    {
+        get
+        {
+            // Prefer the IDs loaded with the campaign so a filtered contact list cannot drop recipients on save.
+            int[] fromList = contacts.SelectedItems.Cast<CampaignContactOption>().Select(c => c.ContactId).ToArray();
+            int[] ids = editorContactIds.Length > 0
+                ? editorContactIds.Union(fromList).Distinct().ToArray()
+                : fromList;
+            if (editorContactIds.Length > 0 && all.IsChecked != true)
+            {
+                int[] listed = contacts.Items.Cast<CampaignContactOption>().Select(c => c.ContactId).ToArray();
+                int[] deselected = listed.Except(fromList).ToArray();
+                if (deselected.Length > 0)
+                    ids = ids.Except(deselected).ToArray();
+            }
+            return new(Population, ids, all.IsChecked == true);
+        }
+    }
     private static void UseTurkishLabels(params ComboBox[] boxes)
     {
         var text = new FrameworkElementFactory(typeof(TextBlock));
@@ -221,7 +240,19 @@ public sealed partial class CampaignWindow : Window
         if (selected.Length == 0 || string.IsNullOrWhiteSpace(evidence.Text)) throw new InvalidOperationException("Müşteri seçin ve izin/ret kanıtını girin. İzin varsayılmaz.");
         if (!Confirm($"{selected.Length} seçili kayıt için {Channel} {(granted ? "izin" : "ret")} kaydı yazılacak. Gerçek kanıtı kontrol ettiniz mi?")) return;
         foreach (var contact in selected)
-            await Service.RecordConsentAsync(contact.Population, contact.ContactId, Channel, Channel == CampaignChannel.Email ? contact.Email : contact.Phone, granted, evidence.Text, closing.Token);
+        {
+            string endpoint = Channel == CampaignChannel.Email ? contact.Email : contact.Phone;
+            try
+            {
+                await Service.RecordConsentAsync(contact.Population, contact.ContactId, Channel, endpoint, granted, evidence.Text, closing.Token);
+            }
+            catch (CrmOptOutException) when (granted && Channel == CampaignChannel.WhatsApp)
+            {
+                if (!Confirm($"{contact.DisplayName}: CRM kartında WhatsApp pazarlama ret'i var. Bu kayıt ret'i kaldırır (KVKK). Yine de yazılsın mı?"))
+                    throw;
+                await Service.RecordConsentAsync(contact.Population, contact.ContactId, Channel, endpoint, granted, evidence.Text, closing.Token, overrideCrmOptOut: true);
+            }
+        }
         await ShowConsentsAsync();
     }
     private async Task ShowConsentsAsync()
@@ -278,6 +309,7 @@ public sealed partial class CampaignWindow : Window
             decimal.Parse(cost.Text, CultureInfo.InvariantCulture), costAcknowledged.IsChecked == true);
         var saved = await Service.SaveDraftAsync(current?.Id, input, current?.Revision ?? 0, closing.Token);
         current = await Service.GetAsync(saved.Id, closing.Token) ?? throw new InvalidOperationException("Kaydedilen kampanya okunamadı.");
+        editorContactIds = current.Input.Audience.ContactIds.ToArray();
         approval = null;
         Show(current);
     }
@@ -292,8 +324,18 @@ public sealed partial class CampaignWindow : Window
         };
         if (picker.ShowDialog(this) != true) return;
         var attached = await Service.StageAttachmentAsync(campaign.Id, picker.FileName, closing.Token);
-        attachmentIds.Clear();
-        attachmentIds.Add(attached.Id);
+        if (Channel == CampaignChannel.WhatsApp)
+        {
+            attachmentIds.Clear();
+            attachmentIds.Add(attached.Id);
+        }
+        else
+        {
+            if (!attachmentIds.Contains(attached.Id))
+                attachmentIds.Add(attached.Id);
+            if (attachmentIds.Count > CampaignStore.MaximumEmailAttachmentCount)
+                throw new InvalidOperationException($"E-postaya en fazla {CampaignStore.MaximumEmailAttachmentCount} dosya eklenebilir.");
+        }
         await SaveAsync();
         Show(attached);
     }
@@ -344,10 +386,12 @@ public sealed partial class CampaignWindow : Window
         channel.SelectedItem = input.Channel;
         population.SelectedItem = input.Audience.Population;
         all.IsChecked = input.Audience.SelectAllEligible;
+        editorContactIds = input.Audience.ContactIds.ToArray();
+        search.Text = "";
         await LoadContactsAsync();
         contacts.SelectedItems.Clear();
         foreach (CampaignContactOption contact in contacts.Items)
-            if (input.Audience.ContactIds.Contains(contact.ContactId)) contacts.SelectedItems.Add(contact);
+            if (editorContactIds.Contains(contact.ContactId)) contacts.SelectedItems.Add(contact);
         await LoadSendersAsync();
         sender.SelectedItem = sender.Items.Cast<CampaignSenderOption>().FirstOrDefault(item => item.Identity == input.SenderIdentity);
         subject.Text = input.Subject;
@@ -375,6 +419,7 @@ public sealed partial class CampaignWindow : Window
         current = null;
         approval = null;
         attachmentIds.Clear();
+        editorContactIds = [];
         costAcknowledged.IsChecked = false;
         detail.Text = "Yeni taslak. İzin, onay ve etkinleştirme ayrı adımlardır.";
         return Task.CompletedTask;

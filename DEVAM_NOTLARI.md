@@ -220,13 +220,12 @@ Planlı aşamalar (henüz kodlanmadı; onay bekleniyor):
 - Yerel ajan: `Tools/ArsanTupTakip/tools/TsplPrintAgent.ps1` (127.0.0.1:39201).
 - Kullanıcı notu: yazıcıyı takınca denenecek; takılınca port kontrolü + TSPL test etiketi yapılacak.
 
-## ArsanTüpTakip — müşteri malı etiket üst yazısı = sahip adı (BEKLEMEDE, 16 Ekim 2026)
-Kullanıcı: "Müşteri tüpleri koyuncu güneş gibi" → sonra "Bu işlemi beklemeye al sonra yapılacaklar listesine ekle".
-- Amaç: Müşteri malı tüp etiketinde üst marka satırı **sahip adı** olsun (ör. GÜNEŞ GAZ / KOYUNCU); firma malında **ARSAN GAZ** kalsın. Örnek saha etiketi gibi.
-- Durum: Yerelde kod taslağı var, **commit edilmedi, yayınlanmadı** (beklemeye alındı).
-  - `Tools/ArsanTupTakip/src/ArsanTupTakip.Api/WebPanel/panel.js` — `labelHtml` + TSPL `buildTsplDocument`: `brand = item.owner || s.title`; sahip marka olunca alt satırda tekrar etme
-  - `panel.html` — üst yazı alanına ipucu
-- Sonra yapılacak: kodu gözden geçir → test (önizleme + TSPL) → onayla → API/panel deploy → Ctrl+F5.
+## ArsanTüpTakip — müşteri malı etiket üst yazısı = sahip adı (HAZIR, yayın bekliyor, 16 Ekim 2026)
+Kullanıcı: "Evet ve devam et" — bekleyen iş uygulandı.
+- Amaç: Müşteri malı tüp etiketinde üst marka satırı **sahip adı**; firma malında Üst yazı (ARSAN GAZ).
+- Kod: `panel.js` `labelHtml` + `buildTsplDocument` → `brand = item.owner || s.title`; sahip markadayken alt satırda tekrar yok.
+- `panel.html` üst yazı ipucu; API sürüm **1.6.21**.
+- Durum: **yerelde hazır**, commit/deploy henüz yok (yayın onayı bekleniyor).
 - Not: `%LOCALAPPDATA%\ArsanGazERP\AgentWatcherData\Notes\tuptakip-etiket-sahip-ust-yazi.md`
 
 ## Birinci uygulamaya (ERP + MobileApi + MobileApp) TupTakip özellik aktarımı (16 Ekim 2026)
@@ -235,7 +234,7 @@ Kullanıcı: "Müşteri tüpleri koyuncu güneş gibi" → sonra "Bu işlemi bek
   site paneli `/ozet` sahiplik bölümü + `/tupler` sahip filtresi, `/api/tup/bilgi` Owner, mobil "Tamamlanmış Seferler" ekranı,
   Tüp Bilgisi'nde sahip satırı, sefer ekranında "Son okutmayı geri al". El terminali (handheld) aktarılmadı.
 - Sürümler: MobileApi csproj 1.4.1, `MobileReleaseInfo.ApiVersion` 1.14.0.
-- Etiket marka (sahip adı üst yazısı) HÂLÂ BEKLEMEDE; ilk uygulamaya da aktarılmadı.
+- Etiket marka (sahip adı üst yazısı): TupTakip panelde hazır (1.6.21, yayın bekliyor); ilk uygulamaya (ERP) henüz aktarılmadı.
 
 
 ## Kampanya

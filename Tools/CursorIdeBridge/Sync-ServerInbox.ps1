@@ -167,15 +167,31 @@ function Confirm-AgentWatcher {
 }
 
 # A request the server took back (server Cursor agent) must not also run on the PC later.
+# Require several consecutive misses so a transient empty/partial poll cannot wipe local requests.
 function Remove-ServerTakenCopies([string[]]$Listed) {
-    foreach ($id in $script:OpenIds) {
+    if ($null -eq $script:MissingCounts) { $script:MissingCounts = @{} }
+    if ($Listed.Count -eq 0 -and @($script:OpenIds).Count -gt 0) {
+        Write-Log 'Poll listed zero open requests while local open ids exist; skip purge this pass.'
+        return
+    }
+    $keepMissing = @{}
+    foreach ($id in @($script:OpenIds)) {
         if ($Listed -contains $id) { continue }
         if (Test-Path -LiteralPath (Join-Path $Inbox "$id.completion.json")) { continue }
         if ((Test-Path -LiteralPath (Join-Path $Inbox "$id.progress.json")) -or (Test-Path -LiteralPath (Join-Path $Inbox "$id.ide-started.json"))) { continue }
+        $n = 1
+        if ($script:MissingCounts.ContainsKey($id)) { $n = [int]$script:MissingCounts[$id] + 1 }
+        $keepMissing[$id] = $n
+        if ($n -lt 3) {
+            Write-Log "Request missing from server list ($n/3); local copy kept: $id"
+            continue
+        }
         Remove-Item -LiteralPath (Join-Path $Inbox "$id.request.json"), (Join-Path $Inbox "$id.ide-claim.json") -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath (Join-Path $StateDir "$id.owner"), (Join-Path $StateDir "$id.hashes") -ErrorAction SilentlyContinue
         Write-Log "Request is no longer open on the server (taken by the server Cursor agent); local copy removed: $id"
+        $keepMissing.Remove($id)
     }
+    $script:MissingCounts = $keepMissing
 }
 
 function Send-File([string]$Id, [string]$Kind, [string]$Path) {

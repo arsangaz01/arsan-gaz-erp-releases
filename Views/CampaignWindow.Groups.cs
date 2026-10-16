@@ -328,8 +328,11 @@ public sealed partial class CampaignWindow
     {
         if (!DateTime.TryParseExact(text.Trim(), "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime local))
             throw new InvalidOperationException($"Tarih '{text}' anlaşılamadı; yyyy-MM-dd HH:mm biçiminde yazın (ör. 2026-10-12 09:30).");
+        var value = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
         TimeZoneInfo zoneInfo = TimeZoneInfo.Local;
-        return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), zoneInfo), TimeSpan.Zero);
+        if (zoneInfo.IsInvalidTime(value) || zoneInfo.IsAmbiguousTime(value))
+            throw new InvalidOperationException("Seçili saat yaz/kış saati geçişinde geçersiz veya belirsiz. Başka bir saat seçin.");
+        return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(value, zoneInfo), TimeSpan.Zero);
     }
 
     private async Task SendToGroupAsync()
@@ -392,8 +395,8 @@ public sealed partial class CampaignWindow
             $"Ekler: {(summary.AttachmentNames.Count == 0 ? "yok" : string.Join(", ", summary.AttachmentNames))}\n" +
             $"Başlangıç: {TimeZoneInfo.ConvertTime(startUtc, TimeZoneInfo.Local):dd.MM.yyyy HH:mm}, saat {quickWindows.Text.Trim()} arası, müşteri başına {spacingSeconds} sn (yaklaşık {minutes} dk)\n" +
             $"Tekrar: {repeatText}\n\n" +
-            "Bu işlem GERÇEK müşterilere mesaj gönderir; genel gönderim izni kapalıysa açılır. Bilgisayar ve Agent Control Center açık olmalı.\n\n" +
-            "Gönderim başlatılsın mı?";
+            "Bu işlem GERÇEK müşterilere mesaj gönderir. Genel gönderim izni kapalıysa Gelişmiş sekmesinden ayrıca açılmalıdır. Bilgisayar ve Agent Control Center açık olmalı.\n\n" +
+            "Gönderim başlatılsın mı? (Bu onay sağlayıcı ücret/kota koşullarını da kabul sayılır.)";
         if (!Confirm(message))
         {
             quickResult.Text = "Gönderim başlatılmadı. Hazırlanan kampanya 'Gelişmiş kampanya' listesinde taslak olarak duruyor.";

@@ -173,7 +173,7 @@ public sealed class CampaignService
             request.MinimumSpacing,
             Math.Clamp(group.ContactIds.Count, 1, CampaignStore.MaximumAudienceSize),
             0m,
-            true,
+            false, // cost acknowledged only after the group-send Confirm dialog → Launch Approve ConfirmCost
             request.RepeatEveryDays);
         CampaignDraft draft = await SaveDraftAsync(null, input, 0, cancellationToken);
         if (request.AttachmentPaths.Count > 0)
@@ -206,10 +206,12 @@ public sealed class CampaignService
         string approvalManifestHash,
         CancellationToken cancellationToken = default)
     {
+        // Gate before Approve so a failed launch leaves the draft editable.
+        if (!await RefreshExecutionStateAsync(cancellationToken))
+            throw new InvalidOperationException(
+                "Gerçek müşteri gönderimi kapalı. Kampanya penceresinde Gelişmiş sekmesinden «Genel gönderim iznini aç» onayını verin, sonra tekrar deneyin.");
         CampaignSnapshot approved = await ApproveAsync(campaignId, expectedRevision, approvalManifestHash,
             new ApprovalAcknowledgement(true, true, true), cancellationToken);
-        if (!await RefreshExecutionStateAsync(cancellationToken))
-            await EnableExecutionAsync(new ExecutionEnablementAcknowledgement(true, true, true), cancellationToken);
         return await ActivateAsync(campaignId, approved.Revision, new ActivationAcknowledgement(true, true, true), cancellationToken);
     }
 
@@ -279,8 +281,7 @@ public sealed class CampaignService
             throw new InvalidOperationException("Approval requires explicit confirmation of the exact audience, sender and campaign cost.");
         CampaignDraft draft = await store.GetDraftAsync(campaignId, cancellationToken);
         await ValidateDraftAsync(draft.Input, cancellationToken);
-        if (!draft.Input.CostAcknowledged)
-            throw new InvalidOperationException("The estimated campaign cost must be acknowledged in the saved draft.");
+        // Cost gate is acknowledgement.ConfirmCost (required above). Draft CostAcknowledged is UI hint only.
         CampaignApprovalManifest manifest = await store.PrepareApprovalAsync(campaignId, expectedRevision, cancellationToken);
         if (!string.Equals(manifest.Hash, approvalManifestHash, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Approval preview changed. Review the current audience and prepare approval again.");
@@ -302,8 +303,7 @@ public sealed class CampaignService
         ValidateDraft(campaign.Input);
         if (!ExecutionEnabled)
             throw new InvalidOperationException("Campaign execution is disabled by default. An explicit runtime enablement acknowledgement is required first.");
-        if (!campaign.Input.CostAcknowledged)
-            throw new InvalidOperationException("Campaign cost acknowledgement is missing.");
+        // Cost was already confirmed at Approve (ConfirmCost). Draft CostAcknowledged is optional UI state.
         ProviderReadiness readiness = await transport.CheckReadinessAsync(
             campaign.Input.Channel, campaign.Input.SenderIdentity, cancellationToken);
         if (!readiness.Ready)
@@ -359,8 +359,11 @@ public sealed class CampaignService
         string endpoint,
         bool granted,
         string evidence,
-        CancellationToken cancellationToken = default) =>
-        store.SetConsentAsync(population, contactId, channel, endpoint, granted, evidence, cancellationToken, overrideCrmOptOut: true);
+        CancellationToken cancellationToken = default,
+        bool overrideCrmOptOut = false) =>
+        // Default false: a normal consent click must not clear CRM WhatsApp opt-out (KVKK).
+        // Pass overrideCrmOptOut:true only after an explicit heavier confirmation in the UI/tests.
+        store.SetConsentAsync(population, contactId, channel, endpoint, granted, evidence, cancellationToken, overrideCrmOptOut);
 
     public Task<IReadOnlyList<CampaignConsent>> GetConsentLedgerAsync(
         CampaignPopulation? population = null,

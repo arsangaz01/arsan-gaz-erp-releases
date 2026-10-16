@@ -35,6 +35,7 @@ public sealed class MailAssistantWindow : Window
     private MailSummary? _selected;
     private string _selectedBody = string.Empty;
     private bool _busy;
+    private int _mailLoadSeq;
 
     public MailAssistantWindow(GraphService graph)
     {
@@ -176,18 +177,36 @@ public sealed class MailAssistantWindow : Window
 
     private async Task LoadSelectedAsync()
     {
-        if (_inbox.SelectedItem is not ListBoxItem { Tag: MailSummary mail } || _busy) return;
+        if (_inbox.SelectedItem is not ListBoxItem { Tag: MailSummary mail }) return;
+        // Do not gate on _busy: a fast click-through must supersede the previous body load.
+        int seq = ++_mailLoadSeq;
         _selected = mail;
+        _selectedBody = string.Empty;
         _summary.Clear();
         _reply.Clear();
         _translation.Clear();
         _replyLanguage.Text = "Yanıt taslağı (düzenleyebilirsiniz)";
-        await RunBusyAsync("E-posta açılıyor…", async () =>
+        _status.Text = "E-posta açılıyor…";
+        UpdateButtons();
+        try
         {
-            _selectedBody = await _graph.GetMailBodyTextAsync(mail.Id);
+            string body = await _graph.GetMailBodyTextAsync(mail.Id);
+            if (seq != _mailLoadSeq) return;
+            if (_inbox.SelectedItem is not ListBoxItem { Tag: MailSummary still } || still.Id != mail.Id) return;
+            _selectedBody = body;
             _original.Text = $"Gönderen: {SenderLabel(mail)} <{mail.FromAddress}>\nKonu: {mail.Subject}\nTarih: {mail.Received:dd.MM.yyyy HH:mm}\n\n{_selectedBody.Trim()}";
-            return "E-posta hazır. Özetleyebilir veya yanıt taslağı isteyebilirsiniz.";
-        }, "E-posta okunamadı: ");
+            _status.Text = "E-posta hazır. Özetleyebilir veya yanıt taslağı isteyebilirsiniz.";
+        }
+        catch (Exception exception)
+        {
+            if (seq != _mailLoadSeq) return;
+            _status.Text = "E-posta okunamadı: " + exception.GetBaseException().Message;
+        }
+        finally
+        {
+            if (seq == _mailLoadSeq)
+                UpdateButtons();
+        }
     }
 
     private async Task SummarizeAsync()

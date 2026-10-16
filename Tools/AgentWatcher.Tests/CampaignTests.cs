@@ -109,8 +109,13 @@ internal static class CampaignTests
         GroupCampaignPreparation prepared = await service.PrepareGroupCampaignAsync(GroupRequest(fixture, group.Id, [pdf, png, csv]));
         Check(prepared.Summary.EligibleCount == 3 && prepared.Summary.AttachmentNames.Count == 3 && transport.SendCount == 0,
             "Preparation freezes the group audience and all attachments without sending.");
+        Check(!prepared.Draft.Input.CostAcknowledged, "Group prepare must not silently mark cost as acknowledged.");
+        await ThrowsAsync<InvalidOperationException>(
+            () => service.LaunchGroupCampaignAsync(prepared.Draft.Id, prepared.Draft.Revision, prepared.Summary.ApprovalManifestHash),
+            "Group launch must not silently enable global campaign execution.");
+        await service.EnableExecutionAsync(new ExecutionEnablementAcknowledgement(true, true, true));
         CampaignSnapshot launched = await service.LaunchGroupCampaignAsync(prepared.Draft.Id, prepared.Draft.Revision, prepared.Summary.ApprovalManifestHash);
-        Check(launched.State == CampaignState.Active && service.ExecutionEnabled, "One confirmation approves and activates the group campaign.");
+        Check(launched.State == CampaignState.Active && service.ExecutionEnabled, "After explicit enablement, group launch approves and activates.");
         for (int i = 0; i < 3; i++)
         {
             Check(await service.DispatchOneAsync(default), "Each group member must receive a dispatch.");
@@ -153,11 +158,14 @@ internal static class CampaignTests
             new AudienceSelection(CampaignPopulation.CrmCompanies, [33, 34], false), CampaignChannel.WhatsApp);
         Check(cardPreview.Recipients.Select(item => item.ContactId).SequenceEqual([34]),
             "A CRM card opt-out must survive a group consent and keep the firm out of the audience.");
-        await service.RecordConsentAsync(CampaignPopulation.CrmCompanies, 33, CampaignChannel.WhatsApp, "0532 333 44 55", true, "Synthetic explicit re-consent");
+        await ThrowsAsync<CrmOptOutException>(
+            () => service.RecordConsentAsync(CampaignPopulation.CrmCompanies, 33, CampaignChannel.WhatsApp, "0532 333 44 55", true, "Synthetic explicit re-consent"),
+            "Default single-firm consent must not clear a CRM WhatsApp opt-out.");
+        await service.RecordConsentAsync(CampaignPopulation.CrmCompanies, 33, CampaignChannel.WhatsApp, "0532 333 44 55", true, "Synthetic explicit re-consent", overrideCrmOptOut: true);
         AudiencePreview reconsented = await service.PreviewAudienceAsync(
             new AudienceSelection(CampaignPopulation.CrmCompanies, [33, 34], false), CampaignChannel.WhatsApp);
         Check(reconsented.Recipients.Select(item => item.ContactId).OrderBy(id => id).SequenceEqual([33, 34]),
-            "An explicit single-firm consent may still clear an earlier CRM card opt-out.");
+            "Only an explicit override may clear an earlier CRM card opt-out.");
     }
 
     private static async Task GmailSenderSettingsAndReadinessAsync()
@@ -211,6 +219,7 @@ internal static class CampaignTests
             Channel = CampaignChannel.WhatsApp, SenderIdentity = "test-whatsapp-sender", WhatsAppTemplate = template
         };
         GroupCampaignPreparation prepared = await service.PrepareGroupCampaignAsync(request);
+        await service.EnableExecutionAsync(new ExecutionEnablementAcknowledgement(true, true, true));
         await service.LaunchGroupCampaignAsync(prepared.Draft.Id, prepared.Draft.Revision, prepared.Summary.ApprovalManifestHash);
         Check(await service.DispatchOneAsync(default) && transport.Requests.Single().Recipient == "+905321112233",
             "WhatsApp dispatch uses the normalized international number.");

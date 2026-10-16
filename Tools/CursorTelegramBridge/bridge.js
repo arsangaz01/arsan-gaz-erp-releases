@@ -271,6 +271,25 @@ async function recoverInterruptedRequest(request) {
   return true;
 }
 
+/** When processRequest deletes request.json before crash, recover from orphan submitted ack. */
+async function recoverOrphanSubmittedAcks(names) {
+  for (const name of names) {
+    const match = /^([A-Za-z0-9_-]{1,80})\.ack\.json$/.exec(name);
+    if (!match) continue;
+    const id = match[1];
+    if (names.includes(`${id}.request.json`) || names.includes(`${id}.completion.json`)) continue;
+    const ack = await readJson(path.join(inboxDirectory, `${id}.ack.json`));
+    if (!ack || ack.status !== "submitted") continue;
+    await writeAcknowledgement(
+      id,
+      "failed",
+      "Cursor köprüsü submitted aşamasında kapandı; istek dosyası yoktu, otomatik tekrar yok. "
+        + "Gerekirse emri Telegram'dan yeniden gönderin.",
+    );
+    log(`Yetim submitted ack kapatıldı: ${id}`);
+  }
+}
+
 function validateRequest(id, request) {
   const requestId = pick(request, "id");
   const taskId = pick(request, "taskId") ?? id;
@@ -552,6 +571,8 @@ async function pollInbox() {
   if (stopping) process.exit(0);
   processing = true;
   try {
+    const names = await fs.readdir(inboxDirectory).catch(() => []);
+    await recoverOrphanSubmittedAcks(names);
     for (const entry of await listPendingRequests()) {
       if (stopping) break;
       if (entry.names.includes(`${entry.id}.ack.json`)) {
