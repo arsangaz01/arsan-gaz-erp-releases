@@ -24,9 +24,11 @@ internal static class AgentWatcherStartupScriptTests
         if (!withErp.Contains($"set \"WATCHER_EXE={Path.GetFullPath(watcherExecutable)}\"", StringComparison.Ordinal) ||
             !withErp.Contains("\"%WATCHER_EXE%\" --background", StringComparison.Ordinal) ||
             !withErp.Contains($"set \"ERP_EXE={Path.GetFullPath(erpExecutable)}\"", StringComparison.Ordinal) ||
-            !withErp.Contains("start /min \"\" /D \"%ERP_DIR%\" \"%ERP_EXE%\"", StringComparison.Ordinal))
+            !withErp.Contains("start \"\" /MIN /D \"%ERP_DIR%\" \"%ERP_EXE%\"", StringComparison.Ordinal) ||
+            !withErp.Contains("if \"%WATCHER_DIR:~-1%\"==\"\\\" set \"WATCHER_DIR=%WATCHER_DIR:~0,-1%\"", StringComparison.Ordinal) ||
+            !withErp.Contains("if \"%ERP_DIR:~-1%\"==\"\\\" set \"ERP_DIR=%ERP_DIR:~0,-1%\"", StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Windows startup must launch the background Watcher and optionally start ERP minimized.");
+            throw new InvalidOperationException("Windows startup must launch the background Watcher and optionally start ERP minimized without trailing-backslash /D quoting bugs.");
         }
 
         string watcherOnly = AgentWatcherStartupScript.Build(
