@@ -2501,13 +2501,19 @@ $("delete-form").addEventListener("submit", async (event) => {
   }
 });
 
-// ---- Karekod Yazdır: QR labels (left QR + right text, like field cylinder stickers) for TSC TA310.
+// ---- Karekod Yazdır: field-style stickers for TSC TA310.
+// Preview uses SVG in the browser; real print sends TSPL2 so the printer builds QRCODE itself (300 dpi).
 const LABEL_DOT_MM = 25.4 / 300;
+const LABEL_DPI = 300;
+const LABEL_DOTS_PER_MM = LABEL_DPI / 25.4;
 const LABEL_SETTINGS_KEY = "arsan-etiket-ayar";
+const LABEL_PRINTER_KEY = "arsan-etiket-yazici";
+const TSPL_AGENT = "http://127.0.0.1:39201";
 let labelList = [];
 let labelResults = [];
 let labelCatalog = null; // full active cylinder snapshot for category chips
 let labelActiveCat = "";
+let labelAgentOk = false;
 
 const xmlEsc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -2530,6 +2536,181 @@ function loadLabelSettings() {
   if (!s) return;
   $("lb-w").value = s.w; $("lb-h").value = s.h; $("lb-copies").value = s.copies; $("lb-title").value = s.title ?? "";
   $("lb-f-gas").checked = !!s.gas; $("lb-f-serial").checked = !!s.serial; $("lb-f-test").checked = !!s.test; $("lb-f-text").checked = !!s.text;
+  try {
+    const printer = localStorage.getItem(LABEL_PRINTER_KEY);
+    if (printer && $("lb-printer")) $("lb-printer").value = printer;
+  } catch { /* private mode */ }
+}
+
+function saveLabelPrinter() {
+  try { localStorage.setItem(LABEL_PRINTER_KEY, ($("lb-printer").value || "TSC TA310").trim()); } catch { /* private mode */ }
+}
+
+function tsplEsc(s) {
+  return String(s ?? "").replace(/"/g, '\\["]');
+}
+
+function tsplMm(mm) { return Math.max(0, Math.round(mm * LABEL_DOTS_PER_MM)); }
+function tsplPtDots(pt) { return Math.max(1, Math.round(pt * LABEL_DPI / 72)); }
+function tsplTextWidth(text, pt) { return Math.ceil(String(text).length * tsplPtDots(pt) * 0.55); }
+
+function tsplEstimateModules(code) {
+  // UTF-8 byte length → rough QR version (ECC M) → module count. Printer encodes the real matrix.
+  const n = new TextEncoder().encode(String(code || "")).length;
+  const version = n <= 14 ? 1 : n <= 26 ? 2 : n <= 42 ? 3 : n <= 62 ? 4 : n <= 84 ? 5 : n <= 106 ? 6
+    : n <= 122 ? 7 : n <= 152 ? 8 : n <= 180 ? 9 : n <= 213 ? 10 : n <= 251 ? 11 : n <= 287 ? 12 : 16;
+  return 21 + (version - 1) * 4;
+}
+
+function tsplFitPt(text, widthDots, prefer, min) {
+  const t = String(text || "").trim();
+  if (!t) return prefer;
+  let pt = prefer;
+  while (pt > min && tsplTextWidth(t, pt) > widthDots) pt--;
+  return pt;
+}
+
+function tsplWrap(text, widthDots, pt, maxLines) {
+  const t = String(text || "").trim();
+  if (!t) return [];
+  const chars = Math.max(4, Math.floor(widthDots / (tsplPtDots(pt) * 0.55)));
+  if (t.length <= chars || maxLines <= 1) return [t.length <= chars + 2 ? t : t.slice(0, chars)];
+  const parts = t.split(/(\s+|·|-)/).filter((p) => p.length);
+  const lines = [];
+  let cur = "";
+  for (const p of parts) {
+    if ((cur + p).length <= chars || !cur) cur += p;
+    else { lines.push(cur.trim()); cur = p.trimStart(); if (lines.length >= maxLines - 1) break; }
+  }
+  if (cur && lines.length < maxLines) lines.push(cur.trim());
+  return lines.flatMap((line) => {
+    if (line.length <= chars + 2) return [line];
+    const out = [];
+    for (let i = 0; i < line.length && out.length < maxLines; i += chars) out.push(line.slice(i, i + chars));
+    return out;
+  }).slice(0, maxLines);
+}
+
+function tsplTextCmd(x, y, pt, text) {
+  return `TEXT ${x},${y},"0",0,${pt},${pt},"${tsplEsc(text)}"\r\n`;
+}
+
+function tsplWriteBlock(lines, x, y, widthDots, prefer, text, maxLines) {
+  const pt = tsplFitPt(text, widthDots, prefer, 5);
+  for (const line of tsplWrap(text, widthDots, pt, maxLines)) {
+    lines.push(tsplTextCmd(x, y, pt, line));
+    y += tsplPtDots(pt) + 3;
+  }
+  return y + 2;
+}
+
+// TSPL2 job: SIZE/GAP once, then CLS + QRCODE + TEXT + PRINT per label. TA310 draws the QR itself.
+function buildTsplDocument(items, s) {
+  const gapMm = 2;
+  const lines = [
+    `SIZE ${s.w} mm,${s.h} mm\r\n`,
+    `GAP ${gapMm} mm,0\r\n`,
+    `SPEED 4\r\n`,
+    `DENSITY 8\r\n`,
+    `DIRECTION 0\r\n`,
+    `CODEPAGE UTF-8\r\n`
+  ];
+  for (const item of items) {
+    const code = String(item.code || "").trim();
+    if (!code) continue;
+    const w = tsplMm(s.w), h = tsplMm(s.h);
+    const pad = tsplMm(1.5), gap = tsplMm(2);
+    const codeBand = s.text ? Math.max(tsplMm(2.8), Math.min(tsplMm(5.5), tsplMm(s.h * 0.16))) : 0;
+    const qrSide = Math.max(tsplMm(8), Math.min(h - 2 * pad - codeBand, Math.floor(w * 0.42)));
+    const modules = tsplEstimateModules(code) + 4;
+    const cell = Math.max(1, Math.min(10, Math.floor(qrSide / modules)));
+    const qrDots = (tsplEstimateModules(code) + 4) * cell;
+    const qrX = pad;
+    const qrY = pad + Math.max(0, Math.floor((h - 2 * pad - codeBand - qrDots) / 2));
+    lines.push("CLS\r\n");
+    lines.push(`QRCODE ${qrX},${qrY},M,${cell},A,0,M2,S7,"${tsplEsc(code)}"\r\n`);
+    if (s.text) {
+      let codeY = qrY + qrDots + tsplMm(0.4);
+      const pt = tsplFitPt(code, qrDots, 7, 5);
+      for (const line of tsplWrap(code, qrDots, pt, 2)) {
+        const tw = tsplTextWidth(line, pt);
+        const tx = qrX + Math.max(0, Math.floor((qrDots - tw) / 2));
+        lines.push(tsplTextCmd(tx, codeY, pt, line));
+        codeY += tsplPtDots(pt) + 2;
+      }
+    }
+    const infoX = pad + qrDots + gap;
+    const infoW = Math.max(tsplMm(12), w - pad - infoX);
+    let y = pad + tsplMm(0.5);
+    if (s.title) y = tsplWriteBlock(lines, infoX, y, infoW, 11, s.title, 1);
+    if (s.gas && item.gas) y = tsplWriteBlock(lines, infoX, y, infoW, 9, String(item.gas), 2);
+    if (s.serial && item.serial && item.serial !== item.code) y = tsplWriteBlock(lines, infoX, y, infoW, 7, String(item.serial), 1);
+    if (s.test && item.stt) y = tsplWriteBlock(lines, infoX, y, infoW, 7, "STT: " + item.stt, 1);
+    if (s.test && (item.gtt || item.test)) y = tsplWriteBlock(lines, infoX, y, infoW, 7, "GTT: " + (item.gtt || item.test), 1);
+    if (item.extra) y = tsplWriteBlock(lines, infoX, y, infoW, 7, String(item.extra), 1);
+    if (item.owner) tsplWriteBlock(lines, infoX, y, infoW, 7, String(item.owner), 2);
+    lines.push(`PRINT 1,${s.copies}\r\n`);
+  }
+  return lines.join("");
+}
+
+function labelTsplPayload(s) {
+  return {
+    items: labelList.map((i) => ({
+      code: i.code, serial: i.serial || "", gas: i.gas || "", stt: i.stt || "",
+      gtt: i.gtt || i.test || "", owner: i.owner || "", extra: i.extra || ""
+    })),
+    widthMm: s.w, heightMm: s.h, copies: s.copies, title: s.title,
+    showGas: s.gas, showSerial: s.serial, showTest: s.test, showCodeText: s.text, gapMm: 2
+  };
+}
+
+function downloadTsplFile(tspl) {
+  const blob = new Blob([tspl], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `arsan-etiket-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.tspl`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function refreshLabelAgentStatus() {
+  const el = $("lb-agent-status");
+  if (!el) return;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 800);
+    const res = await fetch(TSPL_AGENT + "/health", { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error("ajan yanıt vermedi");
+    const data = await res.json();
+    labelAgentOk = true;
+    el.textContent = `Yerel ajan hazır · ${(data.printer || "TSC TA310")}`;
+    el.style.color = "var(--ok, #0a7a3e)";
+    if (Array.isArray(data.printers) && data.printers.length && $("lb-printer")) {
+      const cur = ($("lb-printer").value || "").trim();
+      if (!cur || !data.printers.includes(cur)) {
+        const prefer = data.printers.find((p) => /TA310|TSC/i.test(p)) || data.printers[0];
+        if (prefer) $("lb-printer").value = prefer;
+      }
+    }
+  } catch {
+    labelAgentOk = false;
+    el.textContent = "Yerel ajan yok — TsplPrintAgent.ps1 çalıştırın veya TSPL indirin";
+    el.style.color = "var(--muted)";
+  }
+}
+
+async function printViaTsplAgent(tspl, printer) {
+  const res = await fetch(TSPL_AGENT + "/print", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ printer, tspl })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(data.error || "Yerel ajan yazdıramadı");
+  return data;
 }
 
 // Builds a QR matrix for the cylinder code (UTF-8 byte mode). Error M keeps modules larger on small labels.
@@ -3135,17 +3316,73 @@ function initLabels() {
     } catch (error) { show($("lb-msg"), error.message); }
   });
   $("lb-clear").addEventListener("click", () => { labelList = []; renderLabelList(); });
-  $("lb-print").addEventListener("click", async () => {
+  if ($("lb-printer")) {
+    $("lb-printer").addEventListener("change", saveLabelPrinter);
+    $("lb-printer").addEventListener("blur", saveLabelPrinter);
+  }
+  const ensurePrintable = () => {
     const s = labelSettings();
-    if (!labelList.length) { show($("lb-msg"), "Yazdırılacak etiket yok. Önce barkod ekleyin.", "warn"); return; }
+    if (!labelList.length) { show($("lb-msg"), "Yazdırılacak etiket yok. Önce barkod ekleyin.", "warn"); return null; }
     const bad = labelList.filter((i) => labelBarcodeSvg(i.code, Math.max(8, Math.min(s.h - 3, s.w * 0.42))).error);
-    if (bad.length) { show($("lb-msg"), `Basılamayan barkod var: ${bad.map((i) => i.code).join(", ")}. Listeden çıkarın veya etiket genişliğini artırın.`); return; }
-    printLabelDocument(labelDocument(labelList, s));
-    show($("lb-msg"), `${labelList.length * s.copies} etiket yazdırma penceresine gönderildi. Yazıcı olarak TSC'yi seçin · kenar boşluğu Yok · ölçek %100.`, "ok");
+    if (bad.length) {
+      show($("lb-msg"), `Basılamayan barkod var: ${bad.map((i) => i.code).join(", ")}. Listeden çıkarın veya etiket genişliğini artırın.`);
+      return null;
+    }
+    return s;
+  };
+  $("lb-print-tspl").addEventListener("click", async () => {
+    const s = ensurePrintable();
+    if (!s) return;
+    saveLabelSettings();
+    saveLabelPrinter();
+    const printer = ($("lb-printer").value || "TSC TA310").trim();
+    const tspl = buildTsplDocument(labelList, s);
     try {
-      await api("/panel/api/etiket/yazdirildi", { method: "POST", body: { labels: labelList.length * s.copies, codes: labelList.map((i) => i.code), size: `${s.w}x${s.h} mm` } });
+      await refreshLabelAgentStatus();
+      if (labelAgentOk) {
+        await printViaTsplAgent(tspl, printer);
+        show($("lb-msg"), `${labelList.length * s.copies} etiket TSPL ile ${printer} yazıcısına gönderildi. Karekodu yazıcı kendi üretti.`, "ok");
+      } else {
+        // API may be on Windows (dev); try server RAW, else download.
+        try {
+          await api("/panel/api/etiket/tspl", { method: "POST", body: { ...labelTsplPayload(s), printer, send: true } });
+          show($("lb-msg"), `${labelList.length * s.copies} etiket sunucu üzerinden ${printer} yazıcısına gönderildi (TSPL RAW).`, "ok");
+        } catch {
+          downloadTsplFile(tspl);
+          show($("lb-msg"), `Yerel ajan yok — TSPL indirildi. TsplPrintAgent.ps1 çalıştırıp tekrar "TA310'a bas" deyin, veya .tspl dosyasını Diagnostic Tool / copy /b ile gönderin.`, "warn");
+        }
+      }
+      try {
+        await api("/panel/api/etiket/yazdirildi", { method: "POST", body: {
+          labels: labelList.length * s.copies, codes: labelList.map((i) => i.code),
+          size: `${s.w}x${s.h} mm`, mode: "TSPL"
+        } });
+      } catch { /* audit best effort */ }
+    } catch (error) {
+      downloadTsplFile(tspl);
+      show($("lb-msg"), `TSPL gönderilemedi (${error.message || error}). Dosya indirildi — ajanı kontrol edin.`, "warn");
+    }
+  });
+  $("lb-download-tspl").addEventListener("click", async () => {
+    const s = ensurePrintable();
+    if (!s) return;
+    downloadTsplFile(buildTsplDocument(labelList, s));
+    show($("lb-msg"), "TSPL dosyası indirildi. TA310 bu komutlarla karekodu kendi çizer.", "ok");
+  });
+  $("lb-print").addEventListener("click", async () => {
+    const s = ensurePrintable();
+    if (!s) return;
+    printLabelDocument(labelDocument(labelList, s));
+    show($("lb-msg"), `${labelList.length * s.copies} etiket tarayıcı yazdırmasına gitti (yedek yol — Windows resmi rasterler). Tercihen "TA310'a bas (TSPL)" kullanın.`, "warn");
+    try {
+      await api("/panel/api/etiket/yazdirildi", { method: "POST", body: {
+        labels: labelList.length * s.copies, codes: labelList.map((i) => i.code),
+        size: `${s.w}x${s.h} mm`, mode: "tarayıcı"
+      } });
     } catch { /* the audit entry is best effort */ }
   });
+  void refreshLabelAgentStatus();
+  setInterval(() => { void refreshLabelAgentStatus(); }, 15000);
   renderLabelList();
 }
 

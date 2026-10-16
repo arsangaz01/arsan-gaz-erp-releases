@@ -1,3 +1,4 @@
+using System.Text;
 using ArsanTupTakip.Database;
 using ArsanTupTakip.Models;
 using ArsanTupTakip.Services;
@@ -6,11 +7,17 @@ using Microsoft.EntityFrameworkCore;
 namespace ArsanTupTakip.Api;
 
 internal sealed record LabelSequenceRequest(string? Prefix, long Start, int Count, int Digits);
-internal sealed record LabelPrintedRequest(int Labels, List<string>? Codes, string? Size);
+internal sealed record LabelPrintedRequest(int Labels, List<string>? Codes, string? Size, string? Mode = null);
 internal sealed record LabelTemplateCodesRequest(string? Serial, int? Count);
+internal sealed record LabelTsplItem(string? Code, string? Serial, string? Gas, string? Stt, string? Gtt, string? Owner, string? Extra);
+internal sealed record LabelTsplRequest(
+    List<LabelTsplItem>? Items,
+    int? WidthMm, int? HeightMm, int? Copies, string? Title,
+    bool? ShowGas, bool? ShowSerial, bool? ShowTest, bool? ShowCodeText,
+    int? GapMm, string? Printer, bool? Send);
 
-// Barkod Yazdır (panel only): the labels are drawn in the browser and printed through the TSC driver of the computer;
-// the server only hands out numbers, flags codes that are already used, keeps the saved products and writes the audit entry.
+// Barkod Yazdır (panel): preferred path is TSPL2 so the TSC TA310 builds QRCODE itself;
+// browser SVG print remains a fallback. Server also builds/downloads TSPL and can RAW-print on Windows.
 internal static class LabelEndpoints
 {
     public static void MapPanel(RouteGroupBuilder api)
@@ -104,12 +111,74 @@ internal static class LabelEndpoints
         {
             List<string> codes = request.Codes ?? [];
             string sample = string.Join(", ", codes.Take(20)) + (codes.Count > 20 ? $" … (+{codes.Count - 20})" : string.Empty);
+            string mode = string.IsNullOrWhiteSpace(request.Mode) ? "tarayıcı" : request.Mode.Trim();
             WebPanelAudit.Write((string)context.Items["panelUser"]!, "Barkod etiketi yazdırmaya gönderildi", $"{Math.Clamp(request.Labels, 0, 100000)} etiket",
-                (string.IsNullOrWhiteSpace(request.Size) ? string.Empty : request.Size.Trim()[..Math.Min(request.Size.Trim().Length, 40)] + " · ") + sample,
+                mode + " · " + (string.IsNullOrWhiteSpace(request.Size) ? string.Empty : request.Size.Trim()[..Math.Min(request.Size.Trim().Length, 40)] + " · ") + sample,
                 WebPanelAuth.ClientIp(context));
             return Results.Ok(new { ok = true });
         }).Requires(Perm.LabelPrint);
+
+        // TSPL2 job: printer draws QRCODE natively (not a browser bitmap). Optional RAW send when API is on Windows.
+        api.MapPost("/etiket/tspl", (LabelTsplRequest request, HttpContext context) =>
+        {
+            try
+            {
+                string tspl = BuildTspl(request);
+                bool send = request.Send == true;
+                if (send)
+                {
+                    string printer = string.IsNullOrWhiteSpace(request.Printer) ? "TSC TA310" : request.Printer.Trim();
+                    (bool ok, string? error) = RawPrinter.SendUtf8(printer, tspl);
+                    if (!ok)
+                    {
+                        return Results.BadRequest(new { error, tspl, windows = RawPrinter.IsWindows, printers = RawPrinter.ListPrinterNames() });
+                    }
+
+                    WebPanelAudit.Write((string)context.Items["panelUser"]!, "Barkod etiketi TSPL ile yazıcıya gönderildi",
+                        printer, $"{CountLabels(request)} etiket", WebPanelAuth.ClientIp(context));
+                    return Results.Ok(new { ok = true, printer, bytes = Encoding.UTF8.GetByteCount(tspl) });
+                }
+
+                byte[] utf8 = Encoding.UTF8.GetBytes(tspl);
+                return Results.File(utf8, "application/octet-stream", $"arsan-etiket-{DateTime.Now:yyyyMMdd-HHmmss}.tspl");
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).Requires(Perm.LabelPrint);
+
+        api.MapGet("/etiket/yazicilar", () => Results.Ok(new
+        {
+            windows = RawPrinter.IsWindows,
+            printers = RawPrinter.ListPrinterNames(),
+            agentHint = "http://127.0.0.1:39201/health",
+            note = RawPrinter.IsWindows
+                ? "API Windows üzerinde; /etiket/tspl { send:true } ile RAW basılabilir."
+                : "API Linux'ta; tarayıcıdaki TsplPrintAgent (127.0.0.1:39201) veya .tspl indirme kullanın."
+        })).Requires(Perm.LabelPrint);
     }
+
+    private static string BuildTspl(LabelTsplRequest request)
+    {
+        List<TsplLabels.Item> items = (request.Items ?? [])
+            .Select(i => new TsplLabels.Item(i.Code ?? "", i.Serial, i.Gas, i.Stt, i.Gtt, i.Owner, i.Extra))
+            .ToList();
+        TsplLabels.Settings settings = new(
+            WidthMm: request.WidthMm ?? 50,
+            HeightMm: request.HeightMm ?? 30,
+            Copies: request.Copies ?? 1,
+            Title: request.Title,
+            ShowGas: request.ShowGas ?? true,
+            ShowSerial: request.ShowSerial ?? true,
+            ShowTest: request.ShowTest ?? true,
+            ShowCodeText: request.ShowCodeText ?? true,
+            GapMm: request.GapMm ?? 2);
+        return TsplLabels.Build(items, settings);
+    }
+
+    private static int CountLabels(LabelTsplRequest request) =>
+        Math.Max(0, (request.Items?.Count ?? 0) * Math.Clamp(request.Copies ?? 1, 1, 20));
 
     private static async Task<IEnumerable<object>> CodesAsync(string? prefix, long start, int count, int digits)
     {

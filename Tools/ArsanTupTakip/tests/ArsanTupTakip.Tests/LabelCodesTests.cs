@@ -43,6 +43,18 @@ internal static class LabelCodesTests
         Throws(() => LabelTemplates.ParseSerial(t, ""), "Boş seri no reddedilmeli.");
         Check(LabelCodes.Sequence(t.Prefix, LabelTemplates.ParseSerial(t, "124"), 2, t.Digits).SequenceEqual(["AG000124", "AG000125"]), "Üründen yeni barkod aynı biçimde üretilmeli.");
         Console.WriteLine("PASS: kayıtlı barkod ürünleri (örnek barkoddan biçim, ölçü sınırları, seri numarasından yeni barkod).");
+
+        string tspl = TsplLabels.Build(
+            [new TsplLabels.Item("AG000001", Serial: "AG000001", Gas: "Oksijen 40 lt", Stt: "01.01.2024", Gtt: "01.01.2029", Owner: "Arsan")],
+            new TsplLabels.Settings(50, 30, 2, "ARSAN GAZ", true, true, true, true));
+        Check(tspl.Contains("SIZE 50 mm,30 mm", StringComparison.Ordinal), "TSPL etiket ölçüsü mm cinsinden olmalı.");
+        Check(tspl.Contains("QRCODE ", StringComparison.Ordinal) && tspl.Contains("M2,S7,\"AG000001\"", StringComparison.Ordinal),
+            "TA310 karekodu TSPL QRCODE (M2) ile kendi üretmeli.");
+        Check(tspl.Contains("TEXT ", StringComparison.Ordinal) && tspl.Contains("\"0\"", StringComparison.Ordinal), "Yazılar TSPL2 font 0 (TrueType) ile basılmalı.");
+        Check(tspl.Contains("PRINT 1,2", StringComparison.Ordinal), "Kopya sayısı PRINT komutunda olmalı.");
+        Check(tspl.Contains("CODEPAGE UTF-8", StringComparison.Ordinal), "Türkçe metin için UTF-8 kod sayfası istenmeli.");
+        Throws(() => TsplLabels.Build([], new TsplLabels.Settings()), "Boş liste TSPL üretmemeli.");
+        Console.WriteLine("PASS: TSPL2 etiket üretimi (QRCODE native, SIZE/PRINT, UTF-8).");
     }
 
     private static void Throws(Action action, string message)
