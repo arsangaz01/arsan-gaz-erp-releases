@@ -54,8 +54,8 @@ public final class HomeActivity extends BaseActivity {
         shownAccess = account == null ? null : account.toString();
         String name = account == null ? "-" : Api.str(account, "displayName");
         String role = account == null ? "" : Api.str(account, "role");
+        boolean driver = "Şoför".equals(role);
         page.addView(heading(name == null ? "-" : name));
-        page.addView(note(role == null ? "" : role));
         String plate = Api.fixedPlate();
         if (plate != null) {
             page.addView(text("🚚 Araç: " + plate, 17, true));
@@ -70,7 +70,9 @@ public final class HomeActivity extends BaseActivity {
 
         if (Api.can("tup-goruntule")) {
             add("🔍 Tüp bilgisi", InfoActivity.class);
-            add("👥 Müşteri stok bilgisi", StockActivity.class);
+            if (!driver) {
+                add("👥 Müşteri stok bilgisi", StockActivity.class);
+            }
         }
 
         if (Api.can("depo-sayim")) {

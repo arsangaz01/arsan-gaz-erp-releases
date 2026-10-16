@@ -565,19 +565,6 @@ tr.alarm-row td { background:#fef2f2; }
   <div class="dlg-body">
     <div id="d-msg" class="msg hidden"></div>
     <div class="card"><h2>Bilgiler</h2><div class="kv" id="d-info"></div></div>
-    <div class="card" data-perm="hareket-teslim|hareket-iade|hareket-arac|hareket-dolum|hareket-servis|hareket-hurda">
-      <h2>Hareket kaydet</h2>
-      <div class="form-grid">
-        <label>Yeni durum<select id="m-status"></select></label>
-        <div class="field" id="m-customer-wrap">Müşteri<input id="m-customer-q" placeholder="Müşteri ara">
-          <div class="pick-row"><select id="m-customer"></select><button class="secondary small" id="m-customer-yeni" type="button" data-perm="musteri-ekle" title="Listede yoksa yeni müşteri kaydı açın">+ Yeni</button></div>
-        </div>
-        <label id="m-plate-wrap">Plaka<input id="m-plate" list="plate-list" placeholder="01 ABC 123"></label>
-        <label data-perm="hareket-dolu-bos">Dolu / boş<select id="m-full"><option value="">Otomatik</option><option value="true">Dolu</option><option value="false">Boş</option></select></label>
-        <label>Not<input id="m-note" maxlength="300"></label>
-      </div>
-      <div class="actions"><button class="primary" id="m-save" type="button">Hareketi kaydet</button></div>
-    </div>
     <div class="card" data-perm="tup-duzenle|tup-pasif">
       <h2>Tüp bilgilerini düzenle</h2>
       <div class="form-grid">

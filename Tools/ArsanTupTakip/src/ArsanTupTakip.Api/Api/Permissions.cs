@@ -156,7 +156,8 @@ internal static class Perm
 
     // Phone/handheld: loading, deliveries and pickups, cylinder info, customer stock. Depot count is Operator/Admin only.
     // Unloading the vehicle and closing the trip are done at the depot by an operator (AdminChosen).
-    // CylinderView covers the cylinder info screen, the customer stock screen and the customer picker without phones.
+    // CylinderView covers the cylinder info screen and the customer picker without phones. Customer stock UI is for
+    // staff roles only (hidden for Şoför / depot accounts).
     private static readonly string[] DriverDefaults =
         [MobileLogin, CylinderView, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute, CustomerLocation];
 

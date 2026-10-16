@@ -100,7 +100,7 @@ internal static class PermissionTests
         HashSet<string> driver = Perm.Effective(PanelRoles.Driver, null);
         string[] expected = [Perm.MobileLogin, Perm.CylinderView, Perm.TripView, Perm.TripStart, Perm.TripLoad, Perm.TripDeliver, Perm.TripPickup, Perm.TripRoute,
             Perm.CustomerLocation];
-        Check(driver.SetEquals(expected), "Şoför varsayılanı yalnızca mobil giriş, tüp bilgisi/müşteri stoku ve sefer akışı olmalı: " + string.Join(", ", driver.Order()));
+        Check(driver.SetEquals(expected), "Şoför varsayılanı yalnızca mobil giriş, tüp bilgisi ve sefer akışı olmalı: " + string.Join(", ", driver.Order()));
         Check(!driver.Contains(Perm.PanelLogin) && !driver.Contains(Perm.ManageUsers) && !driver.Contains(Perm.ManageDevices) && !driver.Contains(Perm.AuditLog),
             "Şoför panele giremez ve yönetim yetkisi yoktur.");
         Check(!driver.Contains(Perm.CylinderRegister) && !driver.Contains(Perm.CylinderEdit) && !driver.Contains(Perm.CylinderAudit) && Perm.AnyMove.All(m => !driver.Contains(m))
@@ -119,7 +119,7 @@ internal static class PermissionTests
             && !Perm.Effective(PanelRoles.Driver, new Dictionary<string, bool> { [Perm.StockCount] = true }).Contains(Perm.StockCount)
             && !Perm.Effective(PanelRoles.Viewer, new Dictionary<string, bool> { [Perm.StockCount] = true }).Contains(Perm.StockCount),
             "Depo sayımı yalnızca Yönetici ve Operatör'de olmalı; şoföre/izleyiciye verilememeli.");
-        Check(Perm.CustomerPicker.Any(driver.Contains), "Şoför müşteri seçebilmeli (teslim ve müşteri stoku).");
+        Check(Perm.CustomerPicker.Any(driver.Contains), "Şoför müşteri seçebilmeli (teslim için).");
         Check(PanelRoles.Normalize("SOFOR") == PanelRoles.Driver && PanelRoles.Normalize("şoför") == PanelRoles.Driver && PanelRoles.Normalize("Şoför") == PanelRoles.Driver,
             "Şoför rol adı Türkçe karakterli/karaktersiz eşleşmeli.");
         Check(PanelRoles.Description(PanelRoles.Driver).Length > 0 && PanelRoles.All.Contains(PanelRoles.Driver), "Şoför rolü listede ve açıklamalı olmalı.");
@@ -484,7 +484,7 @@ internal static class PermissionTests
             (HttpMethod.Post, "api/tup/hareket", new { code = "X1", status = 3 }), (HttpMethod.Post, "api/tup/toplu-hareket", new { codes = new[] { "X1" }, status = 1 }),
             (HttpMethod.Post, "api/tup/yeni", new { serialNumber = "X" }), (HttpMethod.Post, "api/tup/sayim", new { customerId = 1 }),
             (HttpMethod.Get, "api/ozet", null), (HttpMethod.Get, "api/tup/durum", null), (HttpMethod.Get, "api/hareketler", null), (HttpMethod.Get, "api/tahmin", null),
-            (HttpMethod.Get, "api/musterideki-tupler", null), (HttpMethod.Post, "api/musteri", new { name = "X" }),
+            (HttpMethod.Get, "api/musterideki-tupler", null), (HttpMethod.Get, "api/musteri/1/stok", null), (HttpMethod.Post, "api/musteri", new { name = "X" }),
             (HttpMethod.Post, "api/arac-kayit", new { plate = "34 TST 02" }), (HttpMethod.Get, "api/arac-kayit/1", null),
             (HttpMethod.Get, "api/depo-sayim/1/excel", null), (HttpMethod.Get, "api/depo-sayim/1/pdf", null),
             (HttpMethod.Post, "api/sefer/donus", new { tripId = 1, plate = "34 ABC 123", codes = new[] { "X1" } }), (HttpMethod.Post, "api/sefer/kapat", new { tripId = 1 }),

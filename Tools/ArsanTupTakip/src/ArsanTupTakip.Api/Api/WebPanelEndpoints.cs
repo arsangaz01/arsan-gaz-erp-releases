@@ -464,8 +464,16 @@ internal static class WebPanelEndpoints
             });
         }).Requires(Perm.CustomerStockTotals);
 
-        api.MapGet("/musteri/{id:int}/stok", (int id, HttpContext context) => CustomerStockAsync(id, Perm.Has(Account(context), Perm.CustomerView)))
-            .Requires(Perm.CylinderView);
+        api.MapGet("/musteri/{id:int}/stok", async (int id, HttpContext context) =>
+        {
+            WebPanelUser user = Account(context);
+            if (user.Role == PanelRoles.Driver)
+            {
+                return Results.Json(new { error = "Müşteri stok bilgisi depo (şoför) hesaplarında kapalı." }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            return await CustomerStockAsync(id, Perm.Has(user, Perm.CustomerView));
+        }).Requires(Perm.CylinderView);
 
         api.MapGet("/musteri-stok.csv", async (int? musteri, string? gaz, HttpContext context) =>
         {

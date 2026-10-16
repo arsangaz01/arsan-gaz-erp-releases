@@ -69,8 +69,6 @@ public sealed class HomePage : ContentPage
             {
                 tiles.Add(new Tile(Icons.ManageSearch, "Tüp bilgisi", "Barkodu okut: tüp nerede, dolu mu", true, Color.FromArgb("#0F766E"), Color.FromArgb("#134E4A"),
                     () => Open("bilgi", () => new CylinderInfoPage())));
-                tiles.Add(new Tile(Icons.Inventory, "Müşteri stok bilgisi", "Müşterideki tüpler: adet, gün, barkod", true, indigo, navy,
-                    () => Open("stok", () => new CustomerStockPage())));
             }
 
             if (api.Can(Perm.StockCount))
@@ -78,20 +76,9 @@ public sealed class HomePage : ContentPage
                 tiles.Add(new Tile(Icons.Warehouse, "Sayım", "Sayımı başlat → doğrudan okutma", true, Color.FromArgb("#312E81"), navy,
                     () => Open("depo-sayim", () => new StockCountPage())));
             }
-
-            if (api.CanAny([Perm.CylinderRegister, .. Perm.AnyMove]))
-            {
-                tiles.Add(new Tile(Icons.QrScanner, "Tüp İşlemleri", "Okut, sorgula, hareket kaydet", false, indigo, navy, () => Open("tup", () => new CylinderPage())));
-            }
         }
         else
         {
-            if (api.CanAny([Perm.CylinderView, Perm.CylinderRegister, Perm.CylinderAudit, .. Perm.AnyMove]))
-            {
-                tiles.Add(new Tile(Icons.QrScanner, "Tüp İşlemleri", "Okut, sorgula, hareket kaydet", true, Color.FromArgb("#0F766E"), Color.FromArgb("#134E4A"),
-                    () => Open("tup", () => new CylinderPage())));
-            }
-
             if (api.Can(Perm.CylinderView))
             {
                 tiles.Add(new Tile(Icons.ManageSearch, "Tüp Bilgisi", null, false, indigo, navy, () => Open("bilgi", () => new CylinderInfoPage())));
@@ -569,28 +556,31 @@ public sealed class HomePage : ContentPage
             BackgroundColor = Ui.Accent.WithAlpha(0.35f),
             Content = Ui.IconLabel(Icons.Account, Colors.White, 22)
         }, 0, 0);
-        user.Add(new VerticalStackLayout
+        VerticalStackLayout userTexts = new()
         {
             VerticalOptions = LayoutOptions.Center,
             Children =
             {
-                new Label { Text = account?.DisplayName ?? "-", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.TailTruncation },
-                new Label
-                {
-                    Text = account?.IsDriver == true ? account.Role : account?.RoleText ?? string.Empty,
-                    FontSize = 12,
-                    TextColor = Glow
-                },
-                new Label
-                {
-                    Text = "🚚 Araç: " + account?.FixedPlate,
-                    FontSize = 16,
-                    FontFamily = "OpenSansSemibold",
-                    TextColor = Colors.White,
-                    IsVisible = !string.IsNullOrEmpty(account?.FixedPlate)
-                }
+                new Label { Text = account?.DisplayName ?? "-", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White, LineBreakMode = LineBreakMode.TailTruncation }
             }
-        }, 1, 0);
+        };
+        if (account?.IsDriver != true && !string.IsNullOrEmpty(account?.RoleText))
+        {
+            userTexts.Children.Add(new Label { Text = account.RoleText, FontSize = 12, TextColor = Glow });
+        }
+
+        if (!string.IsNullOrEmpty(account?.FixedPlate))
+        {
+            userTexts.Children.Add(new Label
+            {
+                Text = "🚚 Araç: " + account.FixedPlate,
+                FontSize = 16,
+                FontFamily = "OpenSansSemibold",
+                TextColor = Colors.White
+            });
+        }
+
+        user.Add(userTexts, 1, 0);
         grid.Add(user, 0, 2);
         Grid.SetColumnSpan(user, 2);
 

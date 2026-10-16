@@ -9,7 +9,6 @@ let me = null;
 // "a|b" means any of the listed permissions, "a&b" all of them.
 const can = (permission) => !!me && permission.split("|").some((any) => any.split("&").every((p) => me.permissions.includes(p)));
 // Target status → permission needed to record it (same table as Perm.MoveByStatus on the server).
-const MOVE_PERMISSION = { 1: "hareket-iade", 2: "hareket-arac", 3: "hareket-teslim", 4: "hareket-dolum", 5: "hareket-servis", 6: "hareket-hurda" };
 const STALE_TEXT = "Bu kayıt başka bir kullanıcı tarafından değiştirildi, yenileyip tekrar deneyin.";
 const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint32Array(4)), (n) => n.toString(16)).join("-"));
 
@@ -234,9 +233,6 @@ async function loadOptions() {
     select.length = 1;
     for (const s of options.statuses) select.append(el("option", { value: s.id }, s.name));
   }
-  const status = $("m-status");
-  const allowed = options.statuses.filter((s) => can(MOVE_PERMISSION[s.id] || "-"));
-  status.replaceChildren(el("option", { value: "" }, "Seçin"), ...allowed.map((s) => el("option", { value: s.id }, s.name)));
   $("f-plaka").length = 1;
   for (const p of options.plates) $("f-plaka").append(el("option", { value: p }, p));
   $("gas-list").replaceChildren(...options.gasTypes.map((g) => el("option", { value: g })));
@@ -282,7 +278,6 @@ function customerPicker(inputId, selectId, emptyLabel) {
 const cylinderCustomer = customerPicker("f-musteri-q", "f-musteri", "Tümü");
 const movementCustomer = customerPicker("h-musteri-q", "h-musteri", "Tümü");
 const newCustomer = customerPicker("n-musteri-q", "n-musteri", "Depoda (müşteri yok)");
-const moveCustomer = customerPicker("m-customer-q", "m-customer", null);
 
 async function loadSummary() {
   try {
@@ -930,12 +925,6 @@ async function openDetail(id) {
   $("e-unit").value = c.capacityUnit;
   $("e-test").value = c.testDue || "";
   $("e-active").value = String(c.isActive);
-  $("m-status").value = "";
-  $("m-note").value = "";
-  $("m-full").value = "";
-  $("m-plate").value = "";
-  moveCustomer.reset();
-  updateMoveFields();
   const head = el("tr", {}, ...["Tarih", "Hareket", "Durum", "Müşteri / Plaka", "Dolu/Boş", "Yapan", "Not"].map((h) => el("th", {}, h)));
   const body = c.movements.map((m) => el("tr", {},
     el("td", {}, m.date), el("td", {}, m.movementType), el("td", {}, `${m.from} → ${m.to}`),
@@ -945,49 +934,6 @@ async function openDetail(id) {
 }
 
 $("d-close").addEventListener("click", () => $("detail").close());
-$("m-status").addEventListener("change", updateMoveFields);
-
-function updateMoveFields() {
-  const status = Number($("m-status").value);
-  $("m-customer-wrap").classList.toggle("hidden", status !== 3);
-  if (status === 3 && !$("m-customer").options.length) moveCustomer.search();
-  $("m-plate-wrap").classList.toggle("hidden", status !== 2);
-}
-
-$("m-save").addEventListener("click", () => saveMove(false));
-
-async function saveMove(confirm) {
-  const status = Number($("m-status").value);
-  if (!status) { show($("d-msg"), "Yeni durumu seçin."); return; }
-  const customerId = status === 3 ? Number($("m-customer").value) || null : null;
-  if (status === 3 && !customerId) { show($("d-msg"), "Müşteriye teslim için müşteri arayıp seçin."); return; }
-  const full = can("hareket-dolu-bos") ? $("m-full").value : "";
-  const body = {
-    status, customerId, confirm,
-    plate: status === 2 ? $("m-plate").value.trim() || null : null,
-    isFull: full === "" ? null : full === "true",
-    note: $("m-note").value.trim() || null,
-    version: current.version
-  };
-  $("m-save").disabled = true;
-  try {
-    const result = await api(`/panel/api/tup/${current.id}/hareket`, { method: "POST", body, key: newKey() });
-    await openDetail(current.id);
-    show($("d-msg"), result.message, result.message.includes("⚠") ? "warn" : "ok");
-  } catch (error) {
-    if (error.status === 409 && error.data?.stale) {
-      await openDetail(current.id);
-      show($("d-msg"), error.message + " Güncel bilgiler yüklendi.", "warn");
-    } else if (error.status === 409 && !confirm && can("hareket-cakisma")) {
-      if (window.confirm(error.message + "\n\nYine de kaydedilsin mi?")) await saveMove(true);
-      else show($("d-msg"), "Hareket kaydedilmedi.", "warn");
-    } else {
-      show($("d-msg"), error.message);
-    }
-  } finally {
-    $("m-save").disabled = false;
-  }
-}
 
 $("e-save").addEventListener("click", async () => {
   const capacity = Number($("e-cap").value.replace(",", "."));
@@ -1088,11 +1034,6 @@ $("cu-use").addEventListener("click", () => {
 $("n-musteri-yeni").addEventListener("click", () => openCustomerDialog(newCustomer.query(), (c, message) => {
   newCustomer.choose(c);
   show($("new-msg"), message + " Tüp kaydında bu müşteri seçili.", "ok");
-}));
-
-$("m-customer-yeni").addEventListener("click", () => openCustomerDialog(moveCustomer.query(), (c, message) => {
-  moveCustomer.choose(c);
-  show($("d-msg"), message + " Hareket için seçildi; kaydetmek için \"Hareketi kaydet\"e basın.", "ok");
 }));
 
 $("c-yeni").addEventListener("click", () => openCustomerDialog($("c-q").value.trim(), async (c, message) => {
