@@ -11,6 +11,20 @@ Kullanıcı bilgisayar başında olmasa da işi Telegram üzerinden yönetir. G�
 Veri klasörü: `%LOCALAPPDATA%\ArsanGazERP\AgentWatcherData`. Betikler `Tools/CursorIdeBridge/` altında,
 PowerShell ile ve sandbox dışında (`required_permissions: ["all"]`) çalıştırılır.
 
+## Her yeni oturum / sohbet başlangıcı (zorunlu)
+Bağlantı kurulana kadar dene; kopukken “Telegram yok” deyip bırakma.
+
+1. `ArsanGazERP.AgentWatcher` sürecini kontrol et; yoksa AgentWatcher’ı başlat / kullanıcıya kurulum gerekmiyorsa mevcut
+   publish/current yolundan ayağa kaldır (gizli anahtar yazma).
+2. `CopilotInbox\ide-session-status.json`: `updatedUtc` ≤15 sn ve `pid` canlı değilse bu sohbette `ide-watch.ps1`’i
+   arka planda yeniden başlat (zaten canlıysa ikinci kopya açma).
+3. Inbox’ta `*.request.json` tara; `*.completion.json` olan artıkları sil. Gerçek bekleyenler için önce
+   `Start-Request.ps1 -Id <id>`: `STARTED` → bu sohbet işler; `TAKEN` → sunucu ajanı / bridge.js almış, **dokunma**
+   (çakışma yok). Aynı işi hem IDE hem sunucu ajanı aynı anda yürütme.
+4. Bağlantı veya claim başarısızsa kısa aralıklarla (ör. 15–30 sn) tekrar dene; asıl görevi buna engel olmadan
+   arka planda sürdürebilirsin. Yalnızca kalıcı kopuklukta (birkaç denemeden sonra) kullanıcıya yaz.
+5. Oturum boyunca 1 dk’da bir sessiz sağlık kontrolü yeter: Watcher + ide yaş; yalnızca hata veya yeni istekte bildir.
+
 ## Telegram'a mesaj gönderme
 Metni UTF-8 bir dosyaya yaz (ör. `%TEMP%\cursor-telegram.txt`), sonra:
 `powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CursorIdeBridge\Send-Telegram.ps1 -Path <dosya>`
