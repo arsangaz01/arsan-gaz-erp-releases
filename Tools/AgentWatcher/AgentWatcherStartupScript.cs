@@ -4,6 +4,13 @@ namespace ArsanGazERP.AgentWatcher;
 
 internal static class AgentWatcherStartupScript
 {
+    internal const string StartupFileName = "ArsanGazERP-AgentWatcher.vbs";
+    internal const string LegacyCmdFileName = "ArsanGazERP-AgentWatcher.cmd";
+
+    /// <summary>
+    /// Builds a hidden VBScript for the Windows Startup folder.
+    /// A .cmd with <c>timeout</c> leaves a visible/hanging console at logon; VBS runs with no window.
+    /// </summary>
     internal static string Build(
         string watcherExecutable,
         string? erpExecutable,
@@ -12,34 +19,32 @@ internal static class AgentWatcherStartupScript
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(watcherExecutable);
 
+        string watcher = Path.GetFullPath(watcherExecutable);
         StringBuilder script = new();
-        script.AppendLine("@echo off");
-        // Give VPN / network / Postgres time after Windows logon before launching services.
-        script.AppendLine("timeout /t 20 /nobreak >nul");
-        script.AppendLine($"set \"WATCHER_EXE={Path.GetFullPath(watcherExecutable)}\"");
-        script.AppendLine("if not exist \"%WATCHER_EXE%\" exit /b 1");
-        script.AppendLine("for %%I in (\"%WATCHER_EXE%\") do set \"WATCHER_DIR=%%~dpI\"");
-        // cmd: a trailing backslash inside "…" escapes the closing quote → Windows shows \" "\ not found.
-        script.AppendLine("if \"%WATCHER_DIR:~-1%\"==\"\\\" set \"WATCHER_DIR=%WATCHER_DIR:~0,-1%\"");
-        script.AppendLine("start \"\" /D \"%WATCHER_DIR%\" \"%WATCHER_EXE%\" --background");
+        script.AppendLine("' Arsan Gaz ERP Windows startup (hidden; no cmd window)");
+        script.AppendLine("Set sh = CreateObject(\"WScript.Shell\")");
+        script.AppendLine("Set fso = CreateObject(\"Scripting.FileSystemObject\")");
+        // Give VPN / network / Postgres time after logon.
+        script.AppendLine("WScript.Sleep 20000");
+        script.AppendLine($"watcher = \"{EscapeVbs(watcher)}\"");
+        script.AppendLine("If Not fso.FileExists(watcher) Then WScript.Quit 1");
+        script.AppendLine("sh.CurrentDirectory = fso.GetParentFolderName(watcher)");
+        script.AppendLine("sh.Run \"\"\"\" & watcher & \"\"\" --background\", 0, False");
 
         if (startErp && !string.IsNullOrWhiteSpace(erpExecutable))
         {
-            string fullErpPath = Path.GetFullPath(erpExecutable);
-            script.AppendLine($"set \"ERP_EXE={fullErpPath}\"");
-            script.AppendLine("if exist \"%ERP_EXE%\" (");
-            // Extra wait so the database is more likely reachable when ERP opens at logon.
-            script.AppendLine("  timeout /t 40 /nobreak >nul");
-            script.AppendLine("  for %%I in (\"%ERP_EXE%\") do set \"ERP_DIR=%%~dpI\"");
-            script.AppendLine("  if \"%ERP_DIR:~-1%\"==\"\\\" set \"ERP_DIR=%ERP_DIR:~0,-1%\"");
-            // Title must come before /MIN /D (start ["title"] [/D path] [/MIN] command).
-            if (startMinimized)
-                script.AppendLine("  start \"\" /MIN /D \"%ERP_DIR%\" \"%ERP_EXE%\"");
-            else
-                script.AppendLine("  start \"\" /D \"%ERP_DIR%\" \"%ERP_EXE%\"");
-            script.AppendLine(")");
+            string erp = Path.GetFullPath(erpExecutable);
+            int style = startMinimized ? 7 : 1; // 7 = minimized, 1 = normal, 0 = hidden
+            script.AppendLine($"erp = \"{EscapeVbs(erp)}\"");
+            script.AppendLine("If fso.FileExists(erp) Then");
+            script.AppendLine("  WScript.Sleep 40000");
+            script.AppendLine("  sh.CurrentDirectory = fso.GetParentFolderName(erp)");
+            script.AppendLine($"  sh.Run \"\"\"\" & erp & \"\"\"\", {style}, False");
+            script.AppendLine("End If");
         }
 
         return script.ToString();
     }
+
+    private static string EscapeVbs(string value) => value.Replace("\"", "\"\"", StringComparison.Ordinal);
 }

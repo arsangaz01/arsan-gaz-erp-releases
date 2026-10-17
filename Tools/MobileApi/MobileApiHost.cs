@@ -46,6 +46,9 @@ internal static class MobileApiHost
         app.UseMiddleware<DeviceAuthMiddleware>();
         app.UseMiddleware<IdempotencyMiddleware>();
         MobileEndpoints.Map(app);
+        FillEndpoints.Map(app);
+        StockCountEndpoints.MapMobile(app);
+        TripPlanEndpoints.MapMobile(app);
         CylinderTripEndpoints.Map(app);
         VehicleEndpoints.Map(app);
         MobileCampaignEndpoints.Map(app);

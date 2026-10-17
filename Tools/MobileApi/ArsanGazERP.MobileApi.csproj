@@ -8,7 +8,7 @@
     <RootNamespace>ArsanGazERP.MobileApi</RootNamespace>
     <AssemblyName>ArsanGazERP.MobileApi</AssemblyName>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <Version>1.4.1</Version>
+    <Version>1.6.0</Version>
   </PropertyGroup>
 
   <!-- Linux sunucu derlemesi: dotnet publish -p:ArsanLinux=true -c Release -->
@@ -58,6 +58,17 @@
     <Compile Include="..\..\Services\CrmEmailFinderService.cs" Link="Shared\CrmEmailFinderService.cs" />
     <Compile Include="..\..\Services\CrudService.cs" Link="Shared\CrudService.cs" />
     <Compile Include="..\..\Services\CylinderSchemaService.cs" Link="Shared\CylinderSchemaService.cs" />
+    <Compile Include="..\..\Services\CustomerStock.cs" Link="Shared\CustomerStock.cs" />
+    <Compile Include="..\..\Services\CylinderFills.cs" Link="Shared\CylinderFills.cs" />
+    <Compile Include="..\..\Services\StockCountService.cs" Link="Shared\StockCountService.cs" />
+    <Compile Include="..\..\Services\StockCountExport.cs" Link="Shared\StockCountExport.cs" />
+    <Compile Include="..\..\Services\LabelCodes.cs" Link="Shared\LabelCodes.cs" />
+    <Compile Include="..\..\Services\LabelTemplates.cs" Link="Shared\LabelTemplates.cs" />
+    <Compile Include="..\..\Services\RawPrinter.cs" Link="Shared\RawPrinter.cs" />
+    <Compile Include="..\..\Services\TsplLabels.cs" Link="Shared\TsplLabels.cs" />
+    <Compile Include="..\..\Services\CustomerRequests.cs" Link="Shared\CustomerRequests.cs" />
+    <Compile Include="..\..\Services\TripPlans.cs" Link="Shared\TripPlans.cs" />
+    <Compile Include="..\..\Services\TripRoutes.cs" Link="Shared\TripRoutes.cs" />
     <Compile Include="..\..\Services\CylinderTracking.cs" Link="Shared\CylinderTracking.cs" />
     <Compile Include="..\..\Services\CylinderTripTracking.cs" Link="Shared\CylinderTripTracking.cs" />
     <Compile Include="..\..\Services\CylinderTripService.cs" Link="Shared\CylinderTripService.cs" />
@@ -82,6 +93,7 @@
   <ItemGroup>
     <EmbeddedResource Include="WebPanel\panel.html" LogicalName="WebPanel.panel.html" />
     <EmbeddedResource Include="WebPanel\panel.js" LogicalName="WebPanel.panel.js" />
+    <EmbeddedResource Include="WebPanel\qrcode.min.js" LogicalName="WebPanel.qrcode.min.js" />
   </ItemGroup>
 
 </Project>

@@ -5,6 +5,11 @@ public static class Ui
     public static readonly Color Accent = Color.FromArgb("#0284C7");
     public static readonly Color AccentDark = Color.FromArgb("#1E3A8A");
     public static readonly Color Muted = Color.FromArgb("#6B7280");
+    public static readonly Color Good = Color.FromArgb("#059669");
+    public static readonly Color Warn = Color.FromArgb("#B45309");
+    public static readonly Color Bad = Color.FromArgb("#DC2626");
+    public static readonly Color Indigo = Color.FromArgb("#4F46E5");
+    public const int LiveSearchMinLength = 2;
     public static readonly Color SurfaceLight = Colors.White;
     public static readonly Color SurfaceDark = Color.FromArgb("#262626");
     public static readonly Color PageLight = Color.FromArgb("#F3F4F6");
@@ -234,6 +239,69 @@ public static class Ui
         return button;
     }
 
+    // Step buttons made with Secondary: the chosen one looks like a primary button.
+    public static void Highlight(Button button, bool selected)
+    {
+        if (selected)
+        {
+            button.BackgroundColor = Accent;
+            button.TextColor = Colors.White;
+        }
+        else
+        {
+            button.SetAppThemeColor(Button.BackgroundColorProperty, SecondaryLight, SecondaryDark);
+            button.TextColor = AccentDark;
+        }
+    }
+
+    public static Border StatTile(string icon, string value, string caption, Color color, string? detail = null)
+    {
+        VerticalStackLayout body = new()
+        {
+            Spacing = 2,
+            Children =
+            {
+                new Label { Text = icon, FontSize = 20 },
+                new Label { Text = value, FontSize = 28, FontFamily = "OpenSansSemibold", TextColor = color },
+                new Label { Text = caption, FontSize = 13, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap }
+            }
+        };
+        if (!string.IsNullOrWhiteSpace(detail))
+        {
+            body.Children.Add(Note(detail));
+        }
+
+        return new Border
+        {
+            Padding = new Thickness(12, 10),
+            StrokeThickness = 0,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
+            BackgroundColor = color.WithAlpha(0.12f),
+            Content = body
+        };
+    }
+
+    public static Grid TileGrid(IReadOnlyList<View> tiles, int columns = 2)
+    {
+        Grid grid = new() { ColumnSpacing = 8, RowSpacing = 8 };
+        for (int c = 0; c < columns; c++)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        }
+
+        for (int i = 0; i < tiles.Count; i++)
+        {
+            if (i % columns == 0)
+            {
+                grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            }
+
+            grid.Add(tiles[i], i % columns, i / columns);
+        }
+
+        return grid;
+    }
+
     // Equal-width columns so two long labels still fit side by side on a narrow phone.
     public static View ActionRow(params View[] buttons)
     {
@@ -273,6 +341,13 @@ public static class Ui
     public static T Allowed<T>(T view, string permission) where T : VisualElement
     {
         view.IsVisible = ApiClient.Instance.Can(permission);
+        return view;
+    }
+
+    // Hides a control the signed-in user has no permission for.
+    public static T ShowIf<T>(this T view, bool visible) where T : VisualElement
+    {
+        view.IsVisible = visible;
         return view;
     }
 

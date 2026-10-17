@@ -120,6 +120,17 @@ internal static class MobileEndpoints
 
         app.MapGet("/api/musteriler", async (string? q) => Results.Ok(await CustomerChoices.SearchAsync(q))).Requires(PanelPermissions.CustomerView);
 
+        app.MapGet("/api/musteri/{id:int}/stok", async (int id, HttpContext context) =>
+        {
+            WebPanelUser user = Account(context);
+            if (user.Role == PanelRoles.Driver)
+            {
+                return Results.Json(new { error = "Müşteri stok bilgisi saha (şoför) hesaplarında kapalı." }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            return await WebPanelEndpoints.CustomerStockAsync(id, PanelRoles.Has(user, PanelPermissions.CustomerView));
+        }).Requires(PanelPermissions.CylinderView);
+
         app.MapPost("/api/musteri", (CustomerCreateRequest request, HttpContext context) =>
             CustomerChoices.CreateAsync(request, "mobil: " + DeviceName(context))).Requires(PanelPermissions.CustomerCreate);
 

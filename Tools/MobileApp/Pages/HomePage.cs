@@ -4,7 +4,7 @@ using Microsoft.Maui.Controls.Shapes;
 
 namespace ArsanGazMobile.Pages;
 
-// Home screen: one tile per section the signed-in user may open; the server checks the same permissions again.
+// Ana menü: TupTakip düzeni (şoför önce sevkiyat; ofis geniş kartlar). ERP renkleri korunur.
 public sealed class HomePage : ContentPage
 {
     private const int Columns = 3;
@@ -12,25 +12,7 @@ public sealed class HomePage : ContentPage
 
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
 
-    private sealed record TileSpec(string Title, string? Subtitle, string Glyph, string Start, string End, string? Permission, bool Wide, Func<HomePage, Task> Open);
-
-    private static readonly TileSpec[] Tiles =
-    [
-        new("Tüp Okut", "Barkod / QR ile hareket kaydı", Icons.QrScanner, "#1D4ED8", "#0EA5E9", "tup-goruntule", true, p => p.OpenAsync("Tüp Okut", () => new CylinderPage())),
-        new("Tüp Bilgisi", null, Icons.ManageSearch, "#0F766E", "#14B8A6", "tup-goruntule", false, p => p.OpenAsync("Tüp Bilgisi", () => new CylinderInfoPage())),
-        new("Tüp Durumu", null, Icons.Dashboard, "#3730A3", "#6366F1", "tup-goruntule", false, p => p.OpenAsync("Tüp Durumu", () => new CylinderStatusPage())),
-        new("Sefer", "Yükleme, teslim ve dönüş", Icons.Route, "#1E3A8A", "#0D9488", "sefer-goruntule", true, p => p.OpenAsync("Sefer", () => new CylinderTripPage())),
-        new("Tamamlanmış Seferler", null, Icons.History, "#1E3A8A", "#0D9488", "sefer-goruntule", false, p => p.OpenAsync("Tamamlanmış Seferler", () => new CompletedTripsPage())),
-        new("Araç İşlemleri", null, Icons.LocalShipping, "#0E7490", "#22D3EE", "arac-goruntule", false, p => p.OpenAsync("Araç İşlemleri", () => new VehiclePage())),
-        new("Müşteride Sayım", null, Icons.FactCheck, "#155E75", "#0891B2", "tup-sayim", false, p => p.OpenAsync("Müşteride Sayım", () => new CylinderAuditPage())),
-        new("CRM Firmalar", null, Icons.Handshake, "#4338CA", "#7C3AED", "crm-goruntule", false, p => p.OpenAsync("CRM", () => new CrmPage(followUps: false))),
-        new("Takip", null, Icons.EventNote, "#5B21B6", "#8B5CF6", "crm-goruntule", false, p => p.OpenAsync("Takip", () => new CrmPage(followUps: true))),
-        new("Kampanya", null, Icons.Campaign, "#9D174D", "#DB2777", "kampanya-goruntule", false, p => p.OpenAsync("Kampanya", () => new CampaignPage())),
-        new("Raporlar", null, Icons.Insights, "#1E40AF", "#3B82F6", "ozet|rapor|hareket-goruntule", false, p => p.OpenAsync("Raporlar", () => new SummaryPage())),
-        new("Asistan", null, Icons.SmartToy, "#0F766E", "#10B981", "asistan|cursor-gorev", false, p => p.OpenAsync("Asistan", () => new ChatPage())),
-        new("Hesap ve Bağlantı", null, Icons.Settings, "#1F2937", "#475569", null, false, p => p.OpenAsync("Hesap ve Bağlantı", () => new ConnectionPage())),
-        new("Çıkış", null, Icons.Power, "#52525B", "#71717A", null, false, p => ConnectionPage.ConfirmLogoutAsync(p))
-    ];
+    private sealed record TileSpec(string Title, string? Subtitle, string Glyph, string Start, string End, string? Permission, bool Wide, Func<HomePage, Task> Open, Label? TitleLabel = null);
 
     private readonly Grid _grid = new() { ColumnSpacing = 12, RowSpacing = 12 };
     private readonly Label _userName = new() { TextColor = Colors.White, FontSize = 16, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.TailTruncation };
@@ -42,9 +24,21 @@ public sealed class HomePage : ContentPage
     private bool _checkingUpdate;
     private readonly Label _date = new() { FontSize = 15, FontFamily = "OpenSansSemibold", HorizontalTextAlignment = TextAlignment.Center };
     private readonly Dictionary<string, Page> _pages = [];
+    private readonly Label _tripTitle = new()
+    {
+        Text = "Sevkiyat başlat",
+        TextColor = Colors.White,
+        FontSize = 18,
+        FontFamily = "OpenSansSemibold",
+        MaxLines = 2,
+        LineBreakMode = LineBreakMode.WordWrap,
+        HorizontalTextAlignment = TextAlignment.Start
+    };
     private string _permissionKey = string.Empty;
     private bool _opening;
     private bool _started;
+    private bool _hasOpenTrip;
+    private bool _driver;
 
     public HomePage(UserSession session)
     {
@@ -112,11 +106,14 @@ public sealed class HomePage : ContentPage
             }
         }
 
+        if (_driver)
+        {
+            await RefreshTripTitleAsync();
+        }
+
         await RefreshUpdateAsync();
     }
 
-    // Also called when the app comes back to the foreground: an admin session stays open until logout, so the user
-    // may never restart the app.
     public async Task RefreshUpdateAsync()
     {
         if (_checkingUpdate || _updateBusy.IsRunning)
@@ -155,17 +152,202 @@ public sealed class HomePage : ContentPage
         _userName.Text = session.DisplayName;
         _userRole.Text = session.Role;
         _initials.Text = Initials(session.DisplayName);
-        string key = string.Join(",", session.Permissions.Order());
+        _driver = session.IsDriver;
+        string key = (_driver ? "D|" : "O|") + string.Join(",", session.Permissions.Order());
         if (key == _permissionKey)
         {
             return;
         }
 
         _permissionKey = key;
-        BuildGrid(Tiles.Where(t => t.Permission is null || session.Can(t.Permission)).ToList());
+        BuildGrid(BuildTiles(session));
     }
 
-    // Row-major packing; a tile that would leave a gap at the end of a row is stretched to fill it.
+    private List<TileSpec> BuildTiles(UserSession session)
+    {
+        List<TileSpec> tiles = [];
+        bool Can(string? permission) => permission is null || session.Can(permission);
+
+        if (_driver)
+        {
+            if (Can("sefer-goruntule"))
+            {
+                tiles.Add(new(
+                    "Sevkiyat başlat",
+                    "Sefer, yükleme, teslim, dönüş",
+                    Icons.LocalShipping,
+                    "#B45309",
+                    "#F59E0B",
+                    "sefer-goruntule",
+                    true,
+                    p => p.OpenTripAsync(),
+                    _tripTitle));
+                tiles.Add(new(
+                    "Tamamlanmış seferler",
+                    "Bitmiş seferler · numara ve özet",
+                    Icons.History,
+                    "#0F766E",
+                    "#14B8A6",
+                    "sefer-goruntule",
+                    true,
+                    p => p.OpenAsync("Tamamlanmış Seferler", () => new CompletedTripsPage())));
+                if (Can("sefer-rota|sefer-plani"))
+                {
+                    tiles.Add(new(
+                        "Bugünkü sefer planım",
+                        "Panelde hazırlanan müşteri sırası",
+                        Icons.Event,
+                        "#1E3A8A",
+                        "#0D9488",
+                        "sefer-rota|sefer-plani",
+                        true,
+                        p => p.OpenAsync("Bugünkü sefer planım", () => new TripPlanTodayPage())));
+                }
+            }
+
+            if (Can("tup-goruntule"))
+            {
+                tiles.Add(new(
+                    "Tüp bilgisi",
+                    "Barkodu okut: tüp nerede, dolu mu",
+                    Icons.ManageSearch,
+                    "#0F766E",
+                    "#14B8A6",
+                    "tup-goruntule",
+                    true,
+                    p => p.OpenAsync("Tüp Bilgisi", () => new CylinderInfoPage())));
+            }
+
+            if (Can("depo-sayim"))
+            {
+                tiles.Add(new(
+                    "Sayım",
+                    "Sayımı başlat → doğrudan okutma",
+                    Icons.FactCheck,
+                    "#3730A3",
+                    "#6366F1",
+                    "depo-sayim",
+                    true,
+                    p => p.OpenAsync("Depo Sayımı", () => new StockCountPage())));
+            }
+
+            if (Can("dolum-kaydi"))
+            {
+                tiles.Add(new("Dolum", "Lot ile depoda dolu", Icons.WaterDrop, "#0369A1", "#38BDF8", "dolum-kaydi", false,
+                    p => p.OpenAsync("Dolum", () => new FillPage())));
+            }
+
+            if (Can("arac-goruntule"))
+            {
+                tiles.Add(new("Araçlar", null, Icons.LocalShipping, "#0E7490", "#22D3EE", "arac-goruntule", false,
+                    p => p.OpenAsync("Araç İşlemleri", () => new VehiclePage())));
+            }
+
+            if (Can("tup-sayim"))
+            {
+                tiles.Add(new("Müşteride Sayım", null, Icons.FactCheck, "#155E75", "#0891B2", "tup-sayim", false,
+                    p => p.OpenAsync("Müşteride Sayım", () => new CylinderAuditPage())));
+            }
+
+            if (Can("ozet|rapor|hareket-goruntule"))
+            {
+                tiles.Add(new("Raporlar", null, Icons.Insights, "#1E40AF", "#3B82F6", "ozet|rapor|hareket-goruntule", false,
+                    p => p.OpenAsync("Raporlar", () => new SummaryPage())));
+            }
+        }
+        else
+        {
+            if (Can("tup-goruntule"))
+            {
+                tiles.Add(new("Tüp Okut", "Barkod / QR ile hareket kaydı", Icons.QrScanner, "#1D4ED8", "#0EA5E9", "tup-goruntule", true,
+                    p => p.OpenAsync("Tüp Okut", () => new CylinderPage())));
+                tiles.Add(new("Tüp Bilgisi", null, Icons.ManageSearch, "#0F766E", "#14B8A6", "tup-goruntule", false,
+                    p => p.OpenAsync("Tüp Bilgisi", () => new CylinderInfoPage())));
+            }
+
+            if (Can("tup-goruntule"))
+            {
+                tiles.Add(new("Tüp Durumu", null, Icons.Dashboard, "#3730A3", "#6366F1", "tup-goruntule", false,
+                    p => p.OpenAsync("Tüp Durumu", () => new CylinderStatusPage())));
+            }
+
+            if (Can("tup-goruntule"))
+            {
+                tiles.Add(new("Müşteri Stoku", "Gaz/boyut, gün, barkodlar", Icons.PropaneTank, "#0F766E", "#14B8A6", "tup-goruntule", true,
+                    p => p.OpenAsync("Müşteri Stoku", () => new CustomerStockPage())));
+            }
+
+            if (Can("sefer-goruntule"))
+            {
+                tiles.Add(new("Sefer", "Yükle, teslim et, dönüş", Icons.Route, "#1E3A8A", "#0D9488", "sefer-goruntule", true,
+                    p => p.OpenAsync("Sefer", () => new CylinderTripPage())));
+                tiles.Add(new("Tamamlanmış seferler", "Bitmiş seferler · numara ve özet", Icons.History, "#0F766E", "#14B8A6", "sefer-goruntule", true,
+                    p => p.OpenAsync("Tamamlanmış Seferler", () => new CompletedTripsPage())));
+                if (Can("sefer-rota|sefer-plani"))
+                {
+                    tiles.Add(new("Bugünkü sefer planım", "Panelde hazırlanan müşteri sırası", Icons.Event, "#1E3A8A", "#0D9488", "sefer-rota|sefer-plani", true,
+                        p => p.OpenAsync("Bugünkü sefer planım", () => new TripPlanTodayPage())));
+                }
+            }
+
+            if (Can("arac-goruntule"))
+            {
+                tiles.Add(new("Araçlar", null, Icons.LocalShipping, "#0E7490", "#22D3EE", "arac-goruntule", false,
+                    p => p.OpenAsync("Araç İşlemleri", () => new VehiclePage())));
+            }
+
+            if (Can("depo-sayim"))
+            {
+                tiles.Add(new("Depo Sayımı", "Okut, gaz ve boyuta göre say", Icons.FactCheck, "#155E75", "#22D3EE", "depo-sayim", true,
+                    p => p.OpenAsync("Depo Sayımı", () => new StockCountPage())));
+            }
+
+            if (Can("dolum-kaydi"))
+            {
+                tiles.Add(new("Dolum", "Lot ile depoda dolu", Icons.WaterDrop, "#0369A1", "#38BDF8", "dolum-kaydi", false,
+                    p => p.OpenAsync("Dolum", () => new FillPage())));
+            }
+
+            if (Can("tup-sayim"))
+            {
+                tiles.Add(new("Müşteride Sayım", null, Icons.FactCheck, "#155E75", "#0891B2", "tup-sayim", false,
+                    p => p.OpenAsync("Müşteride Sayım", () => new CylinderAuditPage())));
+            }
+
+            if (Can("ozet|rapor|hareket-goruntule"))
+            {
+                tiles.Add(new("Raporlar", null, Icons.Insights, "#1E40AF", "#3B82F6", "ozet|rapor|hareket-goruntule", false,
+                    p => p.OpenAsync("Raporlar", () => new SummaryPage())));
+            }
+
+            if (Can("crm-goruntule"))
+            {
+                tiles.Add(new("CRM Firmalar", null, Icons.Handshake, "#4338CA", "#7C3AED", "crm-goruntule", false,
+                    p => p.OpenAsync("CRM", () => new CrmPage(followUps: false))));
+                tiles.Add(new("Takip", null, Icons.EventNote, "#5B21B6", "#8B5CF6", "crm-goruntule", false,
+                    p => p.OpenAsync("Takip", () => new CrmPage(followUps: true))));
+            }
+
+            if (Can("kampanya-goruntule"))
+            {
+                tiles.Add(new("Kampanya", null, Icons.Campaign, "#9D174D", "#DB2777", "kampanya-goruntule", false,
+                    p => p.OpenAsync("Kampanya", () => new CampaignPage())));
+            }
+
+            if (Can("asistan|cursor-gorev"))
+            {
+                tiles.Add(new("Asistan", null, Icons.SmartToy, "#0F766E", "#10B981", "asistan|cursor-gorev", false,
+                    p => p.OpenAsync("Asistan", () => new ChatPage())));
+            }
+        }
+
+        tiles.Add(new("Hesap ve Bağlantı", null, Icons.Settings, "#1F2937", "#475569", null, false,
+            p => p.OpenAsync("Hesap ve Bağlantı", () => new ConnectionPage())));
+        tiles.Add(new("Çıkış", null, Icons.Power, "#52525B", "#71717A", null, false,
+            p => ConnectionPage.ConfirmLogoutAsync(p)));
+        return tiles;
+    }
+
     private void BuildGrid(List<TileSpec> tiles)
     {
         _grid.Children.Clear();
@@ -221,7 +403,7 @@ public sealed class HomePage : ContentPage
             VerticalOptions = LayoutOptions.Center,
             Content = Icons.Glyph(spec.Glyph, Colors.White, horizontal ? 32 : 28)
         };
-        Label title = new()
+        Label title = spec.TitleLabel ?? new Label
         {
             Text = spec.Title,
             TextColor = Colors.White,
@@ -231,6 +413,11 @@ public sealed class HomePage : ContentPage
             LineBreakMode = LineBreakMode.WordWrap,
             HorizontalTextAlignment = horizontal ? TextAlignment.Start : TextAlignment.Center
         };
+        if (spec.TitleLabel is not null)
+        {
+            title.FontSize = horizontal ? 18 : 13.5;
+            title.HorizontalTextAlignment = horizontal ? TextAlignment.Start : TextAlignment.Center;
+        }
 
         View body;
         if (horizontal)
@@ -265,7 +452,6 @@ public sealed class HomePage : ContentPage
             };
         }
 
-        // Large faint circles give the flat gradient some depth.
         Grid layers = new()
         {
             Children =
@@ -375,8 +561,35 @@ public sealed class HomePage : ContentPage
         return new VerticalStackLayout { Spacing = 6, Children = { line, version } };
     }
 
-    // Pages are kept like the former tabs: some subscribe to app-wide events in their constructor, and state such as a
-    // chat or a scanned batch survives going back to the home screen.
+    private async Task RefreshTripTitleAsync()
+    {
+        try
+        {
+            List<ActiveTripSummary> trips = await ApiClient.Instance.ActiveTripsAsync();
+            _hasOpenTrip = trips.Count > 0;
+        }
+        catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
+        {
+            _hasOpenTrip = false;
+        }
+
+        _tripTitle.Text = _hasOpenTrip ? "Sevkiyata devam" : "Sevkiyat başlat";
+    }
+
+    private async Task OpenTripAsync()
+    {
+        await OpenAsync("Sefer", () => new CylinderTripPage());
+        if (!_hasOpenTrip
+            && ApiClient.Instance.Session?.Can("sefer-baslat") == true
+            && _pages.GetValueOrDefault("Sefer") is CylinderTripPage page
+            && Navigation.NavigationStack.LastOrDefault() == page)
+        {
+            await page.StartTripAsync();
+        }
+
+        await RefreshTripTitleAsync();
+    }
+
     private async Task OpenAsync(string title, Func<Page> create)
     {
         if (!_pages.TryGetValue(title, out Page? page))
@@ -396,7 +609,6 @@ public sealed class HomePage : ContentPage
         await Navigation.PushAsync(page);
     }
 
-    // Brief press animation, and one open at a time so a double tap does not push the page twice.
     private void AddTap(View view, Func<Task> action)
     {
         TapGestureRecognizer tap = new();

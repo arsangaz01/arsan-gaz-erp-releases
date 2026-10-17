@@ -68,6 +68,7 @@ internal static class CylinderTripEndpoints
             {
                 CylinderTrip trip = await new CylinderTripService().StartTripAsync(
                     request.Plates, request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
+                await TripPlanEndpoints.ApplyPlansAsync(trip.Id, null, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
                 return Results.Ok(new { trip.Id, trip.Title, trip.StartedAt, message = $"{trip.Title} başlatıldı." });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -81,6 +82,7 @@ internal static class CylinderTripEndpoints
             try
             {
                 await new CylinderTripService().AddVehicleAsync(request.TripId, request.Plate);
+                await TripPlanEndpoints.ApplyPlansAsync(request.TripId, request.Plate, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
                 return Results.Ok(new { message = $"{request.Plate} sefere eklendi." });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -139,7 +141,8 @@ internal static class CylinderTripEndpoints
                     request.TripId, request.Codes ?? [], request.CustomerId, request.Note, "Mobil (" + MobileEndpoints.DeviceName(context) + ")");
                 int ok = results.Count(r => r.Ok);
                 string failures = string.Join("\n", results.Where(r => !r.Ok).Select(r => $"{r.Code}: {r.Message}"));
-                return Results.Ok(new { message = $"{ok}/{results.Count} tüp teslim kaydedildi." + (failures.Length > 0 ? "\n" + failures : string.Empty) });
+                string completed = ok > 0 ? await CustomerRequestEndpoints.CompleteAsync(request.CustomerId, CustomerRequests.Order, request.TripId) : string.Empty;
+                return Results.Ok(new { message = $"{ok}/{results.Count} tüp teslim kaydedildi." + (failures.Length > 0 ? "\n" + failures : string.Empty) + completed });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {

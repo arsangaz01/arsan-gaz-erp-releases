@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "arsangaz-erp-cloud-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-02",
+  "workers_dev": true,
+  "observability": {
+    "enabled": false
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "STATE",
+      "id": "4ecf798934aa471692501f8bfb79b80b"
+    }
+  ],
+  // Every minute: answers Telegram while the PC is offline and sends the morning briefing.
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "vars": {
+    "BRIEFING_CITY": "Adana",
+    "BRIEFING_HOUR": "8"
+  }
+}

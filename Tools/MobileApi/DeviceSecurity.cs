@@ -229,7 +229,7 @@ internal sealed class DeviceAuthMiddleware(RequestDelegate next, DeviceStore dev
     {
         if (metadata?.GetMetadata<PanelPermission>() is { } required)
         {
-            return PanelRoles.Has(user, required.Name) ? null : MissingPermission(required.Name);
+            return PanelRoles.Has(user, required.Name) || (required.OrAny ?? []).Any(key => PanelRoles.Has(user, key)) ? null : MissingPermission(required.Name);
         }
 
         return metadata?.GetMetadata<SignedInOnly>() is not null ? null : "Bu işlem tanımlı bir yetkiye bağlı değil; erişim kapalı.";

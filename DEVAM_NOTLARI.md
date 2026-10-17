@@ -232,9 +232,17 @@ Kullanıcı: "Evet ve devam et" — bekleyen iş uygulandı.
 - Yapıldı (kodda; yayınlanmadı): tüp sahipliği (`Cylinder.OwnerCustomerId`, SQLite + PostgreSQL şema), `CylinderTrip.ClosedBy`,
   `ClosedTripsAsync`, `/api/sefer/gecmis` + `/api/sefer/{id}/detay` (Yönetici/Operatör hepsini, diğerleri kendi kapattıklarını görür),
   site paneli `/ozet` sahiplik bölümü + `/tupler` sahip filtresi, `/api/tup/bilgi` Owner, mobil "Tamamlanmış Seferler" ekranı,
-  Tüp Bilgisi'nde sahip satırı, sefer ekranında "Son okutmayı geri al". El terminali (handheld) aktarılmadı.
-- Sürümler: MobileApi csproj 1.4.1, `MobileReleaseInfo.ApiVersion` 1.14.0.
-- Etiket marka (sahip adı üst yazısı): TupTakip panelde hazır (1.6.21, yayın bekliyor); ilk uygulamaya (ERP) henüz aktarılmadı.
+  Tüp Bilgisi'nde sahip satırı, sefer ekranında "Son okutmayı geri al".
+- **16 Ekim akşam:** Müşteri Stoku aktarıldı — `Services/CustomerStock.cs`, panel sekmesi + stok diyaloğu (müşteriye tıklayınca
+  kod/şehir/telefon/gaz-boyut/gün/barkod), `/panel/api/musteri-stok*`, `/api/musteri/{id}/stok`, mobil "Müşteri Stoku" karosu.
+  Yetki `musteri-stok-toplam` (varsayılan yalnız Yönetici). MobileApi **1.4.2** / ApiVersion **1.14.2**, mobil **1.9.4**/34.
+  **Yayın (16 Ekim ~22:54):** sunucu prod MobileApi **1.14.2** — `/panel` musteri-stok + `openStockDialog` doğrulandı;
+  `/panel/api/musteri-stok` ve `/api/musteri/{id}/stok` → 401 (uç var). Mobil APK hâlâ 1.9.3 (JDK yok, APK yayınlanmadı).
+- **Dolum (16 Ekim gece, kodda; yayın bekliyor):** `CylinderFill` + `CylinderFills`, yetki `dolum-kaydi`,
+  `/api/dolum` + `/panel/api/dolum|dolumlar`, panel sekmesi, mobil FillPage. Sürüm **1.4.3** / Api **1.14.3**, mobil **1.9.5**/35.
+- Hâlâ eksik (yeniye göre): Sefer Planı (+rota/konum), Sayım Raporları, Karekod Yazdır, Müşteri Talepleri/portal, Depo Sayımı,
+  Bugünkü sefer planım, Kullanıcı gözünden. El terminali aktarılmadı.
+- Etiket marka (sahip adı üst yazısı): TupTakip panelde hazır (1.6.21, yayın bekliyor); ilk uygulamaya henüz aktarılmadı.
 
 
 ## Kampanya
@@ -246,3 +254,11 @@ Kullanıcı: "Evet ve devam et" — bekleyen iş uygulandı.
 - AgentWatcher (Gmail destekli) `publish\current\AgentWatcher`. Yedek: `*.exe.bak-pre-gmail`.
 - MobileApi (bridge yayını, 1.6.1) `publish\current\MobileApi`. Yedek: `*.exe.bak-1.6pre`.
 - `devices.json` düz dizi olmalı. PS5 ile `@(ConvertFrom-Json)` kullanarak yeniden yazma. Yedek: `devices.json.bak-kampanya`.
+
+## Birinci uygulamaya aktarım — Depo Sayımı, Karekod, Talepler, Sefer Planı (17 Ekim 2026)
+- Kodda + sunucuda: Depo Sayımı (StockCount*, panel Sayım Raporları, mobil StockCountPage/GroupPage, ScanPage canlı mod), Karekod Yazdır
+  (Label*, panel barkod sekmesi + qrcode.js), Müşteri Talepleri (portal YOK; panelden personel kaydeder, teslimde otomatik kapanır),
+  Sefer Planı + rota + müşteri konumu (panel + mobil "Bugünkü sefer planım"). Yetkiler: depo-sayim, barkod-yazdir, musteri-talepleri,
+  sefer-plani, sefer-rota, musteri-konum-kaydet. Prod MobileApi **1.15.0** (Deploy-Server.ps1 -Component mobileapi; önceki: /opt/arsangaz/mobileapi.bak-20261017-003702).
+- Mobil uygulama 1.10.0/37 derlendi (JDK17: %LOCALAPPDATA%\Android\jdk17, -p:JavaSdkDirectory/-p:AndroidSdkDirectory) ama APK yayınlanmadı.
+- Eksik: müşteri portalı, Google toplu konum bulma, mobil sefer ekranında rota düzenleme arayüzü (uçlar var), el terminali.

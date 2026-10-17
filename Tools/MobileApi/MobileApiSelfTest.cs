@@ -385,7 +385,7 @@ internal static class MobileApiSelfTest
                 missing.Add(pattern);
             }
 
-            if (endpoint.Metadata.GetMetadata<PanelPermission>() is { } permission && !PanelPermissions.IsKnown(permission.Name))
+            if (endpoint.Metadata.GetMetadata<PanelPermission>() is { } permission && (!PanelPermissions.IsKnown(permission.Name) || (permission.OrAny ?? []).Any(key => !PanelPermissions.IsKnown(key))))
             {
                 missing.Add(pattern + " (bilinmeyen yetki " + permission.Name + ")");
             }

@@ -59,6 +59,8 @@ tr.click:active td { background:#bae6fd; }
 .muted { color:var(--muted); font-size:13px; }
 .warn-text { color:var(--warn); }
 .bad-text { color:var(--bad); }
+tr.group-head td { background:#f1f5f9; font-weight:600; border-top:2px solid var(--line); }
+tr.selected td { background:var(--sea-light, #e0f2fe); }
 .hidden { display:none !important; }
 #login { max-width:380px; margin:10vh auto; }
 #login .card { padding:24px; }
@@ -141,6 +143,66 @@ tr.alarm-row td { background:#fef2f2; }
 .vehicle-pick label.busy { opacity:.6; }
 .panel-deploy-footer { text-align:center; padding:8px 18px 18px; font-size:11px; color:#9ca3af; }
 @media (max-width:640px) { main { padding:10px; } header { padding:10px 12px; } .hide-sm { display:none; } }
+.lb-hero { display:flex; gap:16px; align-items:center; padding:18px 20px; border-radius:16px; margin-bottom:16px;
+  background:linear-gradient(135deg,#1e3a8a 0%,#0369a1 55%,#0ea5e9 100%); color:#fff; box-shadow:0 8px 24px rgba(30,58,138,.25); }
+.lb-hero-icon { width:56px; height:56px; border-radius:14px; background:rgba(255,255,255,.15); display:flex; align-items:center; justify-content:center; flex:none; }
+.lb-hero h2 { margin:0; font-size:22px; font-weight:700; letter-spacing:0; text-transform:none; color:#fff; }
+.lb-hero p { margin:4px 0 0; font-size:14px; opacity:.9; }
+.lb-steps { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
+.lb-step { flex:1; min-width:140px; padding:10px 12px; border-radius:12px; background:#fff; border:1px solid var(--line); font-size:13px; color:var(--muted); }
+.lb-step b { display:block; color:var(--navy); font-size:14px; margin-bottom:2px; }
+.lb-step.on { border-color:#7dd3fc; background:var(--sea-light); color:var(--navy); }
+.lb-mode { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.lb-mode button { flex:1; min-width:120px; padding:12px 14px; border-radius:12px; border:2px solid var(--line); background:#fff; cursor:pointer; font:inherit; font-weight:600; color:var(--navy); text-align:left; }
+.lb-mode button small { display:block; font-weight:400; color:var(--muted); font-size:12px; margin-top:2px; }
+.lb-mode button.active { border-color:var(--sea); background:var(--sea-light); box-shadow:0 0 0 3px rgba(2,132,199,.15); }
+.lb-mode button:active { transform:scale(0.98); }
+.lb-panel { display:none; }
+.lb-panel.on { display:block; }
+.lb-presets { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.lb-presets button { border-radius:99px; padding:6px 12px; font-size:13px; }
+.lb-presets button.active { background:var(--navy); color:#fff; border-color:var(--navy); }
+.lb-studio { display:grid; grid-template-columns:minmax(240px,1fr) minmax(280px,1.2fr); gap:14px; }
+@media (max-width:800px) { .lb-studio { grid-template-columns:1fr; } }
+.lb-chips { display:flex; flex-direction:column; gap:8px; max-height:420px; overflow:auto; }
+.lb-chip { display:flex; flex-direction:column; gap:8px; padding:12px; border:1px solid var(--line); border-radius:12px; background:#fafafa; }
+.lb-chip-top { display:flex; align-items:flex-start; gap:8px; flex-wrap:wrap; }
+.lb-chip .fields { display:grid; grid-template-columns:repeat(2,minmax(120px,1fr)); gap:8px; width:100%; }
+.lb-chip .fields label { display:flex; flex-direction:column; gap:2px; font-size:11px; color:var(--muted); margin:0; }
+.lb-chip .fields input { font-size:13px; padding:6px 8px; border-radius:8px; border:1px solid var(--line); font-family:inherit; }
+.lb-chip .fields input.code { font-weight:700; font-family:ui-monospace, Consolas, monospace; color:var(--navy); }
+.lb-chip .err { color:#b91c1c; font-size:12px; }
+.lb-cats { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.lb-cat { border:1px solid var(--line); background:#fff; border-radius:12px; padding:10px 12px; cursor:pointer; font:inherit; text-align:left; min-width:140px; flex:1 1 140px; }
+.lb-cat:hover, .lb-cat.active { border-color:var(--sea); background:var(--sea-light); }
+.lb-cat b { display:block; color:var(--navy); font-size:14px; }
+.lb-cat small { color:var(--muted); font-size:12px; }
+.lb-results-box { margin-top:10px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; }
+.lb-results-box.hidden { display:none; }
+.lb-results-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 12px; background:#f8fafc; border-bottom:1px solid var(--line); font-size:13px; }
+.lb-preview-wrap { background:linear-gradient(180deg,#cbd5e1 0%,#e2e8f0 100%); border-radius:16px; padding:16px; min-height:200px; border:1px solid #94a3b8; }
+.lb-preview-wrap h3 { margin:0 0 10px; font-size:13px; color:#334155; text-transform:uppercase; letter-spacing:.04em; }
+.lb-previews { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-content:flex-start; max-height:380px; overflow:auto; }
+.lb-preview-card { background:#fff; box-shadow:0 4px 14px rgba(15,23,42,.18); border-radius:4px; overflow:hidden; }
+.lb-preview-card.warn { outline:2px solid #f59e0b; }
+.lb-preview-card.bad { outline:2px solid #ef4444; }
+.lb-preview-card .label { width:100%; height:100%; box-sizing:border-box; padding:1.5mm; display:flex; flex-direction:row; gap:2mm; align-items:stretch;
+  font-family:Arial, Helvetica, sans-serif; color:#000; background:#fff; overflow:hidden; }
+.lb-preview-card .qr-col { flex:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.5mm; max-width:46%; }
+.lb-preview-card .qr { display:flex; align-items:center; justify-content:center; }
+.lb-preview-card .qr svg { display:block; }
+.lb-preview-card .qr-code { text-align:center; font-weight:700; letter-spacing:0; overflow:hidden; }
+.lb-preview-card .qr-code div { white-space:nowrap; overflow:hidden; }
+.lb-preview-card .info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:0.35mm; overflow:hidden; }
+.lb-preview-card .info .brand { font-weight:700; line-height:1.12; overflow:hidden; }
+.lb-preview-card .info .gas { line-height:1.12; overflow:hidden; }
+.lb-preview-card .info .meta { line-height:1.15; color:#222; overflow:hidden; }
+.lb-preview-card .info .brand div, .lb-preview-card .info .gas div, .lb-preview-card .info .meta div { white-space:nowrap; overflow:hidden; }
+.lb-empty { text-align:center; padding:28px 12px; color:#475569; }
+.lb-empty .big { font-size:40px; line-height:1; margin-bottom:8px; }
+.lb-print-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+.lb-print-bar .primary { font-size:16px; padding:12px 22px; border-radius:12px; }
+.lb-count-pill { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:99px; background:var(--sea-light); color:var(--navy); font-weight:600; font-size:13px; }
 </style>
 </head>
 <body>
@@ -164,10 +226,16 @@ tr.alarm-row td { background:#fef2f2; }
       <button data-tab="ozet" data-perm="ozet">Özet</button>
       <button data-tab="tupler" data-perm="tup-goruntule">Tüpler</button>
       <button data-tab="hareketler" data-perm="hareket-goruntule">Hareketler</button>
+      <button data-tab="dolum" data-perm="dolum-kaydi">Dolum</button>
       <button data-tab="seferler" data-perm="sefer-goruntule">Seferler</button>
+      <button data-tab="sefer-plani" data-perm="sefer-plani">Sefer Planı</button>
       <button data-tab="araclar" data-perm="arac-goruntule">Araç İşlemleri</button>
+      <button data-tab="musteri-stok" data-perm="tup-goruntule">Müşteri Stoku</button>
       <button data-tab="musteriler" data-perm="musteri-goruntule">Müşteriler</button>
+      <button data-tab="talepler" data-perm="musteri-talepleri">Müşteri Talepleri</button>
+      <button data-tab="sayimlar" data-perm="depo-sayim|tup-sayim|rapor">Sayım Raporları</button>
       <button data-tab="yeni" data-perm="tup-kayit">Yeni tüp</button>
+      <button data-tab="barkod" data-perm="barkod-yazdir">Karekod Yazdır</button>
       <button data-tab="yonetim" data-perm="kullanici-yonetimi|cihaz-yonetimi|denetim-kaydi">Yönetim</button>
     </nav>
     <div class="spacer"></div>
@@ -230,6 +298,33 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="card">
         <div class="muted" id="mov-count"></div>
         <div class="table-wrap"><table id="movements"></table></div>
+      </div>
+    </section>
+
+    <section data-page="dolum" class="hidden">
+      <div class="card">
+        <h2>Dolum kaydet</h2>
+        <p class="muted">Doldurulan tüplerin barkod veya seri numaralarını alt alta yazın. Tüpler depoda <b>dolu</b> olur; kim, ne zaman, hangi parti/lot ile doldurdu kaydedilir. Müşteride görünen tüp doldurulamaz. Periyodik testi geçmiş tüp yalnızca aşağıdaki onayla doldurulur.</p>
+        <div class="filters">
+          <label>Parti / lot no<input id="dl-lot" maxlength="60" placeholder="ör. OKS-2610-01"></label>
+          <label>Not<input id="dl-note" maxlength="300" placeholder="isteğe bağlı"></label>
+        </div>
+        <textarea id="dl-codes" rows="5" placeholder="Barkod veya seri no (her satıra bir tane)"></textarea>
+        <div class="toolbar">
+          <label class="check"><input type="checkbox" id="dl-overdue"> Testi geçmiş tüpleri de doldur (sorumluluğu onaylıyorum)</label>
+          <span class="muted" id="dl-count"></span>
+          <button class="primary" id="dl-save" type="button">Dolumu kaydet</button>
+        </div>
+        <div class="msg hidden" id="dl-msg"></div>
+      </div>
+      <div class="card">
+        <div class="filters">
+          <label>Dönem<select id="dl-days"><option value="1">Bugün</option><option value="7">Son 7 gün</option><option value="30" selected>Son 30 gün</option><option value="90">Son 90 gün</option><option value="365">Son 1 yıl</option></select></label>
+          <label>Ara<input id="dl-q" placeholder="Seri no, lot, gaz, dolduran"></label>
+          <button class="primary" id="dl-list" type="button">Listele</button>
+        </div>
+        <div class="muted" id="dl-list-count"></div>
+        <div class="table-wrap"><table id="dl-rows"></table></div>
       </div>
     </section>
 
@@ -301,6 +396,29 @@ tr.alarm-row td { background:#fef2f2; }
       </div>
     </section>
 
+    <section data-page="musteri-stok" class="hidden">
+      <div class="card">
+        <div class="filters">
+          <label>Müşteri<input id="ms-q" placeholder="Ad, kod, şehir, ilçe"></label>
+          <label>Gaz türü<input id="ms-gaz" list="gas-list" placeholder="Tümü"></label>
+          <label><span><input type="checkbox" id="ms-uzun"> Yalnızca uzun süredir bekleyen tüpü olanlar</span></label>
+          <button class="primary" id="ms-ara" type="button">Listele</button>
+          <a class="secondary" id="ms-csv" href="#" data-perm="disa-aktar&musteri-stok-toplam">Excel'e aktar (tüp tüp, CSV)</a>
+        </div>
+      </div>
+      <div class="grid" id="ms-stats" data-perm="musteri-stok-toplam"></div>
+      <div class="card" style="margin-top:16px" data-perm="musteri-stok-toplam">
+        <h2>Gaz türü ve boyuta göre müşterilerdeki toplam</h2>
+        <p class="muted">Bir satıra tıklayınca o grubun hangi müşteride kaç adet olduğu ve tüm tüpleri tek tek açılır.</p>
+        <div class="table-wrap"><table id="ms-gas"></table></div>
+      </div>
+      <div class="card">
+        <div class="muted" id="ms-count"></div>
+        <div class="table-wrap"><table id="ms-table"></table></div>
+        <div class="hint">Gün: tüpün müşteriye teslim edildiği (son hareket) tarihten bugüne geçen süre. Bir müşteriye tıklayınca elindeki tüpler gaz türü ve boyuta göre, her tüpün barkodu, teslim tarihi ve gün sayısıyla açılır.</div>
+      </div>
+    </section>
+
     <section data-page="musteriler" class="hidden">
       <div class="card">
         <div class="toolbar">
@@ -311,8 +429,184 @@ tr.alarm-row td { background:#fef2f2; }
         </div>
         <div class="muted" id="c-count"></div>
         <div class="table-wrap"><table id="customers"></table></div>
-        <div class="hint">Liste ERP müşterileri ile henüz müşteriye dönüşmemiş CRM firmalarını birlikte gösterir; elinde tüp olanlar önce gelir. Bir satıra tıklayınca o müşterideki tüpler açılır.</div>
+        <div class="hint">Liste ERP müşterileri ile henüz müşteriye dönüşmemiş CRM firmalarını birlikte gösterir; elinde tüp olanlar önce gelir. Bir satıra tıklayınca o müşterinin tüp stoku (gaz, boyut, gün, barkodlar) açılır.</div>
       </div>
+    </section>
+
+    <section data-page="sefer-plani" class="hidden">
+      <div class="card">
+        <div class="toolbar">
+          <h2>Sefer planı</h2>
+          <label>Gün<input type="date" id="tp-date"></label>
+          <button class="secondary small" id="tp-list" type="button">Yenile</button>
+          <button class="primary small" id="tp-new" type="button">Yeni plan</button>
+          <span class="muted" id="tp-count"></span>
+        </div>
+        <div id="tp-msg" class="msg hidden"></div>
+        <div class="table-wrap"><table id="tp-rows"></table></div>
+        <div class="hint">Gün ve araç için uğranacak müşterileri sırasıyla seçin. O gün araç sefere çıkınca (veya sefer zaten açıksa plan kaydedilince) müşteriler aracın rotasına kendiliğinden eklenir. Şoförün telefonu, konumu kayıtlı müşteriye seçilen mesafeye kadar yaklaşınca titreşir ve bildirim gösterir; şoförün konumu sunucuya gönderilmez. Konumu olmayan müşteride uyarı çıkmaz: konumu buradan (📍) veya şoför müşterinin yanındayken telefondan kaydedebilir.</div>
+      </div>
+      <div class="card">
+        <div class="toolbar">
+          <h2>Müşteri konumları</h2>
+          <input id="cl-musteri-q" placeholder="Müşteri ara" autocomplete="off">
+          <select id="cl-musteri"></select>
+          <button class="secondary small" id="cl-open" type="button">📍 Konumu aç</button>
+        </div>
+        <div id="cl-msg" class="msg hidden"></div>
+        <div class="hint">Müşteriyi arayıp seçin ve konumunu açın: Google Haritalar bağlantısını veya koordinatı yapıştırarak kaydedin. Şoför de müşterinin yanındayken telefondan "📍 Konumu kaydet" ile kaydedebilir.</div>
+      </div>
+    </section>
+
+    <section data-page="talepler" class="hidden">
+      <div class="card">
+        <div class="toolbar">
+          <h2>Müşteri talepleri</h2>
+          <label>Göster<select id="rq-status"><option value="acik">Açık talepler</option><option value="tumu">Açık + son 30 gün</option></select></label>
+          <button class="secondary small" id="rq-list" type="button">Yenile</button>
+          <span class="muted" id="rq-count"></span>
+        </div>
+        <div id="rq-msg" class="msg hidden"></div>
+        <div class="table-wrap"><table id="rq-rows"></table></div>
+        <div class="filters" style="margin-top:12px">
+          <label>Müşteri<input id="rq-musteri-q" placeholder="Müşteri ara" autocomplete="off" style="width:min(220px,100%)"></label>
+          <select id="rq-musteri" style="min-width:200px"></select>
+          <label>Tür<select id="rq-tur"><option value="siparis">Dolu tüp siparişi</option><option value="bos-alim">Boş tüp alımı</option></select></label>
+          <label>Adet<input id="rq-adet" type="number" min="1" max="500" step="1" style="width:90px"></label>
+          <label>Not<input id="rq-not" maxlength="300" style="width:min(240px,100%)"></label>
+          <button class="primary small" id="rq-add" type="button">Talep kaydet</button>
+        </div>
+        <div class="hint">Müşterinin telefonla bildirdiği boş tüp alımı veya dolu tüp siparişini aşağıdan kaydedin. Seferde o müşteriye teslim okutulunca açık siparişleri kendiliğinden "Tamamlandı" olur; boş alım taleplerini satırdaki düğmeyle kapatın. Elle kapatmak veya iptal etmek için satırdaki düğmeleri kullanın.</div>
+      </div>
+    </section>
+
+    <section data-page="sayimlar" class="hidden">
+      <div class="grid" id="sc-stats"></div>
+      <div class="card" style="margin-top:16px">
+        <div class="toolbar"><h2>Ana depo sayımları</h2><button class="secondary small" id="sc-refresh" type="button">Yenile</button><a class="secondary small hidden" id="sc-xlsx" href="#">Excel'e aktar</a><a class="secondary small hidden" id="sc-pdf" href="#" target="_blank" rel="noopener">PDF</a><span class="muted" id="sc-export-note"></span></div>
+        <div class="table-wrap"><table id="sc-counts"></table></div>
+        <div class="hint">Sayım mobil uygulamada "Depo Sayımı" ekranından yapılır: her okutulan tüp gaz türü ve boyutuna göre sayılır, aynı tüp iki kez sayılmaz. Eşleşen: kayıtta depoda görünen ve okutulan tüp. Eksik: kayıtta depoda görünüp okutulmayan tüp. Fazla: okutulan ama kayıtta başka yerde (müşteride, araçta, dolumda…) görünen tüp. Sayım bitirilince o anki depo listesi dondurulur; rapor sonradan değişmez. Sayım tüplerin durumunu değiştirmez. Bir satıra tıklayınca ayrıntılı karşılaştırma açılır.</div>
+      </div>
+      <div class="card">
+        <h2>Müşteride sayımlar</h2>
+        <div class="table-wrap"><table id="sc-audits"></table></div>
+      </div>
+    </section>
+
+    <section data-page="barkod" class="hidden">
+      <div class="lb-hero">
+        <div class="lb-hero-icon" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" stroke="#fff" stroke-width="2"/><rect x="13" y="3" width="8" height="8" stroke="#fff" stroke-width="2"/><rect x="3" y="13" width="8" height="8" stroke="#fff" stroke-width="2"/><rect x="13" y="13" width="3" height="3" fill="#fff"/><rect x="18" y="13" width="3" height="3" fill="#fff"/><rect x="13" y="18" width="3" height="3" fill="#fff"/><rect x="18" y="18" width="3" height="3" fill="#fff"/></svg>
+        </div>
+        <div>
+          <h2>Karekod Yazdır</h2>
+          <p>TA310 barkodu kendisi üretir (TSPL QRCODE). Önizleme ekranda; basınca yazıcıya komut gider.</p>
+        </div>
+      </div>
+      <div class="lb-steps">
+        <div class="lb-step on" id="lb-step-1"><b>1 · Barkod ekle</b>Kayıtlı tüp, yeni numara veya ürün</div>
+        <div class="lb-step" id="lb-step-2"><b>2 · Önizle</b>Etiket sağda gerçek boyuta yakın görünür</div>
+        <div class="lb-step" id="lb-step-3"><b>3 · TA310</b>TSPL ile bas · yazıcı karekodu kendi çizer</div>
+      </div>
+      <div id="lb-msg" class="msg hidden"></div>
+
+      <div class="card">
+        <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--navy)">1 · Barkod ekle</h2>
+        <div class="lb-mode" role="tablist">
+          <button type="button" class="active" data-lb-mode="search" id="lb-mode-search">🔍 Kayıtlı tüp<small>Sistemdeki barkodu bas</small></button>
+          <button type="button" data-lb-mode="new" id="lb-mode-new">➕ Yeni numara<small>AG000001 gibi ardışık kod</small></button>
+          <button type="button" data-lb-mode="product" id="lb-mode-product">📦 Üründen<small>Kayıtlı şablonla hızlı bas</small></button>
+        </div>
+
+        <div class="lb-panel on" id="lb-panel-search">
+          <div class="hint">Önce gaz / litre kategorisini seçin veya seri-barkod yazıp Ara'ya basın. Boş arama tüm listeyi açmaz.</div>
+          <div class="filters">
+            <label>Ara<input id="lb-q" placeholder="Seri no, barkod, gaz, müşteri" style="width:min(320px,100%)"></label>
+            <button class="secondary" id="lb-search" type="button">Ara</button>
+            <button class="primary" id="lb-add-selected" type="button">Seçilenleri ekle</button>
+          </div>
+          <div id="lb-cats" class="lb-cats"></div>
+          <div id="lb-results-box" class="lb-results-box hidden">
+            <div class="lb-results-head">
+              <span id="lb-results-title">Sonuçlar</span>
+              <button class="secondary small" id="lb-results-close" type="button">Listeyi kapat</button>
+            </div>
+            <div class="table-wrap"><table id="lb-results"></table></div>
+          </div>
+        </div>
+
+        <div class="lb-panel" id="lb-panel-new">
+          <div class="filters">
+            <label>Önek<input id="lb-prefix" maxlength="10" placeholder="ör. AG" style="width:100px"></label>
+            <label>Başlangıç no<input id="lb-start" type="number" min="0" step="1" value="1" style="width:120px"></label>
+            <label>Adet<input id="lb-count" type="number" min="1" max="500" step="1" value="1" style="width:90px"></label>
+            <label>Basamak<input id="lb-digits" type="number" min="1" max="10" step="1" value="6" style="width:80px"></label>
+            <button class="secondary" id="lb-next" type="button" title="Bu önekle kayıtlı en büyük numaradan sonrakini getirir">Sıradaki boş no</button>
+            <button class="primary" id="lb-generate" type="button">Oluştur ve ekle</button>
+          </div>
+          <div class="hint">Örnek: AG + 1 + 6 basamak → AG000001. Türkçe karakter kullanılamaz. Zaten kayıtlı numaralar eklenmez.</div>
+        </div>
+
+        <div class="lb-panel" id="lb-panel-product">
+          <div class="toolbar" style="margin-bottom:8px">
+            <button class="secondary small" id="lt-new" type="button">+ Ürün kaydet</button>
+            <button class="secondary small" id="lt-edit" type="button">Düzenle</button>
+            <button class="secondary small" id="lt-delete" type="button">Sil</button>
+          </div>
+          <div class="filters">
+            <label>Ürün<select id="lt-select" style="min-width:220px"></select></label>
+            <label>Seri no<input id="lt-serial" placeholder="ör. 124" style="width:140px"></label>
+            <label>Adet<input id="lt-count" type="number" min="1" max="500" step="1" value="1" style="width:80px"></label>
+            <button class="secondary" id="lt-next" type="button">Sıradaki boş no</button>
+            <button class="primary" id="lt-generate" type="button">Oluştur ve ekle</button>
+          </div>
+          <div class="hint" id="lt-info"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--navy)">2 · Önizleme ve ayarlar</h2>
+        <div class="lb-presets" id="lb-presets">
+          <button type="button" class="secondary" data-w="50" data-h="30">50×30 mm</button>
+          <button type="button" class="secondary" data-w="40" data-h="25">40×25 mm</button>
+          <button type="button" class="secondary" data-w="70" data-h="40">70×40 mm</button>
+          <button type="button" class="secondary" data-w="100" data-h="50">100×50 mm</button>
+        </div>
+        <div class="filters">
+          <label>Genişlik (mm)<input id="lb-w" type="number" min="20" max="104" step="1" value="50" style="width:90px"></label>
+          <label>Yükseklik (mm)<input id="lb-h" type="number" min="10" max="200" step="1" value="30" style="width:90px"></label>
+          <label>Kopya<input id="lb-copies" type="number" min="1" max="20" step="1" value="1" style="width:70px"></label>
+          <label>Üst yazı<input id="lb-title" maxlength="40" value="ARSAN GAZ" style="width:160px" title="Firma malında bu yazı kullanılır; müşteri malında üst satır otomatik sahip adı olur"><span class="muted" style="display:block;font-size:11px;margin-top:2px">Müşteri malında üst satır = sahip adı</span></label>
+          <label class="check"><input type="checkbox" id="lb-f-gas" checked> Gaz</label>
+          <label class="check"><input type="checkbox" id="lb-f-serial" checked> Seri</label>
+          <label class="check"><input type="checkbox" id="lb-f-test" checked> Test</label>
+          <label class="check"><input type="checkbox" id="lb-f-text" checked> Kod yazısı</label>
+        </div>
+        <div class="lb-studio" style="margin-top:14px">
+          <div>
+            <div class="toolbar" style="margin-bottom:8px">
+              <h2 style="margin:0;text-transform:none;letter-spacing:0;font-size:14px;color:var(--navy)">Liste <span id="lb-count-text" class="lb-count-pill hidden"></span></h2>
+              <button class="secondary small" id="lb-clear" type="button">Temizle</button>
+            </div>
+            <div id="lb-list" class="lb-chips"></div>
+          </div>
+          <div class="lb-preview-wrap">
+            <h3>Etiket önizlemesi</h3>
+            <div id="lb-previews" class="lb-previews"></div>
+          </div>
+        </div>
+        <div class="filters" style="margin-top:10px">
+          <label>TA310 yazıcı adı<input id="lb-printer" maxlength="80" value="TSC TA310" style="width:min(220px,100%)" title="Windows'taki yazıcı adı"></label>
+          <span id="lb-agent-status" class="hint" style="margin:0">Yerel TSPL ajanı kontrol ediliyor…</span>
+        </div>
+        <div class="lb-print-bar">
+          <button class="primary" id="lb-print-tspl" type="button">🖨️ TA310'a bas (TSPL)</button>
+          <button class="secondary" id="lb-download-tspl" type="button">TSPL indir</button>
+          <button class="secondary" id="lb-print" type="button">Tarayıcıdan yazdır</button>
+          <span class="hint" style="margin:0;flex:1;min-width:200px">Önerilen: TSPL — yazıcı QRCODE komutuyla karekodu kendi üretir (bulanık resim yok). Bir kez <code>Tools/ArsanTupTakip/tools/TsplPrintAgent.ps1</code> çalıştırın; ajan yeşil olunca tek tıkla basılır. Ayarlar bu bilgisayarda hatırlanır.</span>
+        </div>
+      </div>
+      <iframe id="lb-print-frame" title="Yazdırma" style="position:fixed;right:0;bottom:0;width:0;height:0;border:0" aria-hidden="true"></iframe>
     </section>
 
     <section data-page="yonetim" class="hidden">
@@ -516,6 +810,38 @@ tr.alarm-row td { background:#fef2f2; }
   </div>
 </dialog>
 
+<dialog id="stock-dialog">
+  <div class="dlg-head"><h3 id="sd-title">Müşteri stoku</h3><button class="secondary" id="sd-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <div id="sd-msg" class="msg hidden"></div>
+    <div class="card">
+      <div class="toolbar">
+        <h2>Müşteri</h2>
+        <button class="secondary small" id="sd-list" type="button">Tüp listesinde aç</button>
+        <a class="secondary small" id="sd-csv" href="#" data-perm="disa-aktar">Excel'e aktar (CSV)</a>
+      </div>
+      <div class="kv" id="sd-info"></div>
+    </div>
+    <div class="card"><h2>Gaz türü ve boyuta göre</h2><p class="muted">Bir satıra tıklayınca aşağıda yalnızca o grubun tüpleri listelenir; tekrar tıklayınca tümü gelir.</p><div class="table-wrap"><table id="sd-groups"></table></div></div>
+    <div class="card">
+      <div class="toolbar"><h2 id="sd-cyl-title">Tüpler (gaz türü ve boyuta göre, en uzun bekleyen önce)</h2><input id="sd-q" placeholder="Barkod, seri no, gaz ara" style="min-width:220px"></div>
+      <div class="table-wrap"><table id="sd-cylinders"></table></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="group-dialog">
+  <div class="dlg-head"><h3 id="gd-title">Gaz grubu</h3><button class="secondary" id="gd-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <div class="card"><div class="kv" id="gd-info"></div></div>
+    <div class="card"><h2>Hangi müşteride kaç adet</h2><p class="muted">Müşteriye tıklayınca o müşterinin stoku bu grup seçili olarak açılır.</p><div class="table-wrap"><table id="gd-customers"></table></div></div>
+    <div class="card">
+      <div class="toolbar"><h2 id="gd-cyl-title">Tüpler</h2><input id="gd-q" placeholder="Müşteri, barkod, seri no ara" style="min-width:220px"></div>
+      <div class="table-wrap"><table id="gd-cylinders"></table></div>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="user-dialog" class="narrow">
   <div class="dlg-head"><h3 id="u-title">Yeni kullanıcı</h3><button class="secondary" id="u-close" type="button">Kapat</button></div>
   <div class="dlg-body">
@@ -578,6 +904,86 @@ tr.alarm-row td { background:#fef2f2; }
   </div>
 </dialog>
 
+<dialog id="label-template-dialog" class="narrow">
+  <div class="dlg-head"><h3 id="ltd-title">Ürün kaydet</h3><button class="secondary" id="ltd-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <label class="field">Ürün adı<input id="ltd-name" maxlength="60" placeholder="ör. Oksijen 40 lt"></label>
+    <label class="field">Çalışan örnek barkod<input id="ltd-sample" maxlength="40" placeholder="ör. AG000123"></label>
+    <div class="hint">Önek ve basamak sayısı bu barkoddan çıkarılır. Örnek barkod yoksa boş bırakıp önek ve basamağı yazın.</div>
+    <div class="filters">
+      <label>Önek<input id="ltd-prefix" maxlength="10" style="width:100px"></label>
+      <label>Basamak<input id="ltd-digits" type="number" min="1" max="10" step="1" value="6" style="width:80px"></label>
+    </div>
+    <label class="field">Gaz + kapasite (etikette)<input id="ltd-gas" maxlength="60" placeholder="ör. Oksijen 40 lt"></label>
+    <label class="field">Test tarihi (isteğe bağlı)<input id="ltd-test" maxlength="30" placeholder="ör. 05.2031"></label>
+    <div class="hint">Etiket ölçüsü, kopya, üst yazı ve gösterilecek alanlar şu anki "Etiket ayarları"ndan alınır.</div>
+    <div id="ltd-msg" class="msg hidden"></div>
+    <div class="actions"><button class="primary" id="ltd-save" type="button">Kaydet</button></div>
+  </div>
+</dialog>
+
+<dialog id="count-dialog">
+  <div class="dlg-head"><h3 id="cd-title">Depo sayımı</h3><button class="secondary" id="cd-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <div id="cd-msg" class="msg hidden"></div>
+    <div class="card">
+      <div class="toolbar"><h2>Sayım</h2><button class="secondary small" id="cd-refresh" type="button">Yenile</button><a class="secondary small" id="cd-xlsx" href="#">Excel'e aktar</a><a class="secondary small" id="cd-pdf" href="#" target="_blank" rel="noopener">PDF</a><button class="danger" id="cd-close-count" type="button" data-perm="depo-sayim">Sayımı bitir</button></div>
+      <div class="kv" id="cd-info"></div>
+    </div>
+    <div class="card"><h2>Gaz türü ve boyuta göre karşılaştırma</h2><p class="muted">Bir satıra tıklayınca aşağıdaki liste yalnızca o grubu gösterir; tekrar tıklayınca tümü gelir.</p><div class="table-wrap"><table id="cd-groups"></table></div></div>
+    <div class="card">
+      <div class="toolbar">
+        <h2 id="cd-list-title">Tüpler</h2>
+        <select id="cd-kind"><option value="missing">Eksik (depoda olmalıydı, okutulmadı)</option><option value="extra">Fazla (kayıtta başka yerde)</option><option value="matched">Eşleşen</option><option value="unknown">Tanınmayan barkod</option></select>
+        <input id="cd-q" placeholder="Barkod, seri no, gaz ara" style="min-width:200px">
+      </div>
+      <div class="table-wrap"><table id="cd-list"></table></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="tp-dialog">
+  <div class="dlg-head"><h3 id="tp-title">Yeni sefer planı</h3><button class="secondary" id="tp-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <form id="tp-form" style="display:flex;flex-direction:column;gap:10px">
+      <div class="toolbar" style="flex-wrap:wrap">
+        <label class="field">Gün<input type="date" id="tp-day" required></label>
+        <label class="field">Araç<select id="tp-plate" required></select></label>
+        <label class="field">Yaklaşma uyarısı<select id="tp-meters"></select></label>
+      </div>
+      <label class="field">Not (isteğe bağlı)<input id="tp-note" maxlength="300" autocomplete="off" placeholder="ör. öğleden önce sanayi bölgesi"></label>
+      <div class="field">Müşteri ekle
+        <div class="pw-row"><input id="tp-musteri-q" placeholder="Müşteri ara" autocomplete="off"><select id="tp-musteri"></select><button class="secondary small" id="tp-add" type="button">Ekle</button></div>
+      </div>
+      <div class="table-wrap"><table id="tp-stops"></table></div>
+      <div class="toolbar">
+        <button class="primary" type="submit" id="tp-save">Kaydet</button>
+        <button class="secondary delete-link hidden" type="button" id="tp-delete">Planı sil</button>
+        <span class="muted" id="tp-status"></span>
+      </div>
+      <div id="tp-dmsg" class="msg hidden"></div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="loc-dialog" class="narrow">
+  <div class="dlg-head"><h3 id="loc-title">Müşteri konumu</h3><button class="secondary" id="loc-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <form id="loc-form" style="display:flex;flex-direction:column;gap:10px">
+      <div id="loc-current" class="muted"></div>
+      <label class="field">Google Haritalar bağlantısı veya koordinat<textarea id="loc-text" rows="3" maxlength="2000" placeholder="https://maps.app.goo.gl/… veya 37.00123, 35.32111"></textarea></label>
+      <div class="hint">Google Haritalar'da müşterinin yerine uzun basın: üstte çıkan koordinatı kopyalayın ya da Paylaş &gt; Bağlantıyı kopyala ile gelen bağlantıyı yapıştırın.</div>
+      <div class="toolbar">
+        <button class="primary" type="submit" id="loc-save">Kaydet</button>
+        <button class="primary hidden" type="button" id="loc-verify">✓ Konumu onayla</button>
+        <button class="secondary delete-link" type="button" id="loc-clear">Konumu sil</button>
+      </div>
+      <div id="loc-msg" class="msg hidden"></div>
+    </form>
+  </div>
+</dialog>
+
+<script src="/panel/qrcode.js"></script>
 <script src="/panel/app.js"></script>
 </body>
 </html>

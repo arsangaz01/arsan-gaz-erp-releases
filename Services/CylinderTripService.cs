@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ArsanGazERP.Services;
 
-public sealed record TripVehicleSummary(string Plate, int LoadedCount, bool OnTrip, DateTime? ReturnedAt);
+public sealed record TripVehicleSummary(string Plate, int LoadedCount, bool OnTrip, DateTime? ReturnedAt, int OnVehicle = 0);
 
 public sealed record ActiveTripSummary(
     int Id,
@@ -633,7 +633,12 @@ public sealed class CylinderTripService
         string movementNote = $"Sefer #{tripId} · teslim" + (string.IsNullOrWhiteSpace(note) ? string.Empty : " · " + note.Trim())
             + (string.IsNullOrWhiteSpace(performedBy) ? string.Empty : $" · {performedBy}");
         List<CylinderBulkResult> moved = await _crud.MoveCylindersAsync(clean, CylinderStatus.Customer, customerId, movementNote, "Sefer teslimi", vehiclePlate: null, isFull: null);
-        await MarkTripRowsAsync(db, tripId, null, moved, row => row.DeliveredAt ??= DateTime.Now);
+        int? deliveredTo = await _crud.ResolveCustomerIdAsync(customerId);
+        await MarkTripRowsAsync(db, tripId, null, moved, row =>
+        {
+            row.DeliveredAt ??= DateTime.Now;
+            row.DeliveredCustomerId = deliveredTo;
+        });
         return moved;
     }
 
@@ -710,9 +715,11 @@ public sealed class CylinderTripService
             }
 
             string? customer = cylinder.Status == CylinderStatus.Customer ? cylinder.CurrentCustomer?.CompanyName : null;
+            int? pickupCustomerId = cylinder.Status == CylinderStatus.Customer ? cylinder.CurrentCustomerId : null;
             if (rows.TryGetValue(cylinder.Id, out CylinderTripCylinder? row))
             {
                 row.DeliveredAt = null;
+                row.DeliveredCustomerId = null;
                 row.ReturnedAt = null;
                 row.MissingReason = null;
                 row.MissingNote = null;
@@ -722,6 +729,7 @@ public sealed class CylinderTripService
                 row.CheckedBy = null;
                 row.IsPickup = true;
                 row.PickupCustomer = customer;
+                row.PickupCustomerId = pickupCustomerId;
                 row.VehiclePlate = normalized;
                 row.LoadedAt = now;
                 messages.Add($"{cylinder.SerialNumber}: bu seferde teslim edilmişti; müşteriden geri alındı.");
@@ -737,7 +745,8 @@ public sealed class CylinderTripService
                     GasType = cylinder.GasType,
                     LoadedAt = now,
                     IsPickup = true,
-                    PickupCustomer = customer
+                    PickupCustomer = customer,
+                    PickupCustomerId = pickupCustomerId
                 });
             }
 
@@ -925,6 +934,10 @@ public sealed class CylinderTripService
         Dictionary<string, int> loadedByPlate = trip.Cylinders
             .GroupBy(x => x.VehiclePlate, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, int> openByPlate = trip.Cylinders
+            .Where(IsOpen)
+            .GroupBy(x => x.VehiclePlate, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
 
         List<TripVehicleSummary> vehicles = trip.Vehicles
             .OrderBy(x => x.Plate, StringComparer.Create(System.Globalization.CultureInfo.GetCultureInfo("tr-TR"), true))
@@ -932,12 +945,13 @@ public sealed class CylinderTripService
                 v.Plate,
                 loadedByPlate.GetValueOrDefault(v.Plate),
                 v.ReturnedAt is null,
-                v.ReturnedAt))
+                v.ReturnedAt,
+                openByPlate.GetValueOrDefault(v.Plate)))
             .ToList();
 
         foreach (KeyValuePair<string, int> extra in loadedByPlate.Where(x => vehicles.All(v => !string.Equals(v.Plate, x.Key, StringComparison.OrdinalIgnoreCase))))
         {
-            vehicles.Add(new TripVehicleSummary(extra.Key, extra.Value, true, null));
+            vehicles.Add(new TripVehicleSummary(extra.Key, extra.Value, true, null, openByPlate.GetValueOrDefault(extra.Key)));
         }
 
         return new ActiveTripSummary(

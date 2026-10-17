@@ -16,11 +16,16 @@ internal static class PanelPermissions
     internal const string CylinderDeliver = "tup-cikis";
     internal const string CylinderReturn = "tup-iade";
     internal const string CylinderAudit = "tup-sayim";
+    internal const string FillRecord = "dolum-kaydi";
+    internal const string StockCount = "depo-sayim";
+    internal const string LabelPrint = "barkod-yazdir";
     internal const string MovementView = "hareket-goruntule";
     internal const string Reports = "rapor";
     internal const string Export = "disa-aktar";
     internal const string CustomerView = "musteri-goruntule";
     internal const string CustomerCreate = "musteri-ekle";
+    internal const string CustomerStockTotals = "musteri-stok-toplam";
+    internal const string CustomerRequests = "musteri-talepleri";
     internal const string CrmView = "crm-goruntule";
     internal const string CrmWrite = "crm-yaz";
     internal const string VehicleView = "arac-goruntule";
@@ -30,6 +35,9 @@ internal static class PanelPermissions
     internal const string TripLoad = "sefer-yukle";
     internal const string TripDeliver = "sefer-teslim";
     internal const string TripClose = "sefer-kapat";
+    internal const string TripRoute = "sefer-rota";
+    internal const string TripPlan = "sefer-plani";
+    internal const string CustomerLocation = "musteri-konum-kaydet";
     internal const string CampaignView = "kampanya-goruntule";
     internal const string CampaignWhatsApp = "kampanya-whatsapp";
     internal const string CampaignManage = "kampanya-yonet";
@@ -49,11 +57,16 @@ internal static class PanelPermissions
         new(CylinderDeliver, "Tüpler", "Müşteriye çıkış (tüpü müşteriye verme)"),
         new(CylinderReturn, "Tüpler", "Müşteriden iade (müşterideki tüpü geri alma)"),
         new(CylinderAudit, "Tüpler", "Müşteride tüp sayımı"),
+        new(FillRecord, "Tüpler", "Dolum kaydı (lot/parti ile depoda dolu yapma)"),
+        new(StockCount, "Tüpler", "Depo sayımı: telefonda ana depodaki tüpleri okutarak sayma ve panelde Sayım Raporları (yalnızca Yönetici ve Operatör)"),
+        new(LabelPrint, "Tüpler", "Karekod/barkod etiketi yazdırma (panelde Karekod Yazdır sekmesi)"),
         new(MovementView, "Hareketler ve raporlar", "Hareket geçmişini görme"),
         new(Reports, "Hareketler ve raporlar", "Raporlar: uzun süre müşteride kalanlar, test tarihleri, sipariş tahmini"),
         new(Export, "Hareketler ve raporlar", "Excel/CSV'ye aktarma"),
         new(CustomerView, "Müşteriler", "Müşteri listesi ve arama"),
         new(CustomerCreate, "Müşteriler", "Yeni müşteri ekleme"),
+        new(CustomerStockTotals, "Müşteriler", "Müşteri stoğunda tüm müşterilerin toplamı ve gaz/boyut tablosu"),
+        new(CustomerRequests, "Müşteriler", "Müşteri talepleri: boş tüp alımı ve dolu tüp siparişi taleplerini görme, ekleme, tamamlandı/iptal işaretleme"),
         new(CrmView, "CRM", "CRM firmaları ve takip listesi"),
         new(CrmWrite, "CRM", "CRM notu ve takip tarihi girme"),
         new(VehicleView, "Araçlar", "Araçları ve araçtaki tüpleri görme"),
@@ -63,6 +76,9 @@ internal static class PanelPermissions
         new(TripLoad, "Seferler", "Araca tüp yükleme"),
         new(TripDeliver, "Seferler", "Seferde müşteriye teslim ve dönüş okutma"),
         new(TripClose, "Seferler", "Seferi kapatma"),
+        new(TripRoute, "Seferler", "Sefer rotası: durak sırası, bugünkü sefer planım ve yol tarifi"),
+        new(TripPlan, "Seferler", "Sefer planı: gün ve araç için uğranacak müşteriler, uyarı mesafesi ve müşteri konumu (panelde Sefer Planı sekmesi)"),
+        new(CustomerLocation, "Seferler", "Seferde müşterinin yanındayken telefonun konumunu müşteri konumu olarak kaydetme"),
         new(CampaignView, "Kampanya", "Kampanya ve grupları görme"),
         new(CampaignWhatsApp, "Kampanya", "WhatsApp listesini alma (telefon numaraları), gönderildi/RET işaretleme"),
         new(CampaignManage, "Kampanya", "Grup oluşturma/silme, kampanya hazırlama, başlatma, durdurma, iptal"),
@@ -76,6 +92,9 @@ internal static class PanelPermissions
     internal static readonly IReadOnlyList<string> All = Catalog.Select(p => p.Key).ToArray();
 
     internal static bool IsKnown(string? key) => key is not null && All.Contains(key);
+
+    // Depot count stays with Yönetici and Operatör even when someone tries to grant it to a field or viewer account.
+    internal static readonly IReadOnlyList<string> OperatorOnly = [StockCount];
 
     internal static bool IsAdminOnly(string key) => Catalog.Any(p => p.Key == key && p.AdminOnly);
 
@@ -99,14 +118,18 @@ internal static class PanelRoles
     private static readonly string[] OperatorDefaults = PanelPermissions.All.Except(
     [
         PanelPermissions.ManageUsers, PanelPermissions.ManageDevices, PanelPermissions.AuditLog,
-        PanelPermissions.CursorTask, PanelPermissions.CampaignManage, PanelPermissions.CampaignWhatsApp
+        PanelPermissions.CursorTask, PanelPermissions.CampaignManage, PanelPermissions.CampaignWhatsApp,
+        PanelPermissions.CustomerStockTotals
     ]).ToArray();
 
+    // TupTakip şoför menüsüyle aynı işler: sefer, plan, sayım, dolum (CRM/kampanya/asistan ofiste kalır).
     private static readonly string[] DriverDefaults =
     [
         PanelPermissions.Summary, PanelPermissions.CylinderView, PanelPermissions.CylinderMove, PanelPermissions.CylinderDeliver,
         PanelPermissions.CylinderReturn, PanelPermissions.CylinderAudit, PanelPermissions.MovementView, PanelPermissions.CustomerView,
-        PanelPermissions.VehicleView, PanelPermissions.TripView, PanelPermissions.TripLoad, PanelPermissions.TripDeliver
+        PanelPermissions.VehicleView, PanelPermissions.TripView, PanelPermissions.TripStart, PanelPermissions.TripLoad,
+        PanelPermissions.TripDeliver, PanelPermissions.TripRoute, PanelPermissions.TripPlan, PanelPermissions.CustomerLocation,
+        PanelPermissions.StockCount, PanelPermissions.FillRecord
     ];
 
     private static readonly string[] ViewerDefaults =
@@ -142,6 +165,11 @@ internal static class PanelRoles
         }
 
         set.ExceptWith(removed ?? []);
+        if (role != Operator)
+        {
+            set.ExceptWith(PanelPermissions.OperatorOnly);
+        }
+
         return PanelPermissions.All.Where(set.Contains).ToArray();
     }
 

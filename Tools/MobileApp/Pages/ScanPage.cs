@@ -16,6 +16,9 @@ public sealed class ScanPage : ContentPage
     private readonly bool _allowMany;
     private readonly HashSet<string> _known;
     private readonly List<string> _codes = [];
+    // Live mode: every new code is sent at once and the returned text is shown; one code at a time.
+    private Func<string, Task<string>>? _live;
+    private bool _liveBusy;
     private readonly Label _counter = new() { FontSize = 16, TextColor = Colors.White, HorizontalTextAlignment = TextAlignment.Center, Margin = new Thickness(12, 8) };
 
     private ScanPage(bool continuous, bool allowMany, IEnumerable<string>? known)
@@ -82,7 +85,38 @@ public sealed class ScanPage : ContentPage
     public static async Task<IReadOnlyList<string>> ScanManyAsync(INavigation navigation, IEnumerable<string>? known = null) =>
         await OpenAsync(navigation, continuous: true, allowMany: true, known) ?? [];
 
-    private static async Task<IReadOnlyList<string>?> OpenAsync(INavigation navigation, bool continuous, bool allowMany, IEnumerable<string>? known)
+    // Continuous scanning where each code is handled as soon as it is read (e.g. depot count); onCode returns the line to show.
+    public static async Task ScanLiveAsync(INavigation navigation, Func<string, Task<string>> onCode, string intro) =>
+        await OpenAsync(navigation, continuous: true, allowMany: true, known: null, page => { page._live = onCode; page._counter.Text = intro; });
+
+    private async Task SendLiveAsync(IReadOnlyList<string> codes)
+    {
+        _liveBusy = true;
+        try
+        {
+            foreach (string code in codes)
+            {
+                _codes.Add(code);
+                try
+                {
+                    _counter.Text = await _live!(code);
+                    Buzz();
+                }
+                catch (Exception exception)
+                {
+                    _codes.Remove(code);
+                    _counter.Text = $"❌ {code}: {exception.Message}";
+                }
+            }
+        }
+        finally
+        {
+            _liveBusy = false;
+        }
+    }
+
+    private static async Task<IReadOnlyList<string>?> OpenAsync(INavigation navigation, bool continuous, bool allowMany, IEnumerable<string>? known,
+        Action<ScanPage>? setup = null)
     {
         PermissionStatus status = await Permissions.RequestAsync<Permissions.Camera>();
         if (status != PermissionStatus.Granted)
@@ -91,6 +125,7 @@ public sealed class ScanPage : ContentPage
         }
 
         ScanPage page = new(continuous, allowMany, known);
+        setup?.Invoke(page);
         await navigation.PushModalAsync(page);
         return await page._result.Task;
     }
@@ -105,6 +140,16 @@ public sealed class ScanPage : ContentPage
 
         MainThread.BeginInvokeOnMainThread(async () =>
         {
+            if (_live is not null)
+            {
+                if (!_liveBusy && !_codes.Contains(value, StringComparer.OrdinalIgnoreCase))
+                {
+                    await SendLiveAsync([value]);
+                }
+
+                return;
+            }
+
             if (_continuous)
             {
                 if (_codes.Contains(value, StringComparer.OrdinalIgnoreCase))
@@ -239,6 +284,12 @@ public sealed class ScanPage : ContentPage
         }
 
         Buzz();
+        if (_live is not null)
+        {
+            await SendLiveAsync(fresh);
+            return;
+        }
+
         if (_continuous)
         {
             _codes.AddRange(fresh);

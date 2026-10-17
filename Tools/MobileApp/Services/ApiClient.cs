@@ -11,6 +11,66 @@ public sealed record CustomerItem(int Id, string Code, string Name, string? City
     public string Subtitle => $"{Code} · {City ?? "-"} · müşteride {Cylinders} tüp";
 }
 
+public sealed record CustomerStockTotals(int Count, int Full, int Empty, int Unknown, int CustomerOwned, int? MaxDays, int? AvgDays, int Long, DateTime? LastDelivery);
+
+public sealed record CustomerStockGroupItem(string GasType, string Capacity, int Count, int Full, int Empty, int? MinDays, int? MaxDays, int? AvgDays, int Long)
+{
+    public string Title => $"{GasType} {Capacity}";
+
+    public string Subtitle => $"dolu {Full} · boş {Empty}" + (MaxDays is int max ? $" · {max} gün" : string.Empty)
+        + (Long > 0 ? $" · ⚠ {Long} tüp uzun süredir" : string.Empty);
+}
+
+public sealed record CustomerStockCylinderItem(
+    int Id,
+    string SerialNumber,
+    string Barcode,
+    string? ManufacturerSerial,
+    string GasType,
+    string Capacity,
+    string Fullness,
+    string? Since,
+    int? Days,
+    bool CustomerOwned,
+    string? TestDue,
+    bool TestOverdue,
+    bool NeedsReview)
+{
+    public string Title => $"{(NeedsReview ? "⚠ " : string.Empty)}{SerialNumber} · {GasType} {Capacity}";
+
+    public string Subtitle => string.Join(" · ", new[]
+    {
+        Fullness == "-" ? null : Fullness,
+        Since is null ? "teslim tarihi yok" : $"teslim {Since}",
+        Days is int days ? $"{days} gündür" : null,
+        TestDue is null ? null : (TestOverdue ? "test geçmiş " : "test ") + TestDue,
+        CustomerOwned ? "müşteri malı" : null
+    }.Where(part => !string.IsNullOrEmpty(part)));
+
+    public string Codes => string.Join(" · ", new[]
+    {
+        Barcode != SerialNumber ? "barkod " + Barcode : null,
+        string.IsNullOrWhiteSpace(ManufacturerSerial) ? null : "üretici " + ManufacturerSerial
+    }.Where(part => !string.IsNullOrEmpty(part)));
+}
+
+public sealed record CustomerStockResponse(
+    int Id,
+    string Name,
+    string Code,
+    string? City,
+    string? District,
+    string? Phone,
+    bool IsActive,
+    int LongDays,
+    CustomerStockTotals Totals,
+    List<CustomerStockGroupItem> Groups,
+    List<CustomerStockCylinderItem> Cylinders);
+
+public sealed record FillLineItem(string Code, bool Ok, string Message, bool TestOverdue);
+public sealed record FillResponse(string Message, int Filled, List<FillLineItem> Lines, List<string> NeedsTestConfirmation);
+public sealed record FillItem(int Id, int CylinderId, string SerialNumber, string GasType, string FilledAt, string FilledBy, string? LotNumber, string? Note, bool TestOverdue);
+
 public sealed record CustomerCreated(string Message, CustomerItem Customer);
 
 public sealed record CrmItem(int Id, string Name, string? City, string? Sector, string? Phone, string Status, int Score, string? FollowUp, int? FollowUpDays)
@@ -83,7 +143,7 @@ public sealed record CylinderBulkResult(string Code, bool Ok, string Message);
 public sealed record CylinderBulkResponse(string Message, int Ok, int Failed, List<CylinderBulkResult> Results);
 public sealed record CylinderAuditResponse(string Message, int Expected, int Found, List<string> Missing, List<string> Unexpected, List<string> Unknown);
 
-public sealed record TripVehicleSummary(string Plate, int LoadedCount, bool OnTrip, DateTime? ReturnedAt);
+public sealed record TripVehicleSummary(string Plate, int LoadedCount, bool OnTrip, DateTime? ReturnedAt, int OnVehicle = 0);
 
 public sealed record ActiveTripSummary(
     int Id,
@@ -308,6 +368,53 @@ public sealed record CampaignListItem(
         (Failed > 0 ? $" · {Failed} başarısız" : string.Empty) + $" · başlangıç {StartsAt}";
 }
 
+// Permission keys the field screens test (the same keys the panel and server use).
+public static class Perm
+{
+    public const string StockCount = "depo-sayim";
+    public const string TripRoute = "sefer-rota";
+    public const string CustomerLocation = "musteri-konum-kaydet";
+    public const string Reports = "rapor";
+    public const string Export = "disa-aktar";
+}
+
+public sealed record TripStopItem(int Id, int Position, string Plate, int CustomerId, string CustomerName, string? Address, string? District, string? City, string? Phone,
+    bool Done, DateTime? DoneAt, int Delivered, int Collected, string? Note, string? MapUrl,
+    double? Latitude = null, double? Longitude = null, int? AlertMeters = null, bool? LocationVerified = null);
+public sealed record TripPlanStopItem(int CustomerId, string CustomerName, string? City, string? District, string? Address, string? Note,
+    double? Latitude, double? Longitude, bool? LocationVerified, bool Done);
+public sealed record TripPlanItem(int Id, DateTime Date, string Plate, int AlertMeters, string? Note, string Status, int? TripId,
+    int StopCount, int Located, int Unverified, int Done, List<TripPlanStopItem> Stops);
+public sealed record TodayPlansResponse(bool On, List<TripPlanItem>? Plans);
+public sealed record TripStopSuggestionItem(int CustomerId, string CustomerName, string? City, string Reason);
+
+public sealed record StockCountGroupInfo(string Title, string GasType, string Capacity, int Expected, int Counted, int Matched, int Missing, int Extra, int Full, int Empty);
+public sealed record StockCountCylinderInfo(int Id, string SerialNumber, string Barcode, string Group, string Fullness, string Place, string? At);
+public sealed record StockCountUnknownInfo(string Code, string At, string ScannedBy);
+public sealed record StockCountGroupCylinder(int Id, string SerialNumber, string Barcode, string GasType, string Capacity, string Fullness, string Place, string? At, string? ScannedBy);
+public sealed record StockCountGroupDetailInfo(string Title, List<StockCountGroupCylinder> Matched, List<StockCountGroupCylinder> Missing, List<StockCountGroupCylinder> Extra);
+public sealed record StockCountInfo(
+    int Id,
+    string Location,
+    string Started,
+    string StartedBy,
+    bool Open,
+    int Expected,
+    int Counted,
+    int Matched,
+    int Missing,
+    int Extra,
+    int Unknown,
+    string Text,
+    List<StockCountGroupInfo> Groups,
+    List<StockCountCylinderInfo> Recent,
+    List<StockCountUnknownInfo> UnknownCodes);
+public sealed record StockCountListInfo(int Id, string Location, string Started, string StartedBy, string? Closed, bool Open,
+    int Expected, int Counted, int Matched, int Missing, int Extra, int Unknown);
+public sealed record StockCountActiveResponse(StockCountInfo? Count, List<StockCountInfo>? Counts = null);
+public sealed record StockCountResponse(string Message, StockCountInfo? Count);
+public sealed record StockCountScanResponse(string Outcome, string Message, string? Group, StockCountInfo Count);
+
 // The signed-in panel user as last reported by the server; permissions decide which tabs and buttons are shown.
 public sealed record UserSession(
     int Id,
@@ -321,6 +428,13 @@ public sealed record UserSession(
     string Device)
 {
     public bool Can(string permission) => permission.Split('|').Any(Permissions.Contains);
+
+    // Saha / şoför: TupTakip'teki IsDriver ile aynı ana menü düzeni.
+    public bool IsDriver =>
+        string.Equals(Role, "Saha", StringComparison.OrdinalIgnoreCase)
+        || RoleName.Contains("Saha", StringComparison.OrdinalIgnoreCase)
+        || RoleName.Contains("Şoför", StringComparison.OrdinalIgnoreCase)
+        || RoleName.Contains("Sofor", StringComparison.OrdinalIgnoreCase);
 
     public string Caption => (DisplayName == UserName ? UserName : $"{DisplayName} ({UserName})") + " · " + Role;
 }
@@ -589,6 +703,8 @@ public sealed class ApiClient
 
     public bool Can(string permission) => Session?.Can(permission) == true;
 
+    public bool CanAny(params string[] permissions) => permissions.Any(Can);
+
     // Raised (on any thread) when the server refuses the token: expired, signed out by the administrator, password
     // or role changed. The app returns to the sign-in screen with the message.
     public event Action<string>? SessionEnded;
@@ -614,6 +730,80 @@ public sealed class ApiClient
 
     public async Task<List<CustomerItem>> CustomersAsync(string query) =>
         await GetAsync<List<CustomerItem>>("/api/musteriler?q=" + Uri.EscapeDataString(query));
+
+    public Task<CustomerStockResponse> CustomerStockAsync(int customerId) =>
+        GetAsync<CustomerStockResponse>("/api/musteri/" + customerId + "/stok");
+
+    public Task<FillResponse> FillAsync(IReadOnlyList<string> codes, string? lot, string? note, bool allowOverdueTest) =>
+        PostAsync<FillResponse>("/api/dolum", new { codes, lot, note, allowOverdueTest });
+
+    public Task<List<FillItem>> RecentFillsAsync() => GetAsync<List<FillItem>>("/api/dolum/son?gun=1");
+
+    // ---- Depot count ----------------------------------------------------------------------------------------------
+    public const string StockCountFull = "Ana depo · Dolu";
+    public const string StockCountEmpty = "Ana depo · Boş";
+
+    public Task<StockCountActiveResponse> ActiveStockCountAsync(string? location = null) =>
+        GetAsync<StockCountActiveResponse>("/api/depo-sayim/aktif"
+            + (string.IsNullOrWhiteSpace(location) ? string.Empty : "?lokasyon=" + Uri.EscapeDataString(location)));
+
+    public Task<StockCountResponse> StartStockCountAsync(string? note, string? location = null) =>
+        PostAsync<StockCountResponse>("/api/depo-sayim/baslat", new { note, location });
+
+    public Task<StockCountScanResponse> ScanStockCountAsync(int id, string code, DateTime? at = null) =>
+        PostAsync<StockCountScanResponse>($"/api/depo-sayim/{id}/okut", new { code, at });
+
+    public Task<StockCountGroupDetailInfo> StockCountGroupAsync(int id, string gasType, string capacity) =>
+        GetAsync<StockCountGroupDetailInfo>($"/api/depo-sayim/{id}/grup?gaz={Uri.EscapeDataString(gasType)}&boyut={Uri.EscapeDataString(capacity)}");
+
+    public Task<List<StockCountListInfo>> StockCountsAsync() => GetAsync<List<StockCountListInfo>>("/api/depo-sayim/liste");
+
+    public Task<StockCountResponse> UndoStockCountAsync(int id, string code) =>
+        PostAsync<StockCountResponse>($"/api/depo-sayim/{id}/geri-al", new { code });
+
+    public Task<StockCountResponse> CloseStockCountAsync(int id) =>
+        PostAsync<StockCountResponse>($"/api/depo-sayim/{id}/bitir", new { });
+
+    // File download (Excel/PDF); the name comes from the server's Content-Disposition.
+    public async Task<(byte[] Bytes, string FileName)> DownloadAsync(string path, string fallbackName)
+    {
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Get, path, null);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ReadAsync<JsonElement>(response);
+        }
+
+        byte[] bytes = await response.Content.ReadAsByteArrayAsync();
+        string? name = response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+        return (bytes, string.IsNullOrWhiteSpace(name) ? fallbackName : Path.GetFileName(name));
+    }
+
+    // ---- Trip plan, route and customer location ------------------------------------------------------------------
+    public Task<TodayPlansResponse> TodayPlansAsync() => GetAsync<TodayPlansResponse>("/api/sefer-plani/bugun");
+
+    public Task<List<TripStopItem>> TripRouteAsync(int tripId, string plate) =>
+        GetAsync<List<TripStopItem>>("/api/sefer/" + tripId + "/rota?plaka=" + Uri.EscapeDataString(plate));
+
+    public Task<List<TripStopSuggestionItem>> TripStopSuggestionsAsync(int tripId, string plate) =>
+        GetAsync<List<TripStopSuggestionItem>>("/api/sefer/" + tripId + "/rota/oneriler?plaka=" + Uri.EscapeDataString(plate));
+
+    public Task<string> AddTripStopAsync(int tripId, string plate, int customerId) =>
+        PostMessageAsync("/api/sefer/rota/ekle", new { tripId, plate, customerId });
+
+    public Task<string> MoveTripStopAsync(int tripId, int stopId, int direction) =>
+        PostMessageAsync("/api/sefer/rota/sira", new { tripId, stopId, direction });
+
+    public Task<string> RemoveTripStopAsync(int tripId, int stopId) =>
+        PostMessageAsync("/api/sefer/rota/sil", new { tripId, stopId });
+
+    public Task<string> SetTripStopDoneAsync(int tripId, int stopId, bool done) =>
+        PostMessageAsync("/api/sefer/rota/tamam", new { tripId, stopId, done });
+
+    public Task<string> SaveCustomerLocationAsync(int customerId, double latitude, double longitude, double? accuracy) =>
+        PostMessageAsync("/api/musteri/" + customerId + "/konum", new { latitude, longitude, accuracy });
+
+    public Task<string> VerifyCustomerLocationAsync(int customerId) =>
+        PostMessageAsync("/api/musteri/" + customerId + "/konum/onayla", new { });
 
     public Task<CustomerCreated> CreateCustomerAsync(object customer) => PostAsync<CustomerCreated>("/api/musteri", customer);
 

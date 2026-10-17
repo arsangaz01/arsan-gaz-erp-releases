@@ -132,6 +132,7 @@ await ShutdownDrainsAfterCancellationCallbackFailureAsync();
 AgentWatcherDataRootResolutionPrefersExistingLocalData();
 StartupErpResolutionPrefersCurrentPublishedBundle();
 VersionedWatcherUsesCanonicalCurrentBundle();
+ArsanGazERP.AgentWatcher.Tests.AgentWatcherStartupScriptTests.Run();
 await ErpShutdownWaitsForBackgroundScannerAsync();
 await ErpShutdownCancelsAndDrainsScannerAsync();
 SettingsRejectCorruptFilesWithoutOverwriting();

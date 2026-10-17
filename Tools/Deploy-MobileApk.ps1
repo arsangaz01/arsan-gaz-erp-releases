@@ -30,6 +30,7 @@ if (-not $SkipBuild) {
     dotnet publish (Join-Path $repo "Tools\MobileApp\ArsanGazMobile.csproj") -c Release -f net10.0-android `
         -p:AndroidPackageFormat=apk -p:RunAOTCompilation=false -r android-arm64 `
         -p:AndroidSdkDirectory=$sdk -p:JavaSdkDirectory=$jdk
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish basarisiz (exit $LASTEXITCODE)." }
 }
 
 if (-not $ApkPath) {

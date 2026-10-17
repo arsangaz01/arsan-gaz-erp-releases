@@ -52,6 +52,19 @@ public static class VehicleTracking
             .ThenBy(x => x.GasType, TurkishOrder)
             .ToList();
 
+    // "40 Litre" → "40 Litre"; a missing or zero size is not part of the group name.
+    internal static string? SizeKey(string? capacity)
+    {
+        string text = (capacity ?? string.Empty).Trim();
+        return text.Length == 0 || text == "-" || SizeValue(text) <= 0 ? null : text;
+    }
+
+    internal static decimal SizeValue(string? size)
+    {
+        string number = new((size ?? string.Empty).TakeWhile(c => char.IsDigit(c) || c is ',' or '.').ToArray());
+        return decimal.TryParse(number.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal value) ? value : 0;
+    }
+
     public static string TripState(DateTime? deliveredAt, DateTime? returnedAt, bool missing) =>
         deliveredAt is not null ? "Müşteriye teslim edildi"
         : returnedAt is not null ? "Depoya döndü"

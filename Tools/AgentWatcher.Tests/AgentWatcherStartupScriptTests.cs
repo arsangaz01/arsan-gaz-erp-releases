@@ -21,14 +21,18 @@ internal static class AgentWatcherStartupScriptTests
             erpExecutable,
             startErp: true,
             startMinimized: true);
-        if (!withErp.Contains($"set \"WATCHER_EXE={Path.GetFullPath(watcherExecutable)}\"", StringComparison.Ordinal) ||
-            !withErp.Contains("\"%WATCHER_EXE%\" --background", StringComparison.Ordinal) ||
-            !withErp.Contains($"set \"ERP_EXE={Path.GetFullPath(erpExecutable)}\"", StringComparison.Ordinal) ||
-            !withErp.Contains("start \"\" /MIN /D \"%ERP_DIR%\" \"%ERP_EXE%\"", StringComparison.Ordinal) ||
-            !withErp.Contains("if \"%WATCHER_DIR:~-1%\"==\"\\\" set \"WATCHER_DIR=%WATCHER_DIR:~0,-1%\"", StringComparison.Ordinal) ||
-            !withErp.Contains("if \"%ERP_DIR:~-1%\"==\"\\\" set \"ERP_DIR=%ERP_DIR:~0,-1%\"", StringComparison.Ordinal))
+        string watcherFull = Path.GetFullPath(watcherExecutable);
+        string erpFull = Path.GetFullPath(erpExecutable);
+        if (!withErp.Contains($"watcher = \"{watcherFull}\"", StringComparison.Ordinal) ||
+            !withErp.Contains("sh.Run \"\"\"\" & watcher & \"\"\" --background\", 0, False", StringComparison.Ordinal) ||
+            !withErp.Contains($"erp = \"{erpFull}\"", StringComparison.Ordinal) ||
+            !withErp.Contains("sh.Run \"\"\"\" & erp & \"\"\"\", 7, False", StringComparison.Ordinal) ||
+            !withErp.Contains("WScript.Sleep 20000", StringComparison.Ordinal) ||
+            !withErp.Contains("WScript.Sleep 40000", StringComparison.Ordinal) ||
+            withErp.Contains("timeout /t", StringComparison.Ordinal) ||
+            withErp.Contains("@echo off", StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Windows startup must launch the background Watcher and optionally start ERP minimized without trailing-backslash /D quoting bugs.");
+            throw new InvalidOperationException("Windows startup must be a hidden VBS that launches Watcher/ERP without a cmd console.");
         }
 
         string watcherOnly = AgentWatcherStartupScript.Build(
@@ -36,8 +40,8 @@ internal static class AgentWatcherStartupScriptTests
             erpExecutable: null,
             startErp: false,
             startMinimized: false);
-        if (!watcherOnly.Contains("\"%WATCHER_EXE%\" --background", StringComparison.Ordinal) ||
-            watcherOnly.Contains("ERP_EXE", StringComparison.Ordinal))
+        if (!watcherOnly.Contains("\"\"\"\" & watcher & \"\"\" --background\"", StringComparison.Ordinal) ||
+            watcherOnly.Contains("erp =", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Windows startup must be able to launch only AgentWatcher.");
         }
@@ -47,8 +51,8 @@ internal static class AgentWatcherStartupScriptTests
             erpExecutable: null,
             startErp: true,
             startMinimized: true);
-        if (!watcherWhenErpMissing.Contains("\"%WATCHER_EXE%\" --background", StringComparison.Ordinal) ||
-            watcherWhenErpMissing.Contains("ERP_EXE", StringComparison.Ordinal))
+        if (!watcherWhenErpMissing.Contains("--background", StringComparison.Ordinal) ||
+            watcherWhenErpMissing.Contains("erp =", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("A missing ERP executable must not prevent AgentWatcher from starting with Windows.");
         }

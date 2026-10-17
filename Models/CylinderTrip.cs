@@ -48,6 +48,10 @@ public sealed class CylinderTripCylinder
     public string GasType { get; set; } = string.Empty;
     public DateTime LoadedAt { get; set; } = DateTime.Now;
     public DateTime? DeliveredAt { get; set; }
+    // Customer the row was delivered to on this trip (route stops count as visited by it).
+    public int? DeliveredCustomerId { get; set; }
+    // Set when the row is an empty collected from this customer during the trip.
+    public int? PickupCustomerId { get; set; }
     public DateTime? ReturnedAt { get; set; }
     // An empty taken from a customer during the trip (LoadedAt is the pickup time) instead of a full loaded at the depot.
     public bool IsPickup { get; set; }

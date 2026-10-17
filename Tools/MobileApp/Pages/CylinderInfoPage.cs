@@ -9,12 +9,16 @@ public sealed class CylinderInfoPage : ContentPage
     private readonly VerticalStackLayout _result = new() { Spacing = 12 };
     private readonly ActivityIndicator _busy = new() { IsVisible = false, Color = Ui.Accent };
 
-    public CylinderInfoPage()
+    public CylinderInfoPage(string? initialCode = null)
     {
         Title = "Tüp Bilgisi";
         Ui.ApplyPageChrome(this);
         _code.ReturnType = ReturnType.Search;
         _code.Completed += async (_, _) => await LookupAsync(_code.Text);
+        if (!string.IsNullOrWhiteSpace(initialCode))
+        {
+            _code.Text = initialCode.Trim();
+        }
 
         Content = new ScrollView
         {
@@ -37,6 +41,11 @@ public sealed class CylinderInfoPage : ContentPage
                 }
             }
         };
+
+        if (!string.IsNullOrWhiteSpace(initialCode))
+        {
+            Loaded += async (_, _) => await LookupAsync(initialCode);
+        }
     }
 
     private static Border SourceButton(string glyph, string text, Func<Task> action)

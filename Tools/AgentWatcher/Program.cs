@@ -5816,11 +5816,17 @@ internal static class StartupManager
     public static void Apply(AppSettings settings)
     {
         string startupDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
-        string startup = Path.Combine(startupDirectory, "ArsanGazERP-AgentWatcher.cmd");
+        string startup = Path.Combine(startupDirectory, AgentWatcherStartupScript.StartupFileName);
+        string legacyCmd = Path.Combine(startupDirectory, AgentWatcherStartupScript.LegacyCmdFileName);
         string legacyStartup = Path.Combine(startupDirectory, "ArsanGazERP-Startup.cmd");
         if (File.Exists(legacyStartup))
         {
             File.Delete(legacyStartup);
+        }
+        // Old .cmd used timeout and left blank console windows at logon.
+        if (File.Exists(legacyCmd))
+        {
+            File.Delete(legacyCmd);
         }
 
         string? fallbackWatcherExecutable = Path.Combine(
@@ -5842,6 +5848,11 @@ internal static class StartupManager
             if (File.Exists(startup))
             {
                 File.Delete(startup);
+            }
+
+            if (File.Exists(legacyCmd))
+            {
+                File.Delete(legacyCmd);
             }
 
             return;

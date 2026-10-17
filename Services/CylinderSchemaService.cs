@@ -81,6 +81,130 @@ SELECT DISTINCT p.Plate, 1, datetime('now', 'localtime') FROM (
 ) p WHERE p.Plate <> '';
 """;
 
+    // Depot counts, label products, customer requests, customer locations, trip plans and trip route stops.
+    private const string FieldWorkTablesSql = """
+CREATE TABLE IF NOT EXISTS StockCounts (
+ Id INTEGER NOT NULL CONSTRAINT PK_StockCounts PRIMARY KEY AUTOINCREMENT,
+ Location TEXT NOT NULL,
+ StartedAt TEXT NOT NULL,
+ StartedBy TEXT NOT NULL,
+ ClosedAt TEXT NULL,
+ ClosedBy TEXT NULL,
+ Note TEXT NULL,
+ ExpectedCount INTEGER NOT NULL DEFAULT 0,
+ MatchedCount INTEGER NOT NULL DEFAULT 0,
+ MissingCount INTEGER NOT NULL DEFAULT 0,
+ ExtraCount INTEGER NOT NULL DEFAULT 0,
+ UnknownCount INTEGER NOT NULL DEFAULT 0,
+ ExpectedSnapshot TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS StockCountItems (
+ Id INTEGER NOT NULL CONSTRAINT PK_StockCountItems PRIMARY KEY AUTOINCREMENT,
+ CountId INTEGER NOT NULL,
+ CylinderId INTEGER NULL,
+ Code TEXT NOT NULL,
+ ScannedAt TEXT NOT NULL,
+ ScannedBy TEXT NOT NULL,
+ StatusAtScan INTEGER NULL,
+ PlaceAtScan TEXT NULL,
+ CONSTRAINT FK_StockCountItems_StockCounts_CountId FOREIGN KEY (CountId) REFERENCES StockCounts (Id) ON DELETE CASCADE,
+ CONSTRAINT FK_StockCountItems_Cylinders_CylinderId FOREIGN KEY (CylinderId) REFERENCES Cylinders (Id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_StockCountItems_CountId_CylinderId ON StockCountItems(CountId, CylinderId);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_StockCountItems_CountId_Code ON StockCountItems(CountId, Code);
+CREATE INDEX IF NOT EXISTS IX_StockCounts_StartedAt ON StockCounts(StartedAt);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_StockCounts_Open_Location ON StockCounts(Location) WHERE ClosedAt IS NULL;
+CREATE TABLE IF NOT EXISTS LabelTemplates (
+ Id INTEGER NOT NULL CONSTRAINT PK_LabelTemplates PRIMARY KEY AUTOINCREMENT,
+ Name TEXT NOT NULL,
+ GasText TEXT NOT NULL DEFAULT '',
+ Prefix TEXT NOT NULL DEFAULT '',
+ Digits INTEGER NOT NULL DEFAULT 6,
+ SampleCode TEXT NULL,
+ TestText TEXT NULL,
+ Title TEXT NOT NULL DEFAULT '',
+ WidthMm INTEGER NOT NULL DEFAULT 50,
+ HeightMm INTEGER NOT NULL DEFAULT 30,
+ Copies INTEGER NOT NULL DEFAULT 1,
+ ShowGas INTEGER NOT NULL DEFAULT 1,
+ ShowSerial INTEGER NOT NULL DEFAULT 1,
+ ShowTest INTEGER NOT NULL DEFAULT 1,
+ ShowText INTEGER NOT NULL DEFAULT 1,
+ CreatedAt TEXT NOT NULL,
+ CreatedBy TEXT NOT NULL DEFAULT '',
+ UpdatedAt TEXT NOT NULL,
+ UpdatedBy TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_LabelTemplates_Name ON LabelTemplates(Name);
+CREATE TABLE IF NOT EXISTS CustomerRequests (
+ Id INTEGER NOT NULL CONSTRAINT PK_CustomerRequests PRIMARY KEY AUTOINCREMENT,
+ CustomerId INTEGER NOT NULL,
+ Kind TEXT NOT NULL DEFAULT '',
+ Quantity INTEGER NULL,
+ Note TEXT NULL,
+ CreatedAt TEXT NOT NULL,
+ CreatedBy TEXT NOT NULL DEFAULT '',
+ Status TEXT NOT NULL DEFAULT 'acik',
+ HandledAt TEXT NULL,
+ HandledBy TEXT NULL,
+ HandledNote TEXT NULL,
+ CONSTRAINT FK_CustomerRequests_Customers_CustomerId FOREIGN KEY (CustomerId) REFERENCES Customers (Id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS IX_CustomerRequests_Status_CreatedAt ON CustomerRequests(Status, CreatedAt);
+CREATE INDEX IF NOT EXISTS IX_CustomerRequests_CustomerId ON CustomerRequests(CustomerId);
+CREATE TABLE IF NOT EXISTS CylinderTripStops (
+ Id INTEGER NOT NULL CONSTRAINT PK_CylinderTripStops PRIMARY KEY AUTOINCREMENT,
+ TripId INTEGER NOT NULL,
+ Plate TEXT NOT NULL DEFAULT '',
+ CustomerId INTEGER NOT NULL,
+ Position INTEGER NOT NULL DEFAULT 0,
+ AddedAt TEXT NOT NULL,
+ AddedBy TEXT NOT NULL DEFAULT '',
+ DoneAt TEXT NULL,
+ Note TEXT NULL,
+ AlertMeters INTEGER NULL,
+ CONSTRAINT FK_CylinderTripStops_CylinderTrips_TripId FOREIGN KEY (TripId) REFERENCES CylinderTrips (Id) ON DELETE CASCADE,
+ CONSTRAINT FK_CylinderTripStops_Customers_CustomerId FOREIGN KEY (CustomerId) REFERENCES Customers (Id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_CylinderTripStops_TripId_Plate_CustomerId ON CylinderTripStops(TripId, Plate, CustomerId);
+CREATE TABLE IF NOT EXISTS CustomerLocations (
+ CustomerId INTEGER NOT NULL CONSTRAINT PK_CustomerLocations PRIMARY KEY,
+ Latitude REAL NOT NULL,
+ Longitude REAL NOT NULL,
+ UpdatedAt TEXT NOT NULL,
+ UpdatedBy TEXT NOT NULL DEFAULT '',
+ Source TEXT NOT NULL DEFAULT '',
+ Verified INTEGER NOT NULL DEFAULT 1,
+ Label TEXT NULL,
+ CONSTRAINT FK_CustomerLocations_Customers_CustomerId FOREIGN KEY (CustomerId) REFERENCES Customers (Id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS TripPlans (
+ Id INTEGER NOT NULL CONSTRAINT PK_TripPlans PRIMARY KEY AUTOINCREMENT,
+ PlanDate TEXT NOT NULL,
+ Plate TEXT NOT NULL DEFAULT '',
+ AlertMeters INTEGER NOT NULL DEFAULT 300,
+ Note TEXT NULL,
+ CreatedAt TEXT NOT NULL,
+ CreatedBy TEXT NOT NULL DEFAULT '',
+ UpdatedAt TEXT NOT NULL,
+ UpdatedBy TEXT NOT NULL DEFAULT '',
+ TripId INTEGER NULL,
+ AppliedAt TEXT NULL,
+ CONSTRAINT FK_TripPlans_CylinderTrips_TripId FOREIGN KEY (TripId) REFERENCES CylinderTrips (Id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_TripPlans_PlanDate_Plate ON TripPlans(PlanDate, Plate);
+CREATE TABLE IF NOT EXISTS TripPlanStops (
+ Id INTEGER NOT NULL CONSTRAINT PK_TripPlanStops PRIMARY KEY AUTOINCREMENT,
+ PlanId INTEGER NOT NULL,
+ CustomerId INTEGER NOT NULL,
+ Position INTEGER NOT NULL DEFAULT 0,
+ Note TEXT NULL,
+ CONSTRAINT FK_TripPlanStops_TripPlans_PlanId FOREIGN KEY (PlanId) REFERENCES TripPlans (Id) ON DELETE CASCADE,
+ CONSTRAINT FK_TripPlanStops_Customers_CustomerId FOREIGN KEY (CustomerId) REFERENCES Customers (Id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_TripPlanStops_PlanId_CustomerId ON TripPlanStops(PlanId, CustomerId);
+""";
+
     public static async Task EnsureAsync(CancellationToken cancellationToken = default)
     {
         await using ArsanGazDbContext db = new();
@@ -113,12 +237,36 @@ SELECT DISTINCT p.Plate, 1, datetime('now', 'localtime') FROM (
             command.CommandText = AuditTableSql;
             await command.ExecuteNonQueryAsync(cancellationToken);
 
+            await using SqliteCommand fills = connection.CreateCommand();
+            fills.CommandText = """
+CREATE TABLE IF NOT EXISTS CylinderFills (
+ Id INTEGER NOT NULL CONSTRAINT PK_CylinderFills PRIMARY KEY AUTOINCREMENT,
+ CylinderId INTEGER NOT NULL,
+ SerialNumber TEXT NOT NULL,
+ GasType TEXT NOT NULL,
+ FilledAt TEXT NOT NULL,
+ FilledBy TEXT NOT NULL,
+ LotNumber TEXT NULL,
+ Note TEXT NULL,
+ TestOverdue INTEGER NOT NULL DEFAULT 0,
+ CONSTRAINT FK_CylinderFills_Cylinders_CylinderId FOREIGN KEY (CylinderId) REFERENCES Cylinders (Id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS IX_CylinderFills_FilledAt ON CylinderFills(FilledAt);
+CREATE INDEX IF NOT EXISTS IX_CylinderFills_CylinderId ON CylinderFills(CylinderId);
+""";
+            await fills.ExecuteNonQueryAsync(cancellationToken);
+
+            await using SqliteCommand fieldWork = connection.CreateCommand();
+            fieldWork.CommandText = FieldWorkTablesSql;
+            await fieldWork.ExecuteNonQueryAsync(cancellationToken);
+
             HashSet<string> tripColumns = await ColumnsAsync(connection, "CylinderTripCylinders", cancellationToken);
             foreach ((string column, string definition) in new[]
             {
                 ("MissingReason", "TEXT NULL"), ("MissingNote", "TEXT NULL"), ("ReasonAt", "TEXT NULL"),
                 ("ReasonBy", "TEXT NULL"), ("CheckedAt", "TEXT NULL"), ("CheckedBy", "TEXT NULL"),
-                ("IsPickup", "INTEGER NOT NULL DEFAULT 0"), ("PickupCustomer", "TEXT NULL")
+                ("IsPickup", "INTEGER NOT NULL DEFAULT 0"), ("PickupCustomer", "TEXT NULL"),
+                ("DeliveredCustomerId", "INTEGER NULL"), ("PickupCustomerId", "INTEGER NULL")
             })
             {
                 await AddColumnAsync(connection, tripColumns, "CylinderTripCylinders", column, definition, cancellationToken);
