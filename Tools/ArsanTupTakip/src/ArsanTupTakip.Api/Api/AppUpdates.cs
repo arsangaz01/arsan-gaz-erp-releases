@@ -22,15 +22,44 @@ internal static class AppUpdates
         typeof(AppUpdates).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
         ?? typeof(AppUpdates).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
 
-    internal static MobileUpdateInfo Get() => Get(ApkFile, "/indir");
+    internal static MobileUpdateInfo Get() => Get(ApkFile, "indir");
 
-    internal static MobileUpdateInfo GetHandheld() => Get(HandheldApkFile, "/indir/el-terminali");
+    internal static MobileUpdateInfo GetHandheld() => Get(HandheldApkFile, "indir/el-terminali");
 
-    private static MobileUpdateInfo Get(string apkFile, string downloadPath)
+    private static MobileUpdateInfo Get(string apkFile, string relativeDownload)
     {
         long? size = File.Exists(apkFile) ? new FileInfo(apkFile).Length : null;
         (string name, int code) = size is > 0 ? ReadMeta(apkFile + ".meta.json") ?? ("0.0.0", 0) : ("0.0.0", 0);
-        return new MobileUpdateInfo(ApiVersion, name, code, size is > 0 && code > 0, size, downloadPath);
+        // Path only here; ResolveDownloadUrl(HttpContext) makes the absolute URL for /api/guncelleme.
+        return new MobileUpdateInfo(ApiVersion, name, code, size is > 0 && code > 0, size, "/" + relativeDownload.Trim().TrimStart('/'));
+    }
+
+    // Absolute APK URL for phones/agents: env TUPTAKIP_PUBLIC_URL, else request host + PathBase (/tuptakip).
+    internal static string ResolveDownloadUrl(HttpContext context, string relative)
+    {
+        relative = relative.Trim().TrimStart('/');
+        string? root = PublicUrl();
+        if (!string.IsNullOrWhiteSpace(root))
+        {
+            return root.TrimEnd('/') + "/" + relative;
+        }
+
+        string host = context.Request.Headers.Host.ToString();
+        if (context.Request.Headers.TryGetValue("X-Forwarded-Host", out Microsoft.Extensions.Primitives.StringValues forwarded)
+            && !string.IsNullOrWhiteSpace(forwarded))
+        {
+            host = forwarded.ToString().Split(',')[0].Trim();
+        }
+
+        string scheme = context.Request.Scheme;
+        if (context.Request.Headers.TryGetValue("X-Forwarded-Proto", out Microsoft.Extensions.Primitives.StringValues proto)
+            && !string.IsNullOrWhiteSpace(proto))
+        {
+            scheme = proto.ToString().Split(',')[0].Trim();
+        }
+
+        string basePath = (context.Request.PathBase.Value ?? string.Empty).TrimEnd('/');
+        return $"{scheme}://{host}{basePath}/{relative}";
     }
 
     private static (string Name, int Code)? ReadMeta(string metaFile)

@@ -72,11 +72,12 @@ const SERVER_RULES = [
   "Yayınlama senin işin değil: prod'a deploy, servis yeniden başlatma, silme, ödeme, müşterilere e-posta/WhatsApp gibi geri alınamaz işleri yapma.",
   "Son mesajında Türkçe ve kısa olarak yaz: ne değişti, hangi bileşenler etkilendi (web sitesi/MobileApi, masaüstü ERP, AgentWatcher, mobil uygulama),",
   "hangi derleme/testler geçti, commit kodu; ve açıkça şunu ekle: 'Bu değişiklik henüz yayında DEĞİL. Yayınlamak için Telegram'da /yayin yazın;",
-  "CI sonucu ve onay komutu gelir. Mobil uygulama değiştiyse yayından sonra imzalı APK /indir'e konur ve telefon güncelleme önerir.'",
+  "CI sonucu ve onay komutu gelir. ERP mobil (Tools/MobileApp) imzalı APK'sı https://arsantuptakip.com/indir altına konur.",
+  "TupTakip ayrı sistemdir (https://arsantuptakip.com/tuptakip/indir); ERP ajanı oraya APK koymaz, TupTakip koduna dokunmaz.",
   "Masaüstü ERP/AgentWatcher değişiklikleri onaydan sonra bilgisayar açılınca AutoSync ile otomatik uygulanır; web sitesi/MobileApi hemen yayınlanır.",
   "Kullanıcı 'neden mobilde/sitede yok', 'yayınlandı mı' gibi sorarsa önce aşağıdaki canlı yayın durumuna bak; tahmin etme. Yayındaki bir şey için",
   "'prod'a alınmadıysa' deme. Yayında olmayan parça varsa hangisi olduğunu ve nedenini (son yayın işlemi ve çıkış kodu) söyle;",
-  "APK eksikse /apk, MobileApi eksikse /yayin komutunu öner. Durum dosyası yoksa /yayin_durum yazmasını öner.",
+  "ERP APK eksikse /apk, MobileApi eksikse /yayin komutunu öner. Durum dosyası yoksa /yayin_durum yazmasını öner.",
 ];
 
 const shortSha = (sha) => (typeof sha === "string" && sha ? sha.slice(0, 7) : "bilinmiyor");
@@ -95,7 +96,8 @@ function describeReleaseStatus(status, now = new Date()) {
     `- main: ${shortSha(status.main?.sha)} ${status.main?.subject ?? ""}`.trimEnd(),
     `- ${status.workBranch?.name ?? workBranch}: ${waiting > 0 ? `${waiting} commit /yayin onayı bekliyor` : "yayın bekleyen commit yok"}`,
     `- Web sitesi/MobileApi (prod): ${shortSha(api.deployedSha)} (${api.service ?? "?"})${api.mainNotYetDeployed ? " — main'deki MobileApi değişiklikleri henüz yayında DEĞİL" : " — main ile güncel"}`,
-    `- Telefon APK (/indir): ${apk.versionName ?? "?"} (build ${apk.versionCode ?? "?"})${apk.mainNotYetPublished ? " — main'deki mobil uygulama değişiklikleri henüz APK olarak yayında DEĞİL" : " — main ile güncel"}`,
+    `- ERP APK (https://arsantuptakip.com/indir): ${apk.versionName ?? "?"} (build ${apk.versionCode ?? "?"})${apk.mainNotYetPublished ? " — main'deki Tools/MobileApp henüz APK olarak yayında DEĞİL" : " — main ile güncel"}`,
+    "- TupTakip APK ayrı yoldur: https://arsantuptakip.com/tuptakip/indir (bu ajanın /indir'i değildir).",
   ].join("\n");
 }
 

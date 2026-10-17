@@ -19,7 +19,8 @@ test("release status names what is live", () => {
   assert.match(text, /5 dk önce/);
   assert.match(text, /main: 0311907 Sefer bazlı tüp takibi/);
   assert.match(text, /MobileApi \(prod\): 0311907 \(active\) — main ile güncel/);
-  assert.match(text, /APK \(\/indir\): 1\.7\.6 \(build 24\) — main ile güncel/);
+  assert.match(text, /ERP APK \(https:\/\/arsantuptakip\.com\/indir\): 1\.7\.6 \(build 24\) — main ile güncel/);
+  assert.match(text, /TupTakip APK ayrı yoldur: https:\/\/arsantuptakip\.com\/tuptakip\/indir/);
   assert.match(text, /yayın bekleyen commit yok/);
 });
 
@@ -32,7 +33,7 @@ test("release status flags parts that are not published yet", () => {
   });
   assert.match(text, /çıkış kodu 126/);
   assert.match(text, /2 commit \/yayin onayı bekliyor/);
-  assert.match(text, /1\.7\.5 \(build 23\) — main'deki mobil uygulama değişiklikleri henüz APK olarak yayında DEĞİL/);
+  assert.match(text, /1\.7\.5 \(build 23\) — main'deki Tools\/MobileApp henüz APK olarak yayında DEĞİL/);
 });
 
 test("missing status file is reported, not guessed", () => {

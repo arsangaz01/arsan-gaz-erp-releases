@@ -26,6 +26,8 @@ const AGENT_RULES = [
   "Yayınlamak senin işin değil: /opt/arsantuptakip'e kurulum, servis yeniden başlatma, veritabanı değişikliği, silme gibi işleri yapma.",
   "Son mesajında Türkçe ve kısa yaz: ne değişti, hangi derleme/testler geçti, commit kodu, kalan riskler; ve şunu ekle:",
   "'Bu değişiklik henüz yayında DEĞİL. Yayınlamak için /yayin yazın; sunucu derleyip test eder, onay kodu verir.'",
+  "APK: ArsanTüpTakip telefon uygulaması yalnızca https://arsantuptakip.com/tuptakip/indir (sunucu /apk → /apk_onay).",
+  "https://arsantuptakip.com/indir Arsan Gaz ERP APK'sıdır; oraya koyma, o adresi TupTakip güncellemesi diye yazma.",
   "Yapmadığın veya doğrulamadığın bir işi yapılmış gibi gösterme. Gizli anahtar/şifre yazma.",
 ];
 

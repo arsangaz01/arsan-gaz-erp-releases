@@ -154,17 +154,7 @@ public sealed class ConnectionPage : ContentPage
 
     private Task UpdateNowAsync() => UpdateCheck.InstallAsync(this, _update, _busy);
 
-    private async Task OpenDownloadAsync()
-    {
-        string server = ApiClient.Instance.ServerUrl;
-        if (server.Length == 0)
-        {
-            await DisplayAlertAsync("İndir", "Önce sunucu adresini ayarlayın.", "Tamam");
-            return;
-        }
-
-        await Launcher.Default.OpenAsync(new Uri(server + "/indir"));
-    }
+    private Task OpenDownloadAsync() => UpdateCheck.OpenBrowserDownloadAsync(this);
 
     private async Task ConnectFromTelegramAsync()
     {

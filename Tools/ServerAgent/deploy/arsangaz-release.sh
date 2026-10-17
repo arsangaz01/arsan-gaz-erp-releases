@@ -466,7 +466,7 @@ for r in json.load(sys.stdin).get("workflow_runs", []):
   ls -t "$APK_DIR"/ArsanGazERP-Mobil.apk.bak-2* 2>/dev/null | tail -n +4 | xargs -r rm -f || true
   printf '%s\n' "$sha" > "$STATE/apk-sha"
   rm -rf "$tmp"
-  say "📱 Yeni APK yayında: $name (build $code). Telefonlar uygulamayı açınca güncelleme önerir; arsantuptakip.com/indir"
+  say "📱 Yeni ERP APK yayında: $name (build $code). İndirme: https://arsantuptakip.com/indir (TupTakip ayrı: https://arsantuptakip.com/tuptakip/indir)"
   trailer APK_STATE published
 }
 
@@ -522,9 +522,9 @@ act_verify() {
   if [ "${exp_code:-0}" -le 0 ]; then
     say "❌ main'deki mobil uygulama sürümü (ApplicationVersion) okunamadı; APK doğrulanamadı"; missing+=(apk)
   elif [ "${cur_code:-0}" -ge "$exp_code" ]; then
-    say "✅ Telefon APK (/indir): $cur_name (build $cur_code) = main'deki $exp_name (build $exp_code)"
+    say "✅ ERP APK (https://arsantuptakip.com/indir): $cur_name (build $cur_code) = main'deki $exp_name (build $exp_code)"
   else
-    say "❌ Telefon APK (/indir): $cur_name (build $cur_code); main'deki $exp_name (build $exp_code) henüz yayında değil"; missing+=(apk)
+    say "❌ ERP APK (https://arsantuptakip.com/indir): $cur_name (build $cur_code); main'deki $exp_name (build $exp_code) henüz yayında değil"; missing+=(apk)
   fi
   trailer MISSING "$(IFS=,; echo "${missing[*]}")"
   if [ ${#missing[@]} -eq 0 ]; then trailer VERIFIED 1; else trailer VERIFIED 0; fi
@@ -540,7 +540,7 @@ act_apkwatch() {
   read -r cur_code cur_name <<<"$(apk_current)"
   trailer MAIN "$main"
   if [ "${exp_code:-0}" -le "${cur_code:-0}" ]; then
-    say "📱 /indir güncel: $cur_name (build $cur_code)."
+    say "📱 ERP /indir güncel: $cur_name (build $cur_code)."
     trailer APK_BEHIND 0; trailer APK_STATE published; return 0
   fi
   say "📱 main'de $exp_name (build $exp_code) var, telefonlara sunulan $cur_name (build $cur_code)."

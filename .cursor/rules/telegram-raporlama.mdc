@@ -11,6 +11,16 @@ Kullanıcı bilgisayar başında olmasa da işi Telegram üzerinden yönetir. G�
 Veri klasörü: `%LOCALAPPDATA%\ArsanGazERP\AgentWatcherData`. Betikler `Tools/CursorIdeBridge/` altında,
 PowerShell ile ve sandbox dışında (`required_permissions: ["all"]`) çalıştırılır.
 
+## İki mobil APK — indirme yolları (ajanlar karıştırmasın)
+Ekranlardaki gibi iki ayrı uygulama / iki sunucu adresi vardır; ERP APK’sını TupTakip yoluna (veya tersi) koyma.
+
+| Uygulama | Telefon sunucu adresi | Güncelleme API | APK indirme |
+|----------|----------------------|----------------|-------------|
+| Arsan Gaz ERP | `https://arsantuptakip.com` | `/api/guncelleme` | `https://arsantuptakip.com/indir` |
+| ArsanTüpTakip | `https://arsantuptakip.com/tuptakip` | `/tuptakip/api/guncelleme` | `https://arsantuptakip.com/tuptakip/indir` |
+
+Rapor ve yayın notlarında tam URL yaz. Sunucu ajanı TupTakip APK’sını yalnızca `/tuptakip/indir` altına koyar; IDE ajanı ERP APK’sını `Deploy-MobileApk.ps1` ile `/indir` (MobileApi data) altına koyar.
+
 ## Her yeni oturum / sohbet başlangıcı (zorunlu)
 Bağlantı kurulana kadar dene; kopukken “Telegram yok” deyip bırakma.
 
@@ -21,6 +31,9 @@ Bağlantı kurulana kadar dene; kopukken “Telegram yok” deyip bırakma.
 3. Inbox’ta `*.request.json` tara; `*.completion.json` olan artıkları sil. Gerçek bekleyenler için önce
    `Start-Request.ps1 -Id <id>`: `STARTED` → bu sohbet işler; `TAKEN` → sunucu ajanı / bridge.js almış, **dokunma**
    (çakışma yok). Aynı işi hem IDE hem sunucu ajanı aynı anda yürütme.
+   **Ardışık Telegram görevleri:** bilgisayar + bu sohbet + ide-watch açıksa gelen istekleri beklemeden sırayla
+   claim et (`Start-Request` CreatedUtc / dosya zamanına göre); birini bitirmeden sonrakini kuyruğa al, paralel
+   çakışma yaratma. “Sonra bakarım” deyip biriktirme.
 4. Bağlantı veya claim başarısızsa kısa aralıklarla (ör. 15–30 sn) tekrar dene; asıl görevi buna engel olmadan
    arka planda sürdürebilirsin. Yalnızca kalıcı kopuklukta (birkaç denemeden sonra) kullanıcıya yaz.
 5. Oturum boyunca 1 dk’da bir sessiz sağlık kontrolü yeter: Watcher + ide yaş; yalnızca hata veya yeni istekte bildir.

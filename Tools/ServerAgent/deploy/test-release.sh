@@ -136,7 +136,7 @@ check "apk_current reads what phones are offered" "24 1.7.6" "$(apk_current)"
 out=$(run act_verify "${C2:0:7}")
 check "verify: main pushed" "✅ main GitHub'da" "$out"
 check "verify: MobileApi live and /panel 200" "✅ Web sitesi/MobileApi prod" "$out"
-check "verify: missing APK is reported" "❌ Telefon APK (/indir): 1.7.6 (build 24)" "$out"
+check "verify: missing APK is reported" "❌ ERP APK (https://arsantuptakip.com/indir): 1.7.6 (build 24)" "$out"
 check "verify: not verified while the APK is missing" "@@VERIFIED=0" "$out"
 check "verify: names the missing part" "@@MISSING=apk" "$out"
 

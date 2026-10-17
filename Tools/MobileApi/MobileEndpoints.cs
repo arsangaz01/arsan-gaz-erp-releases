@@ -50,7 +50,8 @@ internal static class MobileEndpoints
                 update.ApkReady,
                 update.ApkSizeBytes,
                 downloadUrl = update.DownloadPath,
-                note = "APK bu sunucunun /indir adresinden indirilir; kurulumdan sonra eşleşme anahtarı korunur."
+                note = "Arsan Gaz ERP APK: " + update.DownloadPath
+                    + " (TupTakip ayrı uygulamadır: https://arsantuptakip.com/tuptakip/indir). Kurulumdan sonra eşleşme anahtarı korunur."
             });
         });
 

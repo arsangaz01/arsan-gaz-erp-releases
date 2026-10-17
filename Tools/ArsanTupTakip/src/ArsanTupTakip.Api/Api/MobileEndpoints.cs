@@ -35,9 +35,10 @@ internal static class MobileEndpoints
             });
         });
 
-        app.MapGet("/api/guncelleme", () =>
+        app.MapGet("/api/guncelleme", (HttpContext context) =>
         {
             MobileUpdateInfo update = AppUpdates.Get();
+            string download = AppUpdates.ResolveDownloadUrl(context, "indir");
             return Results.Ok(new
             {
                 update.ApiVersion,
@@ -45,14 +46,16 @@ internal static class MobileEndpoints
                 update.PublishedMobileBuild,
                 update.ApkReady,
                 update.ApkSizeBytes,
-                downloadUrl = update.DownloadPath,
-                note = "APK bu sunucunun /indir adresinden indirilir; kurulumdan sonra oturum korunur (24 saat)."
+                downloadUrl = download,
+                note = "ArsanTüpTakip APK: " + download
+                    + " (ERP ayrı uygulamadır: https://arsantuptakip.com/indir). Kurulumdan sonra oturum korunur (24 saat)."
             });
         });
 
-        app.MapGet("/api/guncelleme/el-terminali", () =>
+        app.MapGet("/api/guncelleme/el-terminali", (HttpContext context) =>
         {
             MobileUpdateInfo update = AppUpdates.GetHandheld();
+            string download = AppUpdates.ResolveDownloadUrl(context, "indir/el-terminali");
             return Results.Ok(new
             {
                 update.ApiVersion,
@@ -60,7 +63,7 @@ internal static class MobileEndpoints
                 update.PublishedMobileBuild,
                 update.ApkReady,
                 update.ApkSizeBytes,
-                downloadUrl = update.DownloadPath
+                downloadUrl = download
             });
         });
 

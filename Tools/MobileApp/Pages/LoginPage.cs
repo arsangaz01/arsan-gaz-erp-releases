@@ -150,7 +150,16 @@ public sealed class LoginPage : ContentPage
         Progress<string> progress = new(text => _update.Text = text);
         try
         {
-            await ApkUpdater.DownloadAndInstallAsync(ApiClient.Instance.ServerUrl, progress);
+            string? downloadUrl = null;
+            try
+            {
+                downloadUrl = (await ApiClient.Instance.GetUpdateInfoAsync()).DownloadUrl;
+            }
+            catch (ApiException)
+            {
+            }
+
+            await ApkUpdater.DownloadAndInstallAsync(ApiClient.Instance.ServerUrl, progress, downloadUrl);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or TaskCanceledException)
         {

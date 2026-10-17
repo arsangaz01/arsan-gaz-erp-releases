@@ -314,7 +314,7 @@ internal static class PermissionTests
             using (HttpResponseMessage handheld = await Send(http, HttpMethod.Get, "api/guncelleme/el-terminali", null))
             {
                 JsonElement info = await Json(handheld);
-                Check(handheld.StatusCode == HttpStatusCode.OK && info.GetProperty("downloadUrl").GetString() == "/indir/el-terminali"
+                Check(handheld.StatusCode == HttpStatusCode.OK && info.GetProperty("downloadUrl").GetString()!.EndsWith("/indir/el-terminali", StringComparison.Ordinal)
                     && (File.Exists(AppUpdates.HandheldApkFile) || !info.GetProperty("apkReady").GetBoolean()),
                     "El terminali sürüm bilgisi oturumsuz okunabilmeli (Android 4.4 uygulaması giriş öncesi denetler).");
             }

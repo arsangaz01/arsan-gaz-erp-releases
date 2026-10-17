@@ -77,7 +77,17 @@ public static class UpdateCheck
             Progress<string> progress = new(text => status.Text = text);
             try
             {
-                await ApkUpdater.DownloadAndInstallAsync(server, progress);
+                string? downloadUrl = null;
+                try
+                {
+                    downloadUrl = (await ApiClient.Instance.GetUpdateInfoAsync()).DownloadUrl;
+                }
+                catch (ApiException)
+                {
+                    // Fall back to server + /indir
+                }
+
+                await ApkUpdater.DownloadAndInstallAsync(server, progress, downloadUrl);
                 status.Text = "Kurulum ekranında \"Güncelle\"ye basın; uygulama yeni sürümle açılır, oturum korunur.";
             }
             catch (Exception exception) when (exception is HttpRequestException or IOException or TaskCanceledException)
@@ -85,5 +95,26 @@ public static class UpdateCheck
                 throw new ApiException("Güncelleme indirilemedi: " + exception.Message);
             }
         });
+    }
+
+    public static async Task OpenBrowserDownloadAsync(Page page)
+    {
+        string server = ApiClient.Instance.ServerUrl;
+        if (server.Length == 0)
+        {
+            await page.DisplayAlertAsync("İndir", "Önce sunucu adresini ayarlayın.", "Tamam");
+            return;
+        }
+
+        string? downloadUrl = null;
+        try
+        {
+            downloadUrl = (await ApiClient.Instance.GetUpdateInfoAsync()).DownloadUrl;
+        }
+        catch (ApiException)
+        {
+        }
+
+        await Launcher.Default.OpenAsync(new Uri(ApkUpdater.ResolveApkUrl(server, downloadUrl)));
     }
 }

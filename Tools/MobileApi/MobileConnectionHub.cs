@@ -30,13 +30,22 @@ internal static class MobileConnectionHub
     {
         long? size = File.Exists(MobileApiPaths.ApkFile) ? new FileInfo(MobileApiPaths.ApkFile).Length : null;
         MobileApkVersion published = MobileApkPublishInfo.ResolvePublishedVersion();
+        // Absolute URL when the public host is known so agents/phones never confuse ERP /indir with TupTakip /tuptakip/indir.
+        string download = AbsoluteDownloadUrl("/indir");
         return new MobileUpdateInfo(
             MobileReleaseInfo.ApiVersion,
             published.VersionName,
             published.VersionCode,
             size is > 0,
             size,
-            "/indir");
+            download);
+    }
+
+    internal static string AbsoluteDownloadUrl(string path)
+    {
+        path = path.StartsWith('/') ? path : "/" + path;
+        string? root = ReadPublicUrl()?.TrimEnd('/');
+        return string.IsNullOrWhiteSpace(root) ? path : root + path;
     }
 
     internal static MobileHubStatus GetHubStatus()

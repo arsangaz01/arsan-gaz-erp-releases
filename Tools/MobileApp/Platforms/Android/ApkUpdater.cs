@@ -8,7 +8,26 @@ public static class ApkUpdater
     private const string Authority = "com.arsangaz.erpmobile.updates";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(15) };
 
-    public static async Task DownloadAndInstallAsync(string serverUrl, IProgress<string> progress)
+    // Prefer absolute downloadUrl from /api/guncelleme so ERP never hits TupTakip paths (or the reverse).
+    public static string ResolveApkUrl(string serverUrl, string? downloadUrl)
+    {
+        if (!string.IsNullOrWhiteSpace(downloadUrl)
+            && (downloadUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                || downloadUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))
+        {
+            return downloadUrl.Trim();
+        }
+
+        string path = string.IsNullOrWhiteSpace(downloadUrl) ? "/indir" : downloadUrl.Trim();
+        if (!path.StartsWith('/'))
+        {
+            path = "/" + path;
+        }
+
+        return serverUrl.TrimEnd('/') + path;
+    }
+
+    public static async Task DownloadAndInstallAsync(string serverUrl, IProgress<string> progress, string? downloadUrl = null)
     {
         Activity activity = Platform.CurrentActivity ?? throw new InvalidOperationException("Uygulama penceresi hazır değil.");
         if (Build.VERSION.SdkInt >= BuildVersionCodes.O && !activity.PackageManager!.CanRequestPackageInstalls())
@@ -24,8 +43,9 @@ public static class ApkUpdater
         Directory.CreateDirectory(directory);
         string target = Path.Combine(directory, "ArsanGazERP-Mobil.apk");
         string partial = target + ".part";
+        string apkUrl = ResolveApkUrl(serverUrl, downloadUrl);
 
-        using (HttpResponseMessage response = await Http.GetAsync(serverUrl.TrimEnd('/') + "/indir", HttpCompletionOption.ResponseHeadersRead))
+        using (HttpResponseMessage response = await Http.GetAsync(apkUrl, HttpCompletionOption.ResponseHeadersRead))
         {
             response.EnsureSuccessStatusCode();
             long? total = response.Content.Headers.ContentLength;
