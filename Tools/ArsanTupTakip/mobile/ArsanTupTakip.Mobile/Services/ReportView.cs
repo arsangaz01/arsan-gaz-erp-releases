@@ -107,15 +107,8 @@ public static partial class ReportView
             detail = string.IsNullOrWhiteSpace(rest) ? "Dokunun: tüp listesi ›" : rest + " · dokunun ›";
         }
 
-        Border tile = Ui.StatTile(Icon(name), value, name, Tone(name, value), string.IsNullOrWhiteSpace(detail) ? null : detail);
-        if (onTap is not null)
-        {
-            TapGestureRecognizer tap = new();
-            tap.Tapped += async (_, _) => await onTap();
-            tile.GestureRecognizers.Add(tap);
-        }
-
-        return tile;
+        Border tile = Ui.StatTile(Icon(name), value, name, Tone(name, value), string.IsNullOrWhiteSpace(detail) ? null : detail, showChevron: onTap is not null);
+        return onTap is null ? tile : Ui.MakeTappable(tile, onTap);
     }
 
     private static Border Item(string text)

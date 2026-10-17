@@ -36,7 +36,7 @@ public sealed class LoginPage : ContentPage
                 Spacing = 14,
                 Children =
                 {
-                    Ui.Title("Arsan Gaz · Tüp Takip"),
+                    Ui.Title("Arsan Gaz ERP"),
                     Ui.Note("Web paneldeki kullanıcı adı ve şifrenizle giriş yapın. Oturum 24 saat açık kalır; sonra yeniden giriş istenir."),
                     _message,
                     Ui.Section("Giriş", _user, _password, Ui.Primary("Giriş yap", async (_, _) => await LoginAsync())),

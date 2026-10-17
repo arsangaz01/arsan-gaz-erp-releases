@@ -53,19 +53,19 @@ public static class Ui
     public static Label Title(string text) => new()
     {
         Text = text,
-        FontSize = 18,
+        FontSize = 20,
         FontFamily = "OpenSansSemibold",
-        Margin = new Thickness(0, 4, 0, 0)
+        Margin = new Thickness(0, 4, 0, 2)
     };
 
     public static Label SectionCaption(string text) => new()
     {
         Text = text,
-        FontSize = 12,
+        FontSize = 13,
         FontFamily = "OpenSansSemibold",
         TextColor = Accent,
-        CharacterSpacing = 0.5,
-        Margin = new Thickness(2, 0, 0, 4)
+        CharacterSpacing = 0.8,
+        Margin = new Thickness(2, 0, 0, 6)
     };
 
     public static Border Card(View content)
@@ -74,7 +74,14 @@ public static class Ui
         {
             Padding = new Thickness(16, 14),
             StrokeThickness = 1,
-            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 16 },
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 18 },
+            Shadow = new Shadow
+            {
+                Brush = new SolidColorBrush(Colors.Black),
+                Opacity = 0.08f,
+                Radius = 10,
+                Offset = new Point(0, 3)
+            },
             Content = content
         };
         card.SetAppThemeColor(VisualElement.BackgroundColorProperty, SurfaceLight, SurfaceDark);
@@ -97,10 +104,64 @@ public static class Ui
     public static Label Note(string text) => new()
     {
         Text = text,
-        FontSize = 13,
+        FontSize = 14,
         LineBreakMode = LineBreakMode.WordWrap,
         TextColor = Muted
     };
+
+    public static View EmptyState(string title, string detail)
+    {
+        return Card(new VerticalStackLayout
+        {
+            Spacing = 8,
+            Padding = new Thickness(8, 12),
+            Children =
+            {
+                new Label
+                {
+                    Text = title,
+                    FontSize = 17,
+                    FontFamily = "OpenSansSemibold",
+                    HorizontalTextAlignment = TextAlignment.Center
+                },
+                new Label
+                {
+                    Text = detail,
+                    FontSize = 14,
+                    TextColor = Muted,
+                    HorizontalTextAlignment = TextAlignment.Center,
+                    LineBreakMode = LineBreakMode.WordWrap
+                }
+            }
+        });
+    }
+
+    public static Border MakeTappable(Border border, Func<Task> onTap)
+    {
+        bool busy = false;
+        TapGestureRecognizer tap = new();
+        tap.Tapped += async (_, _) =>
+        {
+            if (busy)
+            {
+                return;
+            }
+
+            busy = true;
+            try
+            {
+                await border.ScaleToAsync(0.97, 60, Easing.CubicOut);
+                await onTap();
+            }
+            finally
+            {
+                await border.ScaleToAsync(1, 80, Easing.CubicOut);
+                busy = false;
+            }
+        };
+        border.GestureRecognizers.Add(tap);
+        return border;
+    }
 
     public static Entry TextField(string placeholder, Keyboard? keyboard = null, int maxLength = int.MaxValue)
     {
@@ -125,9 +186,9 @@ public static class Ui
             TextColor = Colors.White,
             BorderWidth = 0,
             CornerRadius = 12,
-            Padding = new Thickness(18, 14),
-            MinimumHeightRequest = 48,
-            FontSize = 15,
+            Padding = new Thickness(18, 15),
+            MinimumHeightRequest = 52,
+            FontSize = 16,
             FontFamily = "OpenSansSemibold"
         };
         button.Clicked += onClick;
@@ -154,9 +215,9 @@ public static class Ui
             BorderColor = Accent,
             BorderWidth = 1.5,
             CornerRadius = 12,
-            Padding = new Thickness(16, 12),
-            MinimumHeightRequest = 44,
-            FontSize = 14,
+            Padding = new Thickness(16, 13),
+            MinimumHeightRequest = 48,
+            FontSize = 15,
             FontFamily = "OpenSansSemibold"
         };
         button.SetAppThemeColor(Button.BackgroundColorProperty, SecondaryLight, SecondaryDark);
@@ -195,16 +256,16 @@ public static class Ui
     public static readonly Color Bad = Color.FromArgb("#DC2626");
 
     // A big number with an icon and a short caption, readable at a glance.
-    public static Border StatTile(string icon, string value, string caption, Color color, string? detail = null)
+    public static Border StatTile(string icon, string value, string caption, Color color, string? detail = null, bool showChevron = false)
     {
         VerticalStackLayout body = new()
         {
-            Spacing = 2,
+            Spacing = 4,
             Children =
             {
-                new Label { Text = icon, FontSize = 20 },
-                new Label { Text = value, FontSize = 28, FontFamily = "OpenSansSemibold", TextColor = color },
-                new Label { Text = caption, FontSize = 13, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap }
+                new Label { Text = icon, FontSize = 22 },
+                new Label { Text = value, FontSize = 30, FontFamily = "OpenSansSemibold", TextColor = color },
+                new Label { Text = caption, FontSize = 14, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap }
             }
         };
         if (!string.IsNullOrWhiteSpace(detail))
@@ -212,19 +273,40 @@ public static class Ui
             body.Children.Add(Note(detail));
         }
 
+        View content = body;
+        if (showChevron)
+        {
+            Grid row = new()
+            {
+                ColumnDefinitions = [new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)],
+                ColumnSpacing = 4
+            };
+            row.Add(body, 0, 0);
+            row.Add(new Label
+            {
+                Text = "›",
+                FontSize = 28,
+                TextColor = color,
+                VerticalTextAlignment = TextAlignment.Center,
+                Opacity = 0.85
+            }, 1, 0);
+            content = row;
+        }
+
         return new Border
         {
-            Padding = new Thickness(12, 10),
+            Padding = new Thickness(14, 12),
+            MinimumHeightRequest = 112,
             StrokeThickness = 0,
-            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 16 },
             BackgroundColor = color.WithAlpha(0.12f),
-            Content = body
+            Content = content
         };
     }
 
     public static Grid TileGrid(IReadOnlyList<View> tiles, int columns = 2)
     {
-        Grid grid = new() { ColumnSpacing = 8, RowSpacing = 8 };
+        Grid grid = new() { ColumnSpacing = 10, RowSpacing = 10 };
         for (int c = 0; c < columns; c++)
         {
             grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));

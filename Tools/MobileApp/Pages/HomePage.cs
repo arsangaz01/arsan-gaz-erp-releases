@@ -7,8 +7,8 @@ namespace ArsanGazMobile.Pages;
 // Ana menü: TupTakip düzeni (şoför önce sevkiyat; ofis geniş kartlar). ERP renkleri korunur.
 public sealed class HomePage : ContentPage
 {
-    private const int Columns = 3;
-    private const double TileHeight = 116;
+    private const int Columns = 2;
+    private const double TileHeight = 132;
 
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
 
@@ -407,7 +407,7 @@ public sealed class HomePage : ContentPage
         {
             Text = spec.Title,
             TextColor = Colors.White,
-            FontSize = horizontal ? 18 : 13.5,
+            FontSize = horizontal ? 18 : 15,
             FontFamily = "OpenSansSemibold",
             MaxLines = 2,
             LineBreakMode = LineBreakMode.WordWrap,
@@ -415,7 +415,7 @@ public sealed class HomePage : ContentPage
         };
         if (spec.TitleLabel is not null)
         {
-            title.FontSize = horizontal ? 18 : 13.5;
+            title.FontSize = horizontal ? 18 : 15;
             title.HorizontalTextAlignment = horizontal ? TextAlignment.Start : TextAlignment.Center;
         }
 
@@ -458,7 +458,7 @@ public sealed class HomePage : ContentPage
             {
                 new Ellipse { Fill = new SolidColorBrush(Color.FromRgba(255, 255, 255, 22)), WidthRequest = 130, HeightRequest = 130, HorizontalOptions = LayoutOptions.End, VerticalOptions = LayoutOptions.Start, Margin = new Thickness(0, -60, -50, 0) },
                 new Ellipse { Fill = new SolidColorBrush(Color.FromRgba(255, 255, 255, 14)), WidthRequest = 80, HeightRequest = 80, HorizontalOptions = LayoutOptions.Start, VerticalOptions = LayoutOptions.End, Margin = new Thickness(-30, 0, 0, -40) },
-                new ContentView { Padding = new Thickness(horizontal ? 16 : 8, 10), Content = body }
+                new ContentView { Padding = new Thickness(horizontal ? 16 : 10, horizontal ? 14 : 16), Content = body }
             }
         };
 
@@ -467,6 +467,7 @@ public sealed class HomePage : ContentPage
             StrokeThickness = 1,
             Stroke = new SolidColorBrush(Color.FromRgba(255, 255, 255, 40)),
             StrokeShape = new RoundRectangle { CornerRadius = 22 },
+            MinimumHeightRequest = horizontal ? 96 : TileHeight,
             Background = Gradient(spec.Start, spec.End),
             Shadow = new Shadow { Brush = new SolidColorBrush(Color.FromArgb(spec.Start)), Opacity = 0.35f, Radius = 14, Offset = new Point(0, 6) },
             Content = layers
@@ -500,7 +501,7 @@ public sealed class HomePage : ContentPage
             Children =
             {
                 new Label { Text = "ARSAN GAZ", TextColor = Colors.White, FontSize = 22, FontFamily = "OpenSansSemibold", CharacterSpacing = 1.5 },
-                new Label { Text = "Endüstriyel ve medikal tüp takip sistemi", TextColor = Color.FromArgb("#99F6E4"), FontSize = 12.5 }
+                new Label { Text = "Endüstriyel ve medikal tüp takip sistemi", TextColor = Color.FromArgb("#BAE6FD"), FontSize = 13 }
             }
         }, 1, 0);
 

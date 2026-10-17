@@ -113,15 +113,10 @@ public sealed class CylinderStatusPage : ContentPage
             }
         }, 1, 0);
         grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-        grid.Add(new Label { Text = "›", FontSize = 26, TextColor = Colors.Gray, VerticalTextAlignment = TextAlignment.Center }, 2, 0);
+        grid.Add(new Label { Text = "›", FontSize = 28, TextColor = accent, VerticalTextAlignment = TextAlignment.Center, Opacity = 0.9 }, 2, 0);
         return Ui.Card(grid);
     }
 
-    private Border Tappable(Border card, Func<Page> open)
-    {
-        TapGestureRecognizer tap = new();
-        tap.Tapped += async (_, _) => await Navigation.PushAsync(open());
-        card.GestureRecognizers.Add(tap);
-        return card;
-    }
+    private Border Tappable(Border card, Func<Page> open) =>
+        Ui.MakeTappable(card, () => Navigation.PushAsync(open()));
 }
