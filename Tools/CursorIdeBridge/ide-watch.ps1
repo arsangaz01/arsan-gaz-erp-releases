@@ -1,7 +1,7 @@
 # Runs inside the open Cursor IDE chat as a monitored background shell.
 # While it runs, Telegram requests in CopilotInbox are claimed for the IDE chat
 # (bridge.js stays idle) and new ERP research reports wake the chat.
-# The chat must run Start-Request.ps1 within bridge.js's grace period, otherwise bridge.js takes the request over.
+# The chat must run Start-Request.ps1 within bridge.js's grace period (60s), otherwise bridge.js takes the request over.
 param([int]$IntervalSeconds = 3)
 
 $ErrorActionPreference = 'Continue'

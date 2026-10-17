@@ -14,8 +14,11 @@ function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props)) {
     if (key === "class") node.className = value;
-    else if (key === "onclick") node.addEventListener("click", value);
-    else if (value !== undefined && value !== null) node.setAttribute(key, value);
+    else if (key === "onclick" || key === "onchange" || key === "oninput" || key === "onkeydown") {
+      node.addEventListener(key.slice(2), value);
+    } else if (key === "checked" || key === "selected" || key === "disabled") {
+      node[key] = !!value;
+    } else if (value !== undefined && value !== null) node.setAttribute(key, value);
   }
   for (const child of children) {
     if (child === null || child === undefined) continue;
@@ -32,10 +35,20 @@ function show(box, text, kind = "err") {
 function hide(box) { box.className = "msg hidden"; }
 
 // Lists refresh shortly after typing stops (Enter still works); filter selects and checkboxes refresh at once.
-function liveFilter(inputIds, changeIds, load) {
+// delayMs kısa: ilk harften sonuç gelsin; her sekmede aynı davranış.
+function liveFilter(inputIds, changeIds, load, delayMs = 180) {
   let timer = 0;
-  for (const id of inputIds) $(id).addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(load, 350); });
-  for (const id of changeIds) $(id).addEventListener("change", () => { clearTimeout(timer); load(); });
+  const run = () => { clearTimeout(timer); timer = setTimeout(() => { void Promise.resolve(load()).catch(() => {}); }, delayMs); };
+  for (const id of inputIds) {
+    const node = $(id);
+    if (!node) continue;
+    node.addEventListener("input", run);
+  }
+  for (const id of changeIds) {
+    const node = $(id);
+    if (!node) continue;
+    node.addEventListener("change", () => { clearTimeout(timer); void Promise.resolve(load()).catch(() => {}); });
+  }
 }
 
 // Only the newest request of a list may draw it, so a slow earlier answer cannot overwrite a newer one.
@@ -194,6 +207,7 @@ function openTab(tab) {
   if (tab === "seferler") loadTrips();
   if (tab === "araclar") loadVehicles();
   if (tab === "musteri-stok") loadStock();
+  if (tab === "yalcin") loadYalcin();
   if (tab === "musteriler") loadCustomers();
   if (tab === "talepler") loadRequests();
   if (tab === "sefer-plani") loadPlans();
@@ -264,30 +278,94 @@ function customerLabel(c) {
 // Search box + select pair; the list comes from ERP customers and CRM companies.
 function customerPicker(inputId, selectId, emptyLabel) {
   let timer = 0;
+  let items = [];
+  let active = -1;
   const select = $(selectId);
+  const input = $(inputId);
+  if (!input || !select) {
+    return { search: async () => {}, reset() {}, query: () => "", choose() {} };
+  }
+
+  // Profesyonel açılır liste: input altında sonuçlar, tıklayınca seçilir.
+  select.classList.add("ac-chosen");
+  let wrap = input.closest(".ac-wrap");
+  if (!wrap) {
+    wrap = el("div", { class: "ac-wrap" });
+    input.parentNode.insertBefore(wrap, input);
+    wrap.append(input);
+  }
+  let list = wrap.querySelector(".ac-list");
+  if (!list) {
+    list = el("ul", { class: "ac-list hidden", role: "listbox" });
+    wrap.append(list);
+  }
+
+  function hideList() { list.classList.add("hidden"); active = -1; }
+  function showList() { list.classList.remove("hidden"); }
+
+  function paintList() {
+    if (!items.length) {
+      list.replaceChildren(el("li", { class: "ac-empty" }, input.value.trim() ? "Eşleşen müşteri yok." : "Yazmaya başlayın…"));
+      showList();
+      return;
+    }
+    list.replaceChildren(...items.map((c, i) => el("li", {
+      class: i === active ? "active" : "",
+      role: "option",
+      onclick: (e) => { e.preventDefault(); pick(c); }
+    },
+      el("div", { class: "ac-name" }, c.name),
+      el("div", { class: "ac-meta" }, [c.code, c.city, c.cylinders ? c.cylinders + " tüp" : "", c.fromCrm ? "CRM" : ""].filter(Boolean).join(" · "))
+    )));
+    showList();
+  }
+
+  function syncSelect(c) {
+    const keepEmpty = emptyLabel ? [el("option", { value: "" }, emptyLabel)] : [];
+    select.replaceChildren(...keepEmpty, el("option", { value: c.id }, customerLabel(c)));
+    select.value = String(c.id);
+  }
+
+  function pick(c) {
+    input.value = c.name;
+    syncSelect(c);
+    hideList();
+  }
+
   async function search() {
-    const keep = select.value;
+    const q = input.value.trim();
     try {
-      const rows = await api("/panel/api/musteriler?q=" + encodeURIComponent($(inputId).value.trim()));
-      const items = rows.map((c) => el("option", { value: c.id }, customerLabel(c)));
-      select.replaceChildren(...(emptyLabel ? [el("option", { value: "" }, emptyLabel)] : []), ...items);
-      if (keep && rows.some((c) => String(c.id) === keep)) select.value = keep;
-      else if (!emptyLabel && rows.length) select.value = String(rows[0].id);
+      const rows = await api("/panel/api/musteriler?hepsi=1&take=40&q=" + encodeURIComponent(q));
+      items = rows;
+      active = rows.length ? 0 : -1;
+      paintList();
+      if (rows.length === 1 && q.length >= 2) pick(rows[0]);
     } catch (error) {
       show($("global-msg"), error.message);
     }
   }
-  $(inputId).addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(search, 300); });
+
+  input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(search, 120); });
+  input.addEventListener("focus", () => { void search(); });
+  input.addEventListener("keydown", (e) => {
+    if (list.classList.contains("hidden") && (e.key === "ArrowDown" || e.key === "Enter")) { void search(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); active = Math.min(active + 1, items.length - 1); paintList(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); active = Math.max(active - 1, 0); paintList(); }
+    else if (e.key === "Enter" && active >= 0 && items[active]) { e.preventDefault(); pick(items[active]); }
+    else if (e.key === "Escape") hideList();
+  });
+  document.addEventListener("click", (e) => { if (!wrap.contains(e.target)) hideList(); });
+
   return {
     search,
-    reset() { $(inputId).value = ""; select.replaceChildren(...(emptyLabel ? [el("option", { value: "" }, emptyLabel)] : [])); },
-    query() { return $(inputId).value.trim(); },
-    // Selects a customer that was just created or picked from a duplicate warning.
-    choose(c) {
-      $(inputId).value = c.name;
-      select.replaceChildren(...(emptyLabel ? [el("option", { value: "" }, emptyLabel)] : []), el("option", { value: c.id }, customerLabel(c)));
-      select.value = String(c.id);
-    }
+    reset() {
+      input.value = "";
+      select.replaceChildren(...(emptyLabel ? [el("option", { value: "" }, emptyLabel)] : []));
+      items = [];
+      hideList();
+    },
+    query() { return input.value.trim(); },
+    choose(c) { pick(c); }
   };
 }
 
@@ -378,6 +456,7 @@ function setOwnerFilter(sahip, sahipId, label) {
 
 $("f-ara").addEventListener("click", loadCylinders);
 $("f-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadCylinders(); });
+liveFilter(["f-q", "f-musteri-q"], ["f-durum", "f-plaka", "f-musteri", "f-sahip", "f-doluluk", "f-uzun", "f-pasif"], loadCylinders);
 
 async function loadCylinders() {
   const query = new URLSearchParams();
@@ -423,6 +502,7 @@ function movementFilter() {
 
 $("h-ara").addEventListener("click", loadMovements);
 $("h-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadMovements(); });
+liveFilter(["h-q", "h-musteri-q"], ["h-musteri", "h-durum", "h-bas", "h-bit"], loadMovements);
 $("h-csv").addEventListener("click", (e) => {
   e.preventDefault();
   window.location.href = "/panel/api/hareketler.csv?" + movementFilter();
@@ -1169,6 +1249,7 @@ $("vehicle-form").addEventListener("submit", async (event) => {
 
 $("c-ara").addEventListener("click", loadCustomers);
 $("c-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadCustomers(); });
+liveFilter(["c-q"], [], loadCustomers);
 
 async function loadCustomers() {
   try {
@@ -1210,6 +1291,7 @@ function stockFilter() {
 
 $("ms-ara").addEventListener("click", loadStock);
 for (const id of ["ms-q", "ms-gaz"]) $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") loadStock(); });
+liveFilter(["ms-q", "ms-gaz"], ["ms-uzun"], loadStock);
 $("ms-csv").addEventListener("click", (e) => {
   e.preventDefault();
   const query = new URLSearchParams();
@@ -3094,5 +3176,178 @@ function initLabels() {
 }
 
 initLabels();
+
+// ---- Yalçın partner workspace -------------------------------------------------------------------
+const ycSelected = new Set();
+/** @type {Map<number, {id:number,name:string,code:string,city?:string,cylinders?:number}>} */
+const ycAdaySelected = new Map();
+
+function renderYalcinSelected() {
+  const bar = $("yc-secilenler");
+  if (!bar) return;
+  if (ycAdaySelected.size === 0) {
+    bar.replaceChildren(el("span", { class: "sel-label" }, "Seçilenler"), el("span", { class: "sel-empty" }, "Henüz yok — aşağıdaki listeden işaretleyin."));
+    return;
+  }
+  const chips = [...ycAdaySelected.values()].map((c) => el("span", { class: "sel-chip" },
+    el("span", {}, c.name),
+    el("button", {
+      type: "button",
+      title: "Seçimden çıkar",
+      onclick: (e) => { e.stopPropagation(); ycAdaySelected.delete(c.id); renderYalcinSelected(); loadYalcinAdaylar().catch(() => {}); }
+    }, "×")
+  ));
+  bar.replaceChildren(el("span", { class: "sel-label" }, `Seçilenler (${ycAdaySelected.size})`), ...chips);
+}
+
+function ycToggleAday(c, on) {
+  if (on) ycAdaySelected.set(c.id, { id: c.id, name: c.name, code: c.code, city: c.city, cylinders: c.cylinders });
+  else ycAdaySelected.delete(c.id);
+  renderYalcinSelected();
+}
+
+function ycScroll(id) {
+  const node = $(id);
+  if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function loadYalcin() {
+  hide($("yc-msg"));
+  try {
+    const ozet = await api("/panel/api/yalcin/ozet");
+    $("yc-stats").replaceChildren(
+      el("div", {
+        class: "stat", title: "Tüm Yalçın müşterilerine git",
+        onclick: () => { ycScroll("yc-stok-card"); void loadYalcinStock(); }
+      }, el("div", { class: "muted" }, "Müşteri"), el("div", { class: "n" }, String(ozet.customers)), el("div", { class: "s" }, "Stoğu olan + olmayan")),
+      el("div", {
+        class: "stat", title: "Stoğu olan müşteriler",
+        onclick: () => { ycScroll("yc-stok-card"); void loadYalcinStock(); }
+      }, el("div", { class: "muted" }, "Müşterideki tüp"), el("div", { class: "n" }, String(ozet.cylindersAtCustomer)), el("div", { class: "s" }, "Listeye kaydır")),
+      el("div", {
+        class: "stat", title: "Son hareketler",
+        onclick: () => { ycScroll("yc-moves-card"); void loadYalcinMoves(); }
+      }, el("div", { class: "muted" }, "Son 7 gün hareket"), el("div", { class: "n" }, String(ozet.movementsLast7Days)), el("div", { class: "s" }, "Hareketlere git"))
+    );
+    await Promise.all([loadYalcinStock(), loadYalcinMoves()]);
+    if (can("yalcin-yonet")) await loadYalcinAdaylar();
+  } catch (error) {
+    show($("yc-msg"), error.message);
+  }
+}
+
+async function loadYalcinStock() {
+  const q = new URLSearchParams();
+  if ($("yc-q").value.trim()) q.set("q", $("yc-q").value.trim());
+  const data = await api("/panel/api/yalcin/musteri-stok?" + q);
+  const withN = data.withStock ?? (data.rows || []).length;
+  const withoutN = data.withoutStockCount ?? (data.withoutStock || []).length;
+  $("yc-count").textContent = `Stoğu olan: ${withN} müşteri` + (data.cylinders != null ? ` · ${data.cylinders} tüp` : "");
+  const head = el("tr", {}, ...["", "Müşteri", "Kod", "Şehir", "Tüp", "Dolu/Boş", "Max gün", "Gazlar"].map((h) => el("th", {}, h)));
+  const body = (data.rows || []).map((r) => {
+    const cb = can("yalcin-yonet")
+      ? el("input", { type: "checkbox", checked: ycSelected.has(r.id), onchange: (e) => { if (e.target.checked) ycSelected.add(r.id); else ycSelected.delete(r.id); } })
+      : el("span", {}, "");
+    return el("tr", { class: "click", onclick: (ev) => { if (ev.target.tagName === "INPUT") return; void openStockDialog(r.id); } },
+      el("td", {}, cb),
+      el("td", {}, el("b", {}, r.name)),
+      el("td", { class: "muted" }, r.code),
+      el("td", {}, r.city || "-"),
+      el("td", {}, String(r.count)),
+      el("td", {}, `${r.full}/${r.empty}`),
+      el("td", {}, r.maxDays == null ? "-" : String(r.maxDays)),
+      el("td", { class: "muted" }, r.gases || "-"));
+  });
+  $("yc-stok").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 8, class: "muted" }, "Stoğu olan Yalçın müşterisi yok."))])));
+
+  const empty = data.withoutStock || [];
+  $("yc-empty-count").textContent = empty.length ? `${empty.length} müşteri (tüpsüz)` : "Tüpsüz atanan yok.";
+  const eHead = el("tr", {}, ...["", "Müşteri", "Kod", "Şehir", "Telefon"].map((h) => el("th", {}, h)));
+  const eBody = empty.map((r) => {
+    const cb = can("yalcin-yonet")
+      ? el("input", { type: "checkbox", checked: ycSelected.has(r.id), onchange: (e) => { if (e.target.checked) ycSelected.add(r.id); else ycSelected.delete(r.id); } })
+      : el("span", {}, "");
+    return el("tr", { class: "click", onclick: (ev) => { if (ev.target.tagName === "INPUT") return; void openStockDialog(r.id); } },
+      el("td", {}, cb),
+      el("td", {}, el("b", {}, r.name)),
+      el("td", { class: "muted" }, r.code),
+      el("td", {}, r.city || "-"),
+      el("td", {}, r.phone || "-"));
+  });
+  $("yc-stok-empty").replaceChildren(el("thead", {}, eHead), el("tbody", {}, ...(eBody.length ? eBody : [el("tr", {}, el("td", { colspan: 5, class: "muted" }, "—"))])));
+}
+
+async function loadYalcinMoves() {
+  const q = new URLSearchParams({ take: "80" });
+  if ($("yc-hq").value.trim()) q.set("q", $("yc-hq").value.trim());
+  const data = await api("/panel/api/yalcin/hareketler?" + q);
+  const head = el("tr", {}, ...["Tarih", "Seri", "Müşteri", "Tür", "Plaka"].map((h) => el("th", {}, h)));
+  const body = (data.rows || []).map((r) => el("tr", {},
+    el("td", {}, r.date), el("td", {}, r.serial), el("td", {}, r.customer),
+    el("td", {}, r.movementType || "-"), el("td", { class: "muted" }, r.vehiclePlate || "-")));
+  $("yc-moves").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 5, class: "muted" }, "Hareket yok."))])));
+}
+
+async function loadYalcinAdaylar() {
+  renderYalcinSelected();
+  const term = ($("yc-aday-q")?.value || "").trim();
+  if (term.length === 0) {
+    $("yc-adaylar").replaceChildren(el("thead", {}, el("tr", {}, ...["", "Müşteri", "Kod", "Şehir", "Tüp"].map((h) => el("th", {}, h)))),
+      el("tbody", {}, el("tr", {}, el("td", { colspan: 5, class: "muted" }, "Aktarmak için müşteri adı veya kod yazın — sonuçlar yazdıkça gelir. Seçilenler üstte kalır."))));
+    return;
+  }
+  const q = new URLSearchParams({ take: "60", q: term });
+  const rows = await api("/panel/api/yalcin/adaylar?" + q);
+  const head = el("tr", {}, ...["", "Müşteri", "Kod", "Şehir", "Tüp"].map((h) => el("th", {}, h)));
+  const body = rows.map((c) => {
+    const cb = el("input", {
+      type: "checkbox",
+      checked: ycAdaySelected.has(c.id),
+      onchange: (e) => { ycToggleAday(c, e.target.checked); }
+    });
+    return el("tr", {
+      class: "click" + (ycAdaySelected.has(c.id) ? " selected" : ""),
+      onclick: (ev) => {
+        if (ev.target.tagName === "INPUT") return;
+        const on = !ycAdaySelected.has(c.id);
+        ycToggleAday(c, on);
+        const box = ev.currentTarget.querySelector("input[type=checkbox]");
+        if (box) box.checked = on;
+        ev.currentTarget.classList.toggle("selected", on);
+      }
+    }, el("td", {}, cb), el("td", {}, el("b", {}, c.name)), el("td", { class: "muted" }, c.code),
+      el("td", {}, c.city || "-"), el("td", {}, String(c.cylinders ?? 0)));
+  });
+  $("yc-adaylar").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 5, class: "muted" }, `"${term}" için müşteri bulunamadı.`))])));
+}
+
+$("yc-ara")?.addEventListener("click", () => loadYalcinStock().catch((e) => show($("yc-msg"), e.message)));
+$("yc-hareket")?.addEventListener("click", () => loadYalcinMoves().catch((e) => show($("yc-msg"), e.message)));
+$("yc-aday-ara")?.addEventListener("click", () => loadYalcinAdaylar().catch((e) => show($("yc-msg"), e.message)));
+liveFilter(["yc-q"], [], () => loadYalcinStock());
+liveFilter(["yc-hq"], [], () => loadYalcinMoves());
+liveFilter(["yc-aday-q"], [], () => loadYalcinAdaylar());
+$("yc-ata")?.addEventListener("click", async () => {
+  const ids = [...ycAdaySelected.keys()];
+  if (!ids.length) { show($("yc-msg"), "Önce listeden müşteri seçin — seçilenler arama kutusunun altında görünür."); return; }
+  try {
+    const r = await api("/panel/api/yalcin/ata", { method: "POST", body: { customerIds: ids, assign: true } });
+    ycAdaySelected.clear();
+    renderYalcinSelected();
+    show($("yc-msg"), r.message, "ok");
+    $("yc-aday-q").value = "";
+    await loadYalcin();
+  } catch (e) { show($("yc-msg"), e.message); }
+});
+$("yc-cikar")?.addEventListener("click", async () => {
+  const ids = [...ycSelected];
+  if (!ids.length) { show($("yc-msg"), "Çıkarılacak Yalçın müşterisini seçin."); return; }
+  try {
+    const r = await api("/panel/api/yalcin/ata", { method: "POST", body: { customerIds: ids, assign: false } });
+    ycSelected.clear();
+    show($("yc-msg"), r.message, "ok");
+    await loadYalcin();
+  } catch (e) { show($("yc-msg"), e.message); }
+});
 
 start().then(() => { if ($("app").classList.contains("hidden")) showLogin(); });

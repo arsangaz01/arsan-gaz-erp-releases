@@ -1,6 +1,12 @@
 {
   "version": 1,
   "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "node .cursor/hooks/telegram-before-prompt.js",
+        "timeout": 10
+      }
+    ],
     "afterAgentResponse": [
       {
         "command": "node .cursor/hooks/telegram-final-response.js",

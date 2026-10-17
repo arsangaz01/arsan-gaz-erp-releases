@@ -20,6 +20,8 @@ public sealed class Customer
  public string? Note { get; set; }
  public int? LegacyId { get; set; }
  public string? LegacySource { get; set; }
+ /// <summary>Partner workspace (ör. yalcin). Null = genel listelerde.</summary>
+ public string? PartnerKey { get; set; }
  public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
  public DateTime? UpdatedAt { get; set; }
  public uint Version { get; set; }

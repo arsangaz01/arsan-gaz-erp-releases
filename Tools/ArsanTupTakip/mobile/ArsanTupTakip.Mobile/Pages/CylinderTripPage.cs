@@ -160,11 +160,11 @@ public sealed class CylinderTripPage : ContentPage
             || ApiClient.Instance.Account?.IsDriver == true;
         bool canStart = ApiClient.Instance.Can(Perm.TripStart);
         _tripPickers = new VerticalStackLayout { Spacing = 4, IsVisible = false, Children = { _trip, _vehicle } };
-        _startBig = Ui.Primary("🚚  SEFER BAŞLAT", async (_, _) => await StartTripAsync());
+        _startBig = Ui.Primary("🚚  Sefer başlat", async (_, _) => await StartTripAsync());
         _startBig.FontSize = 20;
         _startBig.MinimumHeightRequest = 72;
         _startBig.IsVisible = false;
-        _finishSimple = Ui.Primary("🏁  SEFERİ BİTİR", async (_, _) => await CloseTripAsync());
+        _finishSimple = Ui.Primary("🏁  Seferi bitir", async (_, _) => await CloseTripAsync());
         _finishSimple.FontSize = 18;
         _finishSimple.MinimumHeightRequest = 60;
         _finishSimple.IsVisible = false;
@@ -178,7 +178,7 @@ public sealed class CylinderTripPage : ContentPage
                 new Label { Text = "↩️ Dolu iade (müşteriden DOLU geri geldi)", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Ui.Warn, VerticalOptions = LayoutOptions.Center }
             }
         };
-        Button save = Ui.Primary("✅  KAYDET", async (_, _) => await SubmitAsync());
+        Button save = Ui.Primary("✅  Kaydet", async (_, _) => await SubmitAsync());
         save.FontSize = 18;
         save.MinimumHeightRequest = 60;
         Button undoLast = Ui.Secondary("↩️  Geri al", async (_, _) => await UndoLastAsync());
@@ -196,7 +196,7 @@ public sealed class CylinderTripPage : ContentPage
                 _busy,
                 _resultCard,
                 Ui.Section(
-                    "🏁 SEFERİ BİTİR",
+                    "🏁 Seferi bitir",
                     Ui.Secondary("📝 Okutulmayan tüplere gerekçe yaz", async (_, _) => await ExplainMissingAsync(false)),
                     Ui.Primary("🏁 Seferi kapat", async (_, _) => await CloseTripAsync())).ShowIf(finish)
             }
@@ -209,7 +209,7 @@ public sealed class CylinderTripPage : ContentPage
             Children =
             {
                 Ui.Section(
-                    "SEFER AYRINTISI",
+                    "Sefer ayrıntısı",
                     _overview,
                     Ui.ActionRow(
                         Ui.Secondary("🔄 Yenile", async (_, _) => await RefreshTripsAsync()),
@@ -306,10 +306,10 @@ public sealed class CylinderTripPage : ContentPage
 
         _stepHint.Text = SelectedMode switch
         {
-            LoadMode => "👉 Düğmeye dokunun, kamera açılır: araca koyduğunuz tüpleri okutun, sonra KAYDET'e basın.",
-            DeliverMode => "👉 Düğmeye dokunun: müşteriyi seçin, kamera açılır, verdiğiniz tüpleri okutun, KAYDET'e basın.",
-            PickupMode => "👉 Düğmeye dokunun: müşteriyi seçin, kamera açılır, aldığınız boşları okutun, KAYDET'e basın.",
-            ReturnMode => "👉 Düğmeye dokunun, kamera açılır: araçtan inen bütün tüpleri okutun, KAYDET'e basın. Müşteriden alınan boşlar depoda BOŞ görünür; "
+            LoadMode => "👉 Düğmeye dokunun, kamera açılır: araca koyduğunuz tüpleri okutun, sonra Kaydet'e basın.",
+            DeliverMode => "👉 Düğmeye dokunun: müşteriyi seçin, kamera açılır, verdiğiniz tüpleri okutun, Kaydet'e basın.",
+            PickupMode => "👉 Düğmeye dokunun: müşteriyi seçin, kamera açılır, aldığınız boşları okutun, Kaydet'e basın.",
+            ReturnMode => "👉 Düğmeye dokunun, kamera açılır: araçtan inen bütün tüpleri okutun, Kaydet'e basın. Müşteriden alınan boşlar depoda boş görünür; "
                 + "müşteriden DOLU geri gelenleri ayrıca \"Dolu iade\" açıkken okutup kaydedin.",
             _ => "👉 Araçtaki tüpleri okutun; yük listesiyle karşılaştırılır."
         };
@@ -719,7 +719,7 @@ public sealed class CylinderTripPage : ContentPage
         if (!any)
         {
             _tripLine.Text = ApiClient.Instance.Can(Perm.TripStart)
-                ? "Aktif sefer yok. Başlamak için yukarıdaki \"SEFER BAŞLAT\"a basın."
+                ? "Aktif sefer yok. Başlamak için yukarıdaki \"Sefer başlat\"a basın."
                 : "Aktif sefer yok. Sefer depoda başlatılınca burada görünür.";
             return;
         }

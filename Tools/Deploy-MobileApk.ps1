@@ -1,4 +1,6 @@
 # Release APK'yı MobileApi indirme klasörüne kopyalar; sürüm meta dosyasını csproj'dan yazar.
+# Prod'da tek başına yayınlama: kullanıcı kuralı gereği Tools\Deploy-BothMobileApks.ps1 kullan
+# (ERP + TupTakip aynı anda). Bu betik Both tarafından veya -NoServer yerel kopya için çağrılır.
 param(
     [string]$ApkPath = "",
     [switch]$SkipBuild,

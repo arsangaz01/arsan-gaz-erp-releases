@@ -184,7 +184,9 @@ internal static class MobileApiSelfTest
         Check(File.ReadAllText(WebPanelUserStore.FilePath).Contains(PanelPermissions.CustomerCreate, StringComparison.Ordinal), "özel yetki dosyaya yazılmadı");
 
         Check(auth.SetPermissions(admin, "yerel", driver.Id, null, true) is null, "varsayılana dönüş başarısız");
-        Check(PanelRoles.Effective(WebPanelUserStore.Find(driver.Id)!).SequenceEqual(PanelRoles.Defaults(PanelRoles.Driver)), "varsayılana dönülmedi");
+        // Effective is catalog-ordered; Defaults may list keys in a different order — compare as sets.
+        Check(PanelRoles.Effective(WebPanelUserStore.Find(driver.Id)!).ToHashSet()
+            .SetEquals(PanelRoles.Defaults(PanelRoles.Driver)), "varsayılana dönülmedi");
 
         auth.SetPermissions(admin, "yerel", driver.Id, wanted, false);
         Check(auth.UpdateUser(admin, "yerel", driver.Id, "sofor1", PanelRoles.Viewer, true) is null, "rol değişimi başarısız");

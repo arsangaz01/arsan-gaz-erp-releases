@@ -541,7 +541,7 @@ public sealed class HomePage : ContentPage
                         }
                     }
                 },
-                new Label { Text = "TÜP TAKİP SİSTEMİ", FontSize = 11, CharacterSpacing = 1.5, TextColor = Colors.White.WithAlpha(0.65f) }
+                new Label { Text = "Tüp takip sistemi", FontSize = 12, CharacterSpacing = 0.2, TextColor = Colors.White.WithAlpha(0.72f) }
             }
         }, 1, 0);
         grid.Add(brand, 0, 0);

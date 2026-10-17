@@ -53,9 +53,9 @@ public static class Ui
     public static Label Title(string text) => new()
     {
         Text = text,
-        FontSize = 20,
+        FontSize = 22,
         FontFamily = "OpenSansSemibold",
-        Margin = new Thickness(0, 4, 0, 2)
+        Margin = new Thickness(0, 4, 0, 4)
     };
 
     public static Label SectionCaption(string text) => new()
@@ -64,7 +64,7 @@ public static class Ui
         FontSize = 13,
         FontFamily = "OpenSansSemibold",
         TextColor = Accent,
-        CharacterSpacing = 0.8,
+        CharacterSpacing = 0.3,
         Margin = new Thickness(2, 0, 0, 6)
     };
 

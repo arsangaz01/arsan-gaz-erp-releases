@@ -51,6 +51,8 @@ ALTER TABLE Cylinders ADD COLUMN IF NOT EXISTS IsFull boolean NULL;
 ALTER TABLE Cylinders ADD COLUMN IF NOT EXISTS VehiclePlate text NULL;
 ALTER TABLE Cylinders ADD COLUMN IF NOT EXISTS OwnerCustomerId integer NULL CONSTRAINT fk_cylinders_customers_ownercustomerid REFERENCES Customers(Id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS ix_cylinders_ownercustomerid ON Cylinders(OwnerCustomerId);
+ALTER TABLE Customers ADD COLUMN IF NOT EXISTS PartnerKey text NULL;
+CREATE INDEX IF NOT EXISTS ix_customers_partnerkey ON Customers(PartnerKey);
 ALTER TABLE CylinderMovements ADD COLUMN IF NOT EXISTS IsFull boolean NULL;
 ALTER TABLE CylinderMovements ADD COLUMN IF NOT EXISTS VehiclePlate text NULL;
 CREATE TABLE IF NOT EXISTS CylinderAudits (

@@ -50,7 +50,9 @@ public static class TupTakipDatabase
             ADD COLUMN IF NOT EXISTS customertype text NULL,
             ADD COLUMN IF NOT EXISTS note text NULL,
             ADD COLUMN IF NOT EXISTS legacyid integer NULL,
-            ADD COLUMN IF NOT EXISTS legacysource text NULL;
+            ADD COLUMN IF NOT EXISTS legacysource text NULL,
+            ADD COLUMN IF NOT EXISTS partnerkey text NULL;
+        CREATE INDEX IF NOT EXISTS ix_customers_partnerkey ON tuptakip.customers (partnerkey);
         ALTER TABLE tuptakip.cylindermovements
             ADD COLUMN IF NOT EXISTS legacyid bigint NULL;
         CREATE INDEX IF NOT EXISTS ix_cylinders_ownercustomerid ON tuptakip.cylinders (ownercustomerid);

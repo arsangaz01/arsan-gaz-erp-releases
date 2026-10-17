@@ -20,7 +20,8 @@ const DEFAULT_MODEL = "auto";
 // The open Cursor IDE chat (Tools/CursorIdeBridge/ide-watch.ps1) refreshes its heartbeat every 3 s.
 const IDE_SESSION_STALE_MS = 90_000;
 // A monitored shell does not guarantee the IDE chat gets a turn; unstarted claims fall back to this bridge.
-const IDE_CLAIM_START_GRACE_MS = 180_000;
+// 60s (was 180s): long idle claims felt like "Telegram is broken" even though the request was only waiting.
+const IDE_CLAIM_START_GRACE_MS = 60_000;
 
 const projectRoot = process.env.CURSOR_BRIDGE_PROJECT_ROOT || findProjectRoot(__dirname);
 const dataRoot = process.env.CURSOR_BRIDGE_DATA_ROOT || resolveDataRoot(projectRoot);
@@ -202,8 +203,35 @@ function claimTakeoverReason({ claim, started, ideStatus, nowMs }) {
   }
   const claimed = Date.parse(claim?.claimedUtc ?? "");
   if (!Number.isFinite(claimed)) return "IDE sahiplenme kaydı okunamadı";
-  if (nowMs - claimed >= IDE_CLAIM_START_GRACE_MS) return "IDE sohbeti 3 dakika içinde işe başlamadı";
+  if (nowMs - claimed >= IDE_CLAIM_START_GRACE_MS) return "IDE sohbeti 1 dakika içinde işe başlamadı";
   return null;
+}
+
+async function queueTelegramNotice(report) {
+  const settings = await readJson(path.join(dataRoot, "settings.json")).catch(() => null);
+  const chatId = Number(settings?.TelegramChatId ?? 0);
+  if (!Number.isFinite(chatId) || chatId === 0) return;
+  const text = String(report ?? "").trim();
+  if (!text) return;
+  const outbox = path.join(dataRoot, "TelegramOutbox");
+  await fs.mkdir(outbox, { recursive: true });
+  const id = `cursor-bridge-notice-${Date.now().toString(36)}`;
+  const now = new Date().toISOString();
+  await writeJsonAtomically(path.join(outbox, `${id}.json`), {
+    Id: id,
+    Kind: "telegram-copilot-direct-response",
+    TaskId: id,
+    ChatId: chatId,
+    Report: text,
+    CreatedUtc: now,
+    NextAttemptUtc: now,
+    Attempts: 0,
+    DeliveredChunkCount: 0,
+    Receipts: [],
+    FilePaths: [],
+    DeliveredFileCount: 0,
+    LastError: null,
+  });
 }
 
 async function releaseStaleIdeClaim(id, names) {
@@ -228,6 +256,10 @@ async function releaseStaleIdeClaim(id, names) {
   }
   await fs.unlink(claimPath).catch(() => undefined);
   log(`IDE sohbetinin sahiplendiği istek köprüye alındı (${reason}): ${id}`);
+  // Tell the user the pipeline is still alive — silence here looked like a Telegram outage.
+  await queueTelegramNotice(
+    `Telegram hattı çalışıyor. IDE sohbeti gecikti (${reason}); istek yedek köprüde işleniyor. Sonuç bu sohbete gelecek.`,
+  ).catch((error) => log(`Takeover Telegram notice failed: ${error.message}`));
   return true;
 }
 

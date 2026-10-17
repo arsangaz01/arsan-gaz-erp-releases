@@ -19,6 +19,15 @@ public sealed class HomePage : ContentPage
     private readonly Label _userRole = new() { TextColor = Color.FromRgba(255, 255, 255, 200), FontSize = 13 };
     private readonly Label _initials = new() { TextColor = Colors.White, FontSize = 16, FontFamily = "OpenSansSemibold", HorizontalTextAlignment = TextAlignment.Center, VerticalTextAlignment = TextAlignment.Center };
     private readonly Border _updateBanner;
+    private readonly Border _checkBanner;
+    private readonly Label _checkText = new()
+    {
+        FontSize = 12,
+        TextColor = Colors.White.WithAlpha(0.85f),
+        LineBreakMode = LineBreakMode.WordWrap,
+        Text = "Telefondaki sürüm: " + AppInfo.Current.VersionString
+    };
+    private readonly ActivityIndicator _checkBusy = new() { IsVisible = false, IsRunning = false, Color = Colors.White, WidthRequest = 22, HeightRequest = 22 };
     private readonly Label _updateText = new() { TextColor = Colors.White, FontSize = 14, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap };
     private readonly ActivityIndicator _updateBusy = new() { IsVisible = false, Color = Ui.Accent };
     private bool _checkingUpdate;
@@ -66,6 +75,35 @@ public sealed class HomePage : ContentPage
                 await UpdateCheck.InstallAsync(this, _updateText, _updateBusy);
             }
         });
+
+        Grid checkRow = new()
+        {
+            ColumnSpacing = 12,
+            ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)]
+        };
+        checkRow.Add(Icons.Glyph(Icons.SystemUpdate, Colors.White, 26), 0, 0);
+        checkRow.Add(new VerticalStackLayout
+        {
+            Spacing = 2,
+            VerticalOptions = LayoutOptions.Center,
+            Children =
+            {
+                new Label { Text = "Güncellemeyi denetle", FontSize = 15, FontFamily = "OpenSansSemibold", TextColor = Colors.White },
+                _checkText
+            }
+        }, 1, 0);
+        checkRow.Add(_checkBusy, 2, 0);
+        _checkBanner = new Border
+        {
+            Padding = new Thickness(16, 12),
+            StrokeThickness = 0,
+            StrokeShape = new RoundRectangle { CornerRadius = 18 },
+            BackgroundColor = Color.FromArgb("#334155"),
+            Content = checkRow
+        };
+        SemanticProperties.SetDescription(_checkBanner, "Güncellemeyi denetle");
+        AddTap(_checkBanner, CheckUpdateAsync);
+
         _date.SetAppThemeColor(Label.TextColorProperty, Color.FromArgb("#1E3A8A"), Color.FromArgb("#BAE6FD"));
 
         Content = new ScrollView
@@ -81,7 +119,7 @@ public sealed class HomePage : ContentPage
                     {
                         Padding = new Thickness(14, 0),
                         Spacing = 16,
-                        Children = { _updateBanner, _updateBusy, _grid, Footer() }
+                        Children = { _updateBanner, _updateBusy, _grid, _checkBanner, Footer() }
                     }
                 }
             }
@@ -112,6 +150,39 @@ public sealed class HomePage : ContentPage
         }
 
         await RefreshUpdateAsync();
+    }
+
+    private async Task CheckUpdateAsync()
+    {
+        if (_checkBusy.IsRunning || _updateBusy.IsRunning)
+        {
+            return;
+        }
+
+        _checkBusy.IsVisible = _checkBusy.IsRunning = true;
+        _checkText.Text = "Denetleniyor…";
+        UpdateInfo? available;
+        try
+        {
+            (available, string text) = await UpdateCheck.CheckNowAsync();
+            _checkText.Text = text;
+        }
+        finally
+        {
+            _checkBusy.IsVisible = _checkBusy.IsRunning = false;
+        }
+
+        _updateBanner.IsVisible = available is not null;
+        if (available is null)
+        {
+            return;
+        }
+
+        _updateText.Text = $"Yeni sürüm {available.PublishedMobileVersion} (build {available.PublishedMobileBuild}) hazır. Kurmak için dokunun.";
+        if (await DisplayAlertAsync("Güncelleme", _checkText.Text + " Şimdi güncellensin mi?", "Güncelle", "Sonra"))
+        {
+            await UpdateCheck.InstallAsync(this, _updateText, _updateBusy);
+        }
     }
 
     public async Task RefreshUpdateAsync()
@@ -500,7 +571,7 @@ public sealed class HomePage : ContentPage
             VerticalOptions = LayoutOptions.Center,
             Children =
             {
-                new Label { Text = "ARSAN GAZ", TextColor = Colors.White, FontSize = 22, FontFamily = "OpenSansSemibold", CharacterSpacing = 1.5 },
+                new Label { Text = "Arsan Gaz", TextColor = Colors.White, FontSize = 22, FontFamily = "OpenSansSemibold", CharacterSpacing = 0.4 },
                 new Label { Text = "Endüstriyel ve medikal tüp takip sistemi", TextColor = Color.FromArgb("#BAE6FD"), FontSize = 13 }
             }
         }, 1, 0);

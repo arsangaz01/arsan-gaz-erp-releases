@@ -4,6 +4,8 @@
 <dict>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>CFBundleDisplayName</key>
+	<string>Arsan Gaz ERP</string>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>
@@ -26,6 +28,16 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Tüp barkodunu okutmak için kamera gerekir.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Galeriden barkod / fotoğraf seçmek için galeri izni gerekir.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Seferde müşteri konumunu kaydetmek ve yaklaşma uyarısı için konum kullanılır; konum sunucuya sürekli gönderilmez.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Konuşarak komut için mikrofon gerekir.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Konuşmayı yazıya çevirmek için konuşma tanıma kullanılır.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

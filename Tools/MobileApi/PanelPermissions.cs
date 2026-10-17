@@ -26,6 +26,8 @@ internal static class PanelPermissions
     internal const string CustomerCreate = "musteri-ekle";
     internal const string CustomerStockTotals = "musteri-stok-toplam";
     internal const string CustomerRequests = "musteri-talepleri";
+    internal const string PartnerYalcinView = "yalcin-goruntule";
+    internal const string PartnerYalcinManage = "yalcin-yonet";
     internal const string CrmView = "crm-goruntule";
     internal const string CrmWrite = "crm-yaz";
     internal const string VehicleView = "arac-goruntule";
@@ -67,6 +69,8 @@ internal static class PanelPermissions
         new(CustomerCreate, "Müşteriler", "Yeni müşteri ekleme"),
         new(CustomerStockTotals, "Müşteriler", "Müşteri stoğunda tüm müşterilerin toplamı ve gaz/boyut tablosu"),
         new(CustomerRequests, "Müşteriler", "Müşteri talepleri: boş tüp alımı ve dolu tüp siparişi taleplerini görme, ekleme, tamamlandı/iptal işaretleme"),
+        new(PartnerYalcinView, "Yalçın", "Yalçın sekmesi: Yalçın'a atanmış müşteri/stok/hareketleri inceleme (Operatör salt okunur)"),
+        new(PartnerYalcinManage, "Yalçın", "Yalçın'a müşteri atama / çıkarma (yalnızca Yönetici)", AdminOnly: true),
         new(CrmView, "CRM", "CRM firmaları ve takip listesi"),
         new(CrmWrite, "CRM", "CRM notu ve takip tarihi girme"),
         new(VehicleView, "Araçlar", "Araçları ve araçtaki tüpleri görme"),
@@ -119,7 +123,7 @@ internal static class PanelRoles
     [
         PanelPermissions.ManageUsers, PanelPermissions.ManageDevices, PanelPermissions.AuditLog,
         PanelPermissions.CursorTask, PanelPermissions.CampaignManage, PanelPermissions.CampaignWhatsApp,
-        PanelPermissions.CustomerStockTotals
+        PanelPermissions.CustomerStockTotals, PanelPermissions.PartnerYalcinManage
     ]).ToArray();
 
     // TupTakip şoför menüsüyle aynı işler: sefer, plan, sayım, dolum (CRM/kampanya/asistan ofiste kalır).
@@ -136,7 +140,7 @@ internal static class PanelRoles
     [
         PanelPermissions.Summary, PanelPermissions.CylinderView, PanelPermissions.MovementView, PanelPermissions.Reports,
         PanelPermissions.Export, PanelPermissions.CustomerView, PanelPermissions.CrmView, PanelPermissions.VehicleView,
-        PanelPermissions.TripView, PanelPermissions.CampaignView
+        PanelPermissions.TripView, PanelPermissions.CampaignView, PanelPermissions.PartnerYalcinView
     ];
 
     internal static IReadOnlyList<string> Defaults(string? role) => role switch
@@ -165,9 +169,11 @@ internal static class PanelRoles
         }
 
         set.ExceptWith(removed ?? []);
+        // Operator-only keys stay on Yönetici/Operatör; role defaults (e.g. Saha + depo sayımı) may keep them.
         if (role != Operator)
         {
-            set.ExceptWith(PanelPermissions.OperatorOnly);
+            IReadOnlyList<string> roleDefaults = Defaults(role);
+            set.ExceptWith(PanelPermissions.OperatorOnly.Where(k => !roleDefaults.Contains(k)));
         }
 
         return PanelPermissions.All.Where(set.Contains).ToArray();

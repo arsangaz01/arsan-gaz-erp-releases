@@ -13,6 +13,12 @@ public sealed class CylinderTripPage : ContentPage
 
     private readonly (string Label, int Kind, string Permission)[] _modes = BuildModes();
     private readonly List<Button> _stepButtons = [];
+    private readonly bool _routes = ApiClient.Instance.Can(Perm.TripRoute);
+    private readonly bool _saveLocation = ApiClient.Instance.Can(Perm.CustomerLocation);
+    private readonly VerticalStackLayout _route = new() { Spacing = 10 };
+    private readonly Label _routeInfo = Ui.Note(string.Empty);
+    private List<TripStopItem> _stops = [];
+    private readonly HashSet<int> _verifyAsked = [];
 
     private readonly Label _overview = new() { FontSize = 14, LineBreakMode = LineBreakMode.WordWrap };
     private readonly Picker _trip = new() { Title = "Aktif sefer" };
@@ -103,6 +109,11 @@ public sealed class CylinderTripPage : ContentPage
         _mode.SelectedIndex = _modes.Length > 0 ? 0 : -1;
         _mode.SelectedIndexChanged += (_, _) => ApplyMode();
         _trip.SelectedIndexChanged += (_, _) => RefreshVehicles();
+        _vehicle.SelectedIndexChanged += async (_, _) =>
+        {
+            UpdateSimpleView();
+            await RefreshRouteAsync();
+        };
         _groupPlate.SelectedIndexChanged += async (_, _) => await RefreshGroupsAsync();
         _customerSearch.Completed += async (_, _) => await SearchCustomersAsync();
 
@@ -117,11 +128,11 @@ public sealed class CylinderTripPage : ContentPage
         bool canStart = ApiClient.Instance.Can("sefer-baslat");
         bool canFinish = ApiClient.Instance.Can("sefer-kapat") || ApiClient.Instance.Session?.IsDriver == true;
         _tripPickers = new VerticalStackLayout { Spacing = 4, IsVisible = false, Children = { _trip, _vehicle } };
-        _startBig = Ui.Allowed(Ui.Primary("🚚  SEFER BAŞLAT", async (_, _) => await StartTripAsync()), "sefer-baslat");
+        _startBig = Ui.Allowed(Ui.Primary("🚚  Sefer başlat", async (_, _) => await StartTripAsync()), "sefer-baslat");
         _startBig.FontSize = 20;
         _startBig.MinimumHeightRequest = 72;
         _startBig.IsVisible = false;
-        _finishSimple = Ui.Primary("🏁  SEFERİ BİTİR", async (_, _) => await CloseTripAsync());
+        _finishSimple = Ui.Primary("🏁  Seferi bitir", async (_, _) => await CloseTripAsync());
         _finishSimple.FontSize = 18;
         _finishSimple.MinimumHeightRequest = 60;
         _finishSimple.IsVisible = false;
@@ -130,7 +141,7 @@ public sealed class CylinderTripPage : ContentPage
             _finishSimple.IsVisible = false;
         }
 
-        Button save = Ui.Allowed(Ui.Primary("✅  KAYDET", async (_, _) => await SubmitAsync()), "sefer-yukle|sefer-teslim");
+        Button save = Ui.Allowed(Ui.Primary("✅  Kaydet", async (_, _) => await SubmitAsync()), "sefer-yukle|sefer-teslim");
         save.FontSize = 18;
         save.MinimumHeightRequest = 60;
         Button undoLast = Ui.Secondary("↩️  Geri al", async (_, _) => await UndoLastAsync());
@@ -157,7 +168,7 @@ public sealed class CylinderTripPage : ContentPage
             Children =
             {
                 Ui.Section(
-                    "SEFER AYRINTISI",
+                    "Sefer ayrıntısı",
                     _overview,
                     Ui.ActionRow(
                         Ui.Secondary("🔄 Yenile", async (_, _) => await RefreshTripsAsync()),
@@ -175,25 +186,34 @@ public sealed class CylinderTripPage : ContentPage
                     _customerSearchButton,
                     _customer),
                 Ui.Section(
+                    "🗺️ ROTA (MÜŞTERİ SIRASI)",
+                    _routeInfo,
+                    _route,
+                    Ui.ActionRow(
+                        Ui.Secondary("Müşteri ekle", async (_, _) => await AddStopAsync()),
+                        Ui.Secondary("Önerilenler", async (_, _) => await SuggestStopsAsync()))).ShowIf(_routes),
+                Ui.Section(
                     "📋 YÜK LİSTESİ (GAZ TÜRÜNE GÖRE)",
                     _groupPlate,
                     _groupsTotal,
                     _groups,
                     Ui.Secondary("🔄 Listeyi yenile", async (_, _) => await RefreshGroupsAsync())),
                 Ui.Allowed(Ui.Section(
-                    "🏁 SEFERİ BİTİR",
+                    "🏁 Seferi bitir",
                     Ui.Secondary("📝 Okutulmayan tüplere gerekçe yaz", async (_, _) => await ExplainMissingAsync()),
                     Ui.Primary("🏁 Seferi kapat", async (_, _) => await CloseTripAsync())), "sefer-kapat")
             }
         };
 
-        Button details = Ui.Secondary("⚙️ Ayrıntılar (yük listesi, diğer seçenekler)", (_, _) => { });
+        Button details = Ui.Secondary(
+            _routes ? "⚙️ Ayrıntılar (rota, yük listesi, diğer seçenekler)" : "⚙️ Ayrıntılar (yük listesi, diğer seçenekler)",
+            (_, _) => { });
         details.Clicked += (_, _) =>
         {
             _detailsBox.IsVisible = !_detailsBox.IsVisible;
             details.Text = _detailsBox.IsVisible
                 ? "⚙️ Ayrıntıları gizle"
-                : "⚙️ Ayrıntılar (yük listesi, diğer seçenekler)";
+                : (_routes ? "⚙️ Ayrıntılar (rota, yük listesi, diğer seçenekler)" : "⚙️ Ayrıntılar (yük listesi, diğer seçenekler)");
         };
 
         Content = new ScrollView
@@ -238,10 +258,10 @@ public sealed class CylinderTripPage : ContentPage
 
         _stepHint.Text = SelectedMode switch
         {
-            LoadMode => "👉 Düğmeye dokunun, kamera açılır: araca koyduğunuz tüpleri okutun, sonra KAYDET'e basın.",
-            DeliverMode => "👉 Düğmeye dokunun: müşteriyi seçin, kamera açılır, verdiğiniz tüpleri okutun, KAYDET'e basın.",
-            PickupMode => "👉 Müşteriden aldığınız boş tüpleri okutun, KAYDET'e basın.",
-            ReturnMode => "👉 Düğmeye dokunun, kamera açılır: araçtan inen bütün tüpleri okutun, KAYDET'e basın.",
+            LoadMode => "👉 Düğmeye dokunun, kamera açılır: araca koyduğunuz tüpleri okutun, sonra Kaydet'e basın.",
+            DeliverMode => "👉 Düğmeye dokunun: müşteriyi seçin, kamera açılır, verdiğiniz tüpleri okutun, Kaydet'e basın.",
+            PickupMode => "👉 Müşteriden aldığınız boş tüpleri okutun, Kaydet'e basın.",
+            ReturnMode => "👉 Düğmeye dokunun, kamera açılır: araçtan inen bütün tüpleri okutun, Kaydet'e basın.",
             _ => "👉 Araçtaki tüpleri okutun; yük listesiyle karşılaştırılır."
         };
     }
@@ -553,13 +573,14 @@ public sealed class CylinderTripPage : ContentPage
             _trip.ItemsSource = _trips.Select(t => $"{t.Title} · {t.LoadedTotal} yüklü · {t.Vehicles.Count(v => v.OnTrip)} araç").ToList();
             if (_trips.Count == 0)
             {
-                _overview.Text = "Aktif sefer yok. \"SEFER BAŞLAT\" ile başlatın.";
+                _overview.Text = "Aktif sefer yok. \"Sefer başlat\" ile başlatın.";
                 _trip.SelectedIndex = -1;
                 _vehicle.ItemsSource = null;
                 _groupPlate.ItemsSource = null;
                 _groupsTotal.Text = string.Empty;
                 _groups.Content = Ui.Note("Aktif sefer yok.");
                 UpdateSimpleView();
+                await RefreshRouteAsync();
                 return;
             }
 
@@ -575,6 +596,7 @@ public sealed class CylinderTripPage : ContentPage
 
             ShowOverview();
             RefreshVehicles();
+            await RefreshRouteAsync();
             if (_firstTrip)
             {
                 _firstTrip = false;
@@ -671,7 +693,7 @@ public sealed class CylinderTripPage : ContentPage
         if (!any)
         {
             _tripLine.Text = ApiClient.Instance.Can("sefer-baslat")
-                ? "Aktif sefer yok. Başlamak için yukarıdaki \"SEFER BAŞLAT\"a basın."
+                ? "Aktif sefer yok. Başlamak için yukarıdaki \"Sefer başlat\"a basın."
                 : "Aktif sefer yok. Sefer depoda başlatılınca burada görünür.";
             _finishSimple.IsVisible = false;
             return;
@@ -757,7 +779,7 @@ public sealed class CylinderTripPage : ContentPage
             _vehicle.SelectedIndex = index;
         }
 
-        await DisplayAlertAsync("Sefer", trip.Message + "\n\nŞimdi \"1. Araca yükle\"ye dokunun veya tüpleri okutup KAYDET'e basın.", "Tamam");
+        await DisplayAlertAsync("Sefer", trip.Message + "\n\nŞimdi \"1. Araca yükle\"ye dokunun veya tüpleri okutup Kaydet'e basın.", "Tamam");
     }
 
     private async Task AddVehicleAsync()
@@ -906,6 +928,7 @@ public sealed class CylinderTripPage : ContentPage
             _scanned.Clear();
             RefreshScanned();
             await RefreshTripsAsync(tripId);
+            await RefreshRouteAsync();
             _busy.IsVisible = false;
             await NextStepAsync(mode, message, reconcile);
         }
@@ -1135,11 +1158,303 @@ public sealed class CylinderTripPage : ContentPage
         {
             if (await ExplainAsync(trip.Id, [cylinder], reasons, $"{++done}/{unexplained.Count} · {CylinderChoice(cylinder)}") is null)
             {
-                await DisplayAlertAsync("Sefer", $"Sefer kapatılmadı. {done - 1} tüpün gerekçesi kaydedildi; kalanlar için tekrar \"SEFERİ BİTİR\"e basın.", "Tamam");
+                await DisplayAlertAsync("Sefer", $"Sefer kapatılmadı. {done - 1} tüpün gerekçesi kaydedildi; kalanlar için tekrar \"Seferi bitir\"e basın.", "Tamam");
                 return false;
             }
         }
 
         return true;
+    }
+
+    // Route of the selected vehicle: one card per customer in visiting order with map, call and scan shortcuts.
+    private async Task RefreshRouteAsync()
+    {
+        if (!_routes)
+        {
+            return;
+        }
+
+        if (SelectedTrip is not ActiveTripSummary trip || SelectedPlate is not string plate)
+        {
+            _routeInfo.Text = "Rota için sefer ve araç seçin.";
+            _route.Children.Clear();
+            _stops = [];
+            return;
+        }
+
+        try
+        {
+            List<TripStopItem> stops = await ApiClient.Instance.TripRouteAsync(trip.Id, plate);
+            _stops = stops;
+            _route.Children.Clear();
+            int done = stops.Count(s => s.Done);
+            _routeInfo.Text = stops.Count == 0
+                ? $"{plate} için durak yok. \"Müşteri ekle\" veya \"Önerilenler\" ile gideceğiniz müşterileri sırayla ekleyin; yol tarifi tek dokunuşla açılır."
+                : $"{plate}: {stops.Count} durak · {done} tamamlandı · sıradaki: {stops.FirstOrDefault(s => !s.Done)?.CustomerName ?? "yok"}";
+            int index = 0;
+            foreach (TripStopItem stop in stops)
+            {
+                _route.Children.Add(StopCard(trip.Id, stop, ++index, stops.Count));
+            }
+        }
+        catch (Exception exception)
+        {
+            _routeInfo.Text = "Rota alınamadı: " + exception.Message;
+        }
+    }
+
+    private async Task SaveLocationAsync(TripStopItem stop, bool ask = true)
+    {
+        if (ask && !await DisplayAlertAsync("Konumu kaydet",
+                $"Şu anki konumunuz {stop.CustomerName} müşterisinin konumu olarak kaydedilsin mi? Müşterinin kapısında / deposunda olduğunuzdan emin olun.",
+                "Kaydet", "Vazgeç"))
+        {
+            return;
+        }
+
+        _busy.IsVisible = true;
+        try
+        {
+            if (await Permissions.RequestAsync<Permissions.LocationWhenInUse>() != PermissionStatus.Granted)
+            {
+                await DisplayAlertAsync("Konum", "Konum izni verilmedi. Telefon ayarlarından Arsan Gaz uygulamasına konum izni verin.", "Tamam");
+                return;
+            }
+
+            Location? here = await Geolocation.Default.GetLocationAsync(new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(20)));
+            if (here is null)
+            {
+                await DisplayAlertAsync("Konum", "Konum alınamadı. Telefonun konum (GPS) ayarının açık olduğundan emin olup açık alanda tekrar deneyin.", "Tamam");
+                return;
+            }
+
+            string message = await ApiClient.Instance.SaveCustomerLocationAsync(stop.CustomerId, here.Latitude, here.Longitude, here.Accuracy);
+            await DisplayAlertAsync("Konum", message + (here.Accuracy is double accuracy ? $" (hassasiyet ±{accuracy:0} m)" : string.Empty), "Tamam");
+            await RefreshRouteAsync();
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Konum", exception.Message, "Tamam");
+        }
+        finally
+        {
+            _busy.IsVisible = false;
+        }
+    }
+
+    private async Task ConfirmLocationAsync(TripStopItem stop, bool force = false)
+    {
+        if (!_saveLocation || stop.LocationVerified != false || stop.Latitude is null || (!force && !_verifyAsked.Add(stop.CustomerId)))
+        {
+            return;
+        }
+
+        const string Correct = "✓ Evet, konum doğru";
+        const string Here = "📍 Buradayım, konumu buraya taşı";
+        const string Map = "🗺️ Haritada göster";
+        string? choice = await DisplayActionSheetAsync(
+            $"{stop.CustomerName}: haritadaki konum doğru mu? (Google'dan bulundu, henüz teyit edilmedi)", "Sonra", null, Correct, Here, Map);
+        try
+        {
+            switch (choice)
+            {
+                case Correct:
+                    string message = await ApiClient.Instance.VerifyCustomerLocationAsync(stop.CustomerId);
+                    ShowInfo($"{stop.CustomerName}: {message}");
+                    await RefreshRouteAsync();
+                    break;
+                case Here:
+                    await SaveLocationAsync(stop, false);
+                    break;
+                case Map when stop.MapUrl is string url:
+                    _verifyAsked.Remove(stop.CustomerId);
+                    await OpenAsync(url);
+                    break;
+            }
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Konum", exception.Message, "Tamam");
+        }
+    }
+
+    private View StopCard(int tripId, TripStopItem stop, int index, int count)
+    {
+        string place = string.Join(", ", new[] { stop.Address, stop.District, stop.City }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        Label title = new()
+        {
+            Text = $"{index}. {stop.CustomerName}" + (stop.Done ? "  ✔" : string.Empty),
+            FontSize = 15,
+            FontFamily = "OpenSansSemibold",
+            TextColor = stop.Done ? Colors.Green : null
+        };
+        Label detail = Ui.Note((place.Length == 0 ? "Adres kayıtlı değil" : place)
+            + (stop.Delivered + stop.Collected > 0 ? $"\nBu seferde verilen {stop.Delivered}, alınan {stop.Collected}" : string.Empty)
+            + (string.IsNullOrEmpty(stop.Note) ? string.Empty : "\nNot: " + stop.Note)
+            + (stop.Latitude is null
+                ? (stop.AlertMeters is null ? string.Empty : "\n📍 Konum kayıtlı değil")
+                : stop.LocationVerified == false ? "\n📍 Konum Google'dan bulundu, doğrulanmamış"
+                : "\n📍 Konum kayıtlı"));
+
+        List<View> actions = [];
+        if (stop.MapUrl is string url)
+        {
+            actions.Add(Ui.Compact("🧭 Yol tarifi", async (_, _) => await OpenAsync(url)));
+        }
+
+        if (_saveLocation)
+        {
+            actions.Add(stop.LocationVerified == false && stop.Latitude is not null
+                ? Ui.Compact("📍 Konumu teyit et", async (_, _) => await ConfirmLocationAsync(stop, true))
+                : Ui.Compact(stop.Latitude is null ? "📍 Konumu kaydet" : "📍 Konumu güncelle", async (_, _) => await SaveLocationAsync(stop)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(stop.Phone))
+        {
+            actions.Add(Ui.Compact("📞 Ara", async (_, _) => await Ui.OpenPhoneAsync(this, stop.Phone)));
+        }
+
+        actions.Add(Ui.Compact("📷 Burada", (_, _) => UseStop(stop)));
+        VerticalStackLayout body = new() { Spacing = 6, Children = { title, detail, Ui.ActionRow([.. actions]) } };
+        body.Children.Add(Ui.ActionRow(
+            Ui.Compact("▲", async (_, _) => await RouteActionAsync(() => ApiClient.Instance.MoveTripStopAsync(tripId, stop.Id, -1))).ShowIf(index > 1),
+            Ui.Compact("▼", async (_, _) => await RouteActionAsync(() => ApiClient.Instance.MoveTripStopAsync(tripId, stop.Id, 1))).ShowIf(index < count),
+            Ui.Compact(stop.Done ? "Yeniden aç" : "Tamamlandı", async (_, _) => await RouteActionAsync(() => ApiClient.Instance.SetTripStopDoneAsync(tripId, stop.Id, !stop.Done))),
+            Ui.Compact("Çıkar", async (_, _) =>
+            {
+                if (await DisplayAlertAsync("Rota", $"{stop.CustomerName} rotadan çıkarılsın mı?", "Çıkar", "Vazgeç"))
+                {
+                    await RouteActionAsync(() => ApiClient.Instance.RemoveTripStopAsync(tripId, stop.Id));
+                }
+            })));
+        return Ui.Card(body);
+    }
+
+    private void UseStop(TripStopItem stop)
+    {
+        PushCustomerUndo();
+        _selectedCustomer = new CustomerItem(stop.CustomerId, string.Empty, stop.CustomerName, stop.City, stop.Phone, true, 0);
+        ShowCustomer();
+        int deliver = Array.FindIndex(_modes, m => m.Kind == DeliverMode);
+        if (deliver >= 0 && SelectedMode is not (DeliverMode or PickupMode))
+        {
+            _mode.SelectedIndex = deliver;
+        }
+
+        ClearScanned(trackUndo: false);
+        ShowInfo(HasMode(PickupMode)
+            ? $"{stop.CustomerName} seçildi. Verdiğiniz dolu tüpleri \"Müşteriye teslim\", aldığınız boşları \"Müşteriden boş alma\" ile okutun."
+            : $"{stop.CustomerName} seçildi. Teslim ettiğiniz tüpleri okutun.");
+        _ = ConfirmLocationAsync(stop);
+    }
+
+    private void ShowInfo(string text)
+    {
+        _result.Text = "ℹ️ " + text;
+        _result.TextColor = Ui.Accent;
+        _resultCard.IsVisible = true;
+    }
+
+    private async Task OpenAsync(string uri)
+    {
+        try
+        {
+            await Launcher.Default.OpenAsync(new Uri(uri));
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Rota", "Açılamadı: " + exception.Message, "Tamam");
+        }
+    }
+
+    private async Task RouteActionAsync(Func<Task<string>> action)
+    {
+        _busy.IsVisible = true;
+        try
+        {
+            await action();
+            await RefreshRouteAsync();
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Rota", exception.Message, "Tamam");
+        }
+        finally
+        {
+            _busy.IsVisible = false;
+        }
+    }
+
+    private async Task AddStopAsync()
+    {
+        if (SelectedTrip is not ActiveTripSummary trip || SelectedPlate is not string plate)
+        {
+            await DisplayAlertAsync("Rota", "Önce sefer ve araç seçin.", "Tamam");
+            return;
+        }
+
+        CustomerItem? customer = await CustomerPickPage.OpenAsync(Navigation, "Rotaya müşteri ekle");
+        if (customer is not null)
+        {
+            await AddStopAsync(trip.Id, plate, customer.Id);
+        }
+    }
+
+    private async Task AddStopAsync(int tripId, string plate, int customerId)
+    {
+        _busy.IsVisible = true;
+        try
+        {
+            string message = await ApiClient.Instance.AddTripStopAsync(tripId, plate, customerId);
+            _routeInfo.Text = message;
+            await RefreshRouteAsync();
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Rota", exception.Message, "Tamam");
+        }
+        finally
+        {
+            _busy.IsVisible = false;
+        }
+    }
+
+    private async Task SuggestStopsAsync()
+    {
+        if (SelectedTrip is not ActiveTripSummary trip || SelectedPlate is not string plate)
+        {
+            await DisplayAlertAsync("Rota", "Önce sefer ve araç seçin.", "Tamam");
+            return;
+        }
+
+        List<TripStopSuggestionItem> suggestions;
+        try
+        {
+            _busy.IsVisible = true;
+            suggestions = await ApiClient.Instance.TripStopSuggestionsAsync(trip.Id, plate);
+        }
+        catch (Exception exception)
+        {
+            await DisplayAlertAsync("Rota", exception.Message, "Tamam");
+            return;
+        }
+        finally
+        {
+            _busy.IsVisible = false;
+        }
+
+        if (suggestions.Count == 0)
+        {
+            await DisplayAlertAsync("Rota", "Şu an sipariş zamanı gelen (veya geciken) ve rotada olmayan müşteri görünmüyor.", "Tamam");
+            return;
+        }
+
+        List<string> items = suggestions.Select(s => $"{s.CustomerName}" + (string.IsNullOrEmpty(s.City) ? string.Empty : $" ({s.City})") + $" · {s.Reason}").ToList();
+        string? picked = await DisplayActionSheetAsync("Önerilen müşteriler", "Kapat", null, items.ToArray());
+        int index = picked is null ? -1 : items.IndexOf(picked);
+        if (index >= 0)
+        {
+            await AddStopAsync(trip.Id, plate, suggestions[index].CustomerId);
+        }
     }
 }

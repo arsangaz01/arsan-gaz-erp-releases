@@ -51,6 +51,7 @@ public sealed class ArsanGazDbContext : DbContext
  protected override void OnModelCreating(ModelBuilder b)
  {
   b.Entity<Customer>().HasIndex(x=>x.Code).IsUnique();
+  b.Entity<Customer>().HasIndex(x=>x.PartnerKey);
   b.Entity<Product>().HasIndex(x=>x.Code).IsUnique();
   b.Entity<Product>().Property(x=>x.SalesPrice).HasPrecision(18,4);
   b.Entity<Cylinder>().HasIndex(x=>x.SerialNumber).IsUnique();

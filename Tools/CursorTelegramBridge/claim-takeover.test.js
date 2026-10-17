@@ -15,7 +15,7 @@ test("fresh claim by the live IDE watcher stays with the IDE chat", () => {
 
 test("claim the IDE chat never started is taken over after the grace period", () => {
   const claim = { pid: 2580, claimedUtc: iso(-IDE_CLAIM_START_GRACE_MS) };
-  assert.match(claimTakeoverReason({ claim, started: false, ideStatus: liveIde, nowMs: now }), /3 dakika/);
+  assert.match(claimTakeoverReason({ claim, started: false, ideStatus: liveIde, nowMs: now }), /1 dakika/);
 });
 
 test("claim is taken over when the IDE watcher heartbeat is stale", () => {

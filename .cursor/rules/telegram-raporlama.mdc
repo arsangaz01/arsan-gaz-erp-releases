@@ -11,18 +11,29 @@ Kullanıcı bilgisayar başında olmasa da işi Telegram üzerinden yönetir. G�
 Veri klasörü: `%LOCALAPPDATA%\ArsanGazERP\AgentWatcherData`. Betikler `Tools/CursorIdeBridge/` altında,
 PowerShell ile ve sandbox dışında (`required_permissions: ["all"]`) çalıştırılır.
 
-## İki mobil APK — indirme yolları (ajanlar karıştırmasın)
-Ekranlardaki gibi iki ayrı uygulama / iki sunucu adresi vardır; ERP APK’sını TupTakip yoluna (veya tersi) koyma.
+## Mobil paketler — Android birlikte; iOS ayrı hat (zorunlu)
+Ekranlardaki gibi iki ayrı Android uygulaması / iki sunucu adresi vardır; ERP APK’sını TupTakip yoluna (veya tersi) koyma.
 
-| Uygulama | Telefon sunucu adresi | Güncelleme API | APK indirme |
-|----------|----------------------|----------------|-------------|
-| Arsan Gaz ERP | `https://arsantuptakip.com` | `/api/guncelleme` | `https://arsantuptakip.com/indir` |
-| ArsanTüpTakip | `https://arsantuptakip.com/tuptakip` | `/tuptakip/api/guncelleme` | `https://arsantuptakip.com/tuptakip/indir` |
+| Kanal | Hat | Güncelleme / indirme |
+|-------|-----|----------------------|
+| Arsan Gaz ERP (Android) | `Deploy-BothMobileApks.ps1` | `/api/guncelleme` · `https://arsantuptakip.com/indir` |
+| ArsanTüpTakip (Android) | aynı Both turu | `/tuptakip/api/guncelleme` · `https://arsantuptakip.com/tuptakip/indir` |
+| iOS (IPA) | **ayrı** `Deploy-IosMobile.ps1` | Android Both’a dahil etme; Mac + Apple Developer gerekir |
 
-Rapor ve yayın notlarında tam URL yaz. Sunucu ajanı TupTakip APK’sını yalnızca `/tuptakip/indir` altına koyar; IDE ajanı ERP APK’sını `Deploy-MobileApk.ps1` ile `/indir` (MobileApi data) altına koyar.
+**Android kuralı:** İki site APK’sı **her zaman aynı anda** (`Tools\Deploy-BothMobileApks.ps1`). Tek APK bırakma.
+**iOS kuralı:** Android’den **ayrı** iş ve yayın; Both’a karıştırma. IPA hazır değilken “iOS yayınlandı” deme.
+Özellik kodu projelerde ayrıdır. Raporlarda tam URL yaz.
 
-## Her yeni oturum / sohbet başlangıcı (zorunlu)
-Bağlantı kurulana kadar dene; kopukken “Telegram yok” deyip bırakma.
+## Mimari (kopuk sanılan durumlar)
+Telegram dinleme sunucuda; PC’de `ServerInboxSync` + `AgentWatcher` (gönderim) + `bridge.js` (yedek ajan) her zaman
+çalışmalı. `ide-watch.ps1` yalnızca **açık Cursor sohbetine** bağlıdır — sohbet değişince/yenilenince ölebilir.
+İstekler sahipsiz kalmaz: IDE 1 dk içinde `Start-Request` yapmazsa `bridge.js` devralır ve Telegram’a “köprüde”
+bildirimi gider. “Bağlantı yok” çoğu zaman IDE sohbetinin uyanmamasıdır; hat gerçekten kopuk değildir.
+
+## Her yeni oturum / sohbet / Cursor yeniden açılışı (zorunlu — ilk iş)
+Kullanıcı bir şey yazmadan veya asıl soruya cevap vermeden **önce** Telegram hattını kur.
+Cursor kapanınca `ide-watch` ölür; “otomatik bağlı kalır” sanma. `beforeSubmitPrompt` her turda hatırlatır —
+hatırlatmayı okuyup uygula; atlama. Kopukken “Telegram yok” deyip bırakma.
 
 1. `ArsanGazERP.AgentWatcher` sürecini kontrol et; yoksa AgentWatcher’ı başlat / kullanıcıya kurulum gerekmiyorsa mevcut
    publish/current yolundan ayağa kaldır (gizli anahtar yazma).
@@ -62,8 +73,8 @@ AgentWatcher çalışıyorsa mesaj birkaç saniye içinde iletilir.
 - `AGENT_LOOP_WAKE_ide_request {"id":...,"path":...}` → önce `Start-Request.ps1 -Id <id>` çalıştır. `STARTED` yazarsa
  istek dosyasını (`Text`, `Context`, `Attachments`) oku, işi yap, raporu dosyaya yazıp
  `Complete-Request.ps1 -Id <id> -ReportPath <dosya>` çalıştır (rapor Telegram'a gider). `TAKEN` yazarsa isteği yedek köprü
- (bridge.js) devralmıştır; dokunma. Sohbet 3 dakika içinde `Start-Request` çalıştırmazsa veya izleyici kapanırsa köprü işi
- otomatik devralır; bu sayede istek hiçbir zaman sahipsiz kalmaz. `mobile-` ile başlayan istekler telefondaki uygulamadan gelir.
+ (bridge.js) devralmıştır; dokunma. Sohbet 1 dakika içinde `Start-Request` çalıştırmazsa veya izleyici kapanırsa köprü işi
+ otomatik devralır (Telegram’a kısa bilgilendirme gider); istek sahipsiz kalmaz. `mobile-` ile başlayan istekler telefondan gelir.
  Video eklerinde (ekran kaydı vb.) videoyu doğrudan okuyamazsın: `Start-Request` çıktısındaki `VIDEO_FRAMES` altında listelenen
  kare PNG'lerini (`SHEET` = zaman damgalı 4x2 kare tablosu, `FRAME` = büyük kare) Read aracıyla oku ve hatayı onlara göre değerlendir.
 - `AGENT_LOOP_WAKE_ide_report {"name":...,"path":...}` → ERP ajan sohbetindeki araştırma raporunu incele.

@@ -8,18 +8,18 @@
 <style>
 :root { --navy:#1e3a8a; --sea:#0284c7; --sea-light:#e0f2fe; --accent:var(--sea); --accent-dark:#0369a1; --bg:#f3f4f6; --card:#fff; --line:#e5e7eb; --text:#1f2937; --muted:#6b7280; --ok:#0369a1; --warn:#475569; --bad:#1e3a8a; }
 * { box-sizing:border-box; }
-body { margin:0; font-family:"Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); font-size:15px; }
+body { margin:0; font-family:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); font-size:15px; line-height:1.45; -webkit-font-smoothing:antialiased; }
 header { background:var(--navy); color:#fff; padding:12px 20px; display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:5; flex-wrap:wrap; }
-header h1 { font-size:18px; margin:0; font-weight:600; }
+header h1 { font-size:18px; margin:0; font-weight:600; letter-spacing:.01em; }
 nav { display:flex; gap:4px; flex-wrap:wrap; }
-nav button { background:transparent; color:#fff; border:1px solid transparent; border-radius:8px; padding:7px 12px; cursor:pointer; font-size:14px; transition:transform .07s ease, background-color .07s ease; -webkit-tap-highlight-color:rgba(255,255,255,.2); }
+nav button { background:transparent; color:#fff; border:1px solid transparent; border-radius:8px; padding:7px 12px; cursor:pointer; font-size:14px; font-weight:600; letter-spacing:.01em; transition:transform .07s ease, background-color .07s ease; -webkit-tap-highlight-color:rgba(255,255,255,.2); }
 nav button.active, nav button:hover { background:rgba(255,255,255,.18); }
 nav button:active { background:rgba(255,255,255,.32); transform:scale(0.96); }
 header .spacer { flex:1; }
 header .user { font-size:13px; opacity:.9; }
 main { max-width:1200px; margin:0 auto; padding:18px; }
 .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px; }
-.card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--accent); margin:0 0 12px; }
+.card h2 { font-size:15px; font-weight:600; text-transform:none; letter-spacing:0; color:var(--navy); margin:0 0 12px; }
 .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; }
 .stat { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; cursor:pointer; transition:transform .07s ease, border-color .07s ease, box-shadow .07s ease; -webkit-tap-highlight-color:transparent; }
 .stat:hover { border-color:var(--accent); }
@@ -56,7 +56,7 @@ tr.click:active td { background:#bae6fd; }
 .badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:12px; background:#f3f4f6; border:1px solid var(--line); white-space:nowrap; }
 .b1 { background:#eff6ff; border-color:#bfdbfe; color:#1e40af; } .b2 { background:#e0f2fe; border-color:#7dd3fc; color:#0369a1; } .b3 { background:#f3f4f6; border-color:#d1d5db; color:#374151; }
 .b4 { background:#dbeafe; border-color:#93c5fd; color:#1d4ed8; } .b5 { background:#f9fafb; border-color:#e5e7eb; color:#4b5563; } .b6 { background:#e5e7eb; border-color:#cbd5e1; color:#1e3a8a; }
-.muted { color:var(--muted); font-size:13px; }
+.muted { color:var(--muted); font-size:13px; line-height:1.45; }
 .warn-text { color:var(--warn); }
 .bad-text { color:var(--bad); }
 tr.group-head td { background:#f1f5f9; font-weight:600; border-top:2px solid var(--line); }
@@ -78,9 +78,29 @@ dialog::backdrop { background:rgba(0,0,0,.4); }
 .kv { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:8px 16px; }
 .kv div span { display:block; font-size:12px; color:var(--muted); }
 .form-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; }
+.ac-wrap { position:relative; min-width:220px; flex:1; }
+.ac-wrap input { width:100%; }
+.ac-list { position:absolute; left:0; right:0; top:100%; z-index:40; margin:4px 0 0; padding:4px 0; max-height:280px; overflow:auto;
+  background:#fff; border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 28px rgba(15,23,42,.14); list-style:none; }
+.ac-list li { padding:10px 12px; cursor:pointer; border-bottom:1px solid #f3f4f6; }
+.ac-list li:last-child { border-bottom:none; }
+.ac-list li:hover, .ac-list li.active { background:var(--sea-light); }
+.ac-list .ac-name { font-weight:600; color:var(--text); }
+.ac-list .ac-meta { font-size:12px; color:var(--muted); margin-top:2px; }
+.ac-list .ac-empty { color:var(--muted); cursor:default; }
+.ac-list .ac-empty:hover { background:transparent; }
+.pick-row { display:flex; flex-wrap:wrap; gap:8px; align-items:end; }
+.pick-row .ac-wrap { min-width:260px; }
+.pick-row select.ac-chosen { min-width:200px; max-width:100%; }
+.sel-bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; padding:10px 12px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; min-height:44px; }
+.sel-bar .sel-label { font-size:12px; color:var(--muted); font-weight:600; text-transform:none; letter-spacing:0; margin-right:4px; }
+.sel-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:#fff; border:1px solid #7dd3fc; border-radius:999px; font-size:13px; color:var(--navy); }
+.sel-chip button { border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:16px; line-height:1; padding:0 2px; }
+.sel-chip button:hover { color:var(--bad); }
+.sel-bar .sel-empty { color:var(--muted); font-size:13px; }
 .form-grid label { display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--muted); }
 .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
-.hint { font-size:12px; color:var(--muted); margin-top:6px; }
+.hint { font-size:12px; color:var(--muted); margin-top:6px; line-height:1.45; }
 .field { display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--muted); }
 .pick-row { display:flex; gap:6px; flex-wrap:wrap; }
 .pick-row select { flex:1 1 150px; }
@@ -181,7 +201,7 @@ tr.alarm-row td { background:#fef2f2; }
 .lb-results-box.hidden { display:none; }
 .lb-results-head { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 12px; background:#f8fafc; border-bottom:1px solid var(--line); font-size:13px; }
 .lb-preview-wrap { background:linear-gradient(180deg,#cbd5e1 0%,#e2e8f0 100%); border-radius:16px; padding:16px; min-height:200px; border:1px solid #94a3b8; }
-.lb-preview-wrap h3 { margin:0 0 10px; font-size:13px; color:#334155; text-transform:uppercase; letter-spacing:.04em; }
+.lb-preview-wrap h3 { margin:0 0 10px; font-size:14px; font-weight:600; color:var(--navy); text-transform:none; letter-spacing:0; }
 .lb-previews { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-content:flex-start; max-height:380px; overflow:auto; }
 .lb-preview-card { background:#fff; box-shadow:0 4px 14px rgba(15,23,42,.18); border-radius:4px; overflow:hidden; }
 .lb-preview-card.warn { outline:2px solid #f59e0b; }
@@ -231,6 +251,7 @@ tr.alarm-row td { background:#fef2f2; }
       <button data-tab="sefer-plani" data-perm="sefer-plani">Sefer Planı</button>
       <button data-tab="araclar" data-perm="arac-goruntule">Araç İşlemleri</button>
       <button data-tab="musteri-stok" data-perm="tup-goruntule">Müşteri Stoku</button>
+      <button data-tab="yalcin" data-perm="yalcin-goruntule">Yalçın</button>
       <button data-tab="musteriler" data-perm="musteri-goruntule">Müşteriler</button>
       <button data-tab="talepler" data-perm="musteri-talepleri">Müşteri Talepleri</button>
       <button data-tab="sayimlar" data-perm="depo-sayim|tup-sayim|rapor">Sayım Raporları</button>
@@ -419,6 +440,48 @@ tr.alarm-row td { background:#fef2f2; }
       </div>
     </section>
 
+    <section data-page="yalcin" class="hidden">
+      <div class="card">
+        <h2>Yalçın</h2>
+        <p class="hint">Yalçın'a atanan müşteriler burada incelenir. Sefer / araç yükleme / teslim / boş alma aynı süreçte çalışır ve stok burada da güncellenir. Bu müşteriler genel «Müşteri Stoku» ve «Müşteriler» listelerinde görünmez. Operatör salt okur; atama yalnız Yönetici.</p>
+        <div class="grid" id="yc-stats"></div>
+      </div>
+      <div class="card" data-perm="yalcin-yonet">
+        <div class="toolbar">
+          <h2>Müşteri aktar</h2>
+          <input id="yc-aday-q" placeholder="Ad veya kod yazın — sonuçlar altta" style="min-width:220px">
+          <button class="secondary" id="yc-aday-ara" type="button">Ara</button>
+          <button class="primary" id="yc-ata" type="button">Seçilenleri Yalçın'a aktar</button>
+        </div>
+        <div class="sel-bar" id="yc-secilenler" aria-live="polite"></div>
+        <div class="hint" style="margin-top:8px">Seçtikleriniz aramayı değiştirseniz de burada kalır. İstediğiniz kadar müşteri ekleyip tek seferde aktarın.</div>
+        <div class="table-wrap" style="margin-top:10px"><table id="yc-adaylar"></table></div>
+      </div>
+      <div class="card" id="yc-stok-card">
+        <div class="toolbar">
+          <h2>Yalçın müşterileri / stok</h2>
+          <input id="yc-q" placeholder="Ad veya kod" style="min-width:200px">
+          <button class="primary" id="yc-ara" type="button">Listele</button>
+          <button class="secondary" id="yc-cikar" type="button" data-perm="yalcin-yonet">Seçilenleri Yalçın'dan çıkar</button>
+        </div>
+        <div class="muted" id="yc-count"></div>
+        <div class="table-wrap"><table id="yc-stok"></table></div>
+        <h2 style="margin-top:18px">Tüp stoğu olmayanlar</h2>
+        <p class="hint">Yalçın'a atanmış ama şu an müşteride tüpü görünmeyenler — ayrı listede.</p>
+        <div class="muted" id="yc-empty-count"></div>
+        <div class="table-wrap"><table id="yc-stok-empty"></table></div>
+      </div>
+      <div class="card" id="yc-moves-card">
+        <div class="toolbar">
+          <h2>Son hareketler (Yalçın müşterileri)</h2>
+          <input id="yc-hq" placeholder="Seri / müşteri" style="min-width:180px">
+          <button class="secondary" id="yc-hareket" type="button">Yenile</button>
+        </div>
+        <div class="table-wrap"><table id="yc-moves"></table></div>
+      </div>
+      <div id="yc-msg" class="msg hidden"></div>
+    </section>
+
     <section data-page="musteriler" class="hidden">
       <div class="card">
         <div class="toolbar">
@@ -429,7 +492,7 @@ tr.alarm-row td { background:#fef2f2; }
         </div>
         <div class="muted" id="c-count"></div>
         <div class="table-wrap"><table id="customers"></table></div>
-        <div class="hint">Liste ERP müşterileri ile henüz müşteriye dönüşmemiş CRM firmalarını birlikte gösterir; elinde tüp olanlar önce gelir. Bir satıra tıklayınca o müşterinin tüp stoku (gaz, boyut, gün, barkodlar) açılır.</div>
+        <div class="hint">Liste ERP müşterileri ile henüz müşteriye dönüşmemiş CRM firmalarını birlikte gösterir; elinde tüp olanlar önce gelir. Bir satıra tıklayınca o müşterinin tüp stoku (gaz, boyut, gün, barkodlar) açılır. Yalçın'a aktarılmış müşteriler bu listede görünmez — Yalçın sekmesine bakın.</div>
       </div>
     </section>
 

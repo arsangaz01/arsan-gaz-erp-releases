@@ -1,9 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
+		<!-- Android her zaman. iOS yalniz Mac'te: -p:BuildIos=true (Windows'ta IPA uretilemez). -->
 		<TargetFrameworks>net10.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="'$(BuildIos)' == 'true'">net10.0-android;net10.0-ios</TargetFrameworks>
 		<AndroidPackageFormat>apk</AndroidPackageFormat>
-		<RuntimeIdentifiers>android-arm64;android-arm</RuntimeIdentifiers>
+		<RuntimeIdentifiers Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">android-arm64;android-arm</RuntimeIdentifiers>
 
 		<OutputType>Exe</OutputType>
 		<RootNamespace>ArsanGazMobile</RootNamespace>
@@ -27,8 +29,8 @@
 		<ApplicationId>com.arsangaz.erpmobile</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>1.10.3</ApplicationDisplayVersion>
-		<ApplicationVersion>40</ApplicationVersion>
+		<ApplicationDisplayVersion>1.10.7</ApplicationDisplayVersion>
+		<ApplicationVersion>44</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<WindowsPackageType>None</WindowsPackageType>
@@ -38,6 +40,10 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+
+		<!-- iOS imza: Mac'te Apple hesabi / provisioning ile override edin. -->
+		<CodesignEntitlements Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">Platforms\iOS\Entitlements.plist</CodesignEntitlements>
+		<!-- Ornek: -p:CodesignKey="Apple Development: ..." -p:CodesignProvision="ArsanGaz ERP Dev" -->
 	</PropertyGroup>
 
 	<ItemGroup>

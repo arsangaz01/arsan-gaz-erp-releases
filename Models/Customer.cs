@@ -15,6 +15,8 @@ public sealed class Customer
  public string? TaxOffice { get; set; }
  public string? TaxNumber { get; set; }
  public bool IsActive { get; set; } = true;
+ /// <summary>Partner workspace key (e.g. "yalcin"). Null = genel müşteri listelerinde görünür.</summary>
+ public string? PartnerKey { get; set; }
  public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
  public DateTime? UpdatedAt { get; set; }
  public ICollection<Cylinder> Cylinders { get; set; } = new List<Cylinder>();
