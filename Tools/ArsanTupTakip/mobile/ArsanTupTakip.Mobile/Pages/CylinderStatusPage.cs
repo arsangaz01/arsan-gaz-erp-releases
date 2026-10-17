@@ -21,7 +21,7 @@ public sealed class CylinderStatusPage : ContentPage
                 {
                     Padding = new Thickness(16, 12, 16, 24),
                     Spacing = 12,
-                    Children = { Ui.Note("Karta dokunarak o durumdaki tüpleri listeleyin. Yenilemek için aşağı çekin."), _cards, _updated }
+                    Children = { Ui.Note("Karta dokunarak o durumdaki tüpleri listeleyin; listede satıra dokununca tüp detayı açılır. Yenilemek için aşağı çekin."), _cards, _updated }
                 }
             }
         };

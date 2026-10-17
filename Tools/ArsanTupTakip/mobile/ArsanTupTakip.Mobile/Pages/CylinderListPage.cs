@@ -21,8 +21,8 @@ public sealed class CylinderListPage : ContentPage
         _longAtCustomer = longAtCustomer;
         _list = new CollectionView
         {
-            SelectionMode = SelectionMode.None,
-            EmptyView = Ui.Note("Bu listede tüp yok."),
+            SelectionMode = SelectionMode.Single,
+            EmptyView = Ui.Note("Bu listede tüp yok. Satıra dokununca tüp detayı açılır."),
             ItemTemplate = new DataTemplate(() =>
             {
                 Label name = new() { FontSize = 16, FontFamily = "OpenSansSemibold" };
@@ -33,6 +33,7 @@ public sealed class CylinderListPage : ContentPage
                 return new ContentView { Padding = new Thickness(0, 0, 0, 8), Content = card };
             })
         };
+        _list.SelectionChanged += OnCylinderSelected;
         _search.TextChanged += (_, _) => ApplyFilter();
         Ui.ApplyPageChrome(this);
 
@@ -74,4 +75,15 @@ public sealed class CylinderListPage : ContentPage
     private static bool Matches(CylinderListItem item, string term) =>
         new[] { item.SerialNumber, item.Barcode, item.GasType, item.Customer, item.Plate }
             .Any(value => value is not null && value.Contains(term, StringComparison.CurrentCultureIgnoreCase));
+
+    private async void OnCylinderSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_list.SelectedItem is not CylinderListItem item)
+        {
+            return;
+        }
+
+        _list.SelectedItem = null;
+        await Navigation.PushAsync(new CylinderInfoPage(item.SerialNumber));
+    }
 }

@@ -1,9 +1,12 @@
+using System.Globalization;
 using ArsanTupTakip.Mobile.Services;
 
 namespace ArsanTupTakip.Mobile.Pages;
 
 public sealed class SummaryPage : ContentPage
 {
+    private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
+
     private readonly ContentView _body = new();
     private bool _loaded;
     private readonly Label _heading = Ui.Title("Genel özet");
@@ -71,7 +74,10 @@ public sealed class SummaryPage : ContentPage
         _body.Content = Ui.Note("Yükleniyor...");
         try
         {
-            _body.Content = ReportView.Build(await ApiClient.Instance.TextAsync(path));
+            string text = await ApiClient.Instance.TextAsync(path);
+            // Genel özet kartları tıklanınca ilgili tüp listesine gider (Tüp durumu ekranı ile aynı).
+            bool ozet = path.StartsWith("/api/ozet", StringComparison.OrdinalIgnoreCase);
+            _body.Content = ReportView.Build(text, ozet ? name => TapForSummaryTile(name) : null);
             _loaded = true;
         }
         catch
@@ -80,4 +86,63 @@ public sealed class SummaryPage : ContentPage
             throw;
         }
     });
+
+    private Func<Task>? TapForSummaryTile(string name)
+    {
+        Func<Page>? open = PageForSummaryTile(name);
+        if (open is null)
+        {
+            return null;
+        }
+
+        return async () => await Navigation.PushAsync(open());
+    }
+
+    // Maps "/api/ozet" count lines (Depoda, Müşteride, …) to the same lists as CylinderStatusPage.
+    private static Func<Page>? PageForSummaryTile(string name)
+    {
+        string n = name.ToLower(Turkish);
+        if (n.Contains("aktif müşteri", StringComparison.Ordinal) || n.Contains("hareket", StringComparison.Ordinal)
+            || n.Contains("test", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (n.Contains("uzun", StringComparison.Ordinal) && n.Contains("müşteri", StringComparison.Ordinal))
+        {
+            return () => new CylinderListPage(name.Trim(), null, null, longAtCustomer: true);
+        }
+
+        if (n.StartsWith("depoda", StringComparison.Ordinal))
+        {
+            return () => new CylinderListPage("Depoda", 1, null, false);
+        }
+
+        if (n.Contains("taşın", StringComparison.Ordinal) || n.Contains("araçta", StringComparison.Ordinal))
+        {
+            return () => new CylinderListPage("Taşınıyor (araçta)", CylinderPage.VehicleStatus, null, false);
+        }
+
+        if (n.StartsWith("müşteride", StringComparison.Ordinal))
+        {
+            return () => new CylinderListPage("Müşteride", CylinderPage.CustomerStatus, null, false);
+        }
+
+        if (n.StartsWith("dolum", StringComparison.Ordinal))
+        {
+            return () => new CylinderListPage("Dolumda", 4, null, false);
+        }
+
+        if (n.StartsWith("servis", StringComparison.Ordinal))
+        {
+            return () => new CylinderListPage("Serviste", 5, null, false);
+        }
+
+        if (n.StartsWith("hurda", StringComparison.Ordinal))
+        {
+            return () => new CylinderListPage("Hurda", 6, null, false);
+        }
+
+        return null;
+    }
 }

@@ -4,6 +4,7 @@ namespace ArsanTupTakip.Mobile.Services;
 
 // Turns the server's plain-text reports into cards: "Name: 12" lines become number tiles, "Heading:" lines captions,
 // "- a · b · c" lines list cards, "■ customer: ..." lines group cards with their indented lines inside.
+// resolveTap: for a count-tile name return a tap action (e.g. open that status's cylinder list), or null to leave it inert.
 public static partial class ReportView
 {
     private const int MaxItems = 200;
@@ -12,7 +13,7 @@ public static partial class ReportView
     [GeneratedRegex(@"^(?<name>[\p{L}\d][^:·.]{1,60}):\s*(?<value>\d+)(?<rest>.*)$")]
     private static partial Regex CountLine();
 
-    public static View Build(string text)
+    public static View Build(string text, Func<string, Func<Task>?>? resolveTap = null)
     {
         VerticalStackLayout root = new() { Spacing = 10 };
         List<View> tiles = [];
@@ -51,7 +52,7 @@ public static partial class ReportView
             {
                 string name = count.Groups["name"].Value.Trim();
                 string rest = count.Groups["rest"].Value.Trim().Trim('(', ')');
-                tiles.Add(Ui.StatTile(Icon(name), count.Groups["value"].Value, name, Tone(name, count.Groups["value"].Value), rest));
+                tiles.Add(CountTile(name, count.Groups["value"].Value, rest, resolveTap?.Invoke(name)));
                 continue;
             }
 
@@ -96,6 +97,25 @@ public static partial class ReportView
         }
 
         return root;
+    }
+
+    private static View CountTile(string name, string value, string rest, Func<Task>? onTap)
+    {
+        string detail = rest;
+        if (onTap is not null)
+        {
+            detail = string.IsNullOrWhiteSpace(rest) ? "Dokunun: tüp listesi ›" : rest + " · dokunun ›";
+        }
+
+        Border tile = Ui.StatTile(Icon(name), value, name, Tone(name, value), string.IsNullOrWhiteSpace(detail) ? null : detail);
+        if (onTap is not null)
+        {
+            TapGestureRecognizer tap = new();
+            tap.Tapped += async (_, _) => await onTap();
+            tile.GestureRecognizers.Add(tap);
+        }
+
+        return tile;
     }
 
     private static Border Item(string text)
