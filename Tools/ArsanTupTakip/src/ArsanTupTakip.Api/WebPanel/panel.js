@@ -233,6 +233,10 @@ async function loadOptions() {
     select.length = 1;
     for (const s of options.statuses) select.append(el("option", { value: s.id }, s.name));
   }
+  const fixStatus = $("fix-status");
+  if (fixStatus) {
+    fixStatus.replaceChildren(...options.statuses.map((s) => el("option", { value: s.id }, s.name)));
+  }
   $("f-plaka").length = 1;
   for (const p of options.plates) $("f-plaka").append(el("option", { value: p }, p));
   $("gas-list").replaceChildren(...options.gasTypes.map((g) => el("option", { value: g })));
@@ -278,6 +282,7 @@ function customerPicker(inputId, selectId, emptyLabel) {
 const cylinderCustomer = customerPicker("f-musteri-q", "f-musteri", "Tümü");
 const movementCustomer = customerPicker("h-musteri-q", "h-musteri", "Tümü");
 const newCustomer = customerPicker("n-musteri-q", "n-musteri", "Depoda (müşteri yok)");
+const fixCustomer = customerPicker("fix-musteri-q", "fix-musteri", "Müşteri seçin");
 
 async function loadSummary() {
   try {
@@ -960,10 +965,86 @@ async function openDetail(id) {
     el("td", {}, m.date), el("td", {}, m.movementType), el("td", {}, `${m.from} → ${m.to}`),
     el("td", {}, m.customer || m.plate || "-"), el("td", {}, m.fullness), el("td", {}, m.performedBy || "-"), el("td", { class: "muted" }, m.note || "")));
   $("d-history").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 7, class: "muted" }, "Hareket yok."))])));
+  if ($("fix-status")) {
+    $("fix-status").value = String(c.status);
+    $("fix-full").value = c.isFull === true ? "true" : c.isFull === false ? "false" : "";
+    $("fix-plate").value = c.plate || "";
+    $("fix-note").value = "";
+    if (c.customerId) fixCustomer.choose({ id: c.customerId, name: c.customer || ("#" + c.customerId), code: null, city: null, cylinders: 0 });
+    else fixCustomer.reset();
+    syncFixFields();
+  }
   if (!$("detail").open) $("detail").showModal();
 }
 
+function syncFixFields() {
+  const status = Number($("fix-status").value);
+  $("fix-cust-wrap").classList.toggle("hidden", status !== 3);
+  $("fix-plate-wrap").classList.toggle("hidden", status !== 2);
+  $("fix-full-wrap").classList.toggle("hidden", status === 3);
+}
+
 $("d-close").addEventListener("click", () => $("detail").close());
+
+$("fix-status").addEventListener("change", syncFixFields);
+
+$("fix-save").addEventListener("click", async () => {
+  if (!current) return;
+  const note = $("fix-note").value.trim();
+  if (note.length < 8) {
+    show($("d-msg"), "Düzeltme için en az 8 karakterlik not/referans girin.", "err");
+    return;
+  }
+  const status = Number($("fix-status").value);
+  const body = {
+    status,
+    customerId: status === 3 ? (Number($("fix-musteri").value) || null) : null,
+    plate: status === 2 ? ($("fix-plate").value.trim() || null) : null,
+    isFull: status === 3 || !$("fix-full").value ? null : $("fix-full").value === "true",
+    note,
+    confirm: false,
+    version: current.version,
+    correction: true
+  };
+  if (status === 3 && !body.customerId) {
+    show($("d-msg"), "Müşteride durumu için müşteri seçin.");
+    return;
+  }
+  if (status === 2 && !body.plate) {
+    show($("d-msg"), "Araçta durumu için plaka girin.");
+    return;
+  }
+  if (!window.confirm("Düzeltme hareketi kaydedilsin mi? Bu geri alınamaz; geçmişte «Düzeltme» satırı görünür.")) return;
+  $("fix-save").disabled = true;
+  try {
+    const result = await api(`/panel/api/tup/${current.id}/hareket`, { method: "POST", body, key: newKey() });
+    await openDetail(current.id);
+    show($("d-msg"), result.message, "ok");
+  } catch (error) {
+    if (error.status === 409 && error.data?.conflict) {
+      if (can("hareket-cakisma") && window.confirm(error.message + "\n\nYine de kaydetmek için onaylıyor musunuz?")) {
+        try {
+          const result = await api(`/panel/api/tup/${current.id}/hareket`, {
+            method: "POST", body: { ...body, confirm: true }, key: newKey()
+          });
+          await openDetail(current.id);
+          show($("d-msg"), result.message, "ok");
+        } catch (retry) {
+          show($("d-msg"), retry.message);
+        }
+      } else {
+        show($("d-msg"), error.message, "warn");
+      }
+    } else if (error.status === 409 && error.data?.stale) {
+      await openDetail(current.id);
+      show($("d-msg"), error.message + " Güncel bilgiler yüklendi.", "warn");
+    } else {
+      show($("d-msg"), error.message);
+    }
+  } finally {
+    $("fix-save").disabled = false;
+  }
+});
 
 $("e-save").addEventListener("click", async () => {
   const capacity = Number($("e-cap").value.replace(",", "."));

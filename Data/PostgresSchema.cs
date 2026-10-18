@@ -3,6 +3,12 @@ namespace ArsanGazERP.Data;
 // PostgreSQL DDL for the tables that are not part of an EF model (they are created by raw SQL on SQLite too).
 // Column types mirror the SQLite storage on purpose: the timestamps of these tables are ISO-8601 text written and
 // compared by CampaignStore, so they stay TEXT (the database uses the C collation, which orders them like SQLite).
+//
+// DEPLOY CHECKLIST (new EF/SQL tables):
+// 1) Add CREATE/ALTER here (Erp or Campaign const) — EF CreateTablesAsync only runs on an empty schema.
+// 2) Ship MobileApi/desktop that applies PostgresSchema on startup.
+// 3) After prod deploy: verify table/column exists (API health or SQL), do not assume EF migrated prod.
+// 4) Document the table in DEVAM_NOTLARI if it is a saha-facing feature.
 public static class PostgresSchema
 {
     // EF model tables added after the erp schema was first created (CreateTablesAsync runs only on an empty schema).

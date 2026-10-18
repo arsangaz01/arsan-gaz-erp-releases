@@ -510,10 +510,12 @@ public static class Ui
         };
     }
 
+    public static bool PageAlive(Page page) => page.Handler is not null && page.Window is not null;
+
     // quiet: errors of a search started by typing are not shown; pressing Enter repeats it with messages.
     public static async Task RunAsync(Page page, ActivityIndicator? busy, Func<Task> action, bool quiet = false)
     {
-        if (busy is not null)
+        if (busy is not null && PageAlive(page))
         {
             busy.IsRunning = busy.IsVisible = true;
         }
@@ -522,24 +524,27 @@ public static class Ui
         {
             await action();
         }
+        catch (ObjectDisposedException)
+        {
+        }
         catch (SessionExpiredException)
         {
             // The login screen is already open and shows the reason.
         }
-        catch (ApiException exception) when (!quiet)
+        catch (ApiException exception) when (!quiet && PageAlive(page))
         {
             await page.DisplayAlertAsync("ArsanTüpTakip", exception.Message, "Tamam");
         }
-        catch (Exception exception) when (!quiet)
+        catch (Exception exception) when (!quiet && PageAlive(page))
         {
             await page.DisplayAlertAsync("Hata", exception.Message, "Tamam");
         }
-        catch (Exception) when (quiet)
+        catch (Exception)
         {
         }
         finally
         {
-            if (busy is not null)
+            if (busy is not null && PageAlive(page))
             {
                 busy.IsRunning = busy.IsVisible = false;
             }

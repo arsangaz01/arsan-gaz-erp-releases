@@ -10,7 +10,7 @@ namespace ArsanTupTakip.Api;
 
 internal sealed record PanelLoginRequest(string? Kullanici, string? Sifre);
 internal sealed record PanelPasswordRequest(string? Mevcut, string? Yeni, string? YeniTekrar);
-internal sealed record PanelMoveRequest(CylinderStatus Status, int? CustomerId, string? Plate, bool? IsFull, string? Note, bool Confirm = false, uint? Version = null);
+internal sealed record PanelMoveRequest(CylinderStatus Status, int? CustomerId, string? Plate, bool? IsFull, string? Note, bool Confirm = false, uint? Version = null, bool Correction = false);
 internal sealed record VehicleDeleteRequest(string? Onay, uint? Version = null);
 internal sealed record PanelEditRequest(string? GasType, decimal Capacity, string? CapacityUnit, DateTime? TestDueDate, bool IsActive, uint? Version = null);
 internal sealed record PanelUserCreateRequest(string? KullaniciAdi, string? AdSoyad, string? Rol, string? Sifre, bool SifreDegistirsin = true, List<string>? Yetkiler = null, string? SabitPlaka = null);
@@ -838,12 +838,29 @@ internal static class WebPanelEndpoints
                 return denied;
             }
 
-            string note = $"Web panel ({context.Items["panelUser"]})" + (string.IsNullOrWhiteSpace(request.Note) ? string.Empty : ": " + request.Note.Trim());
+            string userNote = (request.Note ?? string.Empty).Trim();
+            // Düzeltme: kullanıcı notu ayrı doğrulanır (panel öneki uzunluğu yetmez sayılmaz).
+            if (request.Correction && userNote.Length < 8)
+            {
+                return Results.BadRequest(new { error = "Düzeltme için en az 8 karakterlik zorunlu not/referans girin (ör. yanlış müşteri, fatura no)." });
+            }
+
+            string user = (string)context.Items["panelUser"]!;
+            string movementType = request.Correction ? "Düzeltme" : "Web panel hareketi";
+            string note = request.Correction
+                ? $"Düzeltme ({user}): {userNote}"
+                : $"Web panel ({user})" + (userNote.Length == 0 ? string.Empty : ": " + userNote);
             try
             {
                 string? warning = await new CrudService().MoveCylinderAsync(
-                    id, request.Status, request.CustomerId, note, "Web panel hareketi", request.Plate, request.IsFull, request.Confirm, request.Version);
-                return Results.Ok(new { message = $"{CylinderTracking.StatusName((int)request.Status)} olarak kaydedildi." + (warning is null ? string.Empty : "\n" + warning) });
+                    id, request.Status, request.CustomerId, note, movementType, request.Plate, request.IsFull, request.Confirm, request.Version);
+                if (request.Correction)
+                {
+                    WebPanelAudit.Write(user, "Tüp düzeltme hareketi", $"Tüp #{id}", userNote, WebPanelAuth.ClientIp(context));
+                }
+
+                string label = request.Correction ? "Düzeltme kaydedildi" : $"{CylinderTracking.StatusName((int)request.Status)} olarak kaydedildi";
+                return Results.Ok(new { message = label + (warning is null ? string.Empty : "\n" + warning) });
             }
             catch (CylinderConflictException conflict)
             {

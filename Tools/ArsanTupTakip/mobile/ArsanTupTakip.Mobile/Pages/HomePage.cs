@@ -769,20 +769,35 @@ public sealed class HomePage : ContentPage
         return footer;
     }
 
-    // Section pages are created once and reused, like the former tabs, so their state and event handlers are not duplicated.
+    // Section pages are created once and reused while still on the stack; after back/PopAsync recreate if disposed.
     private async Task Open(string key, Func<Page> create)
     {
         try
         {
-            if (!_pages.TryGetValue(key, out Page? page))
+            // Müşteri Stoku must not reuse a stale instance (video: title "Müşteri Stoku" but home body).
+            if (key == "stok")
+            {
+                _pages.Remove(key);
+            }
+
+            if (_pages.TryGetValue(key, out Page? page))
+            {
+                bool onStack = Navigation.NavigationStack.Contains(page);
+                if (!onStack && page.Handler is null)
+                {
+                    _pages.Remove(key);
+                    page = null;
+                }
+                else if (onStack)
+                {
+                    return;
+                }
+            }
+
+            if (page is null)
             {
                 page = create();
                 _pages[key] = page;
-            }
-
-            if (Navigation.NavigationStack.Contains(page))
-            {
-                return;
             }
 
             await Navigation.PushAsync(page);

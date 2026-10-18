@@ -10,8 +10,19 @@ public sealed class CustomerStockPage : ContentPage
         FontSize = 15,
         FontFamily = "OpenSansSemibold",
         LineBreakMode = LineBreakMode.WordWrap,
-        Text = "🔎 Önce müşteriyi arayıp seçin."
+        Text = "🔎 Müşteri adı, kodu veya şehir yazıp ara."
     };
+    private readonly Entry _search = Ui.TextField("Müşteri adı, kodu veya şehri");
+    private readonly Label _searchInfo = new()
+    {
+        FontSize = 14,
+        FontFamily = "OpenSansSemibold",
+        TextColor = Ui.AccentDark,
+        LineBreakMode = LineBreakMode.WordWrap,
+        Text = "En az 2 harf yazın."
+    };
+    private readonly VerticalStackLayout _customerResults = new() { Spacing = 10 };
+    private View? _pickerBlock;
     private readonly SearchBar _filter = new() { Placeholder = "Barkod, seri no veya gaz ara", IsVisible = false };
     private readonly VerticalStackLayout _summary = new() { Spacing = 8 };
     private readonly VerticalStackLayout _groups = new() { Spacing = 8 };
@@ -20,23 +31,26 @@ public sealed class CustomerStockPage : ContentPage
     private readonly List<(string Key, Border Card)> _groupCards = [];
     private CustomerStockResponse? _stock;
     private string? _picked;
-    private readonly bool _pickOnOpen;
-    private bool _openedPick;
-    private bool _picking;
 
     public CustomerStockPage(CustomerItem? customer = null)
     {
         Title = customer is null ? "Müşteri Stoku" : customer.Name;
         Ui.ApplyPageChrome(this);
-        _pickOnOpen = customer is null;
         _filter.TextChanged += (_, _) => ShowCylinders();
+        _search.ReturnType = ReturnType.Search;
+        _search.Completed += async (_, _) => await SearchCustomersAsync();
 
         VerticalStackLayout stack = new() { Padding = new Thickness(16, 12, 16, 24), Spacing = 14 };
         if (customer is null)
         {
-            stack.Children.Add(Ui.Section("Müşteri",
+            // Inline search — no second "Müşteri ara / seç" page (that navigation caused blank/crash).
+            _pickerBlock = Ui.Section("Müşteri",
                 _customerInfo,
-                Ui.Primary("🔎 Müşteri ara / seç", async (_, _) => await PickCustomerAsync())));
+                _search,
+                Ui.Primary("🔎 ARA", async (_, _) => await SearchCustomersAsync()),
+                _searchInfo,
+                _customerResults);
+            stack.Children.Add(_pickerBlock);
         }
 
         stack.Children.Add(_busy);
@@ -56,53 +70,99 @@ public sealed class CustomerStockPage : ContentPage
                 }
             };
         }
-        else
+    }
+
+    private async Task SearchCustomersAsync()
+    {
+        string query = (_search.Text ?? string.Empty).Trim();
+        if (query.Length < Ui.LiveSearchMinLength)
         {
-            Loaded += async (_, _) =>
+            _searchInfo.Text = "En az 2 harf yazın.";
+            _searchInfo.TextColor = Ui.Warn;
+            return;
+        }
+
+        _busy.IsVisible = _busy.IsRunning = true;
+        try
+        {
+            List<CustomerItem> found = await ApiClient.Instance.CustomersAsync(query);
+            if (!Ui.PageAlive(this))
             {
-                if (_pickOnOpen && _stock is null && !_openedPick)
-                {
-                    _openedPick = true;
-                    await PickCustomerAsync();
-                }
-            };
+                return;
+            }
+
+            _customerResults.Children.Clear();
+            foreach (CustomerItem item in found)
+            {
+                _customerResults.Children.Add(CustomerResultCard(item));
+            }
+
+            _searchInfo.Text = found.Count == 0
+                ? $"\"{query}\" ile eşleşen müşteri yok."
+                : $"{found.Count} müşteri — stok için dokunun.";
+            _searchInfo.TextColor = found.Count == 0 ? Ui.Bad : Ui.Good;
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (Exception exception) when (Ui.PageAlive(this))
+        {
+            _searchInfo.Text = "Arama yapılamadı: " + exception.Message;
+            _searchInfo.TextColor = Ui.Bad;
+        }
+        finally
+        {
+            if (Ui.PageAlive(this))
+            {
+                _busy.IsVisible = _busy.IsRunning = false;
+            }
         }
     }
 
-    private async Task PickCustomerAsync()
+    private View CustomerResultCard(CustomerItem customer)
     {
-        if (_picking)
+        Border card = Ui.Card(new VerticalStackLayout
+        {
+            Spacing = 4,
+            Children =
+            {
+                new Label { Text = customer.Name, FontSize = 17, FontFamily = "OpenSansSemibold", LineBreakMode = LineBreakMode.WordWrap },
+                Ui.Note(customer.Subtitle)
+            }
+        });
+        TapGestureRecognizer tap = new();
+        tap.Tapped += async (_, _) => await SelectCustomerAsync(customer);
+        card.GestureRecognizers.Add(tap);
+        return card;
+    }
+
+    private async Task SelectCustomerAsync(CustomerItem picked)
+    {
+        if (!Ui.PageAlive(this))
         {
             return;
         }
 
-        _picking = true;
-        try
+        Title = picked.Name;
+        _customerInfo.Text = $"{picked.Name}\n{picked.Subtitle}";
+        _customerResults.Children.Clear();
+        if (_pickerBlock is not null)
         {
-            CustomerItem? picked = await CustomerPickPage.OpenAsync(Navigation, "Müşteri stoku");
-            if (picked is null)
-            {
-                if (_stock is null && Navigation.NavigationStack.Count > 1 && Navigation.NavigationStack[^1] == this)
-                {
-                    await Navigation.PopAsync();
-                }
-
-                return;
-            }
-
-            Title = picked.Name;
-            _customerInfo.Text = $"{picked.Name}\n{picked.Subtitle}";
-            await LoadAsync(picked.Id);
+            _pickerBlock.IsVisible = false;
         }
-        finally
-        {
-            _picking = false;
-        }
+
+        await LoadAsync(picked.Id);
     }
 
     private Task LoadAsync(int customerId) => Ui.RunAsync(this, _busy, async () =>
     {
-        _stock = await ApiClient.Instance.CustomerStockAsync(customerId);
+        CustomerStockResponse stock = await ApiClient.Instance.CustomerStockAsync(customerId);
+        if (!Ui.PageAlive(this))
+        {
+            return;
+        }
+
+        _stock = stock;
         ShowStock();
     });
 
@@ -139,6 +199,21 @@ public sealed class CustomerStockPage : ContentPage
 
         _summary.Children.Clear();
         _summary.Children.Add(Ui.Card(card));
+        if (_pickerBlock is not null)
+        {
+            _summary.Children.Add(Ui.Secondary("🔎 Başka müşteri", (_, _) =>
+            {
+                _stock = null;
+                _summary.Children.Clear();
+                _groups.Children.Clear();
+                _cylinders.Children.Clear();
+                _filter.IsVisible = false;
+                Title = "Müşteri Stoku";
+                _customerInfo.Text = "🔎 Müşteri adı, kodu veya şehir yazıp ara.";
+                _pickerBlock.IsVisible = true;
+                _search.Focus();
+            }));
+        }
 
         _groups.Children.Clear();
         _groupCards.Clear();

@@ -18,7 +18,8 @@ PC tarafı: `%LOCALAPPDATA%\ArsanGazERP\MobileApi\tunnel-disabled.txt` PC'deki t
 ## Güncelleme
 - Sunucu: `Tools\ServerAgent\deploy\Deploy-Server.ps1 -Component all|release|mobileapi|serveragent|cursoragent` (eski sürüm `/opt/arsangaz/<ad>.bak-<zaman>`).
 - Bilgisayar kapalıyken: Telegram'dan `/yayin` → `/yayin_onay <kod>` (aşağıda).
-- APK: `Tools\Deploy-MobileApk.ps1` APK'yı hem PC'ye hem sunucuya koyar.
+- APK (zorunlu Both): `Tools\Deploy-BothMobileApks.ps1` — ERP ve TüpTakip Android APK'larını aynı turda
+  yayınlar (`/indir` + `/tuptakip/indir`). Tek APK bırakma; iOS (`Deploy-IosMobile.ps1`) ayrı hattır.
 - Sunucu dosyaları/servis tanımları: `deploy\install-server.sh` (idempotent).
 
 ## Gizli değerler (yalnızca PC'den, gizli giriş)

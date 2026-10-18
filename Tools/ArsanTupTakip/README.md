@@ -1,9 +1,12 @@
 # ArsanTüpTakip
 
-ArsanGaz ERP'den tamamen bağımsız tüp takip sistemi. Ortak veritabanı, servis, güncelleme kanalı veya
-Telegram botu yoktur (kendi botu: @TuptakipArsanbot, aşağıda). Kod ERP'den kopyalanıp ayrıştırılmıştır; CRM, sohbet, kampanya ve ERP köprüleri çıkarılmıştır.
+ArsanGaz ERP'den **ayrı hat**: kendi PostgreSQL şeması (`tuptakip`), kendi API/panel servisi
+(`arsantuptakip-api`, `/tuptakip`), kendi Android paketi (`com.arsantuptakip.mobil`) ve kendi Telegram botu
+(@TuptakipArsanbot). ERP CRM/kampanya köprüleri yoktur.
 
-Şu an yalnızca **altyapı** kuruludur: sistem boştur, dışarıya açık değildir ve hiç kullanıcı hesabı yoktur.
+**Canlı (2026-10):** Panel `https://arsantuptakip.com/tuptakip/panel`, APK
+`https://arsantuptakip.com/tuptakip/indir` (`/tuptakip/api/guncelleme`). Android yayınları ERP ile birlikte
+`Tools\Deploy-BothMobileApks.ps1` ile yapılır (tek APK bırakılmaz).
 
 ## Klasörler
 

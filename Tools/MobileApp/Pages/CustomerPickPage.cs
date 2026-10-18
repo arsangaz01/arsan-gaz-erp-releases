@@ -82,6 +82,11 @@ public sealed class CustomerPickPage : ContentPage
         try
         {
             List<CustomerItem> found = await ApiClient.Instance.CustomersAsync(query);
+            if (_done || Handler is null)
+            {
+                return;
+            }
+
             _list.Children.Clear();
             foreach (CustomerItem customer in found)
             {
@@ -93,14 +98,21 @@ public sealed class CustomerPickPage : ContentPage
                 : $"✅ {found.Count} müşteri bulundu — seçmek için dokunun.";
             _info.TextColor = found.Count == 0 ? Ui.Bad : Ui.Good;
         }
-        catch (Exception exception)
+        catch (ObjectDisposedException)
+        {
+            // Back pressed while search was in flight.
+        }
+        catch (Exception exception) when (Handler is not null && !_done)
         {
             _info.Text = "⚠️ Arama yapılamadı: " + exception.Message;
             _info.TextColor = Ui.Bad;
         }
         finally
         {
-            _busy.IsVisible = false;
+            if (Handler is not null && !_done)
+            {
+                _busy.IsVisible = false;
+            }
         }
     }
 

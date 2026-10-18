@@ -207,11 +207,17 @@ Durum: site, veritabanı (PostgreSQL), Telegram dinleme Oracle sunucusunda; PC'd
 
 ## ArsanTüpTakip — yanlış işlem düzeltme yolu (plan, 16 Ekim 2026, istek 89870)
 Bugün geri alma yok (açık depo sayımı Undo + sefer eksik kontrol undo hariç). Pratik yol: panelden telafi hareketi.
-Planlı aşamalar (henüz kodlanmadı; onay bekleniyor):
-1) Düzeltme hareketi tipi + zorunlu not/referans + denetim (düşük risk)
+Planlı aşamalar:
+1) Düzeltme hareketi tipi + zorunlu not/referans + denetim (düşük risk) — **API + panel (90005/90009)**:
+   `MovementType=Düzeltme` için not ≥8 karakter (`CrudService.MoveCylinderAsync`). Panel tüp ayrıntısında
+   «Düzeltme (yanlış işlem)» kartı (API 1.6.22); void/ters hareket yok. Yayın onayı bekliyor.
 2) Aktif seferde tek tık: stok + sefer satırı senkron düzeltme (orta risk)
 3) Void/ters hareket + kapanmış sefer (yüksek risk, sonra)
 Öncelik saha: yanlış müşteri teslimi → yanlış boş alım → yanlış yükleme → dolum → kapanmış sefer.
+
+## PostgresSchema deploy kontrolü (18 Ekim 2026)
+Yeni tablo/kolon eklerken `Data/PostgresSchema.cs` + MobileApi startup uygulaması şart; EF yalnız boş şemada
+CreateTables çalıştırır. Prod’da “tablo yok” için checklist `PostgresSchema.cs` dosya başlığında.
 
 ## ArsanTüpTakip — TSC TA310 etiket yazdırma (16 Ekim 2026, kullanıcı: "takınca deneyeceğiz not et")
 - Panel 1.6.17: etiketler TSPL `QRCODE` ile basılır (yazıcı karekodu kendi üretir); tarayıcı SVG yazdırma yedek.

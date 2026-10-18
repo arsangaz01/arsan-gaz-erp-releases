@@ -435,9 +435,12 @@ public static class Ui
         return view;
     }
 
+    // True while the page is still attached; false after back/PopAsync (avoids ObjectDisposedException alerts).
+    public static bool PageAlive(Page page) => page.Handler is not null && page.Window is not null;
+
     public static async Task RunAsync(Page page, ActivityIndicator? busy, Func<Task> action)
     {
-        if (busy is not null)
+        if (busy is not null && PageAlive(page))
         {
             busy.IsRunning = busy.IsVisible = true;
         }
@@ -446,21 +449,29 @@ public static class Ui
         {
             await action();
         }
+        catch (ObjectDisposedException)
+        {
+            // User left the page while the request was in flight.
+        }
         catch (ApiException exception) when (exception.HasFlag("loginRequired") || exception.HasFlag("mustChangePassword"))
         {
             // The sign-in or password screen takes over and shows the reason.
         }
-        catch (ApiException exception)
+        catch (ApiException exception) when (PageAlive(page))
         {
             await page.DisplayAlertAsync("Arsan Gaz ERP", exception.Message, "Tamam");
         }
-        catch (Exception exception)
+        catch (Exception exception) when (PageAlive(page))
         {
             await page.DisplayAlertAsync("Hata", exception.Message, "Tamam");
         }
+        catch (Exception)
+        {
+            // Page already gone; swallow so back navigation does not crash the app.
+        }
         finally
         {
-            if (busy is not null)
+            if (busy is not null && PageAlive(page))
             {
                 busy.IsRunning = busy.IsVisible = false;
             }

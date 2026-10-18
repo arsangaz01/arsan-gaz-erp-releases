@@ -247,6 +247,13 @@ public sealed class CrudService
             throw new ArgumentOutOfRangeException(nameof(target), "Geçersiz tüp durumu.");
         }
 
+        // Stage-1 correction path (plan 89870 / 90005): typed "Düzeltme" requires an audit note.
+        if (string.Equals(movementType?.Trim(), "Düzeltme", StringComparison.OrdinalIgnoreCase)
+            && (note ?? "").Trim().Length < 8)
+        {
+            throw new ArgumentException("Düzeltme hareketi için en az 8 karakterlik zorunlu not/referans girilmelidir.", nameof(note));
+        }
+
         string? plate = target == CylinderStatus.Vehicle ? CylinderTracking.NormalizePlate(vehiclePlate) : null;
         int? movementCustomerId = null;
         string? targetName = null;

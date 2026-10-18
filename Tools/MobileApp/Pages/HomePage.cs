@@ -328,11 +328,11 @@ public sealed class HomePage : ContentPage
         }
         else
         {
+            // "Tüp Okut" (CylinderPage) removed: same scan-first flow as Tüp Bilgisi, and movements
+            // already live on Sefer / Dolum / web panel detail. Keep CylinderPage.cs for status constants.
             if (Can("tup-goruntule"))
             {
-                tiles.Add(new("Tüp Okut", "Barkod / QR ile hareket kaydı", Icons.QrScanner, "#1D4ED8", "#0EA5E9", "tup-goruntule", true,
-                    p => p.OpenAsync("Tüp Okut", () => new CylinderPage())));
-                tiles.Add(new("Tüp Bilgisi", null, Icons.ManageSearch, "#0F766E", "#14B8A6", "tup-goruntule", false,
+                tiles.Add(new("Tüp Bilgisi", "Barkodu okut: tüp nerede, dolu mu", Icons.ManageSearch, "#0F766E", "#14B8A6", "tup-goruntule", true,
                     p => p.OpenAsync("Tüp Bilgisi", () => new CylinderInfoPage())));
             }
 
@@ -664,7 +664,28 @@ public sealed class HomePage : ContentPage
 
     private async Task OpenAsync(string title, Func<Page> create)
     {
-        if (!_pages.TryGetValue(title, out Page? page))
+        // Müşteri Stoku: always a fresh page (cached instance showed wrong/home body under this title).
+        if (title == "Müşteri Stoku")
+        {
+            _pages.Remove(title);
+        }
+
+        if (_pages.TryGetValue(title, out Page? page))
+        {
+            // Reusing a page that left the stack (back / PopAsync) can show a blank body after dispose races.
+            bool onStack = Navigation.NavigationStack.Contains(page);
+            if (!onStack && page.Handler is null)
+            {
+                _pages.Remove(title);
+                page = null;
+            }
+            else if (onStack)
+            {
+                return;
+            }
+        }
+
+        if (page is null)
         {
             try
             {

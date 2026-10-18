@@ -87,6 +87,11 @@ public sealed class CustomerPickPage : ContentPage
         try
         {
             List<CustomerItem> found = await ApiClient.Instance.CustomersAsync(query);
+            if (_done || Handler is null)
+            {
+                return;
+            }
+
             if (live && query != (_search.Text ?? string.Empty).Trim())
             {
                 return;
@@ -101,14 +106,20 @@ public sealed class CustomerPickPage : ContentPage
             _info.Text = found.Count == 0 ? $"❌ \"{query}\" ile eşleşen müşteri yok. Başka bir ad veya kod deneyin." : $"✅ {found.Count} müşteri bulundu — seçmek için dokunun.";
             _info.TextColor = found.Count == 0 ? Ui.Bad : Ui.Good;
         }
-        catch (Exception exception)
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (Exception exception) when (Handler is not null && !_done)
         {
             _info.Text = "⚠️ Arama yapılamadı: " + exception.Message;
             _info.TextColor = Ui.Bad;
         }
         finally
         {
-            _busy.IsVisible = false;
+            if (Handler is not null && !_done)
+            {
+                _busy.IsVisible = false;
+            }
         }
     }
 

@@ -40,6 +40,7 @@ $script:WatcherMissingSince = $null
 $script:LastWatcherStart = [DateTime]::MinValue
 $script:LastIdeWatchStart = [DateTime]::MinValue
 $script:BridgeAlerted = $false
+$script:WatcherAlerted = $false
 $script:OpenIds = @()
 New-Item -ItemType Directory -Force -Path $Inbox, $StateDir | Out-Null
 
@@ -301,13 +302,17 @@ function Confirm-PcWorker {
 }
 
 # Only the logon startup entry launches AgentWatcher, so nothing brought it back after a crash or kill until the next
-# logon. It is restarted after 3 minutes of absence (longer than the startup entry and its own safe restart take),
-# at most every 5 minutes; not while AutoSync is swapping it and not when "Windows ile baslat" is turned off.
+# logon. Restart after 1 minute of absence (was 3; Telegram outbound dies while Watcher is down), at most every
+# 2 minutes; not while AutoSync is swapping it and not when "Windows ile baslat" is turned off.
 function Confirm-AgentWatcher {
-    if (Get-Process -Name 'ArsanGazERP.AgentWatcher' -ErrorAction SilentlyContinue) { $script:WatcherMissingSince = $null; return }
+    if (Get-Process -Name 'ArsanGazERP.AgentWatcher' -ErrorAction SilentlyContinue) {
+        $script:WatcherMissingSince = $null
+        $script:WatcherAlerted = $false
+        return
+    }
     if ($null -eq $script:WatcherMissingSince) { $script:WatcherMissingSince = Get-Date; return }
-    if (((Get-Date) - $script:WatcherMissingSince).TotalMinutes -lt 3) { return }
-    if (((Get-Date) - $script:LastWatcherStart).TotalMinutes -lt 5) { return }
+    if (((Get-Date) - $script:WatcherMissingSince).TotalMinutes -lt 1) { return }
+    if (((Get-Date) - $script:LastWatcherStart).TotalMinutes -lt 2) { return }
     $autoSync = $null
     if ([System.Threading.Mutex]::TryOpenExisting('Local\ArsanGazERP.AutoSync', [ref]$autoSync)) { $autoSync.Dispose(); return }
     try {
@@ -319,9 +324,29 @@ function Confirm-AgentWatcher {
     if (-not (Test-Path -LiteralPath $WatcherExe)) { Write-Log "AgentWatcher not found: $WatcherExe"; return }
     try {
         Start-Process -FilePath $WatcherExe -ArgumentList '--background' -WorkingDirectory (Split-Path $WatcherExe) | Out-Null
-        Write-Log 'AgentWatcher was not running for 3 minutes; started it.'
+        Write-Log 'AgentWatcher was not running for 1 minute; started it.'
+        if (-not $script:WatcherAlerted) {
+            $script:WatcherAlerted = $true
+            $note = Join-Path $StateDir 'watcher-alert.txt'
+            [IO.File]::WriteAllText($note,
+                "UYARI: AgentWatcher bir sure yoktu; ServerInboxSync yeniden baslatti. Telegram giden kutusu bu surede gecikmis olabilir.",
+                $Utf8)
+            try { & (Join-Path $PSScriptRoot 'Send-Telegram.ps1') -Path $note | Out-Null }
+            catch { Write-Log "Watcher Telegram alert failed: $($_.Exception.Message)" }
+        }
     }
-    catch { Write-Log "AgentWatcher could not be started: $($_.Exception.Message)" }
+    catch {
+        Write-Log "AgentWatcher could not be started: $($_.Exception.Message)"
+        if (-not $script:WatcherAlerted) {
+            $script:WatcherAlerted = $true
+            $note = Join-Path $StateDir 'watcher-alert.txt'
+            [IO.File]::WriteAllText($note,
+                "UYARI: AgentWatcher calismiyor ve yeniden baslatilamadi: $($_.Exception.Message)`nTelegram giden mesajlar gecikebilir.",
+                $Utf8)
+            try { & (Join-Path $PSScriptRoot 'Send-Telegram.ps1') -Path $note | Out-Null }
+            catch { Write-Log "Watcher Telegram alert failed: $($_.Exception.Message)" }
+        }
+    }
 }
 
 # A request the server took back (server Cursor agent) must not also run on the PC later.
