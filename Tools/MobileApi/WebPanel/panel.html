@@ -726,6 +726,20 @@ tr.alarm-row td { background:#fef2f2; }
       </div>
       <div class="actions"><button class="primary" id="m-save" type="button">Hareketi kaydet</button></div>
     </div>
+    <div class="card" data-perm="tup-hareket|tup-cikis|tup-iade">
+      <h2>Düzeltme (yanlış işlem)</h2>
+      <div class="hint">Geri alma yoktur; doğru yere telafi hareketi yazar. Hareket tipi «Düzeltme» olur; en az 8 karakter not/referans zorunlu. Yalnız bu ERP sistemindeki veriyi değiştirir — ArsanTüpTakip sitesi/APK’sı etkilenmez.</div>
+      <div class="form-grid">
+        <label>Hedef durum<select id="fix-status"></select></label>
+        <label id="fix-full-wrap">Dolu/Boş<select id="fix-full"><option value="">Değiştirme</option><option value="true">Dolu</option><option value="false">Boş</option></select></label>
+        <label id="fix-plate-wrap" class="hidden">Plaka<input id="fix-plate" list="plate-list" maxlength="20" placeholder="01 ABC 123"></label>
+        <label id="fix-cust-wrap" class="hidden" style="grid-column:1/-1">Müşteri
+          <input id="fix-musteri-q" placeholder="Müşteri ara"><select id="fix-musteri"></select>
+        </label>
+        <label style="grid-column:1/-1">Not / referans (zorunlu, min. 8 karakter)<textarea id="fix-note" rows="2" maxlength="400" placeholder="Örn. yanlış müşteriye teslim — doğru: … / fatura 12345"></textarea></label>
+      </div>
+      <div class="actions"><button class="danger" id="fix-save" type="button">Düzeltme kaydet</button></div>
+    </div>
     <div class="card" data-perm="tup-duzenle">
       <h2>Tüp bilgilerini düzenle</h2>
       <div class="form-grid">

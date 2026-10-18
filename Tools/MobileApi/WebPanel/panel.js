@@ -265,6 +265,10 @@ async function loadOptions() {
   }
   const status = $("m-status");
   status.replaceChildren(el("option", { value: "" }, "Seçin"), ...options.statuses.map((s) => el("option", { value: s.id }, s.name)));
+  const fixStatus = $("fix-status");
+  if (fixStatus) {
+    fixStatus.replaceChildren(...options.statuses.map((s) => el("option", { value: s.id }, s.name)));
+  }
   $("f-plaka").length = 1;
   for (const p of options.plates) $("f-plaka").append(el("option", { value: p }, p));
   $("gas-list").replaceChildren(...options.gasTypes.map((g) => el("option", { value: g })));
@@ -373,6 +377,7 @@ const cylinderCustomer = customerPicker("f-musteri-q", "f-musteri", "Tümü");
 const movementCustomer = customerPicker("h-musteri-q", "h-musteri", "Tümü");
 const newCustomer = customerPicker("n-musteri-q", "n-musteri", "Depoda (müşteri yok)");
 const moveCustomer = customerPicker("m-customer-q", "m-customer", null);
+const fixCustomer = customerPicker("fix-musteri-q", "fix-musteri", "Müşteri seçin");
 
 async function loadSummary() {
   try {
@@ -567,6 +572,15 @@ async function openDetail(id) {
   $("m-plate").value = "";
   moveCustomer.reset();
   updateMoveFields();
+  if ($("fix-status")) {
+    $("fix-status").value = String(c.status);
+    $("fix-full").value = c.isFull === true ? "true" : c.isFull === false ? "false" : "";
+    $("fix-plate").value = c.plate || "";
+    $("fix-note").value = "";
+    if (c.customerId) fixCustomer.choose({ id: c.customerId, name: c.customer || ("#" + c.customerId), city: null, cylinders: 0 });
+    else fixCustomer.reset();
+    syncFixFields();
+  }
   const head = el("tr", {}, ...["Tarih", "Hareket", "Durum", "Müşteri / Plaka", "Dolu/Boş", "Not"].map((h) => el("th", {}, h)));
   const body = c.movements.map((m) => el("tr", {},
     el("td", {}, m.date), el("td", {}, m.movementType), el("td", {}, `${m.from} → ${m.to}`),
@@ -575,8 +589,72 @@ async function openDetail(id) {
   if (!$("detail").open) $("detail").showModal();
 }
 
+function syncFixFields() {
+  const status = Number($("fix-status").value);
+  $("fix-cust-wrap").classList.toggle("hidden", status !== 3);
+  $("fix-plate-wrap").classList.toggle("hidden", status !== 2);
+  $("fix-full-wrap").classList.toggle("hidden", status === 3);
+  if (status === 3 && !$("fix-musteri").options.length) fixCustomer.search();
+}
+
 $("d-close").addEventListener("click", () => $("detail").close());
 $("m-status").addEventListener("change", updateMoveFields);
+$("fix-status").addEventListener("change", syncFixFields);
+
+$("fix-save").addEventListener("click", async () => {
+  if (!current) return;
+  const note = $("fix-note").value.trim();
+  if (note.length < 8) {
+    show($("d-msg"), "Düzeltme için en az 8 karakterlik not/referans girin.");
+    return;
+  }
+  const status = Number($("fix-status").value);
+  const body = {
+    status,
+    customerId: status === 3 ? (Number($("fix-musteri").value) || null) : null,
+    plate: status === 2 ? ($("fix-plate").value.trim() || null) : null,
+    isFull: status === 3 || !$("fix-full").value ? null : $("fix-full").value === "true",
+    note,
+    confirm: false,
+    correction: true
+  };
+  if (status === 3 && !body.customerId) {
+    show($("d-msg"), "Müşteride durumu için müşteri seçin.");
+    return;
+  }
+  if (status === 2 && !body.plate) {
+    show($("d-msg"), "Araçta durumu için plaka girin.");
+    return;
+  }
+  if (!window.confirm("Düzeltme hareketi kaydedilsin mi? Bu geri alınamaz; geçmişte «Düzeltme» satırı görünür. ArsanTüpTakip etkilenmez.")) return;
+  $("fix-save").disabled = true;
+  try {
+    const result = await api(`/panel/api/tup/${current.id}/hareket`, { method: "POST", body });
+    await openDetail(current.id);
+    show($("d-msg"), result.message, result.message.includes("⚠") ? "warn" : "ok");
+  } catch (error) {
+    if (error.status === 409 && error.data && error.data.stale) {
+      await openDetail(current.id);
+      show($("d-msg"), error.message, "warn");
+    } else if (error.status === 409 && error.data && error.data.conflict) {
+      if (window.confirm(error.message + "\n\nYine de kaydedilsin mi?")) {
+        try {
+          const result = await api(`/panel/api/tup/${current.id}/hareket`, { method: "POST", body: { ...body, confirm: true } });
+          await openDetail(current.id);
+          show($("d-msg"), result.message, result.message.includes("⚠") ? "warn" : "ok");
+        } catch (retry) {
+          show($("d-msg"), retry.message);
+        }
+      } else {
+        show($("d-msg"), "Düzeltme kaydedilmedi.", "warn");
+      }
+    } else {
+      show($("d-msg"), error.message);
+    }
+  } finally {
+    $("fix-save").disabled = false;
+  }
+});
 
 function updateMoveFields() {
   const status = Number($("m-status").value);

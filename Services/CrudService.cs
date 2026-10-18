@@ -169,6 +169,9 @@ public sealed class CrudService
  public async Task<string?> MoveCylinderAsync(int cylinderId,CylinderStatus target,int? customerId,string note,string movementType="Durum Değişikliği",string? vehiclePlate=null,bool? isFull=null,bool confirmedCustomerChange=false)
  {
   if(!Enum.IsDefined(target))throw new ArgumentOutOfRangeException(nameof(target),"Geçersiz tüp durumu.");
+  // Typed "Düzeltme" requires an audit note (panel/API correction path; same rule as TupTakip).
+  if(string.Equals(movementType?.Trim(),"Düzeltme",StringComparison.OrdinalIgnoreCase)&&(note??"").Trim().Length<8)
+   throw new ArgumentException("Düzeltme hareketi için en az 8 karakterlik zorunlu not/referans girilmelidir.",nameof(note));
   string? plate=target==CylinderStatus.Vehicle?CylinderTracking.NormalizePlate(vehiclePlate):null;
   if(target==CylinderStatus.Customer)customerId=await ResolveCustomerIdAsync(customerId);
   int? movementCustomerId=null;
