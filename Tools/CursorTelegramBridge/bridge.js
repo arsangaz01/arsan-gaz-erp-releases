@@ -19,9 +19,13 @@ const REQUEST_MAX_BYTES = 65_536;
 const DEFAULT_MODEL = "auto";
 // The open Cursor IDE chat (Tools/CursorIdeBridge/ide-watch.ps1) refreshes its heartbeat every 3 s.
 const IDE_SESSION_STALE_MS = 90_000;
-// A monitored shell does not guarantee the IDE chat gets a turn; unstarted claims fall back to this bridge.
-// 60s (was 180s): long idle claims felt like "Telegram is broken" even though the request was only waiting.
+// Preferred owner written by ArsanGazERP CursorIdeBridge\ide-watch.ps1 (this ERP chat).
+// User rule 2026-10-17: Telegram in/out always prioritizes that chat over bridge.js / YouTubeAuto.
+const IDE_PREFERRED_OWNER = "ArsanGazERP-Cursor";
+// Fallback grace when heartbeat is live but owner is not the preferred ERP chat.
 const IDE_CLAIM_START_GRACE_MS = 60_000;
+// Preferred ERP chat: wait much longer before bridge steals — only if the agent is truly stuck.
+const IDE_PREFERRED_CLAIM_GRACE_MS = 600_000;
 
 const projectRoot = process.env.CURSOR_BRIDGE_PROJECT_ROOT || findProjectRoot(__dirname);
 const dataRoot = process.env.CURSOR_BRIDGE_DATA_ROOT || resolveDataRoot(projectRoot);
@@ -37,8 +41,9 @@ function isJarvisChannel(id) {
 const PROGRESS_STEP_LIMIT = 40;
 const CONTEXT_MAX_LENGTH = 40_000;
 const CANCEL_POLL_MS = 1000;
-// Requests run one at a time, so a stuck run would otherwise hold every later request (including Jarvis chat).
-const RUN_MAX_MS = 60 * 60 * 1000;
+// 0 = no auto-stop (user 2026-10-17: long YouTube repairs must not die at 60 min).
+// Manual cancel via .cancel file still works. Stuck runs can block the queue — monitor if needed.
+const RUN_MAX_MS = 0;
 const journalPath = path.join(dataRoot, "cursor-journal.md");
 const configPath = path.join(__dirname, "bridge-config.json");
 
@@ -182,6 +187,8 @@ function describeToolCall(name, args) {
 
 async function isIdeSessionActive() {
   const status = await readJson(path.join(inboxDirectory, "ide-session-status.json")).catch(() => null);
+  // YouTubeAuto must never block the ERP bridge/IDE path by holding a fresh heartbeat.
+  if (status?.owner === "YouTubeAuto-Cursor") return false;
   return isHeartbeatFresh(status, Date.now());
 }
 
@@ -190,7 +197,14 @@ function isHeartbeatFresh(status, nowMs) {
   return Number.isFinite(updated) && nowMs - updated < IDE_SESSION_STALE_MS;
 }
 
+function isPreferredIdeOwner(ideStatus) {
+  return ideStatus?.owner === IDE_PREFERRED_OWNER;
+}
+
 // Returns why the bridge should take over an IDE-claimed request, or null to leave it to the IDE chat.
+// Pid mismatch alone must NOT takeover: Sync/Confirm can spawn a second ide-watch that races
+// ide-session-status.json; that looked like "claimer died" and stole Telegram away from this chat.
+// Preferred ArsanGazERP-Cursor chat keeps Telegram until heartbeat dies or 10 min with no Start-Request.
 function claimTakeoverReason({ claim, started, ideStatus, nowMs }) {
   if (started) return null;
   if (!isHeartbeatFresh(ideStatus, nowMs)) return "IDE izleyicisi çalışmıyor";
@@ -198,12 +212,14 @@ function claimTakeoverReason({ claim, started, ideStatus, nowMs }) {
   if (!Number.isInteger(claimPid) || claimPid <= 0) {
     return "IDE sahiplenme pid eksik";
   }
-  if (Number(ideStatus?.pid) !== claimPid) {
-    return "isteği sahiplenen IDE izleyicisi kapanmış";
-  }
   const claimed = Date.parse(claim?.claimedUtc ?? "");
   if (!Number.isFinite(claimed)) return "IDE sahiplenme kaydı okunamadı";
-  if (nowMs - claimed >= IDE_CLAIM_START_GRACE_MS) return "IDE sohbeti 1 dakika içinde işe başlamadı";
+  const graceMs = isPreferredIdeOwner(ideStatus) ? IDE_PREFERRED_CLAIM_GRACE_MS : IDE_CLAIM_START_GRACE_MS;
+  if (nowMs - claimed >= graceMs) {
+    return isPreferredIdeOwner(ideStatus)
+      ? "IDE sohbeti 10 dakika içinde işe başlamadı"
+      : "IDE sohbeti 1 dakika içinde işe başlamadı";
+  }
   return null;
 }
 
@@ -444,8 +460,10 @@ async function openAgent(config, channel = "telegram", newConversation = false) 
     try {
       return await Agent.resume(state.agentId, options);
     } catch (error) {
-      if (!(error instanceof AgentNotFoundError)) throw error;
-      log(`Önceki Cursor konuşması bulunamadı (${state.agentId}); yeni konuşma açılıyor.`);
+      const detail = error?.message ?? String(error);
+      // Stuck prior run blocks resume/send; rotate to a fresh agent instead of failing Telegram.
+      if (!(error instanceof AgentNotFoundError) && !/already has active run/i.test(detail)) throw error;
+      log(`Önceki Cursor konuşması kullanılamıyor (${state.agentId}: ${detail}); yeni konuşma açılıyor.`);
     }
   }
 
@@ -458,6 +476,10 @@ async function openAgent(config, channel = "telegram", newConversation = false) 
   });
   log(`Yeni Cursor konuşması açıldı (${channel}): ${agent.agentId}`);
   return agent;
+}
+
+function isActiveRunConflict(error) {
+  return /already has active run/i.test(error?.message ?? String(error ?? ""));
 }
 
 // Video frames go inline as images; if the runtime rejects them the prompt still lists their paths for the Read tool.
@@ -518,7 +540,17 @@ async function processRequest(entry) {
     const memory = channel === "jarvis" ? await buildMemoryContext(dataRoot).catch(() => "") : "";
     const video = await framesForAttachments(attachmentPaths);
     if (video.note) log(`Video kareleri hazırlandı (${id}): ${video.images.length} görsel`);
-    const run = await sendWithImages(agent, buildPrompt(text, context, attachmentPaths, channel, memory, video.note), video.images);
+    const prompt = buildPrompt(text, context, attachmentPaths, channel, memory, video.note);
+    let run;
+    try {
+      run = await sendWithImages(agent, prompt, video.images);
+    } catch (error) {
+      if (!isActiveRunConflict(error)) throw error;
+      log(`Aktif run engeli (${agent.agentId}); yeni Cursor konuşması açılıyor: ${id}`);
+      await agent[Symbol.asyncDispose]?.().catch(() => undefined);
+      agent = await openAgent(config, channel, true);
+      run = await sendWithImages(agent, prompt, video.images);
+    }
     submitted = true;
     await writeAcknowledgement(id, "submitted");
     await writeProgress(id, "submitted");
@@ -529,7 +561,7 @@ async function processRequest(entry) {
     const runStartedMs = Date.now();
     cancelWatch = setInterval(() => {
       if (cancelRequested) return;
-      if (Date.now() - runStartedMs > RUN_MAX_MS) {
+      if (RUN_MAX_MS > 0 && Date.now() - runStartedMs > RUN_MAX_MS) {
         timedOut = true;
       } else if (!fsSync.existsSync(cancelPath)) {
         return;
@@ -694,4 +726,13 @@ if (require.main === module) {
   });
 }
 
-module.exports = { buildPrompt, claimTakeoverReason, describeToolCall, sendWithImages, IDE_CLAIM_START_GRACE_MS, IDE_SESSION_STALE_MS };
+module.exports = {
+  buildPrompt,
+  claimTakeoverReason,
+  describeToolCall,
+  sendWithImages,
+  IDE_CLAIM_START_GRACE_MS,
+  IDE_PREFERRED_CLAIM_GRACE_MS,
+  IDE_PREFERRED_OWNER,
+  IDE_SESSION_STALE_MS,
+};

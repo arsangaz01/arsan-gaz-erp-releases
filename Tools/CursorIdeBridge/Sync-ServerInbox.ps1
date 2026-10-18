@@ -34,9 +34,11 @@ $LogPath = Join-Path $StateDir 'sync.log'
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 $BridgeScript = Join-Path (Split-Path $PSScriptRoot) 'CursorTelegramBridge\bridge.js'
 $WatcherExe = Join-Path (Split-Path (Split-Path $PSScriptRoot)) 'publish\current\AgentWatcher\ArsanGazERP.AgentWatcher.exe'
+$IdeWatchScript = Join-Path $PSScriptRoot 'ide-watch.ps1'
 $script:LastBridgeStart = [DateTime]::MinValue
 $script:WatcherMissingSince = $null
 $script:LastWatcherStart = [DateTime]::MinValue
+$script:LastIdeWatchStart = [DateTime]::MinValue
 $script:BridgeAlerted = $false
 $script:OpenIds = @()
 New-Item -ItemType Directory -Force -Path $Inbox, $StateDir | Out-Null
@@ -103,9 +105,165 @@ function Test-BridgeRunning {
     catch { return $false }
 }
 
+function Get-IdeWatchProcesses {
+    # Any live CursorIdeBridge\ide-watch.ps1 counts — status.json alone races when Sync starts a second copy.
+    try {
+        return @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -and ($_.CommandLine -match 'CursorIdeBridge[\\/]+ide-watch\.ps1') })
+    }
+    catch { return @() }
+}
+
 function Test-IdeWatcherRunning {
+    $procs = Get-IdeWatchProcesses
+    if ($procs.Count -gt 0) {
+        $status = Join-Path $Inbox 'ide-session-status.json'
+        if (Test-Path -LiteralPath $status) {
+            try {
+                $json = [IO.File]::ReadAllText($status, $Utf8) | ConvertFrom-Json
+                if ($json.owner -eq 'YouTubeAuto-Cursor') { return $false }
+            }
+            catch { }
+        }
+        return $true
+    }
     $status = Join-Path $Inbox 'ide-session-status.json'
-    return (Test-Path -LiteralPath $status) -and ((Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $status).LastWriteTimeUtc).TotalSeconds -lt 90
+    if (-not (Test-Path -LiteralPath $status)) { return $false }
+    if (((Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $status).LastWriteTimeUtc).TotalSeconds -ge 90) { return $false }
+    try {
+        $json = [IO.File]::ReadAllText($status, $Utf8) | ConvertFrom-Json
+        if ($json.owner -eq 'YouTubeAuto-Cursor') { return $false }
+        if ($json.pid) {
+            $proc = Get-Process -Id ([int]$json.pid) -ErrorAction Stop
+            return $null -ne $proc
+        }
+    }
+    catch { return $false }
+    return $true
+}
+
+function Enforce-YouTubeArsanStub {
+    # YouTubeAuto Cursor agents keep restoring the full hijack script; rewrite stub every sync pass.
+    $path = 'C:\YouTubeAuto\TelegramBridge\Watch-ArsanTelegram.ps1'
+    if (-not (Test-Path -LiteralPath (Split-Path $path))) { return }
+    $marker = 'DISABLED permanently (ArsanGazERP owns arsanerpbot)'
+    $needs = $true
+    if (Test-Path -LiteralPath $path) {
+        try {
+            $text = [IO.File]::ReadAllText($path)
+            if ($text -like "*$marker*") { $needs = $false }
+        }
+        catch { $needs = $true }
+    }
+    if (-not $needs) { return }
+    $stub = @"
+# $marker
+# Do not restore the old CopilotInbox hijack. YouTube bot = watch.ps1 only.
+Write-Output 'Watch-ArsanTelegram DISABLED: ERP Telegram owned by ArsanGazERP CursorIdeBridge.'
+exit 2
+"@
+    try {
+        if (Test-Path -LiteralPath $path) {
+            attrib -R $path 2>$null
+        }
+        [IO.File]::WriteAllText($path, $stub, $Utf8)
+        attrib +R $path 2>$null
+        Write-Log 'Re-stubbed YouTubeAuto Watch-ArsanTelegram.ps1 (ERP inbox protection)'
+        $notice = Join-Path $StateDir 'youtube-hijack-restub.txt'
+        [IO.File]::WriteAllText($notice,
+            "UYARI: YouTubeAuto Watch-ArsanTelegram.ps1 tekrar ERP kuyrugunu gaspetmeye calisti; stub yenilendi. YouTube bot icin yalnizca watch.ps1 kullanin.",
+            $Utf8)
+        try { & (Join-Path $PSScriptRoot 'Send-Telegram.ps1') -Path $notice | Out-Null } catch { }
+    }
+    catch { Write-Log "Watch-ArsanTelegram stub rewrite failed: $($_.Exception.Message)" }
+}
+
+function Stop-YouTubeErpHijack {
+    # YouTubeAuto agents periodically revive Watch-ArsanTelegram.ps1 which overwrites
+    # CopilotInbox\ide-session-status.json with owner=YouTubeAuto-Cursor and steals ERP claims.
+    Enforce-YouTubeArsanStub
+    $hijackers = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -and ($_.CommandLine -match 'Watch-ArsanTelegram\.ps1') })
+    foreach ($h in $hijackers) {
+        try {
+            Stop-Process -Id $h.ProcessId -Force -ErrorAction SilentlyContinue
+            Write-Log "Stopped YouTubeAuto ERP inbox hijack pid=$($h.ProcessId)"
+        }
+        catch { }
+    }
+    $status = Join-Path $Inbox 'ide-session-status.json'
+    if (Test-Path -LiteralPath $status) {
+        try {
+            $json = [IO.File]::ReadAllText($status, $Utf8) | ConvertFrom-Json
+            if ($json.owner -eq 'YouTubeAuto-Cursor') {
+                Remove-Item -LiteralPath $status -Force -ErrorAction SilentlyContinue
+                Write-Log 'Cleared YouTubeAuto-Cursor ide-session-status.json'
+            }
+        }
+        catch { }
+    }
+    # Junction TelegramInbox -> CopilotInbox lets YouTube tools claim ERP requests; never allow it.
+    $telegramInbox = Join-Path $LocalData 'AgentWatcherData\TelegramInbox'
+    if (Test-Path -LiteralPath $telegramInbox) {
+        try {
+            $item = Get-Item -LiteralPath $telegramInbox -Force
+            $isLink = ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+            if ($isLink) {
+                cmd /c "rmdir `"$telegramInbox`"" | Out-Null
+                Write-Log 'Removed TelegramInbox junction (ERP CopilotInbox must stay exclusive)'
+            }
+        }
+        catch { Write-Log "TelegramInbox junction cleanup failed: $($_.Exception.Message)" }
+    }
+}
+
+# Keep ArsanGaz ide-watch alive so Telegram requests land in the ERP Cursor chat (not YouTubeAuto).
+# Prefer a single process: duplicates race status.pid and used to make bridge.js steal IDE claims.
+function Confirm-IdeWatch {
+    Stop-YouTubeErpHijack
+    $procs = Get-IdeWatchProcesses
+    if ($procs.Count -gt 1) {
+        # Prefer direct -File ide-watch (Cursor chat shell). Drop -NonInteractive Sync copies and -Command wrappers.
+        $chat = @($procs | Where-Object {
+            $_.CommandLine -notmatch '-NonInteractive' -and $_.CommandLine -match '-File\s+\S*ide-watch\.ps1'
+        })
+        $keep = if ($chat.Count -gt 0) { $chat | Sort-Object ProcessId -Descending | Select-Object -First 1 }
+            else { $procs | Sort-Object ProcessId -Descending | Select-Object -First 1 }
+        foreach ($extra in $procs) {
+            if ($extra.ProcessId -eq $keep.ProcessId) { continue }
+            try {
+                Stop-Process -Id $extra.ProcessId -Force -ErrorAction SilentlyContinue
+                Write-Log "Stopped duplicate ide-watch pid=$($extra.ProcessId) (kept $($keep.ProcessId))"
+            }
+            catch { }
+        }
+        return
+    }
+    if (Test-IdeWatcherRunning) { return }
+    # Allow quick retry when every ide-watch process is gone (status.json can look fresh for ~90s).
+    if ((Get-IdeWatchProcesses).Count -eq 0) {
+        if (((Get-Date) - $script:LastIdeWatchStart).TotalSeconds -lt 20) { return }
+    }
+    elseif (((Get-Date) - $script:LastIdeWatchStart).TotalMinutes -lt 2) { return }
+    if (-not (Test-Path -LiteralPath $IdeWatchScript)) { Write-Log "ide-watch.ps1 missing: $IdeWatchScript"; return }
+    $script:LastIdeWatchStart = Get-Date
+    try {
+        # Drop stale YouTubeAuto ownership so bridge/IDE can claim for ArsanGaz.
+        $status = Join-Path $Inbox 'ide-session-status.json'
+        if (Test-Path -LiteralPath $status) {
+            try {
+                $json = [IO.File]::ReadAllText($status, $Utf8) | ConvertFrom-Json
+                if ($json.owner -eq 'YouTubeAuto-Cursor') { Remove-Item -LiteralPath $status -Force -ErrorAction SilentlyContinue }
+            }
+            catch { }
+        }
+        Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+            '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+            '-WindowStyle', 'Hidden', '-File', $IdeWatchScript
+        ) -WorkingDirectory $PSScriptRoot -WindowStyle Hidden | Out-Null
+        Write-Log 'ide-watch.ps1 was not healthy; started ArsanGaz CursorIdeBridge watcher.'
+    }
+    catch { Write-Log "ide-watch.ps1 could not be started: $($_.Exception.Message)" }
 }
 
 # Something on the PC must be able to run a request before the sync takes it from the server: the open IDE chat
@@ -265,6 +423,7 @@ try {
     do {
         if (-not $Once) {
             try { Confirm-AgentWatcher } catch { Write-Log "AgentWatcher check failed: $($_.Exception.Message)" }
+            try { Confirm-IdeWatch } catch { Write-Log "ide-watch check failed: $($_.Exception.Message)" }
         }
         try {
             Invoke-SyncPass

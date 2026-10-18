@@ -9,8 +9,13 @@ internal static class CodingBridgeLauncher
 
     public static string Normalize(string? bridge) => CodingBridgeNames.Normalize(bridge);
 
-    public static string Start(string? bridge) =>
-        Normalize(bridge) == VsCode ? VsCodeWorkspaceLauncher.OpenWorkspace() : StartCursorBridge();
+    public static string Start(string? bridge)
+    {
+        // VS Code Telegram/Copilot köprüsü kaldırıldı; seçili olsa bile Cursor açılır.
+        if (string.Equals(bridge?.Trim(), VsCode, StringComparison.OrdinalIgnoreCase))
+            return "VS Code köprüsü kaldırıldı; Cursor köprüsü kullanılıyor. " + StartCursorBridge();
+        return StartCursorBridge();
+    }
 
     public static string StartCursorBridge()
     {

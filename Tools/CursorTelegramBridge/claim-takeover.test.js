@@ -2,11 +2,17 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { claimTakeoverReason, IDE_CLAIM_START_GRACE_MS } = require("./bridge.js");
+const {
+  claimTakeoverReason,
+  IDE_CLAIM_START_GRACE_MS,
+  IDE_PREFERRED_CLAIM_GRACE_MS,
+  IDE_PREFERRED_OWNER,
+} = require("./bridge.js");
 
 const now = Date.parse("2026-10-10T19:00:00Z");
 const iso = (offsetMs) => new Date(now + offsetMs).toISOString();
 const liveIde = { pid: 2580, updatedUtc: iso(-3000) };
+const preferredIde = { pid: 2580, owner: IDE_PREFERRED_OWNER, updatedUtc: iso(-3000) };
 
 test("fresh claim by the live IDE watcher stays with the IDE chat", () => {
   const claim = { pid: 2580, claimedUtc: iso(-30_000) };
@@ -18,15 +24,30 @@ test("claim the IDE chat never started is taken over after the grace period", ()
   assert.match(claimTakeoverReason({ claim, started: false, ideStatus: liveIde, nowMs: now }), /1 dakika/);
 });
 
+test("preferred ArsanGazERP chat keeps claim past the short grace", () => {
+  const claim = { pid: 2580, claimedUtc: iso(-IDE_CLAIM_START_GRACE_MS) };
+  assert.equal(claimTakeoverReason({ claim, started: false, ideStatus: preferredIde, nowMs: now }), null);
+});
+
+test("preferred ArsanGazERP chat is taken over only after the long grace", () => {
+  const claim = { pid: 2580, claimedUtc: iso(-IDE_PREFERRED_CLAIM_GRACE_MS) };
+  assert.match(claimTakeoverReason({ claim, started: false, ideStatus: preferredIde, nowMs: now }), /10 dakika/);
+});
+
 test("claim is taken over when the IDE watcher heartbeat is stale", () => {
   const claim = { pid: 2580, claimedUtc: iso(-10_000) };
-  const staleIde = { pid: 2580, updatedUtc: iso(-120_000) };
+  const staleIde = { pid: 2580, owner: IDE_PREFERRED_OWNER, updatedUtc: iso(-120_000) };
   assert.match(claimTakeoverReason({ claim, started: false, ideStatus: staleIde, nowMs: now }), /çalışmıyor/);
 });
 
-test("claim made by a previous watcher process is taken over", () => {
+test("pid mismatch with a fresh IDE heartbeat stays with the IDE chat (status-file race)", () => {
   const claim = { pid: 1111, claimedUtc: iso(-10_000) };
-  assert.match(claimTakeoverReason({ claim, started: false, ideStatus: liveIde, nowMs: now }), /kapanmış/);
+  assert.equal(claimTakeoverReason({ claim, started: false, ideStatus: liveIde, nowMs: now }), null);
+});
+
+test("pid mismatch is taken over only after the grace period", () => {
+  const claim = { pid: 1111, claimedUtc: iso(-IDE_CLAIM_START_GRACE_MS) };
+  assert.match(claimTakeoverReason({ claim, started: false, ideStatus: liveIde, nowMs: now }), /1 dakika/);
 });
 
 test("request the IDE chat has started is never taken over", () => {

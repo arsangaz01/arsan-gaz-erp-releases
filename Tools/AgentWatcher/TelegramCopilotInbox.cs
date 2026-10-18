@@ -49,7 +49,7 @@ internal sealed class TelegramCopilotInbox(string inboxDirectory, string outboxD
 
         if (string.IsNullOrWhiteSpace(text))
         {
-            throw new ArgumentException("VS Code isteği boş olamaz.", nameof(text));
+            throw new ArgumentException("Telegram isteği boş olamaz.", nameof(text));
         }
 
         string requestId = "telegram-direct-" + updateId.ToString("D20", CultureInfo.InvariantCulture);
@@ -149,9 +149,10 @@ internal sealed class TelegramCopilotInbox(string inboxDirectory, string outboxD
         }
 
         bool succeeded = string.Equals(result.Status, "completed", StringComparison.Ordinal);
+        // User-facing Telegram text: Cursor bridge (not VS Code/Copilot — those names are legacy only).
         string report = succeeded
-            ? result.Report ?? throw new InvalidDataException("VS Code tamamlanma raporu boş.")
-            : "VS Code isteği Copilot'a gönderemedi: " + result.Report;
+            ? result.Report ?? throw new InvalidDataException("Cursor tamamlanma raporu boş.")
+            : "Cursor ajanı işi bitiremedi: " + result.Report;
         string outboxId = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(tracking.Request.TaskId ?? tracking.Request.Id)))[..32];
         string outboxPath = Path.Combine(outboxDirectory, outboxId + ".json");
@@ -206,7 +207,7 @@ internal sealed class TelegramCopilotInbox(string inboxDirectory, string outboxD
                 || completion.Id != requestId
                 || completion.TaskId != (tracking.Request.TaskId ?? requestId))
             {
-                throw new InvalidDataException("VS Code tamamlanma kaydı istek kimliğiyle eşleşmiyor.");
+                throw new InvalidDataException("Cursor tamamlanma kaydı istek kimliğiyle eşleşmiyor.");
             }
 
             return (completion.Status, completion.Report);

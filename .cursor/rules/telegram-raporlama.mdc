@@ -24,11 +24,19 @@ Ekranlardaki gibi iki ayrı Android uygulaması / iki sunucu adresi vardır; ERP
 **iOS kuralı:** Android’den **ayrı** iş ve yayın; Both’a karıştırma. IPA hazır değilken “iOS yayınlandı” deme.
 Özellik kodu projelerde ayrıdır. Raporlarda tam URL yaz.
 
+## Öncelik (zorunlu — 2026-10-17)
+Telegram **gelen ve giden** her zaman bu ArsanGazERP Cursor sohbetinin önceliğindedir.
+- `ide-session-status.json` → `owner=ArsanGazERP-Cursor` (YouTubeAuto / başka sohbet gaspetmesin).
+- `bridge.js` yedektir: tercih edilen owner canlıyken isteği **çalmaz** (yalnızca izleyici ölürse veya ~10 dk
+  Start-Request gelmezse devralır). YouTubeAuto Telegram botu (`watch.ps1`) ayrıdır; ERP `arsanerpbot` buraya gelir.
+- Giden cevaplar bu sohbetin `afterAgentResponse` / `Send-Telegram.ps1` hattından gider; köprü ajanı “ben aldım”
+  diye kullanıcıya rakip rapor yazmamalı (tercih edilen sohbet açıkken).
+
 ## Mimari (kopuk sanılan durumlar)
 Telegram dinleme sunucuda; PC’de `ServerInboxSync` + `AgentWatcher` (gönderim) + `bridge.js` (yedek ajan) her zaman
 çalışmalı. `ide-watch.ps1` yalnızca **açık Cursor sohbetine** bağlıdır — sohbet değişince/yenilenince ölebilir.
-İstekler sahipsiz kalmaz: IDE 1 dk içinde `Start-Request` yapmazsa `bridge.js` devralır ve Telegram’a “köprüde”
-bildirimi gider. “Bağlantı yok” çoğu zaman IDE sohbetinin uyanmamasıdır; hat gerçekten kopuk değildir.
+İstekler sahipsiz kalmaz: tercih edilen IDE sohbeti ölürse veya uzun süre başlamazsa `bridge.js` yedek olarak
+devralır. “Bağlantı yok” çoğu zaman IDE sohbetinin uyanmamasıdır; hat gerçekten kopuk değildir.
 
 ## Her yeni oturum / sohbet / Cursor yeniden açılışı (zorunlu — ilk iş)
 Kullanıcı bir şey yazmadan veya asıl soruya cevap vermeden **önce** Telegram hattını kur.

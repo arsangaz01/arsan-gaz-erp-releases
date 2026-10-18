@@ -15,8 +15,25 @@ $reportPattern = 'erp-research|daily-review'
 
 function Write-Atomic([string]$path, [string]$text) {
     $temporary = "$path.$PID.tmp"
-    [IO.File]::WriteAllText($temporary, $text, $utf8)
-    Move-Item -LiteralPath $temporary -Destination $path -Force
+    try {
+        [IO.File]::WriteAllText($temporary, $text, $utf8)
+        # Another ide-watch may race the same status file; retry then fall back to overwrite.
+        for ($i = 0; $i -lt 5; $i++) {
+            try {
+                Move-Item -LiteralPath $temporary -Destination $path -Force -ErrorAction Stop
+                return
+            }
+            catch {
+                Start-Sleep -Milliseconds (40 * ($i + 1))
+            }
+        }
+        [IO.File]::WriteAllText($path, $text, $utf8)
+    }
+    finally {
+        if (Test-Path -LiteralPath $temporary) {
+            Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 function Write-Wake([string]$kind, [hashtable]$payload) {
@@ -49,7 +66,12 @@ if (Test-Path $seenPath) {
 $firstPass = $true
 Write-Output "IDE_WATCH_STARTED pid=$PID inbox=$inbox"
 while ($true) {
-    $status = @{ active = $true; pid = $PID; updatedUtc = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json -Compress
+    $status = @{
+        active = $true
+        pid = $PID
+        owner = 'ArsanGazERP-Cursor'
+        updatedUtc = (Get-Date).ToUniversalTime().ToString('o')
+    } | ConvertTo-Json -Compress
     Write-Atomic $statusPath $status
 
     foreach ($request in Get-ChildItem $inbox -File -Filter *.request.json -ErrorAction SilentlyContinue | Sort-Object LastWriteTime) {

@@ -1670,7 +1670,7 @@ internal sealed partial class ControlCenterForm : Form
         CheckBox autoForwardRecommendations=new(){Text="Kaynaklı Gözcü/Ar-Ge önerilerini otomatik Copilot'a ilet (günde en fazla 6; araç kartları ve dış işlem onayları korunur)",Checked=settings.AutoForwardAgentRecommendations,AutoSize=true};
         CheckBox workflowProgress=new(){Text="Telegram görevleri ve otomatik Gözcü/Ar-Ge önerilerinde aşama bildirimlerini izinli sohbete gönder (varsayılan kapalı)",Checked=settings.EnableWorkflowProgressNotifications,AutoSize=true};
         CheckBox forwardTelegramToCopilot=new(){Text="Telegram düz metin isteklerini kodlama ajanına gönder (/emir her zaman kodlama ajanına gider)",Checked=settings.ForwardTelegramCommandsToCopilotChat,AutoSize=true};
-        ComboBox codingBridge=NewCombo(CodingBridgeLauncher.Normalize(settings.CodingBridge),CodingBridgeLauncher.Cursor,CodingBridgeLauncher.VsCode);
+        ComboBox codingBridge=NewCombo(CodingBridgeLauncher.Cursor,CodingBridgeLauncher.Cursor);
         NumericUpDown researchInterval=new(){Minimum=12,Maximum=168,Value=Math.Clamp(settings.ResearchIntervalHours,12,168),Width=100};
         NumericUpDown interval=new(){Minimum=3,Maximum=300,Value=Math.Clamp(settings.PollSeconds,3,300),Width=100};
         ComboBox defaultProvider=NewCombo(settings.DefaultProvider,"Cloudflare Workers AI","Copilot Pro","Otomatik","NVIDIA NIM");
@@ -2339,7 +2339,7 @@ internal sealed partial class ControlCenterForm : Form
                     text,
                     "Ajan Ekibi Sohbeti",
                     cancellationToken,
-                    settings.ForwardTelegramCommandsToCopilotChat ? "VS Code Copilot Chat" : "Cloudflare Workers AI");
+                    settings.ForwardTelegramCommandsToCopilotChat ? "Cursor" : "Cloudflare Workers AI");
         }
     }
 
@@ -4524,8 +4524,8 @@ internal sealed partial class ControlCenterForm : Form
             }
 
             MoveActiveTaskToTerminalState(".error.json", item, "Bridge sürüm/protokol uyumsuz", exception.Message);
-            Append("VS Code isteği bridge sürüm/protokol uyumsuzluğu nedeniyle gönderilmedi: " + exception.Message);
-            await SendTelegramErrorAsync(item, "VS Code bridge uyumsuzluğu; istek gönderilmedi: " + exception.Message);
+            Append("Cursor köprüsü sürüm/protokol uyumsuzluğu nedeniyle istek gönderilmedi: " + exception.Message);
+            await SendTelegramErrorAsync(item, "Cursor köprüsü uyumsuzluğu; istek gönderilmedi: " + exception.Message);
             finalStatus = "Bridge uyumsuz";
         }
         catch (BridgeConnectionLostException exception)
@@ -4794,13 +4794,13 @@ internal sealed partial class ControlCenterForm : Form
                     }
                     catch (JsonException exception)
                     {
-                        throw new InvalidDataException("VS Code köprü onayı geçerli JSON değil.", exception);
+                        throw new InvalidDataException("Cursor köprü onayı geçerli JSON değil.", exception);
                     }
 
                     if (acknowledgement?.Status == "failed")
                     {
                         throw new InvalidOperationException(
-                            acknowledgement.Error ?? "VS Code Copilot Chat isteği kabul etmedi.");
+                            acknowledgement.Error ?? "Cursor ajanı isteği kabul etmedi.");
                     }
 
                     if (acknowledgement?.Status == "submitted")
@@ -4831,7 +4831,7 @@ internal sealed partial class ControlCenterForm : Form
                     else if (!submitted)
                     {
                         throw new InvalidOperationException(
-                            acknowledgement?.Error ?? "VS Code Copilot Chat isteği kabul etmedi.");
+                            acknowledgement?.Error ?? "Cursor ajanı isteği kabul etmedi.");
                     }
                 }
 
@@ -4921,10 +4921,10 @@ internal sealed partial class ControlCenterForm : Form
 
                     string actionText = interactionResult.Action switch
                     {
-                        "approve" => "Telegram onayınız VS Code'a iletildi; Gözcü Copilot'un devam eden yanıtını bekliyor.",
-                        "reject" => "Telegram reddetme seçiminiz VS Code'a iletildi; Gözcü Copilot'un sonucunu bekliyor.",
-                        "answered" => "Telegram yanıtınız VS Code soru kartına uygulandı; Gözcü Copilot'un devam eden yanıtını bekliyor.",
-                        _ => "Telegram yanıtınız VS Code Copilot'a iletildi."
+                        "approve" => "Telegram onayınız Cursor'a iletildi; ajanın devam eden yanıtını bekliyor.",
+                        "reject" => "Telegram reddetme seçiminiz Cursor'a iletildi; ajanın sonucunu bekliyor.",
+                        "answered" => "Telegram yanıtınız Cursor soru kartına uygulandı; ajanın devam eden yanıtını bekliyor.",
+                        _ => "Telegram yanıtınız Cursor ajanına iletildi."
                     };
                     Append(actionText);
                     File.Delete(interactionResultPath);

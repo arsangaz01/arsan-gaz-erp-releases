@@ -35,7 +35,8 @@ const inbox = createInboxClient({
 const POLL_INTERVAL_MS = 15_000;
 const CLONE_RETRY_MS = 10 * 60_000;
 const CANCEL_POLL_MS = 5000;
-const RUN_MAX_MS = 60 * 60_000;
+// 0 = no auto-stop (aligned with PC bridge.js; user 2026-10-17).
+const RUN_MAX_MS = 0;
 // A Telegram follow-up ("evet") continues the previous conversation; after a long pause a new one starts.
 const CONVERSATION_IDLE_MS = 3 * 60 * 60_000;
 const REQUEST_MAX_LENGTH = 4096;
@@ -331,7 +332,7 @@ async function processRequest(id, reason) {
     const startedMs = Date.now();
     cancelWatch = setInterval(async () => {
       if (cancelRequested) return;
-      timedOut = Date.now() - startedMs > RUN_MAX_MS;
+      timedOut = RUN_MAX_MS > 0 && Date.now() - startedMs > RUN_MAX_MS;
       if (!timedOut && !(await inbox.isCancelled(id).catch(() => false))) return;
       cancelRequested = true;
       log(timedOut ? `Süre sınırı aşıldı: ${id}` : `Durdurma isteği alındı: ${id}`);

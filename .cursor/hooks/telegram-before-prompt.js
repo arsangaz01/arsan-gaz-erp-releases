@@ -60,8 +60,11 @@ function main() {
   const healthy = ideWatchHealthy();
   const pending = listPendingIds();
   // Always remind: Cursor restart kills ide-watch; agents must reconnect before answering.
+  // User rule: Telegram in/out always prioritizes this ArsanGazERP Cursor chat.
   const parts = [
-    "TELEGRAM (her tur, cevap yazmadan önce): ide-session-status.json heartbeat ≤15 sn ve pid canlı mı bak. "
+    "TELEGRAM ÖNCELİK: Gelen/giden Telegram her zaman BU ArsanGazERP Cursor sohbetinin. "
+      + "pending isteği köprüye bırakma — Start-Request ile bu sohbet al. "
+      + "ide-session-status.json heartbeat ≤15 sn ve pid canlı mı bak. "
       + (healthy
         ? "Şu an canlı görünüyor; yine de pending varsa Start-Request ile al."
         : "ÖLÜ/ESKİ — hemen Tools\\CursorIdeBridge\\ide-watch.ps1 arka planda başlat "
