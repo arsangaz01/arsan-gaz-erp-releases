@@ -58,14 +58,14 @@ Altyapı/kod aynı, veri ve erişim ayrı; geliştirme yine Cursor + Telegram + 
   (ortak botu yalnız ortak verisine dokunur, bizim bot yalnız bizimkine).
 - Bekleyen kararlar: sistem/uygulama adı, kod ortak mı (güncellemeler ikisine de) yoksa ayrı kopya mı, başlangıç verisi boş mu
 
-#### İş modeli — Yalçın (18 Ekim 2026, Telegram 90015)
+#### İş modeli — Yalçın (18 Ekim 2026, Telegram 90015 + 90016 düzeltme)
 Kullanıcı (Yalçın): Arsan Gaz ile birlikte çalışır; müşteri ve satış getirir. Firma sahibi değildir — getirdiği
-müşterilerin «sahibi»dir. Yatırım / satış / fatura Arsan Gaz üzerinden yürür; o uygulamaları yönetmeye yardımcı olur.
-- **ArsanTüpTakip** (yeni APK/site `/tuptakip`): Yalçın’ın kullanacağı sistem (kendi getirdiği müşteri/stok operasyonu).
-- **Arsan Gaz ERP** (`/panel`, `/indir`): Arsan Gaz firmasının kendi müşteri ve satış süreçleri.
-- ERP’deki «Yalçın» sekmesi: Arsan Gaz tarafında Yalçın portföyünü ayırmak için anlamlı.
-- TupTakip’te ayrıca «Yalçın» sekmesi (1.6.23): özellik paritesi için eklendi; tüm uygulama zaten Yalçın’ın alanıysa
-  sekme gereksiz olabilir — kaldırılması kullanıcı onayına bağlı.
+müşterilerin «sahibi»dir. Yatırım / satış / fatura Arsan Gaz üzerinden yürür; uygulamaları yönetmeye yardımcı olur.
+- **Arsan Gaz ERP** (`/panel`, `/indir`, ERP APK) — **Yalçın’ın** ("Erp benim").
+- **ArsanTüpTakip** (`/tuptakip`, yeni APK) — **Arsan Gaz firmasının** ("yenisi onların").
+- Ayrı DB: bir taraftaki sefer/teslim diğerini etkilemez.
+- «Yalçın» sekmesi: firmanın (TupTakip) tarafında Yalçın portföyünü ayırmak için anlamlı; ERP tamamen Yalçın’ın
+  alanıysa ERP’deki Yalçın sekmesi gereksiz olabilir — kullanıcı onayına bağlı (90016).
 
 #### ArsanTüpTakip — durum (12 Ekim 19:59, kullanıcı: "bu şekilde not al, sonra devam edeceğiz")
 Kararlar: ad ArsanTüpTakip; kod ve güncellemeler tamamen ayrı (ortak hiçbir şey yok); iki sistemin de en yetkili
