@@ -98,6 +98,12 @@ button.link.delete-link { color:#b91c1c; }
 button.danger { background:#fff; color:var(--navy); border:1px solid #cbd5e1; border-radius:8px; padding:5px 10px; cursor:pointer; font:inherit; font-size:13px; }
 button.danger:active { background:#e5e7eb; transform:scale(0.97); }
 button.small:active:not(:disabled), a.small:active { transform:scale(0.97); }
+.sel-bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; padding:10px 12px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; min-height:44px; }
+.sel-bar .sel-label { font-size:12px; color:var(--muted); font-weight:600; text-transform:none; letter-spacing:0; margin-right:4px; }
+.sel-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:#fff; border:1px solid #7dd3fc; border-radius:999px; font-size:13px; color:var(--navy); }
+.sel-chip button { border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:16px; line-height:1; padding:0 2px; }
+.sel-chip button:hover { color:var(--bad); }
+.sel-bar .sel-empty { color:var(--muted); font-size:13px; }
 .toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
 .toolbar h2 { margin:0; flex:1; }
 .role { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:600; white-space:nowrap; }
@@ -245,6 +251,7 @@ tr.alarm-row td { background:#fef2f2; }
       <button data-tab="dolum" data-perm="dolum-kaydi">Dolum</button>
       <button data-tab="araclar" data-perm="arac-goruntule">Araç İşlemleri</button>
       <button data-tab="musteri-stok" data-perm="tup-goruntule">Müşteri Stoku</button>
+      <button data-tab="yalcin" data-perm="yalcin-goruntule">Yalçın</button>
       <button data-tab="musteriler" data-perm="musteri-goruntule">Müşteriler</button>
       <button data-tab="talepler" data-perm="musteri-talepleri">Müşteri Talepleri</button>
       <button data-tab="sayimlar" data-perm="depo-sayim|tup-sayim|raporlar">Sayım Raporları</button>
@@ -439,6 +446,48 @@ tr.alarm-row td { background:#fef2f2; }
       </div>
     </section>
 
+    <section data-page="yalcin" class="hidden">
+      <div class="card">
+        <h2>Yalçın</h2>
+        <p class="hint">Yalçın'a atanan müşteriler burada incelenir. Sefer / araç yükleme / teslim / boş alma aynı süreçte çalışır ve stok burada da güncellenir. Bu müşteriler genel «Müşteri Stoku» ve «Müşteriler» listelerinde görünmez. Operatör salt okur; atama yalnız Yönetici.</p>
+        <div class="grid" id="yc-stats"></div>
+      </div>
+      <div class="card" data-perm="yalcin-yonet">
+        <div class="toolbar">
+          <h2>Müşteri aktar</h2>
+          <input id="yc-aday-q" placeholder="Ad veya kod yazın — sonuçlar altta" style="min-width:220px">
+          <button class="secondary" id="yc-aday-ara" type="button">Ara</button>
+          <button class="primary" id="yc-ata" type="button">Seçilenleri Yalçın'a aktar</button>
+        </div>
+        <div class="sel-bar" id="yc-secilenler" aria-live="polite"></div>
+        <div class="hint" style="margin-top:8px">Seçtikleriniz aramayı değiştirseniz de burada kalır. İstediğiniz kadar müşteri ekleyip tek seferde aktarın.</div>
+        <div class="table-wrap" style="margin-top:10px"><table id="yc-adaylar"></table></div>
+      </div>
+      <div class="card" id="yc-stok-card">
+        <div class="toolbar">
+          <h2>Yalçın müşterileri / stok</h2>
+          <input id="yc-q" placeholder="Ad veya kod" style="min-width:200px">
+          <button class="primary" id="yc-ara" type="button">Listele</button>
+          <button class="secondary" id="yc-cikar" type="button" data-perm="yalcin-yonet">Seçilenleri Yalçın'dan çıkar</button>
+        </div>
+        <div class="muted" id="yc-count"></div>
+        <div class="table-wrap"><table id="yc-stok"></table></div>
+        <h2 style="margin-top:18px">Tüp stoğu olmayanlar</h2>
+        <p class="hint">Yalçın'a atanmış ama şu an müşteride tüpü görünmeyenler — ayrı listede.</p>
+        <div class="muted" id="yc-empty-count"></div>
+        <div class="table-wrap"><table id="yc-stok-empty"></table></div>
+      </div>
+      <div class="card" id="yc-moves-card">
+        <div class="toolbar">
+          <h2>Son hareketler (Yalçın müşterileri)</h2>
+          <input id="yc-hq" placeholder="Seri / müşteri" style="min-width:180px">
+          <button class="secondary" id="yc-hareket" type="button">Yenile</button>
+        </div>
+        <div class="table-wrap"><table id="yc-moves"></table></div>
+      </div>
+      <div id="yc-msg" class="msg hidden"></div>
+    </section>
+
     <section data-page="musteriler" class="hidden">
       <div class="card">
         <div class="toolbar">
@@ -449,7 +498,7 @@ tr.alarm-row td { background:#fef2f2; }
         </div>
         <div class="muted" id="c-count"></div>
         <div class="table-wrap"><table id="customers"></table></div>
-        <div class="hint">Elinde tüp olan müşteriler önce gelir. Bir satıra tıklayınca o müşterinin tüp stoku (gaz türü ve boyuta göre adet, gün, barkodlar) açılır.</div>
+        <div class="hint">Elinde tüp olan müşteriler önce gelir. Bir satıra tıklayınca o müşterinin tüp stoku (gaz türü ve boyuta göre adet, gün, barkodlar) açılır. Yalçın'a aktarılmış müşteriler bu listede görünmez — Yalçın sekmesine bakın.</div>
       </div>
     </section>
 

@@ -38,6 +38,8 @@ internal static class Perm
     internal const string CustomerAdd = "musteri-ekle";
     internal const string CustomerStockTotals = "musteri-stok-toplam";
     internal const string CustomerRequests = "musteri-talepleri";
+    internal const string PartnerYalcinView = "yalcin-goruntule";
+    internal const string PartnerYalcinManage = "yalcin-yonet";
     internal const string TripView = "sefer-goruntule";
     internal const string TripStart = "sefer-baslat";
     internal const string TripLoad = "sefer-yukle";
@@ -109,7 +111,9 @@ internal static class Perm
             P(CustomerView, "Müşterileri görüntüleme", "Müşteriler sekmesi ve müşteri telefonları. Yoksa seçim listelerinde yalnızca ad ve şehir görünür."),
             P(CustomerAdd, "Yeni müşteri", "Yeni müşteri kaydı açabilir."),
             P(CustomerStockTotals, "Müşteri stoğunda tüm müşterilerin toplamı", "Panel Müşteri Stoku sekmesinde müşterilerdeki toplam tüp sayılarını, gaz türü ve boyuta göre toplam tabloyu görür ve tüm müşterilerin stoğunu Excel'e aktarır. Yoksa yalnızca müşteri bazında sayılar görünür. Varsayılan olarak yalnızca Yönetici'de vardır.", PanelLogin, CylinderView),
-            P(CustomerRequests, "Müşteri talepleri (portal)", "Panelde Müşteri Talepleri sekmesi: müşterilerin portaldan gönderdiği boş tüp alımı ve dolu tüp siparişi taleplerini görür, tamamlandı veya iptal olarak işaretler. Müşteri portalı özelliği açıkken çalışır.", PanelLogin)
+            P(CustomerRequests, "Müşteri talepleri (portal)", "Panelde Müşteri Talepleri sekmesi: müşterilerin portaldan gönderdiği boş tüp alımı ve dolu tüp siparişi taleplerini görür, tamamlandı veya iptal olarak işaretler. Müşteri portalı özelliği açıkken çalışır.", PanelLogin),
+            P(PartnerYalcinView, "Yalçın", "Yalçın sekmesi: Yalçın'a atanmış müşteri/stok/hareketleri inceleme (Operatör salt okunur)"),
+            P(PartnerYalcinManage, "Yalçın müşteri atama", "Yalçın'a müşteri atama / çıkarma (yalnızca Yönetici)", PanelLogin, CustomerView)
         ]),
         new("Seferler", [
             P(TripView, "Seferleri görüntüleme", "Sefer listesi, sefer ayrıntısı, araç yükü ve kontrol."),
@@ -147,12 +151,12 @@ internal static class Perm
     [
         PanelLogin, MobileLogin, Summary, Reports, CylinderView, CylinderRegister, CylinderEdit, CylinderDeactivate, CylinderAudit, StockCount, LabelPrint,
         MoveDeliver, MoveReturn, MoveVehicle, MoveFilling, FillRecord, MoveService, MoveScrap, MoveFullness, MoveBulk, MoveOverride,
-        MovementHistory, Export, CustomerView, CustomerAdd, CustomerRequests, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute,
+        MovementHistory, Export, CustomerView, CustomerAdd, CustomerRequests, PartnerYalcinView, TripView, TripStart, TripLoad, TripDeliver, TripPickup, TripRoute,
         TripPlan, CustomerLocation, TripReturn, TripClose, VehicleView, VehicleAdd, VehicleEdit, VehicleDeactivate
     ];
 
     private static readonly string[] ViewerDefaults =
-        [PanelLogin, MobileLogin, Summary, Reports, CylinderView, MovementHistory, Export, CustomerView, TripView, VehicleView];
+        [PanelLogin, MobileLogin, Summary, Reports, CylinderView, MovementHistory, Export, CustomerView, TripView, VehicleView, PartnerYalcinView];
 
     // Phone/handheld: loading, deliveries and pickups, cylinder info, customer stock. Depot count is Operator/Admin only.
     // Unloading the vehicle and closing the trip are done at the depot by an operator (AdminChosen).

@@ -221,6 +221,7 @@ function openTab(tab) {
   if (tab === "talepler") loadRequests();
   if (tab === "sefer-plani") loadPlans().then(loadLookup);
   if (tab === "musteri-stok") loadStock();
+  if (tab === "yalcin") loadYalcin();
   if (tab === "sayimlar") loadCounts();
   if (tab === "barkod") loadLabelTemplates();
   if (tab === "yonetim") loadAdmin();
@@ -256,7 +257,7 @@ function customerPicker(inputId, selectId, emptyLabel) {
   async function search() {
     const keep = select.value;
     try {
-      const rows = await api("/panel/api/musteriler?q=" + encodeURIComponent($(inputId).value.trim()));
+      const rows = await api("/panel/api/musteriler?hepsi=1&q=" + encodeURIComponent($(inputId).value.trim()));
       const items = rows.map((c) => el("option", { value: c.id }, customerLabel(c)));
       select.replaceChildren(...(emptyLabel ? [el("option", { value: "" }, emptyLabel)] : []), ...items);
       if (keep && rows.some((c) => String(c.id) === keep)) select.value = keep;
@@ -3504,5 +3505,178 @@ function initLabels() {
 }
 
 initLabels();
+
+// ---- Yalçın partner workspace -------------------------------------------------------------------
+const ycSelected = new Set();
+/** @type {Map<number, {id:number,name:string,code:string,city?:string,cylinders?:number}>} */
+const ycAdaySelected = new Map();
+
+function renderYalcinSelected() {
+  const bar = $("yc-secilenler");
+  if (!bar) return;
+  if (ycAdaySelected.size === 0) {
+    bar.replaceChildren(el("span", { class: "sel-label" }, "Seçilenler"), el("span", { class: "sel-empty" }, "Henüz yok — aşağıdaki listeden işaretleyin."));
+    return;
+  }
+  const chips = [...ycAdaySelected.values()].map((c) => el("span", { class: "sel-chip" },
+    el("span", {}, c.name),
+    el("button", {
+      type: "button",
+      title: "Seçimden çıkar",
+      onclick: (e) => { e.stopPropagation(); ycAdaySelected.delete(c.id); renderYalcinSelected(); loadYalcinAdaylar().catch(() => {}); }
+    }, "×")
+  ));
+  bar.replaceChildren(el("span", { class: "sel-label" }, `Seçilenler (${ycAdaySelected.size})`), ...chips);
+}
+
+function ycToggleAday(c, on) {
+  if (on) ycAdaySelected.set(c.id, { id: c.id, name: c.name, code: c.code, city: c.city, cylinders: c.cylinders });
+  else ycAdaySelected.delete(c.id);
+  renderYalcinSelected();
+}
+
+function ycScroll(id) {
+  const node = $(id);
+  if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function loadYalcin() {
+  hide($("yc-msg"));
+  try {
+    const ozet = await api("/panel/api/yalcin/ozet");
+    $("yc-stats").replaceChildren(
+      el("div", {
+        class: "stat", title: "Tüm Yalçın müşterilerine git",
+        onclick: () => { ycScroll("yc-stok-card"); void loadYalcinStock(); }
+      }, el("div", { class: "muted" }, "Müşteri"), el("div", { class: "n" }, String(ozet.customers)), el("div", { class: "s" }, "Stoğu olan + olmayan")),
+      el("div", {
+        class: "stat", title: "Stoğu olan müşteriler",
+        onclick: () => { ycScroll("yc-stok-card"); void loadYalcinStock(); }
+      }, el("div", { class: "muted" }, "Müşterideki tüp"), el("div", { class: "n" }, String(ozet.cylindersAtCustomer)), el("div", { class: "s" }, "Listeye kaydır")),
+      el("div", {
+        class: "stat", title: "Son hareketler",
+        onclick: () => { ycScroll("yc-moves-card"); void loadYalcinMoves(); }
+      }, el("div", { class: "muted" }, "Son 7 gün hareket"), el("div", { class: "n" }, String(ozet.movementsLast7Days)), el("div", { class: "s" }, "Hareketlere git"))
+    );
+    await Promise.all([loadYalcinStock(), loadYalcinMoves()]);
+    if (can("yalcin-yonet")) await loadYalcinAdaylar();
+  } catch (error) {
+    show($("yc-msg"), error.message);
+  }
+}
+
+async function loadYalcinStock() {
+  const q = new URLSearchParams();
+  if ($("yc-q").value.trim()) q.set("q", $("yc-q").value.trim());
+  const data = await api("/panel/api/yalcin/musteri-stok?" + q);
+  const withN = data.withStock ?? (data.rows || []).length;
+  const withoutN = data.withoutStockCount ?? (data.withoutStock || []).length;
+  $("yc-count").textContent = `Stoğu olan: ${withN} müşteri` + (data.cylinders != null ? ` · ${data.cylinders} tüp` : "");
+  const head = el("tr", {}, ...["", "Müşteri", "Kod", "Şehir", "Tüp", "Dolu/Boş", "Max gün", "Gazlar"].map((h) => el("th", {}, h)));
+  const body = (data.rows || []).map((r) => {
+    const cb = can("yalcin-yonet")
+      ? el("input", { type: "checkbox", checked: ycSelected.has(r.id), onchange: (e) => { if (e.target.checked) ycSelected.add(r.id); else ycSelected.delete(r.id); } })
+      : el("span", {}, "");
+    return el("tr", { class: "click", onclick: (ev) => { if (ev.target.tagName === "INPUT") return; void openStockDialog(r.id); } },
+      el("td", {}, cb),
+      el("td", {}, el("b", {}, r.name)),
+      el("td", { class: "muted" }, r.code),
+      el("td", {}, r.city || "-"),
+      el("td", {}, String(r.count)),
+      el("td", {}, `${r.full}/${r.empty}`),
+      el("td", {}, r.maxDays == null ? "-" : String(r.maxDays)),
+      el("td", { class: "muted" }, r.gases || "-"));
+  });
+  $("yc-stok").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 8, class: "muted" }, "Stoğu olan Yalçın müşterisi yok."))])));
+
+  const empty = data.withoutStock || [];
+  $("yc-empty-count").textContent = empty.length ? `${empty.length} müşteri (tüpsüz)` : "Tüpsüz atanan yok.";
+  const eHead = el("tr", {}, ...["", "Müşteri", "Kod", "Şehir", "Telefon"].map((h) => el("th", {}, h)));
+  const eBody = empty.map((r) => {
+    const cb = can("yalcin-yonet")
+      ? el("input", { type: "checkbox", checked: ycSelected.has(r.id), onchange: (e) => { if (e.target.checked) ycSelected.add(r.id); else ycSelected.delete(r.id); } })
+      : el("span", {}, "");
+    return el("tr", { class: "click", onclick: (ev) => { if (ev.target.tagName === "INPUT") return; void openStockDialog(r.id); } },
+      el("td", {}, cb),
+      el("td", {}, el("b", {}, r.name)),
+      el("td", { class: "muted" }, r.code),
+      el("td", {}, r.city || "-"),
+      el("td", {}, r.phone || "-"));
+  });
+  $("yc-stok-empty").replaceChildren(el("thead", {}, eHead), el("tbody", {}, ...(eBody.length ? eBody : [el("tr", {}, el("td", { colspan: 5, class: "muted" }, "—"))])));
+}
+
+async function loadYalcinMoves() {
+  const q = new URLSearchParams({ take: "80" });
+  if ($("yc-hq").value.trim()) q.set("q", $("yc-hq").value.trim());
+  const data = await api("/panel/api/yalcin/hareketler?" + q);
+  const head = el("tr", {}, ...["Tarih", "Seri", "Müşteri", "Tür", "Plaka"].map((h) => el("th", {}, h)));
+  const body = (data.rows || []).map((r) => el("tr", {},
+    el("td", {}, r.date), el("td", {}, r.serial), el("td", {}, r.customer),
+    el("td", {}, r.movementType || "-"), el("td", { class: "muted" }, r.vehiclePlate || "-")));
+  $("yc-moves").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 5, class: "muted" }, "Hareket yok."))])));
+}
+
+async function loadYalcinAdaylar() {
+  renderYalcinSelected();
+  const term = ($("yc-aday-q")?.value || "").trim();
+  if (term.length === 0) {
+    $("yc-adaylar").replaceChildren(el("thead", {}, el("tr", {}, ...["", "Müşteri", "Kod", "Şehir", "Tüp"].map((h) => el("th", {}, h)))),
+      el("tbody", {}, el("tr", {}, el("td", { colspan: 5, class: "muted" }, "Aktarmak için müşteri adı veya kod yazın — sonuçlar yazdıkça gelir. Seçilenler üstte kalır."))));
+    return;
+  }
+  const q = new URLSearchParams({ take: "60", q: term });
+  const rows = await api("/panel/api/yalcin/adaylar?" + q);
+  const head = el("tr", {}, ...["", "Müşteri", "Kod", "Şehir", "Tüp"].map((h) => el("th", {}, h)));
+  const body = rows.map((c) => {
+    const cb = el("input", {
+      type: "checkbox",
+      checked: ycAdaySelected.has(c.id),
+      onchange: (e) => { ycToggleAday(c, e.target.checked); }
+    });
+    return el("tr", {
+      class: "click" + (ycAdaySelected.has(c.id) ? " selected" : ""),
+      onclick: (ev) => {
+        if (ev.target.tagName === "INPUT") return;
+        const on = !ycAdaySelected.has(c.id);
+        ycToggleAday(c, on);
+        const box = ev.currentTarget.querySelector("input[type=checkbox]");
+        if (box) box.checked = on;
+        ev.currentTarget.classList.toggle("selected", on);
+      }
+    }, el("td", {}, cb), el("td", {}, el("b", {}, c.name)), el("td", { class: "muted" }, c.code),
+      el("td", {}, c.city || "-"), el("td", {}, String(c.cylinders ?? 0)));
+  });
+  $("yc-adaylar").replaceChildren(el("thead", {}, head), el("tbody", {}, ...(body.length ? body : [el("tr", {}, el("td", { colspan: 5, class: "muted" }, `"${term}" için müşteri bulunamadı.`))])));
+}
+
+$("yc-ara")?.addEventListener("click", () => loadYalcinStock().catch((e) => show($("yc-msg"), e.message)));
+$("yc-hareket")?.addEventListener("click", () => loadYalcinMoves().catch((e) => show($("yc-msg"), e.message)));
+$("yc-aday-ara")?.addEventListener("click", () => loadYalcinAdaylar().catch((e) => show($("yc-msg"), e.message)));
+liveFilter(["yc-q"], [], () => loadYalcinStock());
+liveFilter(["yc-hq"], [], () => loadYalcinMoves());
+liveFilter(["yc-aday-q"], [], () => loadYalcinAdaylar());
+$("yc-ata")?.addEventListener("click", async () => {
+  const ids = [...ycAdaySelected.keys()];
+  if (!ids.length) { show($("yc-msg"), "Önce listeden müşteri seçin — seçilenler arama kutusunun altında görünür."); return; }
+  try {
+    const r = await api("/panel/api/yalcin/ata", { method: "POST", body: { customerIds: ids, assign: true } });
+    ycAdaySelected.clear();
+    renderYalcinSelected();
+    show($("yc-msg"), r.message, "ok");
+    $("yc-aday-q").value = "";
+    await loadYalcin();
+  } catch (e) { show($("yc-msg"), e.message); }
+});
+$("yc-cikar")?.addEventListener("click", async () => {
+  const ids = [...ycSelected];
+  if (!ids.length) { show($("yc-msg"), "Çıkarılacak Yalçın müşterisini seçin."); return; }
+  try {
+    const r = await api("/panel/api/yalcin/ata", { method: "POST", body: { customerIds: ids, assign: false } });
+    ycSelected.clear();
+    show($("yc-msg"), r.message, "ok");
+    await loadYalcin();
+  } catch (e) { show($("yc-msg"), e.message); }
+});
 
 start().then(() => { if ($("app").classList.contains("hidden")) showLogin(); });

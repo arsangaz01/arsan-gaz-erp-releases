@@ -8,9 +8,21 @@ namespace ArsanTupTakip.Api;
 // Customer picker data shared by the mobile app and the web panel.
 internal static class CustomerChoices
 {
-    public static async Task<List<object>> SearchAsync(string? query, bool includePhone, int take = 50)
+    // generalOnly: Yalçın vb. partner müşterileri gizler (genel Müşteriler sekmesi).
+    // partner: yalnız o partner anahtarı (ör. yalcin). İkisi boşsa sefer/teslim seçici gibi hepsi gelir.
+    public static async Task<List<object>> SearchAsync(string? query, bool includePhone, int take = 50, string? partner = null, bool generalOnly = false)
     {
+        string partnerKey = PartnerWorkspace.Normalize(partner);
         List<Customer> all = await new CrudService().CustomerChoicesAsync();
+        if (partnerKey.Length > 0)
+        {
+            all = all.Where(c => PartnerWorkspace.Matches(c, partnerKey)).ToList();
+        }
+        else if (generalOnly)
+        {
+            all = all.Where(c => !PartnerWorkspace.IsPartnerCustomer(c)).ToList();
+        }
+
         await using TupTakipDbContext db = new();
         Dictionary<int, int> counts = await db.Cylinders.AsNoTracking()
             .Where(y => y.IsActive && y.Status == CylinderStatus.Customer && y.CurrentCustomerId != null)

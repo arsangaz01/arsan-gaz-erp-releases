@@ -419,13 +419,13 @@ internal static class WebPanelEndpoints
             });
         }).Requires(Perm.CylinderView);
 
-        api.MapGet("/musteri-stok", async (string? q, string? gaz, bool? uzun, HttpContext context) =>
+        api.MapGet("/musteri-stok", async (string? q, string? gaz, bool? uzun, string? partner, HttpContext context) =>
         {
             DateTime today = DateTime.Today;
             int longDays = CylinderTracking.LongAtCustomerDays;
             bool phones = Perm.Has(Account(context), Perm.CustomerView);
             bool totals = Perm.Has(Account(context), Perm.CustomerStockTotals);
-            (List<CustomerStockCylinder> stock, var rows) = await StockCustomerRowsAsync(q, gaz, uzun, today, longDays);
+            (List<CustomerStockCylinder> stock, var rows) = await StockCustomerRowsAsync(q, gaz, uzun, today, longDays, partner);
             HashSet<int> shown = [.. rows.Select(x => x.Customer.Id)];
             return Results.Ok(new
             {
@@ -459,13 +459,13 @@ internal static class WebPanelEndpoints
         }).Requires(Perm.CylinderView);
 
         // Every cylinder of one gas type and size held by the customers that match the stock filter, with a per-customer breakdown.
-        api.MapGet("/musteri-stok/grup", async (string? q, string? gaz, bool? uzun, string? grupGaz, string? boyut) =>
+        api.MapGet("/musteri-stok/grup", async (string? q, string? gaz, bool? uzun, string? grupGaz, string? boyut, string? partner) =>
         {
             DateTime today = DateTime.Today;
             int longDays = CylinderTracking.LongAtCustomerDays;
             string gas = (grupGaz ?? string.Empty).Trim();
             string size = (boyut ?? string.Empty).Trim();
-            (List<CustomerStockCylinder> stock, var rows) = await StockCustomerRowsAsync(q, gaz, uzun, today, longDays);
+            (List<CustomerStockCylinder> stock, var rows) = await StockCustomerRowsAsync(q, gaz, uzun, today, longDays, partner);
             Dictionary<int, Customer> customers = rows.ToDictionary(x => x.Customer.Id, x => x.Customer);
             List<CustomerStockCylinder> group = stock
                 .Where(c => customers.ContainsKey(c.CustomerId)
@@ -818,9 +818,11 @@ internal static class WebPanelEndpoints
         LabelEndpoints.MapPanel(api);
         CustomerPortalEndpoints.MapPanel(api, auth);
         TripPlanEndpoints.MapPanel(api);
+        PartnerEndpoints.Map(api);
 
-        api.MapGet("/musteriler", async (string? q, int? take, HttpContext context) =>
-            Results.Ok(await CustomerChoices.SearchAsync(q, Perm.Has(Account(context), Perm.CustomerView), take ?? 50)))
+        // hepsi=1: sefer/teslim seçicileri (Yalçın dahil). Yoksa genel Müşteriler sekmesi (partner gizlenir).
+        api.MapGet("/musteriler", async (string? q, int? take, bool? hepsi, HttpContext context) =>
+            Results.Ok(await CustomerChoices.SearchAsync(q, Perm.Has(Account(context), Perm.CustomerView), take ?? 50, generalOnly: hepsi != true)))
             .Requires(Perm.CustomerPicker);
 
         api.MapGet("/secenekler", async () => Results.Ok(new
@@ -943,7 +945,7 @@ internal static class WebPanelEndpoints
         }).Requires(Perm.CylinderEdit, Perm.CylinderDeactivate);
     }
 
-    private static WebPanelUser Account(HttpContext context) => (WebPanelUser)context.Items["panelAccount"]!;
+    internal static WebPanelUser Account(HttpContext context) => (WebPanelUser)context.Items["panelAccount"]!;
 
     // A newly chosen fixed vehicle must be a registered active vehicle; keeping the current one is always allowed.
     private static async Task<string?> FixedPlateProblemAsync(string? requested, string? current)
@@ -1091,14 +1093,18 @@ internal static class WebPanelEndpoints
 
     // The customers listed on the stock tab for the given filter, largest stock first, with the gas filtered stock behind them.
     private static async Task<(List<CustomerStockCylinder> Stock, List<(Customer Customer, CustomerStockTotals Totals, IReadOnlyList<CustomerStockGroup> Groups)> Rows)>
-        StockCustomerRowsAsync(string? q, string? gaz, bool? uzun, DateTime today, int longDays)
+        StockCustomerRowsAsync(string? q, string? gaz, bool? uzun, DateTime today, int longDays, string? partner = null)
     {
         List<CustomerStockCylinder> stock = FilterGas(await CustomerStock.LoadAsync(), gaz);
         Dictionary<int, Customer> customers = await StockCustomersAsync(stock.Select(c => c.CustomerId));
         string term = (q ?? string.Empty).Trim();
+        string partnerKey = PartnerWorkspace.Normalize(partner);
         var rows = stock.GroupBy(c => c.CustomerId)
             .Where(g => customers.ContainsKey(g.Key))
             .Select(g => (Customer: customers[g.Key], Totals: CustomerStock.Totals(g.ToList(), today, longDays), Groups: CustomerStock.Groups(g, today, longDays)))
+            .Where(x => partnerKey.Length > 0
+                ? PartnerWorkspace.Matches(x.Customer, partnerKey)
+                : !PartnerWorkspace.IsPartnerCustomer(x.Customer))
             .Where(x => term.Length == 0 || Contains(x.Customer.CompanyName, term) || Contains(x.Customer.Code, term) || Contains(x.Customer.City, term) || Contains(x.Customer.District, term))
             .Where(x => uzun != true || x.Totals.Long > 0)
             .OrderByDescending(x => x.Totals.Count)
