@@ -65,7 +65,7 @@ müşterilerin «sahibi»dir. Yatırım / satış / fatura Arsan Gaz üzerinden 
 - **ArsanTüpTakip** (`/tuptakip`, yeni APK) — **Arsan Gaz firmasının** ("yenisi onların").
 - Ayrı DB: bir taraftaki sefer/teslim diğerini etkilemez.
 - «Yalçın» sekmesi: firmanın (TupTakip) tarafında Yalçın portföyünü ayırmak için anlamlı; ERP tamamen Yalçın’ın
-  alanıysa ERP’deki Yalçın sekmesi gereksiz olabilir — kullanıcı onayına bağlı (90016).
+  alanı olsa da kullanıcı (90017) hiçbir sekmenin kaldırılmamasını istedi; her iki panelde Yalçın kalır.
 
 #### ArsanTüpTakip — durum (12 Ekim 19:59, kullanıcı: "bu şekilde not al, sonra devam edeceğiz")
 Kararlar: ad ArsanTüpTakip; kod ve güncellemeler tamamen ayrı (ortak hiçbir şey yok); iki sistemin de en yetkili
