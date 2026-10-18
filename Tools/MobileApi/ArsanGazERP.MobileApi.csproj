@@ -72,6 +72,7 @@
     <Compile Include="..\..\Services\CylinderTracking.cs" Link="Shared\CylinderTracking.cs" />
     <Compile Include="..\..\Services\CylinderTripTracking.cs" Link="Shared\CylinderTripTracking.cs" />
     <Compile Include="..\..\Services\CylinderTripService.cs" Link="Shared\CylinderTripService.cs" />
+    <Compile Include="..\..\Services\TupTakipPullSync.cs" Link="Shared\TupTakipPullSync.cs" />
     <Compile Include="..\..\Services\VehicleTracking.cs" Link="Shared\VehicleTracking.cs" />
     <Compile Include="..\..\Services\VehicleService.cs" Link="Shared\VehicleService.cs" />
     <Compile Include="..\..\Services\CursorEscalationService.cs" Link="Shared\CursorEscalationService.cs" />

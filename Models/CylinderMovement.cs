@@ -16,4 +16,7 @@ public sealed class CylinderMovement
  public string? Description { get; set; }
  public DateTime MovementDate { get; set; } = DateTime.UtcNow;
  public string? PerformedBy { get; set; }
+ /// <summary>Id in the external system named by <see cref="LegacySource"/> (e.g. ArsanTüpTakip movement id).</summary>
+ public long? LegacyId { get; set; }
+ public string? LegacySource { get; set; }
 }

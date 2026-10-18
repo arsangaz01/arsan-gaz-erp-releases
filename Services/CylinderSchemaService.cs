@@ -232,6 +232,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS IX_TripPlanStops_PlanId_CustomerId ON TripPlan
             HashSet<string> movementColumns = await ColumnsAsync(connection, "CylinderMovements", cancellationToken);
             await AddColumnAsync(connection, movementColumns, "CylinderMovements", "VehiclePlate", "TEXT NULL", cancellationToken);
             await AddColumnAsync(connection, movementColumns, "CylinderMovements", "IsFull", "INTEGER NULL", cancellationToken);
+            await AddColumnAsync(connection, movementColumns, "CylinderMovements", "LegacyId", "INTEGER NULL", cancellationToken);
+            await AddColumnAsync(connection, movementColumns, "CylinderMovements", "LegacySource", "TEXT NULL", cancellationToken);
+
+            HashSet<string> customerColumns = await ColumnsAsync(connection, "Customers", cancellationToken);
+            await AddColumnAsync(connection, customerColumns, "Customers", "PartnerKey", "TEXT NULL", cancellationToken);
+            await AddColumnAsync(connection, customerColumns, "Customers", "LegacyId", "INTEGER NULL", cancellationToken);
+            await AddColumnAsync(connection, customerColumns, "Customers", "LegacySource", "TEXT NULL", cancellationToken);
+            await AddColumnAsync(connection, cylinderColumns, "Cylinders", "LegacyId", "INTEGER NULL", cancellationToken);
+            await AddColumnAsync(connection, cylinderColumns, "Cylinders", "LegacySource", "TEXT NULL", cancellationToken);
 
             await using SqliteCommand command = connection.CreateCommand();
             command.CommandText = AuditTableSql;

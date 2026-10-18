@@ -20,6 +20,9 @@ public sealed class Cylinder
  // Set when the cylinder belongs to a customer (müşteri malı) instead of the company.
  public int? OwnerCustomerId { get; set; }
  public Customer? OwnerCustomer { get; set; }
+ /// <summary>Id in the external system named by <see cref="LegacySource"/> (e.g. ArsanTüpTakip cylinder id).</summary>
+ public int? LegacyId { get; set; }
+ public string? LegacySource { get; set; }
  public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
  public ICollection<CylinderMovement> Movements { get; set; } = new List<CylinderMovement>();
 }

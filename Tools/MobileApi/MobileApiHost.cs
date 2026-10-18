@@ -40,6 +40,7 @@ internal static class MobileApiHost
             }
 
             builder.Services.AddHostedService<CursorRelayNotifier>();
+            builder.Services.AddHostedService<TupTakipSyncHostedService>();
         }
 
         WebApplication app = builder.Build();

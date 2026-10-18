@@ -17,6 +17,9 @@ public sealed class Customer
  public bool IsActive { get; set; } = true;
  /// <summary>Partner workspace key (e.g. "yalcin"). Null = genel müşteri listelerinde görünür.</summary>
  public string? PartnerKey { get; set; }
+ /// <summary>Id in the external system named by <see cref="LegacySource"/> (e.g. ArsanTüpTakip customer id).</summary>
+ public int? LegacyId { get; set; }
+ public string? LegacySource { get; set; }
  public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
  public DateTime? UpdatedAt { get; set; }
  public ICollection<Cylinder> Cylinders { get; set; } = new List<Cylinder>();

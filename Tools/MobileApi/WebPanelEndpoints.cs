@@ -259,6 +259,33 @@ internal static class WebPanelEndpoints
                 : Results.BadRequest(new { error });
         }).Requires(PanelPermissions.ManageUsers);
 
+        api.MapPost("/yonetim/tuptakip-senkron", async (HttpContext context, CancellationToken cancellationToken) =>
+        {
+            WebPanelUser user = Account(context);
+            TupTakipSyncRunResult result = await TupTakipSyncHostedService.RunNowAsync(cancellationToken);
+            WebPanelAudit.Write(user.UserName, "TupTakip senkron", result.SkipReason ?? "Tamamlandı", result.SummaryLine(), WebPanelAuth.ClientIp(context));
+            return Results.Ok(new
+            {
+                ok = result.Ran && result.SkipReason is null,
+                skipped = result.SkipReason,
+                summary = result.SummaryLine(),
+                counts = new
+                {
+                    customersInserted = result.CustomersInserted,
+                    customersUpdated = result.CustomersUpdated,
+                    customersSkipped = result.CustomersSkipped,
+                    cylindersInserted = result.CylindersInserted,
+                    cylindersUpdated = result.CylindersUpdated,
+                    cylindersSkipped = result.CylindersSkipped,
+                    movementsInserted = result.MovementsInserted,
+                    movementsUpdated = result.MovementsUpdated,
+                    sourceCustomers = result.SourceCustomerCount
+                },
+                startedUtc = result.StartedUtc,
+                finishedUtc = result.FinishedUtc
+            });
+        }).Requires(PanelPermissions.ManageUsers);
+
         api.MapGet("/yonetim/denetim", () => Results.Ok(WebPanelAudit.Latest(200).Select(e => new
         {
             At = LocalText(e.At),

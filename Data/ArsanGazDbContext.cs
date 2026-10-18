@@ -52,6 +52,9 @@ public sealed class ArsanGazDbContext : DbContext
  {
   b.Entity<Customer>().HasIndex(x=>x.Code).IsUnique();
   b.Entity<Customer>().HasIndex(x=>x.PartnerKey);
+  b.Entity<Customer>().HasIndex(x=>new { x.LegacySource, x.LegacyId });
+  b.Entity<Cylinder>().HasIndex(x=>new { x.LegacySource, x.LegacyId });
+  b.Entity<CylinderMovement>().HasIndex(x=>new { x.LegacySource, x.LegacyId });
   b.Entity<Product>().HasIndex(x=>x.Code).IsUnique();
   b.Entity<Product>().Property(x=>x.SalesPrice).HasPrecision(18,4);
   b.Entity<Cylinder>().HasIndex(x=>x.SerialNumber).IsUnique();

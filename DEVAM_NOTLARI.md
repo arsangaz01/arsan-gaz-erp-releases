@@ -243,6 +243,14 @@ Kullanıcı: "Evet ve devam et" — bekleyen iş uygulandı.
 - Durum: **yerelde hazır**, commit/deploy henüz yok (yayın onayı bekleniyor).
 - Not: `%LOCALAPPDATA%\ArsanGazERP\AgentWatcherData\Notes\tuptakip-etiket-sahip-ust-yazi.md`
 
+## TupTakip → ERP tek yönlü senkron (Yalçın, faz 1 — 18 Ekim 2026)
+- **Yön:** Yalnızca ArsanTüpTakip PostgreSQL okunur; ERP veritabanına upsert. TupTakip’e yazma yok.
+- **Kapsam:** `partnerkey=yalcin` müşteriler; `currentcustomerid` / `ownercustomerid` ile bağlı tüpler; son **90 gün** hareket (tur başına en fazla 50.000 satır). Sefer senkronu yok (faz 1.5).
+- **Eşleme:** Müşteri → vergi no, sonra normalize ünvan; tüp → seri/barkod; TupTakip id’leri ERP’de `LegacySource=tuptakip` + `LegacyId`.
+- **Tetik:** MobileApi arka plan **5 dk**; Yönetici `POST /panel/api/yonetim/tuptakip-senkron`.
+- **Ortam:** `ARSANGAZ_TUPTAKIP_SYNC_CONNECTION` (salt okunur Postgres, `tuptakip` şeması). Tanımsızsa senkron atlanır (log).
+- **Sürüm:** MobileApi ApiVersion **1.15.11**.
+
 ## Birinci uygulamaya (ERP + MobileApi + MobileApp) TupTakip özellik aktarımı (16 Ekim 2026)
 - Yapıldı (kodda; yayınlanmadı): tüp sahipliği (`Cylinder.OwnerCustomerId`, SQLite + PostgreSQL şema), `CylinderTrip.ClosedBy`,
   `ClosedTripsAsync`, `/api/sefer/gecmis` + `/api/sefer/{id}/detay` (Yönetici/Operatör hepsini, diğerleri kendi kapattıklarını görür),
