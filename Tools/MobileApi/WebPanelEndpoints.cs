@@ -126,6 +126,7 @@ internal static class WebPanelEndpoints
                 role = user.Role,
                 permissions = PanelRoles.Effective(user),
                 mustChangePassword = user.MustChangePassword,
+                features = Features.Catalog.Where(f => Features.IsOn(f.Key)).Select(f => f.Key).ToArray(),
                 sessionMinutes = (int)WebPanelAuth.SessionLifetime.TotalMinutes,
                 roles = PanelRoles.All.Select(r => new { name = r, description = PanelRoles.Description(r) })
             });
@@ -204,7 +205,7 @@ internal static class WebPanelEndpoints
             int self = Account(context).Id;
             DateTime now = DateTime.UtcNow;
             IReadOnlyList<PairedDevice> phones = devices.All();
-            return Results.Ok(WebPanelUserStore.All()
+            return Results.Ok(WebPanelUserStore.All().Where(u => u.Role != PanelRoles.Customer)
                 .OrderByDescending(u => u.IsActive)
                 .ThenBy(u => Array.IndexOf(PanelRoles.All, u.Role))
                 .ThenBy(u => u.UserName, StringComparer.OrdinalIgnoreCase)
@@ -804,6 +805,7 @@ internal static class WebPanelEndpoints
         LabelEndpoints.MapPanel(api);
         TripPlanEndpoints.MapPanel(api);
         CustomerRequestEndpoints.MapPanel(api);
+        CustomerPortalEndpoints.MapPanel(api, auth);
         PartnerEndpoints.Map(api);
 
         api.MapGet("/secenekler", async () => Results.Ok(new
@@ -1126,7 +1128,9 @@ internal static class WebPanelEndpoints
         return text.Contains(';') || text.Contains('"') ? $"\"{text.Replace("\"", "\"\"")}\"" : text;
     }
 
-    private static IResult Asset(string name, string contentType)
+    private static IResult Asset(string name, string contentType) => Asset(name, contentType, null);
+
+    internal static IResult Asset(string name, string contentType, HttpContext? context)
     {
         using Stream? stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("WebPanel." + name);
         if (stream is null)
@@ -1135,6 +1139,12 @@ internal static class WebPanelEndpoints
         }
 
         using StreamReader reader = new(stream, Encoding.UTF8);
-        return Results.Text(reader.ReadToEnd(), contentType);
+        string text = reader.ReadToEnd();
+        if (context is not null && name.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text.Replace("{{BASE}}", System.Net.WebUtility.HtmlEncode(context.Request.PathBase.Value ?? string.Empty), StringComparison.Ordinal);
+        }
+
+        return Results.Text(text, contentType);
     }
 }

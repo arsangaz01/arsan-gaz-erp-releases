@@ -115,6 +115,7 @@ internal static class PanelRoles
     internal const string Operator = "Operatör";
     internal const string Driver = "Saha";
     internal const string Viewer = "İzleyici";
+    internal const string Customer = "Müşteri";
     internal static readonly string[] All = [Admin, Operator, Driver, Viewer];
 
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
@@ -176,6 +177,7 @@ internal static class PanelRoles
             set.ExceptWith(PanelPermissions.OperatorOnly.Where(k => !roleDefaults.Contains(k)));
         }
 
+        set.ExceptWith(Features.DisabledPermissions());
         return PanelPermissions.All.Where(set.Contains).ToArray();
     }
 

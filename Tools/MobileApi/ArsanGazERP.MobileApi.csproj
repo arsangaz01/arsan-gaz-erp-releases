@@ -94,6 +94,8 @@
     <EmbeddedResource Include="WebPanel\panel.html" LogicalName="WebPanel.panel.html" />
     <EmbeddedResource Include="WebPanel\panel.js" LogicalName="WebPanel.panel.js" />
     <EmbeddedResource Include="WebPanel\qrcode.min.js" LogicalName="WebPanel.qrcode.min.js" />
+    <EmbeddedResource Include="WebPanel\portal.html" LogicalName="WebPanel.portal.html" />
+    <EmbeddedResource Include="WebPanel\portal.js" LogicalName="WebPanel.portal.js" />
   </ItemGroup>
 
 </Project>

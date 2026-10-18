@@ -7,8 +7,8 @@ namespace ArsanGazERP.MobileApi;
 internal sealed record CustomerRequestClose(string? Durum, string? Not);
 internal sealed record CustomerRequestStaffCreate(int MusteriId, string? Tur, int? Adet, string? Not);
 
-// Panel Müşteri Talepleri tab. There is no customer portal in this edition, so the staff also record the requests that
-// customers phone in; a delivery or pickup closes the customer's open requests of that kind.
+// Panel Müşteri Talepleri tab. Staff also record phone requests; customers may use /musteri when the portal feature is on.
+// A delivery or pickup on a trip closes the customer's open requests of that kind.
 internal static class CustomerRequestEndpoints
 {
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");

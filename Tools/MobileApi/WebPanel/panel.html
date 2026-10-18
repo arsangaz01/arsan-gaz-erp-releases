@@ -70,6 +70,10 @@ tr.selected td { background:var(--sea-light, #e0f2fe); }
 .msg.err { background:#f3f4f6; color:var(--bad); border:1px solid #cbd5e1; }
 .msg.ok { background:#eff6ff; color:var(--ok); border:1px solid #bfdbfe; }
 .msg.warn { background:#f9fafb; color:var(--warn); border:1px solid #d1d5db; }
+.feature-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px; margin-top:10px; }
+.feature-list > div { border:1px solid var(--line); border-radius:12px; padding:12px; font-size:13px; color:var(--muted); }
+.feature-list > div.on { border-color:#93c5fd; background:#f8fbff; }
+.feature-list b { color:var(--text); font-size:14px; }
 dialog { border:none; border-radius:16px; padding:0; width:min(900px,96vw); max-height:92vh; }
 dialog::backdrop { background:rgba(0,0,0,.4); }
 .dlg-head { display:flex; align-items:center; padding:14px 18px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; }
@@ -539,7 +543,7 @@ tr.alarm-row td { background:#fef2f2; }
           <label>Not<input id="rq-not" maxlength="300" style="width:min(240px,100%)"></label>
           <button class="primary small" id="rq-add" type="button">Talep kaydet</button>
         </div>
-        <div class="hint">Müşterinin telefonla bildirdiği boş tüp alımı veya dolu tüp siparişini aşağıdan kaydedin. Seferde o müşteriye teslim okutulunca açık siparişleri kendiliğinden "Tamamlandı" olur; boş alım taleplerini satırdaki düğmeyle kapatın. Elle kapatmak veya iptal etmek için satırdaki düğmeleri kullanın.</div>
+        <div class="hint">Müşteriler portaldan (<strong>https://arsantuptakip.com/musteri</strong>) veya telefonla boş tüp alımı / dolu tüp siparişi iletebilir; portal kapalıyken yalnızca telefon ve aşağıdaki manuel kayıt kullanılır. Seferde o müşteriye teslim okutulunca açık siparişleri, boş alım okutulunca açık alım talepleri kendiliğinden "Tamamlandı" olur. Elle kapatmak için satırdaki düğmeleri kullanın. Portal ve talep sekmesi Yönetim &gt; Özellikler'den "Müşteri portalı" açıkken etkindir.</div>
       </div>
     </section>
 
@@ -685,6 +689,20 @@ tr.alarm-row td { background:#fef2f2; }
       <div class="card" data-perm="kullanici-yonetimi">
         <h2>Roller (varsayılan yetki şablonları)</h2>
         <div class="roles-grid" id="roles"></div>
+      </div>
+      <div class="card" data-admin-only>
+        <h2>Özellikler (isteğe bağlı)</h2>
+        <div class="hint" style="margin-top:0">Varsayılan kapalıdır. Kapalıyken ilgili ekranlar gizlenir ve sunucu bu işlemleri kabul etmez. Açınca yetkisi olan kullanıcılar kullanabilir. Kapatmak kayıtlı verileri silmez.</div>
+        <div id="features" class="feature-list"></div>
+      </div>
+      <div class="card" data-admin-only>
+        <div class="toolbar">
+          <h2>Müşteri hesapları (portal)</h2>
+          <button class="primary" id="ca-new" type="button">+ Yeni müşteri hesabı</button>
+        </div>
+        <div id="ca-off" class="msg warn hidden">"Müşteri portalı" özelliği kapalı: müşteri hesapları şu an giriş yapamaz. Yukarıdaki Özellikler bölümünden açabilirsiniz.</div>
+        <div class="table-wrap"><table id="customer-accounts"></table></div>
+        <div class="hint">Müşteri hesabı yalnızca bağlı müşterinin tüplerini görür ve talep gönderir; panele veya mobil uygulamaya giremez. Giriş: <strong>https://arsantuptakip.com/musteri</strong>. Kullanıcı adı ve şifreyi müşteriye siz iletirsiniz.</div>
       </div>
       <div class="card" data-perm="cihaz-yonetimi">
         <div class="toolbar">
@@ -950,6 +968,27 @@ tr.alarm-row td { background:#fef2f2; }
     </div>
     <div id="pm-msg" class="msg hidden"></div>
     <div class="hint">Sarı satırlar rolün varsayılanından farklıdır. Değişiklik kullanıcının bir sonraki işleminden itibaren web panelde ve mobil uygulamada geçerli olur. Rol değiştirilirse özel seçimler sıfırlanır.</div>
+  </div>
+</dialog>
+
+<dialog id="ca-dialog" class="narrow">
+  <div class="dlg-head"><h3 id="ca-title">Yeni müşteri hesabı</h3><button class="secondary" id="ca-close" type="button">Kapat</button></div>
+  <div class="dlg-body">
+    <form id="ca-form" style="display:flex;flex-direction:column;gap:10px">
+      <div class="field" id="ca-customer-wrap">Müşteri
+        <input id="ca-musteri-q" placeholder="Müşteri ara" autocomplete="off">
+        <select id="ca-musteri" required></select>
+      </div>
+      <label class="field" id="ca-name-wrap">Kullanıcı adı (giriş adı)<input id="ca-name" required minlength="3" maxlength="40" autocomplete="off" placeholder="ör. firma.adi"></label>
+      <label class="field">Görünen ad<input id="ca-display" maxlength="80" autocomplete="off" placeholder="ör. yetkili kişinin adı"></label>
+      <div class="field" id="ca-pass-wrap">İlk şifre (en az 8 karakter, harf ve rakam)
+        <div class="pw-row"><input id="ca-pass" type="text" minlength="8" maxlength="200" autocomplete="new-password"><button class="secondary small" id="ca-gen" type="button">Şifre üret</button></div>
+      </div>
+      <label class="check" id="ca-must-wrap"><input type="checkbox" id="ca-must" checked> İlk girişte kendi şifresini belirlesin</label>
+      <label class="check hidden" id="ca-active-wrap"><input type="checkbox" id="ca-active"> Hesap aktif</label>
+      <button class="primary" type="submit" id="ca-save">Kaydet</button>
+      <div id="ca-msg" class="msg hidden"></div>
+    </form>
   </div>
 </dialog>
 

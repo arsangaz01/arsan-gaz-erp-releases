@@ -229,7 +229,16 @@ internal sealed class DeviceAuthMiddleware(RequestDelegate next, DeviceStore dev
     {
         if (metadata?.GetMetadata<PanelPermission>() is { } required)
         {
-            return PanelRoles.Has(user, required.Name) || (required.OrAny ?? []).Any(key => PanelRoles.Has(user, key)) ? null : MissingPermission(required.Name);
+            string[] keys = [required.Name, .. required.OrAny ?? []];
+            if (keys.Any(key => PanelRoles.Has(user, key)))
+            {
+                return null;
+            }
+
+            FeatureInfo? feature = keys.Select(Features.OwnerOf).FirstOrDefault(f => f is not null && !Features.IsOn(f.Key));
+            return feature is not null
+                ? $"\"{feature.Label}\" özelliği şu an kapalı. Yönetici web panelde Yönetim > Özellikler bölümünden açabilir."
+                : MissingPermission(required.Name);
         }
 
         return metadata?.GetMetadata<SignedInOnly>() is not null ? null : "Bu işlem tanımlı bir yetkiye bağlı değil; erişim kapalı.";

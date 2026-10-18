@@ -12,6 +12,9 @@ internal sealed class WebPanelUser
     public string UserName { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public string Role { get; set; } = PanelRoles.Viewer;
+
+    // Müşteri portalı hesapları: yalnızca bu müşterinin verisini görür.
+    public int? CustomerId { get; set; }
     public string Salt { get; set; } = string.Empty;
     public string Hash { get; set; } = string.Empty;
     public int Iterations { get; set; }

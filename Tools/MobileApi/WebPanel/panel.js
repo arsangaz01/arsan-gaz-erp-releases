@@ -85,6 +85,7 @@ async function api(path, options = {}) {
 // Hides what the signed-in role may not do; the server enforces the same rules.
 function applyPermissions() {
   for (const node of document.querySelectorAll("[data-perm]")) node.classList.toggle("hidden", !can(node.dataset.perm));
+  for (const node of document.querySelectorAll("[data-admin-only]")) node.classList.toggle("hidden", !me || me.role !== "Yönetici");
 }
 
 function roleBadge(role) { return el("span", { class: "role role-" + role }, role); }
@@ -1589,12 +1590,131 @@ async function loadAdmin() {
       [users, catalog] = await Promise.all([api("/panel/api/yonetim/kullanicilar"), api("/panel/api/yonetim/yetkiler")]);
       renderUsers();
     }
+    if (me.role === "Yönetici") {
+      await loadFeatures();
+      await loadCustomerAccounts();
+    }
     if (can("cihaz-yonetimi")) await loadDevices();
     if (can("denetim-kaydi")) await loadAudit();
   } catch (error) {
     show($("admin-msg"), error.message);
   }
 }
+
+async function loadFeatures() {
+  const rows = await api("/panel/api/yonetim/ozellikler");
+  $("features").replaceChildren(...rows.map((f) => {
+    const box = el("input", { type: "checkbox" });
+    box.checked = f.on;
+    box.addEventListener("change", () => switchFeature(f, box));
+    return el("div", { class: f.on ? "on" : "" },
+      el("label", { class: "check" }, box, el("b", {}, f.label), el("span", { class: "muted" }, f.on ? "açık" : "kapalı")),
+      el("div", { style: "margin-top:6px" }, f.description),
+      el("div", { class: "muted", style: "margin-top:4px" }, "İlgili yetkiler: " + f.permissions.join(", ")));
+  }));
+}
+
+async function switchFeature(f, box) {
+  const on = box.checked;
+  const question = on
+    ? `"${f.label}" açılsın mı? Yetkisi olan kullanıcılar ilgili ekranları görmeye başlar.`
+    : `"${f.label}" kapatılsın mı? İlgili ekranlar gizlenir ve sunucu bu işlemleri kabul etmez. Kayıtlı veriler silinmez; tekrar açınca geri gelir.`;
+  if (!window.confirm(question)) { box.checked = !on; return; }
+  box.disabled = true;
+  try {
+    const result = await api("/panel/api/yonetim/ozellik", { method: "POST", body: { key: f.key, on } });
+    me = await api("/panel/api/ben");
+    applyPermissions();
+    await loadFeatures();
+    await loadCustomerAccounts();
+    show($("admin-msg"), result.message, "ok");
+  } catch (error) {
+    box.checked = !on;
+    show($("admin-msg"), error.message);
+  } finally {
+    box.disabled = false;
+  }
+}
+
+let customerAccounts = [];
+let editingAccount = null;
+const accountCustomer = customerPicker("ca-musteri-q", "ca-musteri", null);
+
+async function loadCustomerAccounts() {
+  const data = await api("/panel/api/yonetim/musteri-hesaplari");
+  customerAccounts = data.accounts;
+  $("ca-off").classList.toggle("hidden", data.portalOn);
+  const head = el("tr", {}, ...["Müşteri", "Hesap", "Durum", "Son giriş", "Oluşturan", ""].map((h) => el("th", {}, h)));
+  const body = customerAccounts.map((a) => el("tr", { class: a.isActive ? "" : "off" },
+    el("td", {}, el("b", {}, a.customerName)),
+    el("td", {}, a.userName, a.displayName && a.displayName !== a.userName ? el("div", { class: "muted" }, a.displayName) : null),
+    el("td", {}, el("span", { class: "dot" + (a.isActive ? " on" : "") }), a.isActive ? "Aktif" : "Pasif",
+      a.mustChangePassword ? el("div", { class: "warn-text muted" }, "Şifre değiştirmesi bekleniyor") : null),
+    el("td", {}, a.lastLogin || "Hiç giriş yapmadı"),
+    el("td", {}, a.createdBy || "-", el("div", { class: "muted" }, a.created)),
+    el("td", {},
+      el("button", { class: "link", type: "button", onclick: () => openAccountDialog(a) }, "Düzenle"),
+      el("button", { class: "link", type: "button", onclick: () => openResetDialog({ ...a, isSelf: false }) }, "Şifre sıfırla"),
+      el("button", { class: a.isActive ? "danger" : "link", type: "button", onclick: () => toggleAccount(a) }, a.isActive ? "Pasife al" : "Aktif et"),
+      el("button", { class: "link delete-link", type: "button", onclick: () => openDeleteDialog({ ...a, role: "Müşteri hesabı", isSelf: false }) }, "Sil"))));
+  $("customer-accounts").replaceChildren(el("thead", {}, head), el("tbody", {},
+    ...(body.length ? body : [el("tr", {}, el("td", { colspan: 6, class: "muted" }, "Müşteri hesabı yok."))])));
+}
+
+function openAccountDialog(a) {
+  editingAccount = a;
+  $("ca-form").reset();
+  hide($("ca-msg"));
+  $("ca-title").textContent = a ? `Müşteri hesabı: ${a.userName}` : "Yeni müşteri hesabı";
+  $("ca-customer-wrap").classList.toggle("hidden", !!a);
+  $("ca-musteri").required = !a;
+  $("ca-name-wrap").classList.toggle("hidden", !!a);
+  $("ca-name").required = !a;
+  $("ca-pass-wrap").classList.toggle("hidden", !!a);
+  $("ca-pass").required = !a;
+  $("ca-must-wrap").classList.toggle("hidden", !!a);
+  $("ca-active-wrap").classList.toggle("hidden", !a);
+  $("ca-active").checked = a ? a.isActive : true;
+  $("ca-display").value = a ? a.displayName : "";
+  if (!a) { accountCustomer.reset(); accountCustomer.search(); }
+  $("ca-dialog").showModal();
+  (a ? $("ca-display") : $("ca-musteri-q")).focus();
+}
+
+async function toggleAccount(a) {
+  const activate = !a.isActive;
+  if (!activate && !window.confirm(`${a.userName} (${a.customerName}) pasife alınsın mı? Portala giriş yapamaz (silinmez, tekrar aktif edilebilir).`)) return;
+  try {
+    const result = await api(`/panel/api/yonetim/musteri-hesabi/${a.id}`, { method: "POST", body: { adSoyad: a.displayName, aktif: activate } });
+    await loadCustomerAccounts();
+    show($("admin-msg"), result.message, "ok");
+  } catch (error) {
+    show($("admin-msg"), error.message);
+  }
+}
+
+$("ca-new").addEventListener("click", () => openAccountDialog(null));
+$("ca-close").addEventListener("click", () => $("ca-dialog").close());
+$("ca-gen").addEventListener("click", () => { $("ca-pass").value = generatePassword(); });
+$("ca-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("ca-save").disabled = true;
+  try {
+    const result = editingAccount
+      ? await api(`/panel/api/yonetim/musteri-hesabi/${editingAccount.id}`, { method: "POST", body: { adSoyad: $("ca-display").value.trim(), aktif: $("ca-active").checked } })
+      : await api("/panel/api/yonetim/musteri-hesabi", {
+        method: "POST",
+        body: { kullaniciAdi: $("ca-name").value.trim(), adSoyad: $("ca-display").value.trim(), musteriId: Number($("ca-musteri").value) || 0, sifre: $("ca-pass").value, sifreDegistirsin: $("ca-must").checked }
+      });
+    $("ca-dialog").close();
+    await loadCustomerAccounts();
+    show($("admin-msg"), result.message + (editingAccount ? "" : " Giriş bilgilerini müşteriye güvenli bir yoldan iletin."), "ok");
+  } catch (error) {
+    show($("ca-msg"), error.message);
+  } finally {
+    $("ca-save").disabled = false;
+  }
+});
 
 function permissionSummary(u) {
   if (u.role === "Yönetici") return el("div", { class: "muted" }, "Tüm yetkiler");

@@ -53,6 +53,7 @@ internal static class MobileApiHost
         VehicleEndpoints.Map(app);
         MobileCampaignEndpoints.Map(app);
         WebPanelEndpoints.Map(app);
+        CustomerPortalEndpoints.Map(app);
         return app;
     }
 }
