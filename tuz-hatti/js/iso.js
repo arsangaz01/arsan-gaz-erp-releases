@@ -40,26 +40,27 @@ function shade(hex, amt) {
   return `rgb(${r},${g},${b})`;
 }
 
+/* Kamera modeli: sapma 0, eğim 37.5°. Zemin yalnızca dikeyde sin(eğim) kadar sıkışır,
+   yükseklik cos(eğim) ile görünür. Harita döndürülmez; fotoğraf ve model aynı bakışta kalır. */
+const CAMERA_PITCH = (37.5 * Math.PI) / 180;
+export const GROUND_A = 1;
+export const GROUND_B = Math.sin(CAMERA_PITCH);
+const RISE = Math.cos(CAMERA_PITCH);
+
 function project(x, y, z, yaw) {
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
   const wx = x * c - y * s;
   const wy = x * s + y * c;
-  return [(wx - wy) * GROUND_A, (wx + wy) * GROUND_B - z * 1.18];
+  return [wx * GROUND_A, wy * GROUND_B - z * RISE];
 }
 
-export const GROUND_A = 1.04;
-export const GROUND_B = 0.82;
-
 export function groundPoint(x, y) {
-  return { x: (x - y) * GROUND_A, y: (x + y) * GROUND_B };
+  return { x: x * GROUND_A, y: y * GROUND_B };
 }
 
 export function worldPoint(px, py) {
-  return {
-    x: (px / GROUND_A + py / GROUND_B) / 2,
-    y: (py / GROUND_B - px / GROUND_A) / 2,
-  };
+  return { x: px / GROUND_A, y: py / GROUND_B };
 }
 
 export function groundSpan(mapW, mapH) {
@@ -79,7 +80,7 @@ export function groundSpan(mapW, mapH) {
 
 export function applyGround(ctx, view) {
   const z = view.zoom;
-  ctx.setTransform(GROUND_A * z, GROUND_B * z, -GROUND_A * z, GROUND_B * z, -view.camX * z, -view.camY * z);
+  ctx.setTransform(GROUND_A * z, 0, 0, GROUND_B * z, -view.camX * z, -view.camY * z);
 }
 
 export function screenPoint(view, x, y) {
@@ -93,9 +94,8 @@ export function screenPoint(view, x, y) {
 function depthOf(x, y, z, yaw) {
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
-  const wx = x * c - y * s;
   const wy = x * s + y * c;
-  return wx + wy + z * 0.65;
+  return wy + z * 0.65;
 }
 
 function lit(nx, ny, nz, spin, yaw) {
@@ -107,8 +107,8 @@ function lit(nx, ny, nz, spin, yaw) {
   const s2 = Math.sin(yaw);
   const rx = sx * c2 - sy * s2;
   const ry = sx * s2 + sy * c2;
-  const face = -(rx + ry) * 0.82 + nz * 0.7;
-  const light = -rx * 0.35 - ry * 0.55 + nz * 0.85;
+  const face = -ry * 0.82 + nz * 0.7;
+  const light = -rx * 0.45 - ry * 0.4 + nz * 0.85;
   return { face, light };
 }
 

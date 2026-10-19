@@ -465,6 +465,9 @@ function updateUnit(state, e, def, dt, events) {
   if (!plan || plan.kind === "guard") {
     const home = plan?.kind === "guard" ? plan : { x: e.x, y: e.y };
     if (!e.plan) e.plan = { kind: "guard", x: e.x, y: e.y };
+    e.vel = 0;
+    e.reverse = false;
+    if ((e.drive || 0) > 0) e.drive = Math.max(0, e.drive - dt * 3);
     if ((def.damage || 0) > 0) {
       const foe = nearestEnemy(state, e, (def.range || 0) + 28);
       if (foe) e.plan = { kind: "attack", targetId: foe.id, leash: 200, homeX: home.x, homeY: home.y };
@@ -755,6 +758,8 @@ function moveToward(state, e, tx, ty, step, stopDist, ignoreId, dt) {
   if (dist <= stopDist + 1.25) {
     face(e, tx, ty, dt, 4);
     e.drive = Math.max(0, (e.drive || 0) - dt * 3);
+    e.vel = 0;
+    e.reverse = false;
     return true;
   }
   let vx = dx / dist;
@@ -781,42 +786,132 @@ function moveToward(state, e, tx, ty, step, stopDist, ignoreId, dt) {
       vy *= 0.28;
     }
   }
-  let aim = Math.atan2(vy, vx);
-  let gap = aim - e.angle;
-  while (gap > Math.PI) gap -= Math.PI * 2;
-  while (gap < -Math.PI) gap += Math.PI * 2;
-  const gapAbs = Math.abs(gap);
-  let align = 1;
-  if (!agile) {
-    if (gapAbs > 0.7) align = 0.04;
-    else if (gapAbs > 0.35) align = 0.22 * Math.max(0, Math.cos(gap));
-    else align = Math.max(0.4, Math.cos(gap));
+  if (agile) {
+    e.drive = 1;
+    e.vel = step / dt;
+    face(e, e.x + vx * 48, e.y + vy * 48, dt, 9);
+    const travel = Math.min(step, dist - stopDist);
+    e.x += vx * travel;
+    e.y += vy * travel;
+    e.x = clamp(e.x, e.radius, state.mapW - e.radius);
+    e.y = clamp(e.y, e.radius, state.mapH - e.radius);
+    return Math.hypot(tx - e.x, ty - e.y) <= stopDist + 1.25;
   }
-  if (agile) e.drive = 1;
-  else {
-    const goal = gapAbs < 0.35 ? 1 : 0.05;
-    e.drive = (e.drive ?? 0) + (goal - (e.drive ?? 0)) * Math.min(1, dt * (goal > 0.5 ? 3.2 : 6));
-  }
-  const travel = Math.min(step * align * (agile ? 1 : 0.15 + 0.85 * (e.drive || 0)), dist - stopDist);
-  const turn = agile ? 9 : def.worker ? 6.2 : def.sprite === "infantry" ? 4.2 : 3.4;
-  face(e, e.x + vx * 48, e.y + vy * 48, dt, turn);
-  if (travel > 0) {
-    if (agile) {
-      e.x += vx * travel;
-      e.y += vy * travel;
-    } else {
-      const fx = Math.cos(e.angle);
-      const fy = Math.sin(e.angle);
-      const forward = fx * vx + fy * vy;
-      if (forward > 0.25) {
-        e.x += fx * travel * forward;
-        e.y += fy * travel * forward;
-      }
-    }
-  }
+  locomote(e, def, vx, vy, dist - stopDist, step / dt, dt);
   e.x = clamp(e.x, e.radius, state.mapW - e.radius);
   e.y = clamp(e.y, e.radius, state.mapH - e.radius);
-  return Math.hypot(tx - e.x, ty - e.y) <= stopDist + 1.25;
+  const arrived = Math.hypot(tx - e.x, ty - e.y) <= stopDist + 1.25;
+  if (arrived) {
+    e.vel = 0;
+    e.reverse = false;
+  }
+  return arrived;
+}
+
+/* Kara hareketi: palet, tekerlek ve ayak için ayrı davranış.
+   Dönüş açısı büyüdükçe hedef hız düşer, fren mesafesi hızın karesiyle büyür,
+   hız ancak ivme sınırıyla değişir ve yer değiştirme yalnızca burun doğrultusundadır. */
+function locoKind(def) {
+  if (def.naval) return "ship";
+  if (def.worker) return "wheels";
+  if (def.sprite === "infantry") return "legs";
+  return "treads";
+}
+
+const LOCO = {
+  treads: { turn: 3.2, accel: 1.7, brake: 2.6, pivot: true },
+  wheels: { turn: 3.6, accel: 2.2, brake: 3.2, pivot: false },
+  legs: { turn: 5.5, accel: 4.5, brake: 6, pivot: true, minSpeed: 0.3 },
+  ship: { turn: 1.4, accel: 0.55, brake: 0.8, pivot: false },
+};
+
+function locomote(e, def, vx, vy, remaining, maxSpeed, dt) {
+  // Sıfır süreli kare (ilk kare, duraklatma) hız sınırını sıfırlar; bölme yapmadan çık.
+  if (!(dt > 0) || !(maxSpeed > 0)) return;
+  if (!Number.isFinite(e.angle)) e.angle = Math.atan2(vy, vx);
+  const kind = locoKind(def);
+  const spec = LOCO[kind];
+  const accel = maxSpeed * spec.accel;
+  const brake = maxSpeed * spec.brake;
+  let vel = e.vel || 0;
+
+  const aim = Math.atan2(vy, vx);
+  let gap = angleGap(aim, e.angle);
+  const gapAbs = Math.abs(gap);
+
+  if (kind === "wheels") {
+    // Tekerlekli araç durunca dönemez. Hedef arkadaysa geri geri çıkar, sonra ileri alır.
+    const turnSpeed = maxSpeed * 0.3;
+    if (!e.reverse && vel < turnSpeed * 0.2 && gapAbs > Math.PI * 0.55 && remaining > e.radius * 3) {
+      e.reverse = true;
+      e.reversed = 0;
+    }
+    if (e.reverse && (gapAbs < Math.PI * 0.42 || remaining < e.radius * 1.5 || (e.reversed || 0) > e.radius * 4)) {
+      e.reverse = false;
+    }
+    if (e.reverse) {
+      // Üç nokta dönüşü: geri giderken direksiyon kırılır, burun hedefe doğru savrulur.
+      e.angle = normalizeAngle(e.angle + Math.sign(gap) * Math.min(gapAbs, spec.turn * 0.8 * dt));
+      vel = Math.max(-turnSpeed, vel - accel * dt);
+      const fx = Math.cos(e.angle);
+      const fy = Math.sin(e.angle);
+      e.x += fx * vel * dt;
+      e.y += fy * vel * dt;
+      e.reversed = (e.reversed || 0) + Math.abs(vel) * dt;
+      e.vel = vel;
+      e.drive = Math.min(1, Math.abs(vel) / maxSpeed);
+      return;
+    }
+    if (vel < 0) vel = Math.min(0, vel + brake * dt);
+    const turnFactor = Math.max(0.3, Math.min(1, vel / turnSpeed));
+    e.angle = normalizeAngle(e.angle + Math.sign(gap) * Math.min(gapAbs, spec.turn * turnFactor * dt));
+    gap = angleGap(aim, e.angle);
+    let goal = maxSpeed;
+    if (Math.abs(gap) > Math.PI / 20) goal = Math.min(goal, turnSpeed);
+    const slowDist = ((vel / 1.5) * vel) / brake;
+    if (remaining < slowDist) goal = Math.min(goal, Math.max(0, vel - brake * dt));
+    vel = approach(vel, goal, accel * dt, brake * dt);
+  } else {
+    const rate = kind === "treads" && remaining < e.radius * 2 ? spec.turn * 0.8 : spec.turn;
+    e.angle = normalizeAngle(e.angle + Math.sign(gap) * Math.min(gapAbs, rate * dt));
+    gap = angleGap(aim, e.angle);
+    const coeff = Math.min(1, Math.abs(gap) / (Math.PI / 4));
+    let goal = (1 - coeff) * maxSpeed;
+    const slowDist = ((vel / 1.5) * vel) / brake;
+    if (remaining < slowDist) goal = Math.min(goal, spec.minSpeed ? maxSpeed * spec.minSpeed : Math.max(0, vel - brake * dt));
+    if (remaining < e.radius * 2 && coeff > 0.05) goal = Math.min(goal, vel * 0.6);
+    vel = approach(vel, goal, accel * dt, brake * dt);
+  }
+
+  const fx = Math.cos(e.angle);
+  const fy = Math.sin(e.angle);
+  const forward = fx * vx + fy * vy;
+  const travel = Math.min(Math.max(0, remaining), vel * dt);
+  if (forward > 0 && travel > 0) {
+    e.x += fx * travel;
+    e.y += fy * travel;
+  }
+  e.vel = vel;
+  e.drive = Math.min(1, Math.abs(vel) / maxSpeed);
+}
+
+function approach(current, goal, up, down) {
+  const delta = goal - current;
+  if (delta > 0) return current + Math.min(delta, up);
+  return current + Math.max(delta, -down);
+}
+
+function angleGap(target, angle) {
+  let d = target - angle;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+function normalizeAngle(a) {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
 }
 
 function face(e, x, y, dt, turnRate) {

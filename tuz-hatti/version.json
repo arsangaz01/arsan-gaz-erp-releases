@@ -1,6 +1,6 @@
 {
-  "versionCode": 14,
-  "versionName": "3.2",
-  "notes": "Araçlar tek renkte kalır, tekerlek ve temel yere oturur, kara birlikleri önce dönüp sonra ileri gider. Harita iki kat, uzaklaştırma iki kat, zemin daha düz.",
+  "versionCode": 15,
+  "versionName": "3.3",
+  "notes": "Kamera Generals düzeninde: harita eğik elmas değil, 37,5° eğimle düz bakış. Gölgeler zemine basılı yumuşak çıkartma; karargâh kaidesi ve tekerlekler ölçülen ayak izine oturur. Tekerlekli araçlar üç nokta dönüşü yapar, paletliler dönerken yavaşlar, frenle durur; duran araçta toz ve iz kalmaz.",
   "apk": "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }

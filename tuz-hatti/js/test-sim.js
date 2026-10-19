@@ -100,6 +100,25 @@ simulate(fight, 8);
 const foe = fight.entities.find((e) => e.id === 901);
 assert.ok(!foe || foe.hp < before, "çatışma hasar vermedi");
 
+// Tarayıcıda ilk kare dt=0 gelir: açı NaN olmamalı, araç geri geri çıkıp hedefe varmalı.
+const drive = createMatch({ seed: 6, playerFaction: "usa", enemyFaction: "rus" });
+const lorry = drive.entities.find((e) => e.owner === 0 && e.kind === "tasiyici");
+lorry.angle = 0;
+const goalX = lorry.x - 220;
+const goalY = lorry.y + 30;
+command(drive, { by: 0, type: "move", ids: [lorry.id], x: goalX, y: goalY });
+step(drive, 0);
+assert.ok(Number.isFinite(lorry.angle), "sıfır kare açıyı bozdu");
+let backed = false;
+for (let t = 0; t < 12; t += 0.05) {
+  step(drive, 0.05);
+  if (lorry.reverse) backed = true;
+  assert.ok(Number.isFinite(lorry.angle) && Number.isFinite(lorry.x), "hareket sayısal kaldı");
+}
+assert.ok(backed, "kamyon üç nokta dönüşü yapmadı");
+assert.ok(Math.hypot(lorry.x - goalX, lorry.y - goalY) < 16, `kamyon varmadı: ${Math.hypot(lorry.x - goalX, lorry.y - goalY)}`);
+assert.equal(lorry.vel, 0, "varınca hız sıfırlanmadı");
+
 const end = createMatch({ seed: 5, playerFaction: "rus", enemyFaction: "usa" });
 end.entities.find((e) => e.owner === 1 && e.kind === "ocak").hp = 0;
 step(end, 0.05);

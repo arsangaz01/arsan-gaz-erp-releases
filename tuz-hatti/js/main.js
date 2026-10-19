@@ -33,7 +33,7 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 14, name: "3.2" };
+const APP = { code: 15, name: "3.3" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
@@ -346,10 +346,18 @@ function frame(now) {
         const moving = e.plan && (e.plan.kind === "move" || e.plan.kind === "attackMove" || e.plan.kind === "harvest");
         if (!moving || (e.drive || 0) < 0.3) continue;
         const def = entityDef(match, e);
-        if (def.air) continue;
-        const bx = e.x - Math.cos(e.angle) * e.radius * 0.95;
-        const by = e.y - Math.sin(e.angle) * e.radius * 0.95;
-        view.fx.push({ type: "puff", x: bx, y: by, color: "rgba(92,74,48,0.55)", life: 0.45, max: 0.45 });
+        if (def.air || def.naval) continue;
+        const bx = e.x - Math.cos(e.angle) * e.radius * 1.2;
+        const by = e.y - Math.sin(e.angle) * e.radius * 1.2;
+        if (def.sprite === "infantry") {
+          view.fx.push({ type: "puff", x: bx, y: by, color: "rgba(92,74,48,0.4)", life: 0.4, max: 0.4 });
+          continue;
+        }
+        // Palet ve tekerlek tozu iki izden kalkar.
+        const px = -Math.sin(e.angle) * e.radius * 0.45;
+        const py = Math.cos(e.angle) * e.radius * 0.45;
+        view.fx.push({ type: "puff", x: bx + px, y: by + py, color: "rgba(92,74,48,0.55)", life: 0.45, max: 0.45 });
+        view.fx.push({ type: "puff", x: bx - px, y: by - py, color: "rgba(92,74,48,0.55)", life: 0.45, max: 0.45 });
       }
       const cap = view.gfx?.fxCap || 28;
       while (view.fx.length > cap) view.fx.shift();
