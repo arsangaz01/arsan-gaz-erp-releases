@@ -1,10 +1,21 @@
 /** Dünya çizimi. Birlik ve üsler haritanın perspektifiyle aynı izometrik gövdelerdir. */
 
 import { faction } from "./balance.js";
-import { applyGround, drawIso, screenPoint, worldPoint } from "./iso.js";
+import { GROUND_A, GROUND_B, applyGround, drawIso, screenPoint, worldPoint } from "./iso.js";
 import { canSeeEntity, cellExplored, cellVisible, entityDef } from "./sim.js";
 
 export const SPRITE_SRC = {
+  "iso-tank-sw": "assets/iso-tank-sw.png",
+  "iso-tank-nw": "assets/iso-tank-nw.png",
+  "iso-truck-sw": "assets/iso-truck-sw.png",
+  "iso-truck-nw": "assets/iso-truck-nw.png",
+  "iso-infantry-sw": "assets/iso-infantry-sw.png",
+  "iso-infantry-nw": "assets/iso-infantry-nw.png",
+  "iso-hq-iso": "assets/iso-hq-iso.png",
+  "iso-barracks-iso": "assets/iso-barracks-iso.png",
+  "iso-shop-iso": "assets/iso-shop-iso.png",
+  "iso-jet-sw": "assets/iso-jet-sw.png",
+  "iso-heli-sw": "assets/iso-heli-sw.png",
   terrain: "assets/terrain.jpg",
   "map-tur": "assets/map-tur.jpg",
   "map-usa": "assets/map-usa.jpg",
@@ -98,6 +109,8 @@ function ensureTerrain(view, state, gfx) {
   g.scale(scale, scale);
   if (photoReady) {
     g.drawImage(photo, 0, 0, state.mapW, state.mapH);
+    g.fillStyle = "rgba(92, 68, 36, 0.16)";
+    g.fillRect(0, 0, state.mapW, state.mapH);
   } else {
     g.fillStyle = "#6d6248";
     g.fillRect(0, 0, state.mapW, state.mapH);
@@ -257,12 +270,124 @@ function drawGroundFx(ctx, view) {
   }
 }
 
+const BUILDING_PHOTO = {
+  hq: "iso-hq-iso",
+  barracks: "iso-barracks-iso",
+  shop: "iso-shop-iso",
+  strip: "iso-shop-iso",
+  depot: "iso-barracks-iso",
+  bunker: "iso-hq-iso",
+  yard: "iso-shop-iso",
+};
+
+const BUILDING_SPAN = {
+  hq: 3.15,
+  barracks: 3.55,
+  shop: 3.35,
+  strip: 3.7,
+  depot: 3.2,
+  bunker: 2.7,
+  yard: 3.3,
+};
+
+const TANK_FRAMES = [
+  { key: "iso-tank-sw", ang: Math.PI * 0.78 },
+  { key: "iso-tank-nw", ang: -Math.PI * 0.7 },
+];
+
+const UNIT_FRAMES = {
+  tank: TANK_FRAMES,
+  sph: TANK_FRAMES,
+  mlrs: TANK_FRAMES,
+  ifv: TANK_FRAMES,
+  atgm: TANK_FRAMES,
+  truck: [
+    { key: "iso-truck-sw", ang: Math.PI * 0.7 },
+    { key: "iso-truck-nw", ang: -Math.PI * 0.68 },
+  ],
+  infantry: [
+    { key: "iso-infantry-sw", ang: Math.PI * 0.75 },
+    { key: "iso-infantry-nw", ang: -Math.PI * 0.68 },
+  ],
+  heli: [{ key: "iso-heli-sw", ang: Math.PI * 0.62 }],
+  jet: [{ key: "iso-jet-sw", ang: Math.PI * 0.5 }],
+  wing: [{ key: "iso-jet-sw", ang: Math.PI * 0.5 }],
+  drone: [{ key: "iso-jet-sw", ang: Math.PI * 0.5 }],
+  quad: [{ key: "iso-heli-sw", ang: Math.PI * 0.62 }],
+};
+
+const UNIT_SPAN = {
+  tank: 5.6,
+  sph: 5.4,
+  mlrs: 5.3,
+  ifv: 5.1,
+  atgm: 4.8,
+  truck: 5.15,
+  infantry: 3.7,
+  heli: 6.2,
+  jet: 6.4,
+  wing: 5.8,
+  drone: 5.2,
+  quad: 4.4,
+};
+
+function screenHeading(angle) {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return Math.atan2((c + s) * GROUND_B, (c - s) * GROUND_A);
+}
+
+function pickFrame(frames, heading) {
+  let best = frames[0];
+  let bestFlip = false;
+  let bestD = 99;
+  for (const frame of frames) {
+    for (const flip of [false, true]) {
+      const ang = flip ? Math.PI - frame.ang : frame.ang;
+      const d = Math.abs(angDiff(heading, ang));
+      if (d < bestD) {
+        bestD = d;
+        best = frame;
+        bestFlip = flip;
+      }
+    }
+  }
+  return { key: best.key, flip: bestFlip, ang: bestFlip ? Math.PI - best.ang : best.ang };
+}
+
+function ready(img) {
+  return img && img.complete && img.naturalWidth > 0;
+}
+
+function drawAnchored(ctx, key, width, opt = {}) {
+  const img = images[key];
+  if (!ready(img)) return false;
+  const aspect = img.naturalWidth / Math.max(1, img.naturalHeight);
+  const dw = width;
+  const dh = width / aspect;
+  const foot = opt.foot != null ? opt.foot : dh * (opt.sink ?? 0.04);
+  ctx.save();
+  if (opt.lift) ctx.translate(0, -opt.lift);
+  if (opt.flip) ctx.scale(-1, 1);
+  if (opt.grow != null && opt.grow < 0.995) {
+    const top = -dh + foot;
+    ctx.beginPath();
+    ctx.rect(-dw / 2 - 2, top + dh * (1 - opt.grow), dw + 4, dh * opt.grow + 4);
+    ctx.clip();
+  }
+  ctx.drawImage(img, -dw / 2, -dh + foot, dw, dh);
+  ctx.restore();
+  return true;
+}
+
 function paintStructure(ctx, def, colors, gfx, grow) {
   const shape = def.shape || "depot";
-  const span = def.radius * 1.15;
+  const span = def.radius * (BUILDING_SPAN[shape] || 3.1);
+  const key = BUILDING_PHOTO[shape];
+  if (key && drawAnchored(ctx, key, span, { grow, sink: 0.06 })) return span * 0.72;
   drawIso(ctx, {
     form: shape,
-    radius: span,
+    radius: def.radius * 1.15,
     angle: 0.55,
     paint: colors.main,
     dark: colors.dark,
@@ -270,7 +395,7 @@ function paintStructure(ctx, def, colors, gfx, grow) {
     detail: gfx.decor !== false,
     grow,
   });
-  return span * 1.35;
+  return def.radius * 1.5;
 }
 
 function drawBuilding(ctx, e, def, colors, gfx) {
@@ -380,7 +505,29 @@ function drawUnit(ctx, e, def, colors, gfx, state, view) {
   const bank = def.air ? Math.max(-0.4, Math.min(0.4, angDiff(e.angle, pose.prevHull) * -8)) : 0;
   const kick = e.kick || 0;
   if (kick > 0.02) e.kick = kick * 0.82;
-  const lift = def.air ? 28 + Math.sin(state.time * 2.2 + e.id) * 1.4 : 0;
+  const lift = def.air ? 36 + Math.sin(state.time * 2.2 + e.id) * 1.4 : 0;
+  const frames = UNIT_FRAMES[form];
+  if (frames) {
+    const shown = articulated ? pose.turret : e.angle;
+    const heading = screenHeading(shown);
+    const picked = pickFrame(frames, heading);
+    const span = def.radius * (UNIT_SPAN[form] || 5);
+    ctx.save();
+    if (kick > 0) ctx.translate(-Math.cos(heading) * kick * 7, -Math.sin(heading) * kick * 3);
+    const drawn = drawAnchored(ctx, picked.key, span, {
+      flip: picked.flip,
+      lift,
+      sink: def.air ? 0.02 : 0.08,
+    });
+    if (drawn && (def.damage || 0) > 0 && kick > 0.2) {
+      ctx.fillStyle = kick > 0.65 ? "#fff1c4" : "rgba(255, 170, 60, 0.9)";
+      ctx.beginPath();
+      ctx.arc(Math.cos(heading) * span * 0.42, Math.sin(heading) * span * 0.16 - span * 0.12, span * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    if (drawn) return;
+  }
   drawIso(ctx, {
     form,
     key: def.sprite,
@@ -622,21 +769,26 @@ function drawFx(ctx, view) {
       ctx.fill();
     } else if (fx.type === "boom") {
       const p = screenPoint(view, fx.x, fx.y);
-      const z = Math.min(view.zoom, 1.8);
-      const radius = (8 + t * (fx.heavy ? 54 : 30)) * z;
-      ctx.fillStyle = `rgba(255, 92, 28, ${0.42 * (1 - t)})`;
+      const z = Math.min(view.zoom, 2);
+      const radius = (14 + t * (fx.heavy ? 78 : 42)) * z;
+      const rise = t * 18 * z;
+      ctx.fillStyle = `rgba(40, 32, 28, ${0.45 * (1 - t)})`;
       ctx.beginPath();
-      ctx.arc(p.x, p.y - t * 12 * z, radius * 0.62, 0, Math.PI * 2);
+      ctx.arc(p.x + 6 * z, p.y - rise - radius * 0.2, radius * 0.55, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = `rgba(255, 214, 120, ${0.9 * (1 - t)})`;
+      ctx.fillStyle = `rgba(255, 120, 30, ${0.85 * (1 - t)})`;
       ctx.beginPath();
-      ctx.arc(p.x, p.y - t * 6 * z, radius * 0.24, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y - rise * 0.4, radius * 0.48, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = `rgba(70, 54, 40, ${0.4 * (1 - t)})`;
-      ctx.lineWidth = 5 * z;
+      ctx.fillStyle = `rgba(255, 220, 120, ${0.95 * (1 - t)})`;
       ctx.beginPath();
-      ctx.arc(p.x, p.y - t * 20 * z, radius * 0.78, Math.PI * 1.1, Math.PI * 1.9);
-      ctx.stroke();
+      ctx.arc(p.x, p.y - rise * 0.25, radius * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff6d2";
+      ctx.globalAlpha = Math.max(0, (1 - t) * 0.9);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y - rise * 0.15, radius * 0.1, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.globalAlpha = 1;
   }

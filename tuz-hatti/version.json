@@ -1,6 +1,6 @@
 {
-  "versionCode": 12,
-  "versionName": "3.0",
-  "notes": "Birlik ve üsler haritanın perspektifinde. Palet döner, kule hedefe bakar, uçak iz bırakır, isabet patlar.",
+  "versionCode": 13,
+  "versionName": "3.1",
+  "notes": "Karargâh, kamyon, tank ve piyade ayrıntılı model. İsabet büyük alev topu.",
   "apk": "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }
