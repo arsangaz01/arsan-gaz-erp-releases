@@ -1,6 +1,6 @@
 {
-  "versionCode": 9,
-  "versionName": "2.7",
-  "notes": "Harita eğik açıdan daha büyük görünür. Araçlar yandan gövdeli çizilir. Yakınlaştırma iki parmakladır. Boşluğa çift dokunuş bütün birliği seçer.",
+  "versionCode": 10,
+  "versionName": "2.8",
+  "notes": "Tank, kamyon, piyade ve üsler fotoğraf ayrıntısında üç çeyrek plaka olarak çizilir. Palet, tekerlek ve gövde okunur.",
   "apk": "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }

@@ -1,39 +1,35 @@
-/** Dünya çizimi. Araç ve üs görselleri üstten, magenta zeminden ayrılmış özgün plakalardır. */
+/** Dünya çizimi. Araç ve üsler özgün üç çeyrek fotoğraf plakalarıdır. */
 
 import { faction } from "./balance.js";
-import { applyGround, drawIso, screenPoint, worldPoint } from "./iso.js";
+import { GROUND_A, GROUND_B, applyGround, drawIso, screenPoint, worldPoint } from "./iso.js";
 import { canSeeEntity, cellExplored, cellVisible, entityDef } from "./sim.js";
 
 export const SPRITE_SRC = {
-  abrams: "assets/abrams.png",
-  type99: "assets/type99.png",
-  ch2: "assets/ch2.png",
-  leo2: "assets/leo2.png",
-  t90: "assets/t90.png",
-  t64: "assets/t64.png",
-  altay: "assets/altay.png",
-  karrar: "assets/karrar.png",
-  apache: "assets/apache.png",
-  gj11: "assets/gj11.png",
-  f35: "assets/f35.png",
-  typhoon: "assets/typhoon.png",
-  lancet: "assets/lancet.png",
-  fpv: "assets/fpv.png",
-  kizilelma: "assets/kizilelma.png",
-  shahed: "assets/shahed.png",
-  truck: "assets/truck.png",
-  infantry: "assets/infantry.png",
-  spg: "assets/spg.png",
-  atgm: "assets/atgm.png",
-  ifv: "assets/ifv.png",
-  hq: "assets/hq.png",
-  barracks: "assets/barracks.png",
-  motor: "assets/motor.png",
-  sam: "assets/sam.png",
-  depot: "assets/depot.png",
-  strip: "assets/strip.png",
-  fuel: "assets/fuel.png",
-  ship: "assets/ship.png",
+  "real-tank-w": "assets/real-tank-w.png",
+  "real-tank-s": "assets/real-tank-s.png",
+  "real-tank-n": "assets/real-tank-n.png",
+  "real-sph": "assets/real-sph.png",
+  "real-mlrs": "assets/real-mlrs.png",
+  "real-ifv": "assets/real-ifv.png",
+  "real-atgm": "assets/real-atgm.png",
+  "real-truck": "assets/real-truck.png",
+  "real-infantry": "assets/real-infantry.png",
+  "real-heli": "assets/real-heli.png",
+  "real-jet": "assets/real-jet.png",
+  "real-wing": "assets/real-wing.png",
+  "real-drone": "assets/real-drone.png",
+  "real-ship": "assets/real-ship.png",
+  "real-sam": "assets/real-sam.png",
+  "real-hq": "assets/real-hq.png",
+  "real-barracks": "assets/real-barracks.png",
+  "real-shop": "assets/real-shop.png",
+  "real-strip": "assets/real-strip.png",
+  "real-depot": "assets/real-depot.png",
+  "real-bunker": "assets/real-bunker.png",
+  "real-yard": "assets/real-yard.png",
+  "real-battery": "assets/real-battery.png",
+  "real-tree": "assets/real-tree.png",
+  "real-peak": "assets/real-peak.png",
   terrain: "assets/terrain.jpg",
   "map-tur": "assets/map-tur.jpg",
   "map-usa": "assets/map-usa.jpg",
@@ -176,16 +172,21 @@ function drawUpright(ctx, state, view, gfx) {
   for (const rock of state.obstacles) {
     if (rock.kind === "water") continue;
     withModel(ctx, view, rock.x, rock.y, () => {
-      drawIso(ctx, {
-        form: rock.kind === "forest" ? "tree" : "peak",
-        radius: rock.r * (rock.kind === "forest" ? 0.34 : 0.48),
-        angle: 0.4,
-        paint: rock.kind === "forest" ? "#2f6a38" : "#8a8074",
-        dark: "#3a3228",
-        cloth: "#d9d3c6",
-        detail: !!gfx.decor,
-        grow: 1,
-      });
+      const forest = rock.kind === "forest";
+      const span = rock.r * (forest ? 2.2 : 2.45);
+      softShadow(ctx, span * 0.34, span * 0.12);
+      if (!drawAnchored(ctx, forest ? "real-tree" : "real-peak", span)) {
+        drawIso(ctx, {
+          form: forest ? "tree" : "peak",
+          radius: rock.r * (forest ? 0.34 : 0.48),
+          angle: 0.4,
+          paint: forest ? "#2f6a38" : "#8a8074",
+          dark: "#3a3228",
+          cloth: "#d9d3c6",
+          detail: !!gfx.decor,
+          grow: 1,
+        });
+      }
     });
   }
   for (const n of state.nodes) {
@@ -238,38 +239,157 @@ function drawEntities(ctx, state, view, gfx) {
   }
 }
 
-function drawBuilding(ctx, e, def, colors, gfx) {
-  const grow = e.constructed ? 1 : Math.max(0.18, Math.min(1, e.progress));
-  if (gfx.shadows) {
-    ctx.fillStyle = "rgba(0,0,0,0.28)";
-    ctx.beginPath();
-    ctx.ellipse(2, def.radius * 0.35, def.radius * 0.95, def.radius * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
+const BUILDING_PHOTO = {
+  hq: "real-hq",
+  barracks: "real-barracks",
+  shop: "real-shop",
+  strip: "real-strip",
+  tower: "real-sam",
+  bunker: "real-bunker",
+  yard: "real-yard",
+  battery: "real-battery",
+  depot: "real-depot",
+};
+
+const BUILDING_SPAN = {
+  hq: 3.35,
+  barracks: 3.7,
+  shop: 3.55,
+  strip: 4.1,
+  tower: 3.9,
+  bunker: 3.5,
+  yard: 3.45,
+  battery: 3.3,
+  depot: 3.6,
+};
+
+const UNIT_FRAMES = {
+  tank: [
+    { key: "real-tank-w", ang: Math.PI },
+    { key: "real-tank-s", ang: Math.PI * 0.75 },
+    { key: "real-tank-n", ang: -Math.PI * 0.25 },
+  ],
+  sph: [{ key: "real-sph", ang: Math.PI }],
+  mlrs: [{ key: "real-mlrs", ang: Math.PI }],
+  ifv: [{ key: "real-ifv", ang: Math.PI }],
+  atgm: [{ key: "real-atgm", ang: Math.PI * 0.75 }],
+  truck: [{ key: "real-truck", ang: Math.PI * 0.75 }],
+  infantry: [{ key: "real-infantry", ang: Math.PI }],
+  heli: [{ key: "real-heli", ang: Math.PI }],
+  jet: [{ key: "real-jet", ang: Math.PI }],
+  wing: [{ key: "real-wing", ang: Math.PI * 0.72 }],
+  drone: [{ key: "real-drone", ang: Math.PI }],
+  quad: [{ key: "real-drone", ang: Math.PI }],
+  ship: [{ key: "real-ship", ang: Math.PI * 0.7 }],
+};
+
+const UNIT_SPAN = {
+  tank: 5.5,
+  sph: 5.3,
+  mlrs: 5.2,
+  ifv: 5.1,
+  atgm: 4.9,
+  truck: 4.7,
+  infantry: 4.6,
+  heli: 6.4,
+  jet: 6.6,
+  wing: 5.8,
+  drone: 4.4,
+  quad: 3.8,
+  ship: 6.2,
+};
+
+function angDiff(a, b) {
+  let d = a - b;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+function screenHeading(angle) {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return Math.atan2((c + s) * GROUND_B, (c - s) * GROUND_A);
+}
+
+function pickFrame(frames, heading) {
+  let best = frames[0];
+  let bestFlip = false;
+  let bestD = 99;
+  for (const frame of frames) {
+    for (const flip of [false, true]) {
+      const ang = flip ? Math.PI - frame.ang : frame.ang;
+      const d = Math.abs(angDiff(heading, ang));
+      if (d < bestD) {
+        bestD = d;
+        best = frame;
+        bestFlip = flip;
+      }
+    }
   }
+  return { key: best.key, flip: bestFlip };
+}
+
+function softShadow(ctx, rx, ry) {
+  ctx.fillStyle = "rgba(0,0,0,0.32)";
+  ctx.beginPath();
+  ctx.ellipse(0, 5, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawAnchored(ctx, key, width, opt = {}) {
+  const img = images[key];
+  if (!ready(img)) return false;
+  const aspect = img.naturalWidth / Math.max(1, img.naturalHeight);
+  const dw = width;
+  const dh = width / aspect;
+  const foot = opt.foot ?? Math.min(6, width * 0.04);
+  ctx.save();
+  if (opt.lift) ctx.translate(0, -opt.lift);
+  if (opt.rot) ctx.rotate(opt.rot);
+  if (opt.flip) ctx.scale(-1, 1);
+  if (opt.grow != null && opt.grow < 0.995) {
+    const top = -dh + foot;
+    ctx.beginPath();
+    ctx.rect(-dw / 2 - 2, top + dh * (1 - opt.grow), dw + 4, dh * opt.grow + 4);
+    ctx.clip();
+  }
+  ctx.drawImage(img, -dw / 2, -dh + foot, dw, dh);
+  ctx.restore();
+  return true;
+}
+
+function paintStructure(ctx, def, colors, gfx, grow) {
+  const shape = def.shape || "depot";
+  const span = def.radius * (BUILDING_SPAN[shape] || 3.4);
+  if (gfx.shadows !== false) softShadow(ctx, span * 0.34, span * 0.13);
+  const key = BUILDING_PHOTO[shape] || BUILDING_PHOTO.depot;
+  if (drawAnchored(ctx, key, span, { grow, foot: span * 0.02 })) return span;
   drawIso(ctx, {
-    form: def.shape || "depot",
+    form: shape,
     radius: def.radius * 1.05,
     angle: 0.55,
-    aim: def.turret ? e.angle : 0.55,
     paint: colors.main,
     dark: colors.dark,
     cloth: colors.cloth,
     detail: gfx.decor !== false,
     grow,
-    phase: 0,
   });
+  return span;
+}
+
+function drawBuilding(ctx, e, def, colors, gfx) {
+  const grow = e.constructed ? 1 : Math.max(0.18, Math.min(1, e.progress));
+  const span = paintStructure(ctx, def, colors, gfx, grow);
   if (!e.constructed) {
-    ctx.strokeStyle = "rgba(214, 196, 140, 0.9)";
-    ctx.lineWidth = 1.6;
-    ctx.strokeRect(-def.radius, -def.radius * 0.7, def.radius * 2, def.radius * 1.4);
     ctx.fillStyle = "#d7e8b0";
     ctx.font = "13px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(`İnşa %${Math.floor(e.progress * 100)}`, 0, -def.radius - 14);
+    ctx.fillText(`İnşa %${Math.floor(e.progress * 100)}`, 0, -span * 0.72);
     ctx.fillStyle = "rgba(8,10,8,0.75)";
-    ctx.fillRect(-18, def.radius * 0.2, 36, 5);
+    ctx.fillRect(-22, span * 0.08, 44, 5);
     ctx.fillStyle = "#d7c48a";
-    ctx.fillRect(-18, def.radius * 0.2, 36 * grow, 5);
+    ctx.fillRect(-22, span * 0.08, 44 * grow, 5);
   }
 }
 
@@ -302,10 +422,12 @@ function drawUnit(ctx, e, def, colors, gfx, state) {
     const target = state.entities.find((item) => item.id === e.plan.targetId);
     if (target) aim = Math.atan2(target.y - e.y, target.x - e.x);
   }
-  if (gfx.shadows) {
-    ctx.fillStyle = def.air ? "rgba(0,0,0,0.22)" : "rgba(0,0,0,0.32)";
+  const form = unitForm(def);
+  const span = def.radius * (UNIT_SPAN[form] || 4.8);
+  if (gfx.shadows !== false) {
+    ctx.fillStyle = def.air ? "rgba(0,0,0,0.22)" : "rgba(0,0,0,0.34)";
     ctx.beginPath();
-    ctx.ellipse(def.air ? 10 : 2, def.air ? 16 : 8, def.radius * (def.air ? 1.1 : 0.95), def.radius * 0.38, 0, 0, Math.PI * 2);
+    ctx.ellipse(def.air ? 8 : 0, def.air ? 14 : 6, span * (def.air ? 0.22 : 0.28), span * 0.09, 0, 0, Math.PI * 2);
     ctx.fill();
   }
   const pose = gfx._pose || (gfx._pose = new Map());
@@ -313,28 +435,38 @@ function drawUnit(ctx, e, def, colors, gfx, state) {
   pose.set(e.id, e.angle);
   let bank = 0;
   if (prev != null && def.air) {
-    let d = e.angle - prev;
-    while (d > Math.PI) d -= Math.PI * 2;
-    while (d < -Math.PI) d += Math.PI * 2;
-    bank = Math.max(-0.45, Math.min(0.45, d * 6));
+    bank = Math.max(-0.28, Math.min(0.28, angDiff(e.angle, prev) * 5));
   }
-  drawIso(ctx, {
-    form: unitForm(def),
-    key: def.sprite,
-    name: def.name,
-    radius: def.radius * (def.air ? 1.7 : def.naval ? 1.55 : def.worker ? 1.45 : 1.72),
-    angle: e.angle,
-    aim,
-    paint: colors.main,
-    dark: colors.dark,
-    cloth: colors.cloth,
-    detail: gfx.decor !== false,
-    phase,
-    lift: def.air ? 26 + Math.sin(state.time * 3 + e.id) * 2 : 0,
-    carry: e.carry > 0,
-    bank,
-    grow: 1,
-  });
+  const frames = UNIT_FRAMES[form] || UNIT_FRAMES.tank;
+  const face = def.turret ? aim : e.angle;
+  const picked = pickFrame(frames, screenHeading(face));
+  const lift = def.air ? 36 + Math.sin(state.time * 3 + e.id) * 1.6 : 0;
+  if (
+    !drawAnchored(ctx, picked.key, span, {
+      flip: picked.flip,
+      lift,
+      rot: bank,
+      foot: span * 0.04,
+    })
+  ) {
+    drawIso(ctx, {
+      form,
+      key: def.sprite,
+      name: def.name,
+      radius: def.radius * (def.air ? 1.7 : def.naval ? 1.55 : def.worker ? 1.45 : 1.72),
+      angle: e.angle,
+      aim,
+      paint: colors.main,
+      dark: colors.dark,
+      cloth: colors.cloth,
+      detail: gfx.decor !== false,
+      phase,
+      lift,
+      carry: e.carry > 0,
+      bank,
+      grow: 1,
+    });
+  }
 }
 
 function ready(img) {
@@ -533,16 +665,7 @@ function drawGhostModel(ctx, state, view) {
   if (!def) return;
   withModel(ctx, view, ghost.x, ghost.y, () => {
     ctx.globalAlpha = 0.55;
-    drawIso(ctx, {
-      form: def.shape || "depot",
-      radius: def.radius * 1.05,
-      angle: 0.55,
-      paint: fac.colors.main,
-      dark: fac.colors.dark,
-      cloth: fac.colors.cloth,
-      detail: false,
-      grow: 0.85,
-    });
+    paintStructure(ctx, def, fac.colors, { shadows: true, decor: false }, 0.92);
     ctx.globalAlpha = 1;
   });
 }
