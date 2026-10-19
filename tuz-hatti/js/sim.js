@@ -819,10 +819,10 @@ function locoKind(def) {
 }
 
 const LOCO = {
-  treads: { turn: 3.2, accel: 1.7, brake: 2.6, pivot: true },
-  wheels: { turn: 3.6, accel: 2.2, brake: 3.2, pivot: false },
-  legs: { turn: 5.5, accel: 4.5, brake: 6, pivot: true, minSpeed: 0.3 },
-  ship: { turn: 1.4, accel: 0.55, brake: 0.8, pivot: false },
+  treads: { turn: 2.6, accel: 1.15, brake: 2.1, pivot: true },
+  wheels: { turn: 2.9, accel: 1.45, brake: 2.5, pivot: false },
+  legs: { turn: 4.8, accel: 3.4, brake: 5.2, pivot: true, minSpeed: 0.28 },
+  ship: { turn: 1.15, accel: 0.42, brake: 0.7, pivot: false },
 };
 
 function locomote(e, def, vx, vy, remaining, maxSpeed, dt) {
@@ -840,19 +840,18 @@ function locomote(e, def, vx, vy, remaining, maxSpeed, dt) {
   const gapAbs = Math.abs(gap);
 
   if (kind === "wheels") {
-    // Tekerlekli araç durunca dönemez. Hedef arkadaysa geri geri çıkar, sonra ileri alır.
-    const turnSpeed = maxSpeed * 0.3;
-    if (!e.reverse && vel < turnSpeed * 0.2 && gapAbs > Math.PI * 0.55 && remaining > e.radius * 3) {
+    // Tekerlekli araç durunca dönemez. Hedef arkadaysa kısa geri manevra, sonra ileri alır.
+    const turnSpeed = maxSpeed * 0.38;
+    if (!e.reverse && vel < turnSpeed * 0.25 && gapAbs > Math.PI * 0.6 && remaining > e.radius * 3.5) {
       e.reverse = true;
       e.reversed = 0;
     }
-    if (e.reverse && (gapAbs < Math.PI * 0.42 || remaining < e.radius * 1.5 || (e.reversed || 0) > e.radius * 4)) {
+    if (e.reverse && (gapAbs < Math.PI * 0.38 || remaining < e.radius * 1.8 || (e.reversed || 0) > e.radius * 3.2)) {
       e.reverse = false;
     }
     if (e.reverse) {
-      // Üç nokta dönüşü: geri giderken direksiyon kırılır, burun hedefe doğru savrulur.
-      e.angle = normalizeAngle(e.angle + Math.sign(gap) * Math.min(gapAbs, spec.turn * 0.8 * dt));
-      vel = Math.max(-turnSpeed, vel - accel * dt);
+      e.angle = normalizeAngle(e.angle + Math.sign(gap) * Math.min(gapAbs, spec.turn * 0.75 * dt));
+      vel = Math.max(-turnSpeed * 0.85, vel - accel * 0.9 * dt);
       const fx = Math.cos(e.angle);
       const fy = Math.sin(e.angle);
       e.x += fx * vel * dt;
@@ -863,23 +862,29 @@ function locomote(e, def, vx, vy, remaining, maxSpeed, dt) {
       return;
     }
     if (vel < 0) vel = Math.min(0, vel + brake * dt);
-    const turnFactor = Math.max(0.3, Math.min(1, vel / turnSpeed));
+    const turnFactor = Math.max(0.35, Math.min(1, Math.abs(vel) / turnSpeed));
     e.angle = normalizeAngle(e.angle + Math.sign(gap) * Math.min(gapAbs, spec.turn * turnFactor * dt));
     gap = angleGap(aim, e.angle);
     let goal = maxSpeed;
-    if (Math.abs(gap) > Math.PI / 20) goal = Math.min(goal, turnSpeed);
-    const slowDist = ((vel / 1.5) * vel) / brake;
-    if (remaining < slowDist) goal = Math.min(goal, Math.max(0, vel - brake * dt));
+    if (Math.abs(gap) > Math.PI / 16) goal = Math.min(goal, turnSpeed + maxSpeed * 0.15 * (1 - Math.min(1, Math.abs(gap) / (Math.PI / 2))));
+    const slowDist = ((Math.abs(vel) / 1.35) * Math.abs(vel)) / brake + e.radius * 0.8;
+    if (remaining < slowDist) {
+      const ease = Math.max(0, remaining / Math.max(1, slowDist));
+      goal = Math.min(goal, maxSpeed * ease);
+    }
     vel = approach(vel, goal, accel * dt, brake * dt);
   } else {
-    const rate = kind === "treads" && remaining < e.radius * 2 ? spec.turn * 0.8 : spec.turn;
+    const rate = kind === "treads" && remaining < e.radius * 2.4 ? spec.turn * 0.75 : spec.turn;
     e.angle = normalizeAngle(e.angle + Math.sign(gap) * Math.min(gapAbs, rate * dt));
     gap = angleGap(aim, e.angle);
-    const coeff = Math.min(1, Math.abs(gap) / (Math.PI / 4));
-    let goal = (1 - coeff) * maxSpeed;
-    const slowDist = ((vel / 1.5) * vel) / brake;
-    if (remaining < slowDist) goal = Math.min(goal, spec.minSpeed ? maxSpeed * spec.minSpeed : Math.max(0, vel - brake * dt));
-    if (remaining < e.radius * 2 && coeff > 0.05) goal = Math.min(goal, vel * 0.6);
+    const coeff = Math.min(1, Math.abs(gap) / (Math.PI / 3.2));
+    let goal = (1 - coeff * 0.92) * maxSpeed;
+    const slowDist = ((Math.abs(vel) / 1.35) * Math.abs(vel)) / brake + e.radius * 0.7;
+    if (remaining < slowDist) {
+      const ease = Math.max(0, remaining / Math.max(1, slowDist));
+      goal = Math.min(goal, spec.minSpeed ? maxSpeed * spec.minSpeed : maxSpeed * ease);
+    }
+    if (remaining < e.radius * 2.2 && coeff > 0.04) goal = Math.min(goal, Math.max(0, vel) * 0.7 + maxSpeed * 0.08);
     vel = approach(vel, goal, accel * dt, brake * dt);
   }
 

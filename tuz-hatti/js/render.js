@@ -48,7 +48,7 @@ preloadSprites();
 function gfxOf(view) {
   return (
     view.gfx || {
-      terrainScale: 0.5,
+      terrainScale: 1.35,
       shadows: true,
       decor: true,
       smoothing: true,
@@ -56,6 +56,11 @@ function gfxOf(view) {
       nodeScale: 1,
     }
   );
+}
+
+function setSmooth(ctx, on) {
+  ctx.imageSmoothingEnabled = !!on;
+  if (on && "imageSmoothingQuality" in ctx) ctx.imageSmoothingQuality = "high";
 }
 
 export function drawWorld(ctx, state, view) {
@@ -66,10 +71,20 @@ export function drawWorld(ctx, state, view) {
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.save();
   applyGround(ctx, view);
-  ctx.imageSmoothingEnabled = !!gfx.smoothing;
-  ctx.drawImage(view.terrain, 0, 0, state.mapW, state.mapH);
+  setSmooth(ctx, gfx.smoothing);
+  // Fotoğrafı doğrudan çiz: ara önbellekte şişirilmez, ekran pikseline göre örneklenir.
+  const photo = view.terrainPhotoImg;
+  if (photo) {
+    ctx.drawImage(photo, 0, 0, state.mapW, state.mapH);
+    ctx.fillStyle = "rgba(92, 68, 36, 0.14)";
+    ctx.fillRect(0, 0, state.mapW, state.mapH);
+  } else if (view.terrainBase) {
+    ctx.drawImage(view.terrainBase, 0, 0, state.mapW, state.mapH);
+  }
+  if (view.terrainOverlay) ctx.drawImage(view.terrainOverlay, 0, 0, state.mapW, state.mapH);
   if (gfx.decor) drawDecor(ctx, state);
-  drawContacts(ctx, state, view);
+  refreshSoftPoses(state, view);
+  if (gfx.shadows !== false) drawContacts(ctx, state, view);
   drawSelectionRings(ctx, state, view);
   drawGroundFx(ctx, view);
   drawGroundMarks(ctx, state, view);
@@ -87,48 +102,60 @@ function ensureTerrain(view, state, gfx) {
   if (photo && !photo.complete && !photo.dataset.hooked) {
     photo.dataset.hooked = "1";
     photo.addEventListener("load", () => {
-      view.terrain = null;
+      view.terrainOverlay = null;
+      view.terrainBase = null;
+      view.terrainPhotoImg = null;
     });
   }
-  const scale = gfx.terrainScale || 0.5;
+  const scale = Math.max(0.85, gfx.terrainScale || 1.35);
   if (
-    view.terrain &&
+    view.terrainOverlay &&
     view.terrainKey === key &&
     view.terrainSeed === state.seed &&
     view.terrainPhoto === photoReady &&
     view.terrainScale === scale
   ) {
+    view.terrainPhotoImg = photoReady ? photo : null;
     return;
+  }
+  // Yedek düz zemin (foto yoksa) + üst katman (gölge, su, orman, kum tanesi).
+  if (!photoReady) {
+    const base = document.createElement("canvas");
+    base.width = Math.max(1, Math.floor(state.mapW * Math.min(1, scale)));
+    base.height = Math.max(1, Math.floor(state.mapH * Math.min(1, scale)));
+    const bg = base.getContext("2d");
+    bg.scale(base.width / state.mapW, base.height / state.mapH);
+    bg.fillStyle = "#6d6248";
+    bg.fillRect(0, 0, state.mapW, state.mapH);
+    view.terrainBase = base;
+    view.terrainPhotoImg = null;
+  } else {
+    view.terrainBase = null;
+    view.terrainPhotoImg = photo;
   }
   const c = document.createElement("canvas");
   c.width = Math.max(1, Math.floor(state.mapW * scale));
   c.height = Math.max(1, Math.floor(state.mapH * scale));
   const g = c.getContext("2d");
-  g.scale(scale, scale);
-  if (photoReady) {
-    g.drawImage(photo, 0, 0, state.mapW, state.mapH);
-    g.fillStyle = "rgba(92, 68, 36, 0.16)";
+  g.scale(c.width / state.mapW, c.height / state.mapH);
+  setSmooth(g, true);
+  const grain = detailPattern(g);
+  if (grain) {
+    g.save();
+    g.globalCompositeOperation = "source-over";
+    g.globalAlpha = gfx.decor ? 0.28 : 0.16;
+    g.fillStyle = grain;
     g.fillRect(0, 0, state.mapW, state.mapH);
-    const grain = detailPattern(g);
-    if (grain) {
-      g.save();
-      g.globalCompositeOperation = "overlay";
-      g.globalAlpha = gfx.decor ? 0.5 : 0.3;
-      g.fillStyle = grain;
-      g.fillRect(0, 0, state.mapW, state.mapH);
-      g.restore();
-    }
-  } else {
-    g.fillStyle = "#6d6248";
-    g.fillRect(0, 0, state.mapW, state.mapH);
+    g.restore();
   }
   const shade = g.createLinearGradient(0, 0, 0, state.mapH);
-  shade.addColorStop(0, "rgba(12,16,10,0.08)");
+  shade.addColorStop(0, "rgba(12,16,10,0.1)");
   shade.addColorStop(0.5, "rgba(0,0,0,0)");
-  shade.addColorStop(1, "rgba(8,10,8,0.1)");
+  shade.addColorStop(1, "rgba(8,10,8,0.12)");
   g.fillStyle = shade;
   g.fillRect(0, 0, state.mapW, state.mapH);
   for (const rock of state.obstacles) paintObstacle(g, rock);
+  view.terrainOverlay = c;
   view.terrain = c;
   view.terrainKey = key;
   view.terrainSeed = state.seed;
@@ -136,12 +163,12 @@ function ensureTerrain(view, state, gfx) {
   view.terrainScale = scale;
 }
 
-/* Ayrıntı dokusu: uydu fotoğrafı büyütülünce bulanıklaşır; ince kum ve çatlak deseni keskinlik katar. */
+/* Ayrıntı dokusu: ince kum ve çatlak; fotoğrafın üstünde keskinlik verir. */
 let detailCanvas = null;
 
 function detailPattern(g) {
   if (!detailCanvas && typeof document !== "undefined") {
-    const size = 192;
+    const size = 384;
     detailCanvas = document.createElement("canvas");
     detailCanvas.width = size;
     detailCanvas.height = size;
@@ -369,6 +396,33 @@ function withModel(ctx, view, x, y, draw) {
   ctx.restore();
 }
 
+/* Çizim konumu simülasyonu yumuşak takip eder; ani sıçrama ve titreşim azalır. */
+function refreshSoftPoses(state, view) {
+  const map = view._soft || (view._soft = new Map());
+  const dt = Math.max(0.008, view.dt || 0.016);
+  const rate = 1 - Math.exp(-dt * 20);
+  const live = new Set();
+  for (const e of state.entities) {
+    if (e.hp <= 0) continue;
+    live.add(e.id);
+    const prev = map.get(e.id);
+    if (!prev || e.isBuilding) {
+      map.set(e.id, { x: e.x, y: e.y, angle: e.angle || 0 });
+      continue;
+    }
+    const gap = angDiff(e.angle || 0, prev.angle);
+    prev.x += (e.x - prev.x) * rate;
+    prev.y += (e.y - prev.y) * rate;
+    prev.angle += gap * Math.min(1, rate * 1.4);
+    if (Math.hypot(e.x - prev.x, e.y - prev.y) > e.radius * 4) {
+      prev.x = e.x;
+      prev.y = e.y;
+      prev.angle = e.angle || 0;
+    }
+  }
+  for (const id of map.keys()) if (!live.has(id)) map.delete(id);
+}
+
 function drawEntities(ctx, state, view, gfx) {
   const list = state.entities.filter((e) => e.hp > 0);
   list.sort((a, b) => {
@@ -379,10 +433,11 @@ function drawEntities(ctx, state, view, gfx) {
     if (e.owner !== viewer(view) && !canSeeEntity(state, viewer(view), e)) continue;
     const colors = faction(state.players[e.owner].faction).colors;
     const def = entityDef(state, e);
-    withModel(ctx, view, e.x, e.y, () => {
+    const soft = view._soft?.get(e.id) || { x: e.x, y: e.y, angle: e.angle || 0 };
+    withModel(ctx, view, soft.x, soft.y, () => {
       ctx.globalAlpha = e.isBuilding && !e.constructed ? 0.72 : 1;
       if (e.isBuilding) drawBuilding(ctx, e, def, colors, gfx);
-      else drawUnit(ctx, e, def, colors, gfx, state, view);
+      else drawUnit(ctx, e, def, colors, gfx, state, view, soft);
     });
   }
 }
@@ -391,15 +446,17 @@ function drawEntities(ctx, state, view, gfx) {
 function drawSelectionRings(ctx, state, view) {
   if (!view.selected || view.selected.size === 0) return;
   const who = viewer(view);
+  const softMap = view._soft;
   for (const e of state.entities) {
     if (e.hp <= 0 || !view.selected.has(e.id)) continue;
     const def = entityDef(state, e);
+    const soft = softMap?.get(e.id);
     const ring = def.radius * (e.isBuilding ? 1.9 : def.sprite === "infantry" ? 1.9 : 2.6);
     const own = e.owner === who;
     ctx.strokeStyle = own ? "rgba(126, 196, 92, 0.95)" : "rgba(196, 92, 60, 0.95)";
     ctx.lineWidth = 2.4 / Math.max(0.5, view.zoom);
     ctx.beginPath();
-    ctx.arc(e.x, e.y, ring, 0, Math.PI * 2);
+    ctx.arc(soft?.x ?? e.x, soft?.y ?? e.y, ring, 0, Math.PI * 2);
     ctx.stroke();
   }
 }
@@ -413,8 +470,8 @@ function angDiff(a, b) {
 
 /* Gölge çıkartması: zemin düzlemine, gövdenin ayak izi kadar ve güneş yönünde hafif kaydırılmış.
    Model ile aynı zemin noktasına bağlı olduğu için ayrı duramaz. */
-const SUN_X = 0.26;
-const SUN_Y = 0.16;
+const SUN_X = 0.14;
+const SUN_Y = 0.1;
 
 /* Üs ayak izleri (yarıçap katı, zemin düzleminde): resimdeki kaide ne kadar yer kaplıyorsa o kadar. */
 const BUILDING_FOOT = {
@@ -446,35 +503,40 @@ function softDecal(ctx, x, y, rx, ry, angle, alpha) {
 
 function drawContacts(ctx, state, view) {
   const who = viewer(view);
+  const softMap = view._soft;
   for (const e of state.entities) {
     if (e.hp <= 0) continue;
     if (e.owner !== who && !canSeeEntity(state, who, e)) continue;
     const def = entityDef(state, e);
+    const soft = softMap?.get(e.id);
+    const x = soft?.x ?? e.x;
+    const y = soft?.y ?? e.y;
+    const ang = soft?.angle ?? e.angle;
     if (def.air) {
-      softDecal(ctx, e.x + e.radius * 1.4, e.y + e.radius * 1.1, e.radius * 1.2, e.radius * 0.8, e.angle, 0.3);
+      softDecal(ctx, x + e.radius * 1.4, y + e.radius * 1.1, e.radius * 1.2, e.radius * 0.8, ang, 0.28);
       continue;
     }
     if (e.isBuilding) {
       const grow = e.constructed ? 1 : Math.max(0.3, Math.min(1, e.progress));
       const foot = BUILDING_FOOT[def.shape] || BUILDING_FOOT.depot;
-      softDecal(ctx, e.x + e.radius * SUN_X, e.y + e.radius * SUN_Y, e.radius * foot.rx, e.radius * foot.ry, 0, 0.5 * grow);
+      softDecal(ctx, x + e.radius * SUN_X, y + e.radius * SUN_Y, e.radius * foot.rx, e.radius * foot.ry, 0, 0.42 * grow);
       continue;
     }
     const infantry = def.sprite === "infantry";
-    const long = infantry ? e.radius * 1.2 : e.radius * 2.0;
-    const wide = infantry ? e.radius * 1.0 : e.radius * 1.25;
-    softDecal(ctx, e.x + e.radius * SUN_X, e.y + e.radius * SUN_Y, long, wide, e.angle, infantry ? 0.4 : 0.5);
+    const long = infantry ? e.radius * 1.15 : e.radius * 1.85;
+    const wide = infantry ? e.radius * 0.95 : e.radius * 1.15;
+    softDecal(ctx, x + e.radius * SUN_X, y + e.radius * SUN_Y, long, wide, ang, infantry ? 0.36 : 0.44);
     if ((e.drive || 0) < 0.45 || infantry || def.naval) continue;
-    const bx = e.x - Math.cos(e.angle) * e.radius * 2.4;
-    const by = e.y - Math.sin(e.angle) * e.radius * 2.4;
-    const px = -Math.sin(e.angle) * e.radius * 0.6;
-    const py = Math.cos(e.angle) * e.radius * 0.6;
-    ctx.strokeStyle = "rgba(36, 28, 18, 0.4)";
-    ctx.lineWidth = e.radius > 14 ? 2.4 : 1.4;
+    const bx = x - Math.cos(ang) * e.radius * 2.4;
+    const by = y - Math.sin(ang) * e.radius * 2.4;
+    const px = -Math.sin(ang) * e.radius * 0.6;
+    const py = Math.cos(ang) * e.radius * 0.6;
+    ctx.strokeStyle = "rgba(36, 28, 18, 0.32)";
+    ctx.lineWidth = e.radius > 14 ? 2.2 : 1.3;
     ctx.beginPath();
-    ctx.moveTo(e.x + px, e.y + py);
+    ctx.moveTo(x + px, y + py);
     ctx.lineTo(bx + px, by + py);
-    ctx.moveTo(e.x - px, e.y - py);
+    ctx.moveTo(x - px, y - py);
     ctx.lineTo(bx - px, by - py);
     ctx.stroke();
   }
@@ -504,13 +566,13 @@ const BUILDING_PHOTO = {
 };
 
 const BUILDING_SPAN = {
-  hq: 3.15,
-  barracks: 3.55,
-  shop: 3.35,
-  strip: 3.7,
-  depot: 3.2,
-  bunker: 2.7,
-  yard: 3.3,
+  hq: 3.55,
+  barracks: 3.95,
+  shop: 3.75,
+  strip: 4.05,
+  depot: 3.55,
+  bunker: 3.05,
+  yard: 3.7,
 };
 
 /* Ayak izi merkezi: resmin alt ucundan yukarı, yükseklik oranı. Model bu noktadan zemine bağlanır. */
@@ -542,18 +604,18 @@ const UNIT_FRAMES = {
 };
 
 const UNIT_SPAN = {
-  tank: 5.6,
-  sph: 5.4,
-  mlrs: 5.3,
-  ifv: 5.1,
-  atgm: 4.8,
-  truck: 5.15,
-  infantry: 3.7,
-  heli: 6.2,
-  jet: 6.4,
-  wing: 5.8,
-  drone: 5.2,
-  quad: 4.4,
+  tank: 6.4,
+  sph: 6.15,
+  mlrs: 6.05,
+  ifv: 5.85,
+  atgm: 5.5,
+  truck: 5.9,
+  infantry: 4.25,
+  heli: 7.1,
+  jet: 7.3,
+  wing: 6.6,
+  drone: 5.95,
+  quad: 5.05,
 };
 
 function screenHeading(angle) {
@@ -735,8 +797,9 @@ function drawTrails(ctx, view) {
   ctx.restore();
 }
 
-function drawUnit(ctx, e, def, colors, gfx, state, view) {
-  let aim = e.angle;
+function drawUnit(ctx, e, def, colors, gfx, state, view, soft) {
+  const hull = soft?.angle ?? e.angle;
+  let aim = hull;
   if (e.plan?.targetId) {
     const target = state.entities.find((item) => item.id === e.plan.targetId);
     if (target) aim = Math.atan2(target.y - e.y, target.x - e.x);
@@ -747,13 +810,13 @@ function drawUnit(ctx, e, def, colors, gfx, state, view) {
   noteTrail(view, e, def, pose.dist);
   const walking = def.sprite === "infantry" && pose.dist > 0.15;
   const phase = def.air ? state.time * 16 + e.id : walking ? state.time * 8 + e.id : pose.track * 0.22;
-  const bank = def.air ? Math.max(-0.4, Math.min(0.4, angDiff(e.angle, pose.prevHull) * -8)) : 0;
+  const bank = def.air ? Math.max(-0.4, Math.min(0.4, angDiff(hull, pose.prevHull) * -8)) : 0;
   const kick = e.kick || 0;
   if (kick > 0.02) e.kick = kick * 0.82;
   const lift = def.air ? 36 + Math.sin(state.time * 2.2 + e.id) * 1.4 : 0;
   const frames = UNIT_FRAMES[form];
   if (frames) {
-    const shown = articulated ? pose.turret : e.angle;
+    const shown = articulated ? pose.turret : hull;
     const heading = screenHeading(shown);
     const picked = pickFrame(frames, heading, pose.frame);
     pose.frame = { key: picked.key, flip: picked.flip };
@@ -762,15 +825,15 @@ function drawUnit(ctx, e, def, colors, gfx, state, view) {
     if (kick > 0) ctx.translate(-Math.cos(heading) * kick * 7, -Math.sin(heading) * kick * 3);
     if (!def.air && def.sprite !== "infantry") {
       const facingRight = Math.cos(heading) > 0;
-      const tilt = (pose.pitch || 0) * 0.05 * (facingRight ? -1 : 1);
-      const bob = (e.drive || 0) > 0.3 ? Math.sin(pose.track * 0.35 + e.id) * 0.6 : 0;
+      const tilt = (pose.pitch || 0) * 0.04 * (facingRight ? -1 : 1);
+      const bob = (e.drive || 0) > 0.35 ? Math.sin(pose.track * 0.28 + e.id) * 0.35 : 0;
       ctx.translate(0, -bob);
       if (Math.abs(tilt) > 0.002) ctx.rotate(tilt);
     }
     const drawn = drawAnchored(ctx, picked.key, span, {
       flip: picked.flip,
       lift,
-      sink: def.air ? 0.02 : def.sprite === "infantry" ? 0.06 : 0.11,
+      sink: def.air ? 0.02 : def.sprite === "infantry" ? 0.055 : 0.1,
     });
     if (drawn && (def.damage || 0) > 0 && kick > 0.2) {
       ctx.fillStyle = kick > 0.65 ? "#fff1c4" : "rgba(255, 170, 60, 0.9)";
@@ -786,7 +849,7 @@ function drawUnit(ctx, e, def, colors, gfx, state, view) {
     key: def.sprite,
     name: def.name,
     radius: def.radius * (def.air ? 2.15 : def.naval ? 1.9 : def.worker ? 1.85 : def.sprite === "infantry" ? 1.7 : 2.05),
-    angle: e.angle,
+    angle: hull,
     aim: articulated ? pose.turret : aim,
     paint: colors.main,
     dark: colors.dark,
@@ -828,7 +891,7 @@ function drawFog(ctx, state, view) {
   }
   const g = view.fogCanvas.getContext("2d");
   g.putImageData(view.fogImg, 0, 0);
-  ctx.imageSmoothingEnabled = gfxOf(view).fogSmooth !== false;
+  setSmooth(ctx, gfxOf(view).fogSmooth !== false);
   ctx.drawImage(view.fogCanvas, 0, 0, state.mapW, state.mapH);
 }
 

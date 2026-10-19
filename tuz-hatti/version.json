@@ -1,6 +1,6 @@
 {
-  "versionCode": 15,
-  "versionName": "3.3",
-  "notes": "Kamera Generals düzeninde: harita eğik elmas değil, 37,5° eğimle düz bakış. Gölgeler zemine basılı yumuşak çıkartma; karargâh kaidesi ve tekerlekler ölçülen ayak izine oturur. Tekerlekli araçlar üç nokta dönüşü yapar, paletliler dönerken yavaşlar, frenle durur; duran araçta toz ve iz kalmaz.",
+  "versionCode": 16,
+  "versionName": "3.4",
+  "notes": "Çözünürlük yükseltildi: arazi ve birlik görselleri 2 kat piksel, ekran keskinliği arttı. Hareket yumuşadı: araçlar yavaş hızlanır, hedefe yumuşak frenler, çizim konumları sıçramadan kayar. Birlikler daha büyük ve net görünür.",
   "apk": "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }

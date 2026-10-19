@@ -33,7 +33,7 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 15, name: "3.3" };
+const APP = { code: 16, name: "3.4" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
@@ -217,6 +217,10 @@ function beginMatch(options) {
   view.selected.clear();
   view.fx = [];
   view.terrain = null;
+  view.terrainOverlay = null;
+  view.terrainBase = null;
+  view.terrainPhotoImg = null;
+  view._soft = null;
   view.fogCanvas = null;
   tool = null;
   paused = false;
@@ -1080,6 +1084,9 @@ function applyGfx(choice) {
   gfxChoice = { mode };
   view.gfx = { ...GFX_PRESETS[tier], mode, suggested, info };
   view.terrain = null;
+  view.terrainOverlay = null;
+  view.terrainBase = null;
+  view.terrainPhotoImg = null;
   try {
     localStorage.setItem(GFX_KEY, JSON.stringify(gfxChoice));
   } catch (err) {
