@@ -2,18 +2,19 @@
 
 import { GFX_PRESETS, suggestTier, tierAbove } from "./gfx.js";
 import { BUILD_ORDER, FACTION_IDS, buildingDef, faction, unitDef } from "./balance.js";
+import { MAP_IDS, MATCH_SIZES, battlePlan, mapById } from "./maps.js";
+import { applyPack, hostRoom, joinRoom, makeCode, packState } from "./net.js";
 import { playEvent, unlockAudio } from "./audio.js";
 import { aiAct, createAiMemory } from "./ai.js";
 import { drawMinimap, drawWorld } from "./render.js";
 import {
-  MAP_H,
-  MAP_W,
   canPlace,
   canSeeEntity,
   command,
   createMatch,
   entityDef,
   getEntity,
+  hostile,
   pickEntity,
   recomputeFog,
   step,
@@ -31,7 +32,8 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 2, name: "2.0" };
+const APP = { code: 3, name: "2.1" };
+const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://cdn.jsdelivr.net/gh/arsangaz01/arsan-gaz-erp-releases@cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
 
@@ -68,9 +70,16 @@ const view = {
 };
 
 let match = null;
-let aiMem = null;
+let aiMem = [];
 let playerFaction = "tur";
 let enemyFaction = "rus";
+let selectedMap = "anadolu";
+let selectedCount = 2;
+let me = 0;
+let role = "local";
+let net = null;
+let lobby = null;
+let snapAcc = 0;
 let paused = false;
 let tool = null;
 let pointer = null;
@@ -93,12 +102,24 @@ document.querySelector("#again").addEventListener("click", () => {
 document.querySelector("#back-menu").addEventListener("click", () => {
   running = false;
   match = null;
+  if (net) {
+    net.close();
+    net = null;
+  }
+  role = "local";
+  lobby = null;
+  me = 0;
   resultEl.classList.add("hidden");
   stage.classList.add("hidden");
   menu.classList.remove("hidden");
+  sayRoom("Yapay zekâ boş koltukları doldurur. Oda kodu ile karşılıklı da oynanır.");
 });
 
 pauseBtn.addEventListener("click", () => {
+  if (role === "guest") {
+    toast("Ev sahibi duraklatır");
+    return;
+  }
   paused = !paused;
   pauseBtn.textContent = paused ? "Sürdür" : "Duraklat";
   pauseBtn.setAttribute("aria-pressed", paused ? "true" : "false");
@@ -142,20 +163,61 @@ minimap.addEventListener("pointermove", (ev) => {
   if (ev.buttons) onMinimap(ev);
 });
 
-function startMatch() {
-  match = createMatch({
-    seed: (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0,
-    playerFaction,
-    enemyFaction,
+function factionsFor(count) {
+  const plan = battlePlan(selectedMap, count);
+  const pool = FACTION_IDS.filter((id) => id !== playerFaction);
+  const foe = enemyFaction === playerFaction ? pool[0] : enemyFaction;
+  const rest = pool.filter((id) => id !== foe);
+  let ally = 0;
+  let enemy = 0;
+  return plan.slots.map((slot, index) => {
+    if (index === 0) return playerFaction;
+    if (plan.battle === "ffa" || slot.team !== plan.slots[0].team) {
+      const id = enemy === 0 ? foe : rest[enemy % rest.length] || foe;
+      enemy += 1;
+      return id;
+    }
+    const id = rest[ally % rest.length] || playerFaction;
+    ally += 1;
+    return id;
   });
-  aiMem = createAiMemory();
+}
+
+function humanFlags(count) {
+  const flags = Array.from({ length: count }, () => false);
+  flags[0] = true;
+  if (role === "host" && lobby) {
+    for (const guest of lobby.guests) flags[guest.slot] = true;
+  }
+  return flags;
+}
+
+function beginMatch(options) {
+  const count = options.count || selectedCount;
+  const mapId = options.mapId || selectedMap;
+  me = options.slot ?? 0;
+  match = createMatch({
+    seed: options.seed,
+    mapId,
+    count,
+    factions: options.factions,
+    humans: options.humans,
+  });
+  aiMem = Array.from({ length: count }, () => createAiMemory());
+  view.viewer = me;
   view.selected.clear();
   view.fx = [];
   view.terrain = null;
+  view.fogCanvas = null;
   tool = null;
   paused = false;
+  snapAcc = 0;
   pauseBtn.textContent = "Duraklat";
   hudSig = "";
+  const goal = document.querySelector("#goal");
+  if (goal) {
+    goal.textContent = match.battle === "ffa" ? "Diğer karargâhları düşür" : "Rakip hattın karargâhını düşür";
+  }
   resultEl.classList.add("hidden");
   menu.classList.add("hidden");
   stage.classList.remove("hidden");
@@ -165,11 +227,36 @@ function startMatch() {
     focusHome();
   });
   last = performance.now();
-  toast("İkmal araçları yakıt toplar. İşçi seç, üssü kur, tank ve hava aracını üret.");
+  const map = mapById(match.mapId);
+  toast(`${map.name} · ${map.resourceName}. ${map.posture}`);
   if (!looping) {
     looping = true;
     requestAnimationFrame(frame);
   }
+  if (role === "host" && net && lobby) {
+    const payload = {
+      seed: options.seed,
+      mapId,
+      count,
+      factions: options.factions,
+      humans: options.humans,
+    };
+    for (const guest of lobby.guests) {
+      if (guest.conn.open) guest.conn.send({ t: "start", ...payload, slot: guest.slot });
+    }
+    net.broadcast(packState(match), { paused });
+  }
+}
+
+function startMatch() {
+  if (role === "guest") {
+    toast("Ev sahibi savaşı başlatınca harita açılır");
+    return;
+  }
+  const seed = (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0;
+  const factions = factionsFor(selectedCount);
+  const humans = humanFlags(selectedCount);
+  beginMatch({ seed, mapId: selectedMap, count: selectedCount, factions, humans, slot: 0 });
 }
 
 let looping = false;
@@ -193,7 +280,7 @@ function resize() {
 }
 
 function focusHome() {
-  const hq = match.entities.find((e) => e.owner === 0 && e.kind === "ocak");
+  const hq = match.entities.find((e) => e.owner === me && e.kind === "ocak");
   if (!hq) return;
   const viewW = view.canvasWidth / view.zoom;
   const viewH = view.canvasHeight / view.zoom;
@@ -205,19 +292,31 @@ function focusHome() {
 function clampCam() {
   const viewW = view.canvasWidth / view.zoom;
   const viewH = view.canvasHeight / view.zoom;
-  view.camX = clampTo(view.camX, 0, Math.max(0, MAP_W - viewW));
-  view.camY = clampTo(view.camY, 0, Math.max(0, MAP_H - viewH));
+  view.camX = clampTo(view.camX, 0, Math.max(0, match.mapW - viewW));
+  view.camY = clampTo(view.camY, 0, Math.max(0, match.mapH - viewH));
 }
 
 function frame(now) {
   if (!looping) return;
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  if (running && match && !paused && match.winner === null) {
-    aiAct(match, 1, dt, aiMem);
-    const events = step(match, dt);
-    for (const ev of events) acceptEvent(ev, now);
-    if (match.winner !== null) showResult();
+  if (running && match && match.winner === null && role !== "guest") {
+    if (!paused) {
+      for (let owner = 0; owner < match.playerCount; owner++) {
+        if (match.players[owner].human) continue;
+        aiAct(match, owner, dt, aiMem[owner]);
+      }
+      const events = step(match, dt);
+      for (const ev of events) acceptEvent(ev, now);
+      if (match.winner !== null) showResult();
+    }
+    if (role === "host" && net) {
+      snapAcc += dt;
+      if (snapAcc >= 0.2) {
+        snapAcc = 0;
+        net.broadcast(packState(match), { paused });
+      }
+    }
   }
   tickFx(dt);
   if (match) {
@@ -259,8 +358,8 @@ function acceptEvent(ev, now) {
       life: 0.35,
       max: 0.35,
     });
-  } else if (ev.type === "built" && ev.owner === 0) {
-    toast(`${buildingDef(match.players[0].faction, ev.kind).name} hazır`);
+  } else if (ev.type === "built" && ev.owner === me) {
+    toast(`${buildingDef(match.players[me].faction, ev.kind).name} hazır`);
   }
   const cap = view.gfx?.fxCap || 28;
   while (view.fx.length > cap) view.fx.shift();
@@ -328,8 +427,8 @@ function onPointerUp(ev) {
 function onMinimap(ev) {
   if (!match) return;
   const rect = minimap.getBoundingClientRect();
-  const x = ((ev.clientX - rect.left) / rect.width) * MAP_W;
-  const y = ((ev.clientY - rect.top) / rect.height) * MAP_H;
+  const x = ((ev.clientX - rect.left) / rect.width) * match.mapW;
+  const y = ((ev.clientY - rect.top) / rect.height) * match.mapH;
   const viewW = view.canvasWidth / view.zoom;
   const viewH = view.canvasHeight / view.zoom;
   view.camX = x - viewW / 2;
@@ -339,7 +438,7 @@ function onMinimap(ev) {
 
 function handleTap(x, y) {
   if (tool?.type === "place") {
-    const result = command(match, { by: 0, type: "place", workerId: tool.workerId, kind: tool.kind, x, y });
+    const result = issue({ type: "place", workerId: tool.workerId, kind: tool.kind, x, y });
     if (!result.ok) toast(REASONS[result.reason] || "Kurulamadı");
     else {
       tool = null;
@@ -352,23 +451,22 @@ function handleTap(x, y) {
     const building = [...view.selected]
       .map((id) => getEntity(match, id))
       .find((e) => e && e.isBuilding);
-    if (building) command(match, { by: 0, type: "rally", buildingId: building.id, x, y });
+    if (building) issue({ type: "rally", buildingId: building.id, x, y });
     tool = null;
     recomputeFog(match);
     return;
   }
-  const hit = pickEntity(match, x, y, 0);
+  const hit = pickEntity(match, x, y, me);
   if (tool === "attack") {
     const ids = selectedUnits().map((e) => e.id);
-    if (hit && hit.owner !== 0) command(match, { by: 0, type: "attack", ids, targetId: hit.id });
-    else command(match, { by: 0, type: "attackMove", ids, x, y });
+    if (hit && hostile(match, me, hit.owner)) issue({ type: "attack", ids, targetId: hit.id });
+    else issue({ type: "attackMove", ids, x, y });
     tool = null;
     return;
   }
-  if (hit && hit.owner === 0) {
+  if (hit && hit.owner === me) {
     if (!hit.constructed && hit.isBuilding && selectedWorkers().length) {
-      const result = command(match, {
-        by: 0,
+      const result = issue({
         type: "construct",
         buildingId: hit.id,
         workerIds: selectedWorkers().map((w) => w.id),
@@ -382,14 +480,14 @@ function handleTap(x, y) {
   }
   const units = selectedUnits();
   if (!units.length) {
-    if (hit && hit.owner !== 0) {
+    if (hit && hostile(match, me, hit.owner)) {
       view.selected.clear();
       view.selected.add(hit.id);
     } else view.selected.clear();
     return;
   }
-  if (hit && hit.owner !== 0) command(match, { by: 0, type: "attack", ids: units.map((u) => u.id), targetId: hit.id });
-  else command(match, { by: 0, type: "move", ids: units.map((u) => u.id), x, y });
+  if (hit && hostile(match, me, hit.owner)) issue({ type: "attack", ids: units.map((u) => u.id), targetId: hit.id });
+  else issue({ type: "move", ids: units.map((u) => u.id), x, y });
   recomputeFog(match);
 }
 
@@ -400,7 +498,7 @@ function selectBox(x1, y1, x2, y2) {
   const maxY = Math.max(y1, y2);
   view.selected.clear();
   for (const e of match.entities) {
-    if (e.owner !== 0 || e.hp <= 0) continue;
+    if (e.owner !== me || e.hp <= 0) continue;
     if (e.x < minX || e.x > maxX || e.y < minY || e.y > maxY) continue;
     view.selected.add(e.id);
   }
@@ -422,7 +520,7 @@ function selectedWorkers() {
 function pruneSelection() {
   for (const id of [...view.selected]) {
     const e = getEntity(match, id);
-    if (!e || e.hp <= 0 || (e.owner !== 0 && !canSeeEntity(match, 0, e))) view.selected.delete(id);
+    if (!e || e.hp <= 0 || (e.owner !== me && !canSeeEntity(match, me, e))) view.selected.delete(id);
   }
 }
 
@@ -430,7 +528,7 @@ function updateGhost() {
   view.ghost = null;
   view.rally = null;
   if (tool?.type === "place" && hover) {
-    view.ghost = { kind: tool.kind, x: hover.x, y: hover.y, ok: canPlace(match, 0, tool.kind, hover.x, hover.y) };
+    view.ghost = { kind: tool.kind, x: hover.x, y: hover.y, ok: canPlace(match, me, tool.kind, hover.x, hover.y) };
   }
   const only = selectedEntities();
   if (only.length === 1 && only[0].isBuilding && only[0].constructed && entityDef(match, only[0]).trains) {
@@ -439,8 +537,8 @@ function updateGhost() {
 }
 
 function updateCounters() {
-  const p = match.players[0];
-  const supply = supplyInfo(match, 0);
+  const p = match.players[me];
+  const supply = supplyInfo(match, me);
   ashEl.textContent = String(Math.floor(p.ash));
   supplyEl.textContent = `${supply.used}/${supply.cap}`;
 }
@@ -452,7 +550,7 @@ function refreshHud(force) {
     tool?.type || tool || "",
     tool?.kind || "",
     paused,
-    Math.floor(match.players[0].ash / 5),
+    Math.floor(match.players[me].ash / 5),
     ents
       .filter((e) => e.isBuilding)
       .map((e) => `${e.queue?.length || 0}:${e.constructed ? 1 : 0}`)
@@ -493,8 +591,8 @@ function paintInspect(ents) {
 }
 
 function buttonModel(ents) {
-  const own = ents.filter((e) => e.owner === 0);
-  const fac = match.players[0].faction;
+  const own = ents.filter((e) => e.owner === me);
+  const fac = match.players[me].faction;
   if (tool) return [{ id: "cancel", label: "İptal" }];
   if (!own.length) {
     return [
@@ -518,7 +616,7 @@ function buttonModel(ents) {
           id: "train",
           unit: kind,
           label: `${udef.name} · ${udef.cost}`,
-          poor: match.players[0].ash < udef.cost,
+          poor: match.players[me].ash < udef.cost,
         });
       }
       if (def.trains?.length) items.push({ id: "rally", label: "Toplanma" });
@@ -539,7 +637,7 @@ function buttonModel(ents) {
         id: "build",
         kind,
         label: `${bdef.name} · ${bdef.cost}`,
-        poor: match.players[0].ash < bdef.cost,
+        poor: match.players[me].ash < bdef.cost,
       });
     }
   }
@@ -568,7 +666,7 @@ function runButton(item) {
   if (item.id === "army") {
     view.selected.clear();
     for (const e of match.entities) {
-      if (e.owner === 0 && e.hp > 0 && !e.isBuilding && (entityDef(match, e).damage || 0) > 0) view.selected.add(e.id);
+      if (e.owner === me && e.hp > 0 && !e.isBuilding && (entityDef(match, e).damage || 0) > 0) view.selected.add(e.id);
     }
     if (!view.selected.size) toast("Henüz savaşan birliğin yok");
     return;
@@ -576,7 +674,7 @@ function runButton(item) {
   if (item.id === "workers") {
     view.selected.clear();
     for (const e of match.entities) {
-      if (e.owner === 0 && e.hp > 0 && !e.isBuilding && entityDef(match, e).worker) view.selected.add(e.id);
+      if (e.owner === me && e.hp > 0 && !e.isBuilding && entityDef(match, e).worker) view.selected.add(e.id);
     }
     return;
   }
@@ -597,7 +695,7 @@ function runButton(item) {
     return;
   }
   if (item.id === "harvest") {
-    command(match, { by: 0, type: "harvest", ids: selectedWorkers().map((w) => w.id) });
+    issue({ type: "harvest", ids: selectedWorkers().map((w) => w.id) });
     return;
   }
   if (item.id === "build") {
@@ -611,7 +709,7 @@ function runButton(item) {
   }
   if (item.id === "train") {
     const building = selectedEntities().find((e) => e.isBuilding);
-    const result = command(match, { by: 0, type: "train", buildingId: building.id, unitKind: item.unit });
+    const result = issue({ type: "train", buildingId: building.id, unitKind: item.unit });
     if (!result.ok) toast(REASONS[result.reason] || "Üretilemedi");
     return;
   }
@@ -624,7 +722,7 @@ function runButton(item) {
     let worker = null;
     let best = Infinity;
     for (const e of match.entities) {
-      if (e.owner !== 0 || e.hp <= 0 || e.isBuilding || !entityDef(match, e).worker) continue;
+      if (e.owner !== me || e.hp <= 0 || e.isBuilding || !entityDef(match, e).worker) continue;
       if (e.plan?.kind === "construct") continue;
       const d = Math.hypot(e.x - building.x, e.y - building.y);
       if (d < best) {
@@ -636,8 +734,17 @@ function runButton(item) {
       toast(REASONS.worker);
       return;
     }
-    command(match, { by: 0, type: "construct", buildingId: building.id, workerIds: [worker.id] });
+    issue({ type: "construct", buildingId: building.id, workerIds: [worker.id] });
   }
+}
+
+function issue(cmd) {
+  cmd.by = me;
+  if (role === "guest" && net) {
+    net.send(cmd);
+    return { ok: true };
+  }
+  return command(match, cmd);
 }
 
 function armAttack() {
@@ -651,17 +758,20 @@ function armAttack() {
 function issueStop() {
   const ids = selectedEntities().map((e) => e.id);
   if (!ids.length) return;
-  command(match, { by: 0, type: "stop", ids });
+  issue({ type: "stop", ids });
 }
 
 function showResult() {
-  const you = match.winner === 0;
+  if (!resultEl.classList.contains("hidden")) return;
+  const myTeam = match.players[me].team;
+  const you = match.winner === myTeam;
   const draw = match.winner === "draw";
-  resultTitle.textContent = draw ? "İki karargâh da düştü" : you ? "Rakip karargâh düştü" : "Karargâhın düştü";
+  const ffa = match.battle === "ffa";
+  resultTitle.textContent = draw ? "Karargâhlar düştü" : you ? (ffa ? "Son karargâh sende" : "Rakip hat düştü") : "Karargâhın düştü";
   const secs = Math.floor(match.time);
   const mm = String(Math.floor(secs / 60)).padStart(2, "0");
   const ss = String(secs % 60).padStart(2, "0");
-  resultBody.textContent = `${mm}:${ss} · toplanan yakıt ${Math.floor(match.players[0].gathered)} · imha ${match.players[0].kills}`;
+  resultBody.textContent = `${mm}:${ss} · toplanan yakıt ${Math.floor(match.players[me].gathered)} · imha ${match.players[me].kills}`;
   resultEl.classList.remove("hidden");
   if (you) navigator.vibrate?.([20, 40, 20]);
 }
@@ -792,7 +902,189 @@ function factionCard(id, role) {
   return btn;
 }
 
+function mountMaps() {
+  const root = document.querySelector("#maps");
+  if (!root) return;
+  root.replaceChildren();
+  for (const id of MAP_IDS) {
+    const map = mapById(id);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "map-card" + (id === selectedMap ? " selected" : "");
+    btn.innerHTML = `<img alt="" loading="lazy" /><div class="map-copy"><strong></strong><span></span></div>`;
+    btn.querySelector("img").src = `assets/${map.terrain}.jpg`;
+    btn.querySelector("strong").textContent = map.name;
+    btn.querySelector("span").textContent = `${map.country} · ${map.resourceName}`;
+    btn.addEventListener("click", () => {
+      unlockAudio();
+      selectedMap = id;
+      mountMaps();
+      paintMapBlurb();
+    });
+    root.append(btn);
+  }
+  paintMapBlurb();
+}
+
+function paintMapBlurb() {
+  const el = document.querySelector("#map-blurb");
+  if (!el) return;
+  const map = mapById(selectedMap);
+  el.textContent = `${map.blurb} ${map.posture} Kaynak adı ${map.resourceName}; miktar aynı oyuncu sayısında diğer haritalarla eşittir.`;
+}
+
+function mountSizes() {
+  const root = document.querySelector("#sizes");
+  if (!root) return;
+  root.replaceChildren();
+  for (const count of MATCH_SIZES) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "size-btn" + (count === selectedCount ? " selected" : "");
+    btn.innerHTML = `<strong>${count}</strong><span>${SIZE_LABEL[count]}</span>`;
+    btn.addEventListener("click", () => {
+      unlockAudio();
+      selectedCount = count;
+      mountSizes();
+    });
+    root.append(btn);
+  }
+}
+
+function sayRoom(text) {
+  const status = document.querySelector("#room-status");
+  if (status) status.textContent = text;
+}
+
+function nextGuestSlot() {
+  const plan = battlePlan(selectedMap, selectedCount);
+  const taken = new Set([0, ...(lobby?.guests || []).map((guest) => guest.slot)]);
+  const order = plan.slots
+    .map((_, index) => index)
+    .filter((index) => index > 0)
+    .sort((a, b) => {
+      const hostTeam = plan.slots[0].team;
+      const ta = plan.slots[a].team === hostTeam ? 1 : 0;
+      const tb = plan.slots[b].team === hostTeam ? 1 : 0;
+      return ta - tb || a - b;
+    });
+  for (const index of order) {
+    if (!taken.has(index)) return index;
+  }
+  return null;
+}
+
+async function openRoom() {
+  const input = document.querySelector("#room-code");
+  const code = ((input?.value || makeCode()) + "").trim().toUpperCase().slice(0, 4);
+  if (input) input.value = code;
+  sayRoom("Oda açılıyor…");
+  try {
+    if (net) {
+      net.close();
+      net = null;
+    }
+    role = "host";
+    lobby = { code, guests: [] };
+    net = await hostRoom(code, {
+      onGuest(conn) {
+        const slot = nextGuestSlot();
+        if (slot == null) {
+          if (conn.open) conn.send({ t: "full" });
+          return null;
+        }
+        lobby.guests.push({ conn, slot });
+        if (conn.open) conn.send({ t: "seat", slot, mapId: selectedMap, count: selectedCount });
+        sayRoom(`Oda ${code} · ${lobby.guests.length} oyuncu bağlandı`);
+        return slot;
+      },
+      onCommand(slot, cmd) {
+        if (!match || match.winner !== null) return;
+        cmd.by = slot;
+        command(match, cmd);
+      },
+      onLeave(slot) {
+        if (!lobby) return;
+        lobby.guests = lobby.guests.filter((guest) => guest.slot !== slot);
+        sayRoom(`Oda ${code} · koltuk ${slot + 1} boşaldı`);
+      },
+    });
+    sayRoom(`Oda ${code} hazır. Kodu paylaş, sonra Savaşa gir.`);
+  } catch (err) {
+    role = "local";
+    lobby = null;
+    net = null;
+    sayRoom("Oda açılamadı. Yerel skirmish ile devam edebilirsin.");
+  }
+}
+
+async function enterRoom() {
+  const input = document.querySelector("#room-code");
+  const code = ((input?.value || "") + "").trim().toUpperCase();
+  if (code.length < 4) {
+    sayRoom("Dört harfli oda kodunu yaz");
+    return;
+  }
+  sayRoom("Odaya bağlanılıyor…");
+  try {
+    if (net) {
+      net.close();
+      net = null;
+    }
+    role = "guest";
+    me = 0;
+    net = await joinRoom(code, {
+      onStart(msg) {
+        beginMatch({
+          seed: msg.seed,
+          mapId: msg.mapId,
+          count: msg.count,
+          factions: msg.factions,
+          humans: msg.humans,
+          slot: msg.slot,
+        });
+      },
+      onSnap(msg) {
+        if (!match) return;
+        paused = !!msg.paused;
+        pauseBtn.textContent = paused ? "Sürdür" : "Duraklat";
+        applyPack(match, msg.pack);
+        if (match.winner !== null) showResult();
+      },
+      onFull() {
+        sayRoom("Oda dolu");
+      },
+      onSeat(msg) {
+        me = msg.slot;
+        if (msg.mapId) selectedMap = msg.mapId;
+        if (msg.count) selectedCount = msg.count;
+        mountMaps();
+        mountSizes();
+        sayRoom(`Koltuk ${msg.slot + 1}. Ev sahibi savaşı başlatınca gireceksin.`);
+      },
+      onStatus(text) {
+        sayRoom(text);
+      },
+    });
+  } catch (err) {
+    role = "local";
+    net = null;
+    sayRoom("Odaya girilemedi. Kod veya bağlantıyı kontrol et.");
+  }
+}
+
+mountMaps();
+mountSizes();
 mountPickers();
+
+document.querySelector("#room-host")?.addEventListener("click", () => {
+  unlockAudio();
+  openRoom();
+});
+document.querySelector("#room-join")?.addEventListener("click", () => {
+  unlockAudio();
+  enterRoom();
+});
 
 function sayUpdate(text) {
   const status = document.querySelector("#update-status");

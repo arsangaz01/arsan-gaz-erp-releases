@@ -102,11 +102,96 @@ h2 { font-size: 26px; }
   line-height: 1.45;
 }
 
-.factions {
+.maps, .sizes, .factions {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   margin-top: 8px;
+}
+
+.maps {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.sizes {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.factions {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.map-card, .size-btn {
+  text-align: left;
+  background: #101612;
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  min-height: 72px;
+}
+
+.map-card {
+  padding: 0;
+  overflow: hidden;
+  min-height: 118px;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-card img {
+  display: block;
+  width: 100%;
+  height: 54px;
+  object-fit: cover;
+  filter: saturate(0.92) contrast(1.05);
+}
+
+.map-card .map-copy {
+  padding: 7px 9px 9px;
+}
+
+.map-card strong, .size-btn strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 3px;
+}
+
+.map-card span, .size-btn span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.map-card.selected, .size-btn.selected {
+  border-color: var(--brass);
+  background: #1c2618;
+}
+
+.map-blurb {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  min-height: 2.8em;
+}
+
+.room {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#room-code {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  background: #101612;
+  color: var(--paper);
+  border-radius: 2px;
+  padding: 0 12px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  font-size: 16px;
+  touch-action: manipulation;
 }
 
 .faction {
@@ -367,7 +452,10 @@ h2 { font-size: 26px; }
 @media (max-width: 860px) {
   .menu-top { flex-wrap: wrap; }
   .menu-top .eyebrow { width: 100%; margin-bottom: 4px; }
-  .factions { grid-template-columns: 1fr 1fr; }
+  .maps, .factions { grid-template-columns: 1fr 1fr; }
+  .sizes { grid-template-columns: repeat(3, 1fr); }
+  .room { grid-template-columns: 1fr 1fr; }
+  #room-code { grid-column: 1 / -1; }
   h1 { font-size: 28px; }
   #goal { display: none; }
   #minimap { width: 108px; height: 68px; }

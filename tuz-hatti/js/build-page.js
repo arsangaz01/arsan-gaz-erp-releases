@@ -5,11 +5,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const order = ["balance.js", "sim.js", "ai.js", "audio.js", "gfx.js", "render.js", "main.js"];
+const order = ["balance.js", "maps.js", "sim.js", "ai.js", "audio.js", "gfx.js", "render.js", "net.js", "main.js"];
 
 function stripModules(source) {
   return source
     .replace(/^\s*import\s[\s\S]*?from\s+["'][^"']+["'];?/gm, "")
+    .replace(/^\s*export\s*\{[^}]*\}\s*;?/gm, "")
     .replace(/\bexport\s+(?=(async\s+)?function\b|const\b|let\b|var\b|class\b)/g, "");
 }
 

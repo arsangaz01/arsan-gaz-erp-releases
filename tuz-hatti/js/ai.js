@@ -1,7 +1,7 @@
 /** Rakip hat. Yakıtı kurar, ikmal tıkanırsa ambar açar, ordu eşiğinde saldırır. */
 
 import { buildingDef, unitDef } from "./balance.js";
-import { canPlace, command, supplyInfo } from "./sim.js";
+import { canPlace, command, hostile, supplyInfo } from "./sim.js";
 
 export function createAiMemory() {
   return { acc: 0, attackLock: 0 };
@@ -96,7 +96,7 @@ export function aiAct(state, owner, dt, mem) {
   }
 
   if (!underAttack && state.time > 62 && mem.attackLock <= 0 && fighters.length >= 4) {
-    const enemyHq = state.entities.find((e) => e.owner !== owner && e.kind === "ocak" && e.hp > 0);
+    const enemyHq = nearestHostileHq(state, owner, hq);
     if (enemyHq) {
       const idle = fighters.filter((f) => !f.plan || f.plan.kind === "guard" || f.plan.kind === "move");
       const pack = idle.length >= 4 ? idle : fighters;
@@ -152,8 +152,22 @@ function ensureBuilding(state, owner, factionId, buildings, workers, kind) {
   return command(state, { by: owner, type: "place", workerId: worker.id, kind, x: spot.x, y: spot.y }).ok;
 }
 
+function nearestHostileHq(state, owner, hq) {
+  let best = null;
+  let bestD = Infinity;
+  for (const entity of state.entities) {
+    if (!hostile(state, owner, entity.owner) || entity.kind !== "ocak" || entity.hp <= 0) continue;
+    const d = hq ? Math.hypot(entity.x - hq.x, entity.y - hq.y) : 0;
+    if (d < bestD) {
+      bestD = d;
+      best = entity;
+    }
+  }
+  return best;
+}
+
 function findSpot(state, owner, kind, anchor) {
-  const enemy = state.entities.find((e) => e.owner !== owner && e.kind === "ocak");
+  const enemy = nearestHostileHq(state, owner, anchor);
   const bias = enemy ? Math.atan2(enemy.y - anchor.y, enemy.x - anchor.x) : 0;
   for (const dist of [130, 170, 210, 250, 300]) {
     for (let i = 0; i < 18; i++) {
@@ -181,7 +195,7 @@ function threatPoint(state, owner, buildings) {
   let sy = 0;
   let n = 0;
   for (const foe of state.entities) {
-    if (foe.owner === owner || foe.hp <= 0 || foe.isBuilding) continue;
+    if (!hostile(state, owner, foe.owner) || foe.hp <= 0 || foe.isBuilding) continue;
     for (const b of buildings) {
       if (Math.hypot(foe.x - b.x, foe.y - b.y) < 460) {
         sx += foe.x;

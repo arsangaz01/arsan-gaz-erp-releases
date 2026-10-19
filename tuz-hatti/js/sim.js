@@ -7,36 +7,10 @@ import {
   defFor,
   unitDef,
 } from "./balance.js";
+import { battlePlan } from "./maps.js";
 
-export const MAP_W = 2100;
-export const MAP_H = 1300;
 export const CELL = 22;
 export const BUILD_RADIUS = 290;
-
-const BASES = {
-  0: { x: 300, y: 650 },
-  1: { x: 1800, y: 650 },
-};
-
-const NODE_LAYOUT = [
-  { x: 540, y: 500, amount: 2000 },
-  { x: 1560, y: 820, amount: 2000 },
-  { x: 1050, y: 240, amount: 1500 },
-  { x: 1050, y: 1060, amount: 1500 },
-];
-
-const ROCKS = [
-  [1050, 650, 52],
-  [900, 500, 34],
-  [1220, 800, 36],
-  [820, 860, 28],
-  [1260, 430, 30],
-  [680, 260, 24],
-  [1420, 1080, 26],
-  [430, 1040, 30],
-  [1680, 280, 28],
-  [1050, 900, 22],
-];
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -49,11 +23,36 @@ export function mulberry32(seed) {
   };
 }
 
-export function createMatch({ seed = 1, playerFaction = "tur", enemyFaction = "rus" } = {}) {
+export function createMatch({
+  seed = 1,
+  playerFaction = "usa",
+  enemyFaction = "rus",
+  mapId = "anadolu",
+  count = 2,
+  factions = null,
+  humans = null,
+} = {}) {
   const rng = mulberry32(seed);
-  const cols = Math.ceil(MAP_W / CELL);
-  const rows = Math.ceil(MAP_H / CELL);
+  const plan = battlePlan(mapId, count);
+  const roster = factions && factions.length ? factions : [playerFaction, enemyFaction];
+  const cols = Math.ceil(plan.map.w / CELL);
+  const rows = Math.ceil(plan.map.h / CELL);
   const cells = cols * rows;
+  const players = {};
+  const visible = {};
+  const explored = {};
+  plan.slots.forEach((slot, index) => {
+    players[index] = {
+      faction: roster[index % roster.length],
+      ash: 420,
+      gathered: 0,
+      kills: 0,
+      team: slot.team,
+      human: humans ? !!humans[index] : index === 0,
+    };
+    visible[index] = new Uint8Array(cells);
+    explored[index] = new Uint8Array(cells);
+  });
   const state = {
     seed,
     rng,
@@ -62,60 +61,69 @@ export function createMatch({ seed = 1, playerFaction = "tur", enemyFaction = "r
     nextId: 1,
     cols,
     rows,
+    mapId: plan.map.id,
+    mapW: plan.map.w,
+    mapH: plan.map.h,
+    terrainKey: plan.map.terrain,
+    battle: plan.battle,
+    playerCount: plan.count,
+    slots: plan.slots,
     entities: [],
-    nodes: NODE_LAYOUT.map((n, i) => ({
-      id: i + 1,
-      x: n.x,
-      y: n.y,
-      amount: n.amount,
-      max: n.amount,
+    nodes: plan.nodes.map((node, index) => ({
+      id: index + 1,
+      x: node.x,
+      y: node.y,
+      amount: node.amount,
+      max: node.amount,
       radius: 26,
+      kind: node.kind,
     })),
-    obstacles: ROCKS.map(([x, y, r]) => ({ x, y, r })),
+    obstacles: plan.map.obstacles.map((obstacle) => ({ ...obstacle })),
     decor: [],
-    players: {
-      0: blankPlayer(playerFaction),
-      1: blankPlayer(enemyFaction),
-    },
-    visible: { 0: new Uint8Array(cells), 1: new Uint8Array(cells) },
-    explored: { 0: new Uint8Array(cells), 1: new Uint8Array(cells) },
+    players,
+    visible,
+    explored,
   };
 
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 18; i++) {
     state.decor.push({
-      x: 40 + rng() * (MAP_W - 80),
-      y: 40 + rng() * (MAP_H - 80),
+      x: 40 + rng() * (state.mapW - 80),
+      y: 40 + rng() * (state.mapH - 80),
       r: 10 + rng() * 18,
       kind: rng() > 0.55 ? "bush" : "crack",
     });
   }
 
-  spawnBase(state, 0);
-  spawnBase(state, 1);
-  revealDisk(state, 0, BASES[0].x, BASES[0].y, 420);
-  revealDisk(state, 1, BASES[1].x, BASES[1].y, 420);
+  for (let index = 0; index < plan.count; index++) {
+    spawnBase(state, index);
+    const slot = plan.slots[index];
+    revealDisk(state, index, slot.x, slot.y, 420);
+  }
   recomputeFog(state);
   return state;
 }
 
 function blankPlayer(factionId) {
-  return { faction: factionId, ash: 420, gathered: 0, kills: 0 };
+  return { faction: factionId, ash: 420, gathered: 0, kills: 0, team: 0, human: false };
 }
 
 function spawnBase(state, owner) {
-  const base = BASES[owner];
-  const dir = owner === 0 ? 1 : -1;
+  const base = state.slots[owner];
+  const ang = Math.atan2(state.mapH / 2 - base.y, state.mapW / 2 - base.x);
   const hq = makeBuilding(state, owner, "ocak", base.x, base.y);
   hq.constructed = true;
   hq.progress = 1;
   hq.hp = hq.maxHp;
+  hq.angle = ang;
   state.entities.push(hq);
+  const side = ang + Math.PI / 2;
   const spots = [
-    [base.x + dir * 86, base.y + 42],
-    [base.x + dir * 86, base.y - 42],
+    [base.x + Math.cos(ang) * 78 + Math.cos(side) * 36, base.y + Math.sin(ang) * 78 + Math.sin(side) * 36],
+    [base.x + Math.cos(ang) * 78 - Math.cos(side) * 36, base.y + Math.sin(ang) * 78 - Math.sin(side) * 36],
   ];
   for (const [x, y] of spots) {
     const worker = makeUnit(state, owner, "tasiyici", x, y);
+    worker.angle = ang;
     const node = nearestOre(state, x, y);
     if (node) worker.plan = { kind: "harvest", nodeId: node.id, phase: "toNode", gather: 0 };
     state.entities.push(worker);
@@ -124,7 +132,7 @@ function spawnBase(state, owner) {
 
 function makeBuilding(state, owner, kind, x, y) {
   const def = buildingDef(state.players[owner].faction, kind);
-  const dir = owner === 0 ? 1 : -1;
+  const ang = Math.atan2(state.mapH / 2 - y, state.mapW / 2 - x);
   return {
     id: state.nextId++,
     owner,
@@ -135,13 +143,13 @@ function makeBuilding(state, owner, kind, x, y) {
     hp: Math.round(def.hp * 0.2),
     maxHp: def.hp,
     radius: def.radius,
-    angle: owner === 0 ? 0 : Math.PI,
+    angle: ang,
     constructed: false,
     progress: 0,
     cooldown: 0,
     queue: [],
-    rallyX: x + dir * (def.radius + 40),
-    rallyY: y,
+    rallyX: x + Math.cos(ang) * (def.radius + 40),
+    rallyY: y + Math.sin(ang) * (def.radius + 40),
     carry: 0,
     plan: null,
   };
@@ -159,7 +167,7 @@ function makeUnit(state, owner, kind, x, y) {
     hp: def.hp,
     maxHp: def.hp,
     radius: def.radius,
-    angle: owner === 0 ? 0 : Math.PI,
+    angle: Math.atan2(state.mapH / 2 - y, state.mapW / 2 - x),
     constructed: true,
     progress: 1,
     cooldown: 0,
@@ -205,7 +213,7 @@ export function canPlace(state, owner, kind, x, y) {
   const def = buildingDef(state.players[owner].faction, kind);
   if (!def || def.hq) return false;
   const r = def.radius;
-  if (x < r + 16 || y < r + 16 || x > MAP_W - r - 16 || y > MAP_H - r - 16) return false;
+  if (x < r + 16 || y < r + 16 || x > state.mapW - r - 16 || y > state.mapH - r - 16) return false;
 
   let nearFriendly = false;
   for (const e of state.entities) {
@@ -246,7 +254,7 @@ export function command(state, cmd) {
     }
     case "attack": {
       const target = getEntity(state, cmd.targetId);
-      if (!target || target.hp <= 0 || target.owner === owner) return { ok: false, reason: "target" };
+      if (!target || target.hp <= 0 || !hostile(state, owner, target.owner)) return { ok: false, reason: "target" };
       const ids = livingOwnedUnits(state, owner, cmd.ids);
       if (!ids.length) return { ok: false, reason: "units" };
       for (const e of ids) {
@@ -339,8 +347,8 @@ export function command(state, cmd) {
     case "rally": {
       const b = ownedAlive(state, owner, cmd.buildingId);
       if (!b || !b.isBuilding) return { ok: false, reason: "building" };
-      b.rallyX = clamp(cmd.x, 20, MAP_W - 20);
-      b.rallyY = clamp(cmd.y, 20, MAP_H - 20);
+      b.rallyX = clamp(cmd.x, 20, state.mapW - 20);
+      b.rallyY = clamp(cmd.y, 20, state.mapH - 20);
       return { ok: true };
     }
     default:
@@ -459,9 +467,10 @@ function updateUnit(state, e, def, dt, events) {
   }
 
   if (plan.kind === "attackMove") {
-    const foe = nearestEnemy(state, e, Math.min(def.sight || 160, (def.range || 40) + 70));
+    const acquire = Math.max((def.sight || 160) * 0.85, (def.range || 40) + 90);
+    const foe = nearestEnemy(state, e, acquire);
     if (foe && (def.damage || 0) > 0) {
-      e.plan = { kind: "attack", targetId: foe.id, leash: 260, resume: { kind: "attackMove", x: plan.x, y: plan.y } };
+      e.plan = { kind: "attack", targetId: foe.id, leash: 320, resume: { kind: "attackMove", x: plan.x, y: plan.y } };
       return;
     }
     const arrived = moveToward(state, e, plan.x, plan.y, def.speed * dt, 12, null);
@@ -664,7 +673,7 @@ function nearestEnemy(state, e, range) {
   let best = null;
   let bestD = Infinity;
   for (const o of state.entities) {
-    if (o.owner === e.owner || o.hp <= 0) continue;
+    if (!hostile(state, e.owner, o.owner) || o.hp <= 0) continue;
     if (o.isBuilding && !o.constructed && o.progress <= 0) continue;
     const d = Math.hypot(o.x - e.x, o.y - e.y);
     if (d <= range + o.radius && d < bestD) {
@@ -717,11 +726,11 @@ function moveToward(state, e, tx, ty, step, stopDist, ignoreId) {
   }
   let vx = dx / dist;
   let vy = dy / dist;
-  const look = 26;
+  const look = isAir(state, e) ? 18 : 32;
   if (!isAir(state, e) && circleBlocked(state, e.x + vx * look, e.y + vy * look, e.radius * 0.75, ignoreId)) {
     const base = Math.atan2(vy, vx);
     let steered = false;
-    for (const off of [0.8, -0.8, 1.4, -1.4, 2.2, -2.2, 3]) {
+    for (const off of [0.55, -0.55, 1.05, -1.05, 1.7, -1.7, 2.4, -2.4, 3.1]) {
       const ax = Math.cos(base + off);
       const ay = Math.sin(base + off);
       if (!circleBlocked(state, e.x + ax * look, e.y + ay * look, e.radius * 0.7, ignoreId)) {
@@ -732,15 +741,15 @@ function moveToward(state, e, tx, ty, step, stopDist, ignoreId) {
       }
     }
     if (!steered) {
-      vx *= 0.35;
-      vy *= 0.35;
+      vx *= 0.28;
+      vy *= 0.28;
     }
   }
   const travel = Math.min(step, dist - stopDist);
   e.x += vx * travel;
   e.y += vy * travel;
-  e.x = clamp(e.x, e.radius, MAP_W - e.radius);
-  e.y = clamp(e.y, e.radius, MAP_H - e.radius);
+  e.x = clamp(e.x, e.radius, state.mapW - e.radius);
+  e.y = clamp(e.y, e.radius, state.mapH - e.radius);
   face(e, e.x + vx, e.y + vy, 0.16);
   return Math.hypot(tx - e.x, ty - e.y) <= stopDist + 1.25;
 }
@@ -750,13 +759,14 @@ function face(e, x, y, dt) {
   let d = target - e.angle;
   while (d > Math.PI) d -= Math.PI * 2;
   while (d < -Math.PI) d += Math.PI * 2;
-  const max = Math.max(0.05, dt) * 8;
+  const turn = e.isBuilding ? 6 : 11;
+  const max = Math.max(0.05, dt) * turn;
   if (Math.abs(d) < max) e.angle = target;
   else e.angle += Math.sign(d) * max;
 }
 
 function circleBlocked(state, x, y, r, ignoreId) {
-  if (x < r || y < r || x > MAP_W - r || y > MAP_H - r) return true;
+  if (x < r || y < r || x > state.mapW - r || y > state.mapH - r) return true;
   for (const o of state.obstacles) {
     if (Math.hypot(o.x - x, o.y - y) < o.r + r) return true;
   }
@@ -800,8 +810,8 @@ function separateUnits(state) {
   }
   for (const u of units) {
     if (isAir(state, u)) {
-      u.x = clamp(u.x, u.radius, MAP_W - u.radius);
-      u.y = clamp(u.y, u.radius, MAP_H - u.radius);
+      u.x = clamp(u.x, u.radius, state.mapW - u.radius);
+      u.y = clamp(u.y, u.radius, state.mapH - u.radius);
       continue;
     }
     for (const o of state.obstacles) pushOut(u, o.x, o.y, o.r);
@@ -814,8 +824,8 @@ function separateUnits(state) {
       }
       pushOut(u, b.x, b.y, b.radius);
     }
-    u.x = clamp(u.x, u.radius, MAP_W - u.radius);
-    u.y = clamp(u.y, u.radius, MAP_H - u.radius);
+    u.x = clamp(u.x, u.radius, state.mapW - u.radius);
+    u.y = clamp(u.y, u.radius, state.mapH - u.radius);
   }
 }
 
@@ -848,11 +858,20 @@ function freeSpot(state, x, y, radius, ignoreId) {
 }
 
 function checkWinner(state) {
-  const a = state.entities.some((e) => e.owner === 0 && e.kind === "ocak" && e.hp > 0);
-  const b = state.entities.some((e) => e.owner === 1 && e.kind === "ocak" && e.hp > 0);
-  if (!a && !b) state.winner = "draw";
-  else if (!a) state.winner = 1;
-  else if (!b) state.winner = 0;
+  const alive = new Set();
+  for (const entity of state.entities) {
+    if (entity.kind === "ocak" && entity.hp > 0) alive.add(state.players[entity.owner].team);
+  }
+  if (alive.size === 0) state.winner = "draw";
+  else if (alive.size === 1) state.winner = [...alive][0];
+}
+
+export function hostile(state, owner, other) {
+  if (owner === other) return false;
+  const left = state.players[owner];
+  const right = state.players[other];
+  if (!left || !right) return true;
+  return left.team !== right.team;
 }
 
 export function cellIndex(state, x, y) {
@@ -870,7 +889,9 @@ export function cellExplored(state, owner, x, y) {
 }
 
 export function canSeeEntity(state, viewer, entity) {
-  if (entity.owner === viewer) return true;
+  const viewerTeam = state.players[viewer]?.team;
+  const ownerTeam = state.players[entity.owner]?.team;
+  if (entity.owner === viewer || (viewerTeam !== undefined && viewerTeam === ownerTeam)) return true;
   if (entity.isBuilding && cellExplored(state, viewer, entity.x, entity.y)) return true;
   return cellVisible(state, viewer, entity.x, entity.y);
 }
@@ -893,8 +914,8 @@ function revealDisk(state, owner, x, y, r) {
 }
 
 export function recomputeFog(state) {
-  state.visible[0].fill(0);
-  state.visible[1].fill(0);
+  const ids = Object.keys(state.players).map(Number);
+  for (const id of ids) state.visible[id].fill(0);
   for (const e of state.entities) {
     if (e.hp <= 0) continue;
     const def = entityDef(state, e);
@@ -918,6 +939,19 @@ export function recomputeFog(state) {
         const i = cy * state.cols + cx;
         vis[i] = 1;
         exp[i] = 1;
+      }
+    }
+  }
+  for (const id of ids) {
+    for (const ally of ids) {
+      if (ally === id || state.players[ally].team !== state.players[id].team) continue;
+      const vis = state.visible[id];
+      const exp = state.explored[id];
+      const otherVis = state.visible[ally];
+      const otherExp = state.explored[ally];
+      for (let i = 0; i < vis.length; i++) {
+        if (otherVis[i]) vis[i] = 1;
+        if (otherExp[i]) exp[i] = 1;
       }
     }
   }

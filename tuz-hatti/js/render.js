@@ -1,7 +1,7 @@
 /** Dünya çizimi. Araç ve üs görselleri üstten, magenta zeminden ayrılmış özgün plakalardır. */
 
 import { faction } from "./balance.js";
-import { MAP_H, MAP_W, canSeeEntity, cellExplored, cellVisible, entityDef } from "./sim.js";
+import { canSeeEntity, cellExplored, cellVisible, entityDef } from "./sim.js";
 
 export const SPRITE_SRC = {
   abrams: "assets/abrams.png",
@@ -33,6 +33,22 @@ export const SPRITE_SRC = {
   strip: "assets/strip.png",
   fuel: "assets/fuel.png",
   terrain: "assets/terrain.jpg",
+  "map-tur": "assets/map-tur.jpg",
+  "map-usa": "assets/map-usa.jpg",
+  "map-cin": "assets/map-cin.jpg",
+  "map-rus": "assets/map-rus.jpg",
+  "map-alm": "assets/map-alm.jpg",
+  "map-ing": "assets/map-ing.jpg",
+  "map-ukr": "assets/map-ukr.jpg",
+  "map-irn": "assets/map-irn.jpg",
+};
+
+const NODE_TINT = {
+  maden: "#b08958",
+  petrol: "#3a2c22",
+  komur: "#141414",
+  gaz: "#8ec8d4",
+  tahil: "#d2b85a",
 };
 
 const images = {};
@@ -67,7 +83,7 @@ export function drawWorld(ctx, state, view) {
   ensureTerrain(view, state, gfx);
   ctx.imageSmoothingEnabled = !!gfx.smoothing;
   ctx.setTransform(view.zoom, 0, 0, view.zoom, -view.camX * view.zoom, -view.camY * view.zoom);
-  ctx.drawImage(view.terrain, 0, 0, MAP_W, MAP_H);
+  ctx.drawImage(view.terrain, 0, 0, state.mapW, state.mapH);
   if (gfx.decor) drawDecor(ctx, state);
   drawNodes(ctx, state, gfx);
   drawEntities(ctx, state, view, gfx);
@@ -79,46 +95,66 @@ export function drawWorld(ctx, state, view) {
 }
 
 function ensureTerrain(view, state, gfx) {
-  const photo = images.terrain;
+  const key = state.terrainKey || "terrain";
+  const photo = images[key] || images.terrain;
   const photoReady = !!(photo && photo.complete && photo.naturalWidth);
-  if (photo && !photo.complete && !view.terrainHook) {
-    view.terrainHook = true;
+  if (photo && !photo.complete && !photo.dataset.hooked) {
+    photo.dataset.hooked = "1";
     photo.addEventListener("load", () => {
       view.terrain = null;
     });
   }
   const scale = gfx.terrainScale || 0.5;
-  if (view.terrain && view.terrainSeed === state.seed && view.terrainPhoto === photoReady && view.terrainScale === scale) return;
+  if (
+    view.terrain &&
+    view.terrainKey === key &&
+    view.terrainSeed === state.seed &&
+    view.terrainPhoto === photoReady &&
+    view.terrainScale === scale
+  ) {
+    return;
+  }
   const c = document.createElement("canvas");
-  c.width = Math.floor(MAP_W * scale);
-  c.height = Math.floor(MAP_H * scale);
+  c.width = Math.max(1, Math.floor(state.mapW * scale));
+  c.height = Math.max(1, Math.floor(state.mapH * scale));
   const g = c.getContext("2d");
   g.scale(scale, scale);
   if (photoReady) {
-    g.drawImage(photo, 0, 0, MAP_W, MAP_H);
+    g.drawImage(photo, 0, 0, state.mapW, state.mapH);
   } else {
     g.fillStyle = "#6d6248";
-    g.fillRect(0, 0, MAP_W, MAP_H);
+    g.fillRect(0, 0, state.mapW, state.mapH);
   }
-  const shade = g.createLinearGradient(0, 0, 0, MAP_H);
+  const shade = g.createLinearGradient(0, 0, 0, state.mapH);
   shade.addColorStop(0, "rgba(12,16,10,0.18)");
   shade.addColorStop(0.5, "rgba(0,0,0,0)");
   shade.addColorStop(1, "rgba(8,10,8,0.22)");
   g.fillStyle = shade;
-  g.fillRect(0, 0, MAP_W, MAP_H);
-  for (const rock of state.obstacles) {
-    g.fillStyle = "rgba(20,16,12,0.45)";
-    g.beginPath();
-    g.ellipse(rock.x, rock.y, rock.r * 0.9, rock.r * 0.55, 0, 0, Math.PI * 2);
-    g.fill();
-    g.strokeStyle = "rgba(40,32,24,0.8)";
-    g.lineWidth = 2;
-    g.stroke();
-  }
+  g.fillRect(0, 0, state.mapW, state.mapH);
+  for (const rock of state.obstacles) paintObstacle(g, rock);
   view.terrain = c;
+  view.terrainKey = key;
   view.terrainSeed = state.seed;
   view.terrainPhoto = photoReady;
   view.terrainScale = scale;
+}
+
+function paintObstacle(g, rock) {
+  if (rock.kind === "water") {
+    g.fillStyle = "rgba(28, 78, 112, 0.5)";
+    g.strokeStyle = "rgba(190, 220, 230, 0.45)";
+  } else if (rock.kind === "forest") {
+    g.fillStyle = "rgba(22, 52, 28, 0.42)";
+    g.strokeStyle = "rgba(16, 36, 18, 0.55)";
+  } else {
+    g.fillStyle = "rgba(62, 54, 46, 0.28)";
+    g.strokeStyle = "rgba(210, 190, 160, 0.28)";
+  }
+  g.beginPath();
+  g.ellipse(rock.x, rock.y, rock.r * 0.92, rock.r * 0.58, 0, 0, Math.PI * 2);
+  g.fill();
+  g.lineWidth = 1.5;
+  g.stroke();
 }
 
 function drawDecor(ctx, state) {
@@ -138,7 +174,7 @@ function drawNodes(ctx, state, gfx) {
     ctx.save();
     ctx.translate(n.x, n.y);
     ctx.globalAlpha = left > 0 ? 1 : 0.4;
-    if (!drawSprite(ctx, "fuel", size, null)) {
+    if (!drawSprite(ctx, "fuel", size, NODE_TINT[n.kind] || null)) {
       ctx.fillStyle = left > 0 ? "#8a7040" : "#666";
       ctx.beginPath();
       ctx.arc(0, 0, 14, 0, Math.PI * 2);
@@ -155,7 +191,7 @@ function drawEntities(ctx, state, view, gfx) {
     return layer(a) - layer(b) || a.y - b.y;
   });
   for (const e of list) {
-    if (e.owner !== 0 && !canSeeEntity(state, 0, e)) continue;
+    if (e.owner !== viewer(view) && !canSeeEntity(state, viewer(view), e)) continue;
     const colors = faction(state.players[e.owner].faction).colors;
     const def = entityDef(state, e);
     ctx.save();
@@ -245,17 +281,22 @@ function tinted(key, tint) {
   return c;
 }
 
+function viewer(view) {
+  return view.viewer ?? 0;
+}
+
 function drawFog(ctx, state, view) {
   const { cols, rows } = state;
-  if (!view.fogCanvas) {
+  const who = viewer(view);
+  if (!view.fogCanvas || view.fogCanvas.width !== cols || view.fogCanvas.height !== rows) {
     view.fogCanvas = document.createElement("canvas");
     view.fogCanvas.width = cols;
     view.fogCanvas.height = rows;
     view.fogImg = new ImageData(cols, rows);
   }
   const data = view.fogImg.data;
-  const vis = state.visible[0];
-  const exp = state.explored[0];
+  const vis = state.visible[who];
+  const exp = state.explored[who];
   for (let i = 0; i < cols * rows; i++) {
     const a = vis[i] ? 0 : exp[i] ? 118 : 210;
     const o = i * 4;
@@ -267,17 +308,18 @@ function drawFog(ctx, state, view) {
   const g = view.fogCanvas.getContext("2d");
   g.putImageData(view.fogImg, 0, 0);
   ctx.imageSmoothingEnabled = gfxOf(view).fogSmooth !== false;
-  ctx.drawImage(view.fogCanvas, 0, 0, MAP_W, MAP_H);
+  ctx.drawImage(view.fogCanvas, 0, 0, state.mapW, state.mapH);
 }
 
 function drawBarsAndRings(ctx, state, view) {
   const selected = view.selected;
   for (const e of state.entities) {
     if (e.hp <= 0) continue;
-    const own = e.owner === 0;
-    const seen = own || canSeeEntity(state, 0, e);
+    const who = viewer(view);
+    const own = e.owner === who;
+    const seen = own || canSeeEntity(state, who, e);
     if (!seen) continue;
-    const visibleNow = own || cellVisible(state, 0, e.x, e.y) || (e.isBuilding && cellExplored(state, 0, e.x, e.y));
+    const visibleNow = own || cellVisible(state, who, e.x, e.y) || (e.isBuilding && cellExplored(state, who, e.x, e.y));
     if (!visibleNow && !own) continue;
     const isSel = selected.has(e.id);
     if (isSel) {
@@ -289,7 +331,7 @@ function drawBarsAndRings(ctx, state, view) {
     }
     const showBar = isSel || e.hp < e.maxHp - 0.5;
     if (!showBar) continue;
-    if (!own && e.isBuilding && !cellVisible(state, 0, e.x, e.y)) continue;
+    if (!own && e.isBuilding && !cellVisible(state, who, e.x, e.y)) continue;
     const w = Math.max(18, e.radius * 2);
     const x = e.x - w / 2;
     const y = e.y - e.radius - 10;
@@ -314,7 +356,7 @@ function drawBarsAndRings(ctx, state, view) {
 function drawGhost(ctx, state, view) {
   const ghost = view.ghost;
   if (!ghost) return;
-  const fac = faction(state.players[0].faction);
+  const fac = faction(state.players[viewer(view)].faction);
   const def = fac.buildings[ghost.kind];
   if (!def) return;
   ctx.save();
@@ -370,28 +412,29 @@ export function drawMinimap(canvas, state, view) {
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = "#3a4030";
   ctx.fillRect(0, 0, w, h);
-  const sx = w / MAP_W;
-  const sy = h / MAP_H;
+  const who = viewer(view);
+  const sx = w / state.mapW;
+  const sy = h / state.mapH;
   ctx.fillStyle = "rgba(6,10,8,0.78)";
-  const cellW = (MAP_W / state.cols) * sx;
-  const cellH = (MAP_H / state.rows) * sy;
+  const cellW = (state.mapW / state.cols) * sx;
+  const cellH = (state.mapH / state.rows) * sy;
   for (let cy = 0; cy < state.rows; cy++) {
     for (let cx = 0; cx < state.cols; cx++) {
       const i = cy * state.cols + cx;
-      if (state.visible[0][i]) continue;
-      ctx.globalAlpha = state.explored[0][i] ? 0.45 : 0.88;
+      if (state.visible[who][i]) continue;
+      ctx.globalAlpha = state.explored[who][i] ? 0.45 : 0.88;
       ctx.fillRect(cx * cellW, cy * cellH, cellW + 0.5, cellH + 0.5);
     }
   }
   ctx.globalAlpha = 1;
   for (const n of state.nodes) {
-    if (!cellExplored(state, 0, n.x, n.y) || n.amount <= 0) continue;
+    if (!cellExplored(state, who, n.x, n.y) || n.amount <= 0) continue;
     ctx.fillStyle = "#c6a15a";
     ctx.fillRect(n.x * sx - 2, n.y * sy - 2, 4, 4);
   }
   for (const e of state.entities) {
     if (e.hp <= 0) continue;
-    if (e.owner !== 0 && !canSeeEntity(state, 0, e)) continue;
+    if (e.owner !== who && !canSeeEntity(state, who, e)) continue;
     ctx.fillStyle = faction(state.players[e.owner].faction).colors.main;
     const r = e.isBuilding ? 3.2 : 1.7;
     ctx.fillRect(e.x * sx - r / 2, e.y * sy - r / 2, r, r);

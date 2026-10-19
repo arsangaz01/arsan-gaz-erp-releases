@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { unitDef } from "./balance.js";
 import { aiAct, createAiMemory } from "./ai.js";
-import { cellExplored, cellVisible, command, createMatch, getEntity, step, supplyInfo } from "./sim.js";
+import { MAP_IDS, MATCH_SIZES, battlePlan, resourceTotal } from "./maps.js";
+import { cellExplored, cellVisible, command, createMatch, getEntity, hostile, step, supplyInfo } from "./sim.js";
 
 function simulate(state, seconds, owners = []) {
   const mems = owners.map(() => createAiMemory());
@@ -161,6 +162,35 @@ const jet = flight.entities.find((e) => e.id === 880);
 assert.ok(jet && jet.x > 1150, `uçak ilerleyemedi: ${jet && jet.x}`);
 assert.ok(jet && Math.abs(jet.y - 650) < 18, `uçak kayaya saplandı: ${jet && jet.y}`);
 
+for (const count of MATCH_SIZES) {
+  const totals = MAP_IDS.map((id) => resourceTotal(battlePlan(id, count)));
+  assert.ok(
+    totals.every((total) => total === totals[0]),
+    `kaynak dengesi bozuldu count=${count}`,
+  );
+}
+const four = createMatch({
+  seed: 9,
+  mapId: "anadolu",
+  count: 4,
+  factions: ["usa", "rus", "cin", "tur"],
+});
+assert.equal(four.entities.filter((e) => e.kind === "ocak").length, 4);
+assert.equal(four.players[0].team, four.players[1].team);
+assert.equal(four.players[2].team, four.players[3].team);
+assert.equal(hostile(four, 0, 1), false);
+assert.equal(hostile(four, 0, 2), true);
+
+const ffa = createMatch({
+  seed: 10,
+  mapId: "bozkir",
+  count: 3,
+  factions: ["usa", "rus", "cin"],
+});
+assert.equal(ffa.battle, "ffa");
+assert.equal(hostile(ffa, 0, 1), true);
+assert.equal(hostile(ffa, 1, 2), true);
+
 console.log("cephe sim tamam");
 console.log(
   JSON.stringify({
@@ -169,5 +199,7 @@ console.log(
     skirmishTime: Math.round(skirmish.time),
     buildings: skirmish.entities.filter((e) => e.isBuilding && e.hp > 0).map((e) => `${e.owner}:${e.kind}`),
     winner: skirmish.winner,
+    maps: MAP_IDS.length,
+    equal2: resourceTotal(battlePlan("anadolu", 2)),
   }),
 );
