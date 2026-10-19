@@ -1,6 +1,6 @@
 {
-  "versionCode": 6,
-  "versionName": "2.4",
-  "notes": "İnşa yerden yükselir, toplanma bayrağı ve yol çizgisi, yürüyen birliğin tozu.",
-  "apk": "https://github.com/arsangaz01/arsan-gaz-erp-releases/raw/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
+  "versionCode": 7,
+  "versionName": "2.5",
+  "notes": "Güncelleme artık önbellekteki eski sürüm listesine takılmaz. Kurulum dosyası doğrudan depodan iner.",
+  "apk": "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }

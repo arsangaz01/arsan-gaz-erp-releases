@@ -5,6 +5,8 @@ import android.app.ActivityManager;
 import android.content.Context;
 import android.util.DisplayMetrics;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -25,7 +27,7 @@ import java.nio.charset.StandardCharsets;
 
 public class UpdateBridge {
     private static final String VERSION_URL =
-            "https://cdn.jsdelivr.net/gh/arsangaz01/arsan-gaz-erp-releases@cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
+            "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
 
     private final Activity activity;
     private final WebView webView;
@@ -60,17 +62,18 @@ public class UpdateBridge {
     public void checkAndUpdate() {
         new Thread(() -> {
             try {
-                String body = httpGet(VERSION_URL + "?t=" + (System.currentTimeMillis() / 3600000L));
+                String body = httpGet(VERSION_URL + "?t=" + System.currentTimeMillis());
                 JSONObject json = new JSONObject(body);
                 long remote = json.optLong("versionCode", 0);
                 String name = json.optString("versionName", "");
                 String apk = json.optString("apk", "");
-                if (remote <= localVersion()) {
-                    post("Sürüm güncel · " + localName());
+                long local = localVersion();
+                if (remote <= local) {
+                    post("Sürüm güncel · " + localName() + ". Sunucu " + name + ".");
                     return;
                 }
                 if (!apk.startsWith("https://")) {
-                    post("Yeni sürüm bulundu ama kurulum adresi yok.");
+                    post("Yeni sürüm " + name + " bulundu ama kurulum adresi yok.");
                     return;
                 }
                 if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
@@ -85,10 +88,15 @@ public class UpdateBridge {
                 }
                 post("Sürüm " + name + " indiriliyor");
                 File file = download(apk);
+                if (file.length() < 200000) {
+                    post("İndirilen dosya kurulum paketi değil.");
+                    return;
+                }
                 post("Kurulum ekranı açıldı");
                 activity.runOnUiThread(() -> install(file));
             } catch (Exception ex) {
-                post("Sürüm denetlenemedi. Bağlantıyı kontrol et.");
+                String detail = ex.getMessage() == null ? "bağlantı" : ex.getMessage();
+                post("Güncelleme olmadı: " + detail);
             }
         }).start();
     }
@@ -120,11 +128,7 @@ public class UpdateBridge {
     }
 
     private String httpGet(String address) throws Exception {
-        HttpURLConnection conn = (HttpURLConnection) new URL(address).openConnection();
-        conn.setInstanceFollowRedirects(true);
-        conn.setConnectTimeout(15000);
-        conn.setReadTimeout(20000);
-        conn.setRequestProperty("User-Agent", "CepheHatti");
+        HttpURLConnection conn = open(address);
         try (InputStream in = conn.getInputStream()) {
             return readText(in);
         } finally {
@@ -134,13 +138,9 @@ public class UpdateBridge {
 
     private File download(String address) throws Exception {
         File dir = new File(activity.getCacheDir(), "updates");
-        if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("cache");
+        if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("önbellek");
         File out = new File(dir, "CepheHatti.apk");
-        HttpURLConnection conn = (HttpURLConnection) new URL(address).openConnection();
-        conn.setInstanceFollowRedirects(true);
-        conn.setConnectTimeout(20000);
-        conn.setReadTimeout(120000);
-        conn.setRequestProperty("User-Agent", "CepheHatti");
+        HttpURLConnection conn = open(address);
         try (InputStream in = conn.getInputStream(); FileOutputStream fos = new FileOutputStream(out)) {
             byte[] buf = new byte[8192];
             int n;
@@ -149,6 +149,33 @@ public class UpdateBridge {
             conn.disconnect();
         }
         return out;
+    }
+
+    private HttpURLConnection open(String address) throws Exception {
+        String current = address;
+        for (int hop = 0; hop < 5; hop++) {
+            HttpURLConnection conn = (HttpURLConnection) new URL(current).openConnection();
+            conn.setInstanceFollowRedirects(false);
+            conn.setUseCaches(false);
+            conn.setConnectTimeout(20000);
+            conn.setReadTimeout(120000);
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+            conn.setRequestProperty("Cache-Control", "no-cache");
+            int code = conn.getResponseCode();
+            if (code >= 300 && code < 400) {
+                String next = conn.getHeaderField("Location");
+                conn.disconnect();
+                if (next == null || next.isEmpty()) throw new IllegalStateException("yönlendirme yok");
+                current = next.startsWith("http") ? next : new URL(new URL(current), next).toString();
+                continue;
+            }
+            if (code != 200) {
+                conn.disconnect();
+                throw new IllegalStateException("sunucu " + code);
+            }
+            return conn;
+        }
+        throw new IllegalStateException("adres yönlendirmesi");
     }
 
     private static String readText(InputStream in) throws Exception {
@@ -164,6 +191,9 @@ public class UpdateBridge {
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.setDataAndType(uri, "application/vnd.android.package-archive");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        for (ResolveInfo info : activity.getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)) {
+            activity.grantUriPermission(info.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        }
         activity.startActivity(intent);
     }
 }

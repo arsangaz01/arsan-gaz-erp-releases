@@ -32,10 +32,10 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 6, name: "2.4" };
+const APP = { code: 7, name: "2.5" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
-  "https://cdn.jsdelivr.net/gh/arsangaz01/arsan-gaz-erp-releases@cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
+  "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
 
 const menu = document.querySelector("#menu");
 const stage = document.querySelector("#stage");
@@ -1212,9 +1212,20 @@ document.querySelector("#room-join")?.addEventListener("click", () => {
   enterRoom();
 });
 
-function sayUpdate(text) {
+function sayUpdate(text, href) {
   const status = document.querySelector("#update-status");
-  if (status) status.textContent = text;
+  if (status) {
+    status.textContent = text;
+    if (href) {
+      status.appendChild(document.createTextNode(" "));
+      const link = document.createElement("a");
+      link.href = href;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = "Kurulumu indir";
+      status.appendChild(link);
+    }
+  }
   if (match) toast(text);
 }
 
@@ -1227,14 +1238,16 @@ async function checkUpdate() {
     return;
   }
   try {
-    const res = await fetch(VERSION_URL + "?t=" + Math.floor(Date.now() / 3600000), { cache: "no-store" });
+    const res = await fetch(VERSION_URL + "?t=" + Date.now(), { cache: "no-store" });
     if (!res.ok) throw new Error("http");
     const data = await res.json();
     if ((data.versionCode | 0) > APP.code) {
-      sayUpdate("Yeni sürüm " + (data.versionName || "") + " hazır. Kurulum dosyası açılıyor.");
-      if (data.apk) window.open(data.apk, "_blank");
+      sayUpdate(
+        "Yeni sürüm " + (data.versionName || "") + " hazır.",
+        data.apk && String(data.apk).startsWith("https://") ? data.apk : ""
+      );
     } else {
-      sayUpdate("Sürüm güncel · " + APP.name);
+      sayUpdate("Sürüm güncel · " + APP.name + ". Sunucu " + (data.versionName || "") + ".");
     }
   } catch (err) {
     sayUpdate("Sürüm denetlenemedi. Bağlantıyı kontrol et.");
