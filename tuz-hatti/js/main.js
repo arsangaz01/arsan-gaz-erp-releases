@@ -32,7 +32,7 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 5, name: "2.3" };
+const APP = { code: 6, name: "2.4" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://cdn.jsdelivr.net/gh/arsangaz01/arsan-gaz-erp-releases@cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
@@ -329,7 +329,20 @@ function frame(now) {
       }
     }
   }
-  tickFx(dt);
+  if (match && view.gfx?.decor !== false) {
+    view.dustAcc = (view.dustAcc || 0) + dt;
+    if (view.dustAcc > 0.16) {
+      view.dustAcc = 0;
+      for (const e of match.entities) {
+        if (e.owner !== me || e.hp <= 0 || e.isBuilding) continue;
+        const moving = e.plan && (e.plan.kind === "move" || e.plan.kind === "attackMove" || e.plan.kind === "harvest");
+        if (!moving) continue;
+        view.fx.push({ type: "puff", x: e.x, y: e.y + 4, color: "rgba(120,100,70,0.35)", life: 0.28, max: 0.28 });
+      }
+      const cap = view.gfx?.fxCap || 28;
+      while (view.fx.length > cap) view.fx.shift();
+    }
+  }
   if (match) {
     pruneSelection();
     updateGhost();
@@ -356,18 +369,27 @@ function acceptEvent(ev, now) {
       y2: ev.y2,
       heavy: ev.heavy,
       air: ev.air,
-      life: 0.12,
-      max: 0.12,
+      life: 0.2,
+      max: 0.2,
     });
-    if (ev.targetOwner === 0 && ev.targetKind === "ocak") navigator.vibrate?.(18);
+    if (ev.targetOwner === me && ev.building) {
+      const nowMs = performance.now();
+      if (nowMs - (view.lastAlarm || 0) > 4000) {
+        view.lastAlarm = nowMs;
+        toast("Yapı ateş altında");
+      }
+    }
   } else if (ev.type === "death") {
+    view.scorches = view.scorches || [];
+    view.scorches.push({ x: ev.x, y: ev.y });
+    if (view.scorches.length > 24) view.scorches.shift();
     view.fx.push({
       type: "puff",
       x: ev.x,
       y: ev.y,
-      color: ev.building ? "#6a5340" : "#c8bba8",
-      life: 0.35,
-      max: 0.35,
+      color: ev.building ? "#6a5340" : "#e7d2a8",
+      life: 0.55,
+      max: 0.55,
     });
   } else if (ev.type === "built" && ev.owner === me) {
     toast(`${buildingDef(match.players[me].faction, ev.kind).name} hazır`);
@@ -559,11 +581,17 @@ function updateGhost() {
   view.ghost = null;
   view.rally = null;
   if (tool?.type === "place" && hover) {
-    view.ghost = { kind: tool.kind, x: hover.x, y: hover.y, ok: canPlace(match, me, tool.kind, hover.x, hover.y) };
+    view.ghost = {
+      kind: tool.kind,
+      x: hover.x,
+      y: hover.y,
+      ok: canPlace(match, me, tool.kind, hover.x, hover.y),
+      workerId: tool.workerId,
+    };
   }
   const only = selectedEntities();
   if (only.length === 1 && only[0].isBuilding && only[0].constructed && entityDef(match, only[0]).trains) {
-    view.rally = { x: only[0].rallyX, y: only[0].rallyY };
+    view.rally = { x: only[0].rallyX, y: only[0].rallyY, fromX: only[0].x, fromY: only[0].y };
   }
 }
 

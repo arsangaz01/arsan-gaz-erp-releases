@@ -1,6 +1,6 @@
 {
-  "versionCode": 5,
-  "versionName": "2.3",
-  "notes": "Birlikler yerde halkayla seçilir, sıra halinde yürür, harita önizlemeleri düzeldi.",
+  "versionCode": 6,
+  "versionName": "2.4",
+  "notes": "İnşa yerden yükselir, toplanma bayrağı ve yol çizgisi, yürüyen birliğin tozu.",
   "apk": "https://github.com/arsangaz01/arsan-gaz-erp-releases/raw/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }

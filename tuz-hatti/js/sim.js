@@ -584,6 +584,7 @@ function deal(state, attacker, def, target, events) {
     targetId: target.id,
     targetKind: target.kind,
     targetOwner: target.owner,
+    building: !!target.isBuilding,
   });
   if (target.hp <= 0) kill(state, target, attacker, events);
 }

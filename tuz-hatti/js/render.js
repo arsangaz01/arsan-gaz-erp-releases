@@ -213,26 +213,28 @@ function drawBuilding(ctx, e, def, colors, gfx) {
     ctx.ellipse(2, size * 0.18, size * 0.34, size * 0.12, 0, 0, Math.PI * 2);
     ctx.fill();
   }
+  const grow = e.constructed ? 1 : Math.max(0.2, Math.min(1, e.progress));
+  ctx.save();
+  ctx.scale(1, grow);
+  ctx.translate(0, (1 - grow) * def.radius * 0.4);
   const tint = colors.wash;
   if (!drawSprite(ctx, def.sprite, size, tint)) {
     ctx.fillStyle = colors.dark;
     ctx.fillRect(-def.radius, -def.radius * 0.7, def.radius * 2, def.radius * 1.4);
   }
+  ctx.restore();
   if (!e.constructed) {
-    const grow = Math.max(0.15, Math.min(1, e.progress));
-    ctx.strokeStyle = "rgba(230, 220, 190, 0.85)";
-    ctx.lineWidth = 2;
-    const s = def.radius * grow;
-    ctx.strokeRect(-s, -s * 0.72, s * 2, s * 1.44);
-    ctx.beginPath();
-    ctx.moveTo(-s, -s * 0.72);
-    ctx.lineTo(0, -s * 1.15);
-    ctx.lineTo(s, -s * 0.72);
-    ctx.stroke();
+    ctx.strokeStyle = "rgba(214, 196, 140, 0.9)";
+    ctx.lineWidth = 1.6;
+    ctx.strokeRect(-def.radius, -def.radius * 0.7, def.radius * 2, def.radius * 1.4);
+    ctx.fillStyle = "#d7e8b0";
+    ctx.font = "13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`İnşa %${Math.floor(e.progress * 100)}`, 0, -def.radius - 14);
     ctx.fillStyle = "rgba(8,10,8,0.75)";
-    ctx.fillRect(-18, -3, 36, 5);
+    ctx.fillRect(-18, def.radius * 0.2, 36, 5);
     ctx.fillStyle = "#d7c48a";
-    ctx.fillRect(-18, -3, 36 * Math.max(0, Math.min(1, e.progress)), 5);
+    ctx.fillRect(-18, def.radius * 0.2, 36 * grow, 5);
   }
 }
 
@@ -321,6 +323,32 @@ function drawFog(ctx, state, view) {
   ctx.drawImage(view.fogCanvas, 0, 0, state.mapW, state.mapH);
 }
 
+function drawOrderLine(ctx, x1, y1, x2, y2, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.setLineDash([7, 5]);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawFlag(ctx, x, y, color) {
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - 16);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, y - 16);
+  ctx.lineTo(x + 10, y - 12);
+  ctx.lineTo(x, y - 8);
+  ctx.fill();
+}
+
 function drawGroundMarks(ctx, state, view) {
   const who = viewer(view);
   for (const e of state.entities) {
@@ -332,6 +360,37 @@ function drawGroundMarks(ctx, state, view) {
     ctx.beginPath();
     ctx.ellipse(e.x, e.y + rx * 0.08, rx, rx * 0.4, 0, 0, Math.PI * 2);
     ctx.stroke();
+    const arm = Math.max(6, rx * 0.55);
+    ctx.beginPath();
+    ctx.moveTo(e.x - rx, e.y - arm);
+    ctx.lineTo(e.x - rx, e.y - rx * 0.15);
+    ctx.lineTo(e.x - rx + arm, e.y - rx * 0.15);
+    ctx.moveTo(e.x + rx, e.y - arm);
+    ctx.lineTo(e.x + rx, e.y - rx * 0.15);
+    ctx.lineTo(e.x + rx - arm, e.y - rx * 0.15);
+    ctx.moveTo(e.x - rx, e.y + arm);
+    ctx.lineTo(e.x - rx, e.y + rx * 0.35);
+    ctx.lineTo(e.x - rx + arm, e.y + rx * 0.35);
+    ctx.moveTo(e.x + rx, e.y + arm);
+    ctx.lineTo(e.x + rx, e.y + rx * 0.35);
+    ctx.lineTo(e.x + rx - arm, e.y + rx * 0.35);
+    ctx.stroke();
+  }
+  for (const e of state.entities) {
+    if (e.hp <= 0 || e.owner !== who || !view.selected?.has(e.id)) continue;
+    if (e.isBuilding && e.constructed && e.rallyX) {
+      drawOrderLine(ctx, e.x, e.y, e.rallyX, e.rallyY, "#7ec45c");
+      drawFlag(ctx, e.rallyX, e.rallyY, "#7ec45c");
+    }
+    if (!e.isBuilding && (e.plan?.kind === "move" || e.plan?.kind === "attackMove") && e.plan.x) {
+      drawOrderLine(ctx, e.x, e.y, e.plan.x, e.plan.y, "rgba(214, 196, 140, 0.85)");
+    }
+  }
+  for (const mark of view.scorches || []) {
+    ctx.fillStyle = "rgba(20, 16, 12, 0.45)";
+    ctx.beginPath();
+    ctx.ellipse(mark.x, mark.y, 14, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
   const ping = view.ping;
   if (ping && ping.life > 0) {
@@ -376,14 +435,8 @@ function drawBarsAndRings(ctx, state, view) {
   }
 
   if (view.rally) {
-    ctx.strokeStyle = "#e7d7a4";
-    ctx.lineWidth = 1.4 / view.zoom;
-    ctx.beginPath();
-    ctx.moveTo(view.rally.x - 7, view.rally.y);
-    ctx.lineTo(view.rally.x + 7, view.rally.y);
-    ctx.moveTo(view.rally.x, view.rally.y - 9);
-    ctx.lineTo(view.rally.x, view.rally.y + 5);
-    ctx.stroke();
+    drawOrderLine(ctx, view.rally.fromX, view.rally.fromY, view.rally.x, view.rally.y, "#7ec45c");
+    drawFlag(ctx, view.rally.x, view.rally.y, "#7ec45c");
   }
 }
 
@@ -393,6 +446,8 @@ function drawGhost(ctx, state, view) {
   const fac = faction(state.players[viewer(view)].faction);
   const def = fac.buildings[ghost.kind];
   if (!def) return;
+  const worker = state.entities.find((e) => e.id === ghost.workerId);
+  if (worker) drawOrderLine(ctx, worker.x, worker.y, ghost.x, ghost.y, ghost.ok ? "#b7c48a" : "#c45c3c");
   const anchor = state.entities.find((e) => e.owner === viewer(view) && e.kind === "ocak" && e.hp > 0);
   if (anchor) {
     ctx.fillStyle = ghost.ok ? "rgba(143, 191, 106, 0.55)" : "rgba(196, 92, 60, 0.45)";
@@ -421,8 +476,8 @@ function drawFx(ctx, view) {
     const t = 1 - fx.life / fx.max;
     ctx.globalAlpha = Math.max(0, fx.life / fx.max);
     if (fx.type === "shot") {
-      ctx.strokeStyle = fx.air ? "#d5e4f2" : fx.heavy ? "#e4d2b4" : "#f2e6c8";
-      ctx.lineWidth = (fx.heavy ? 2.2 : 1.3) / view.zoom;
+      ctx.strokeStyle = fx.air ? "#f4fbff" : fx.heavy ? "#ffe08a" : "#fff4cf";
+      ctx.lineWidth = (fx.heavy ? 2.8 : 1.8) / view.zoom;
       ctx.beginPath();
       ctx.moveTo(fx.x1, fx.y1);
       ctx.lineTo(fx.x1 + (fx.x2 - fx.x1) * Math.min(1, t * 1.4), fx.y1 + (fx.y2 - fx.y1) * Math.min(1, t * 1.4));
