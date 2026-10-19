@@ -43,9 +43,9 @@ function shade(hex, amt) {
 function project(x, y, z, yaw) {
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
-  const rx = x * c - y * s;
-  const ry = x * s + y * c;
-  return [rx * 1.05 + ry * 0.46, rx * 0.16 + ry * 0.34 - z * 1.28];
+  const wx = x * c - y * s;
+  const wy = x * s + y * c;
+  return [(wx - wy) * GROUND_A, (wx + wy) * GROUND_B - z * 1.18];
 }
 
 export const GROUND_A = 1.04;
@@ -90,10 +90,12 @@ export function screenPoint(view, x, y) {
   };
 }
 
-function depthOf(x, y, yaw) {
+function depthOf(x, y, z, yaw) {
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
-  return x * c - y * s + (x * s + y * c);
+  const wx = x * c - y * s;
+  const wy = x * s + y * c;
+  return wx + wy + z * 0.65;
 }
 
 function lit(nx, ny, nz, spin, yaw) {
@@ -139,14 +141,14 @@ function addBox(faces, cx, cy, cz, sx, sy, sz, spin, yaw, color) {
     const sun = lit(quad.n[0], quad.n[1], quad.n[2], spin, yaw);
     let depth = 0;
     const pts = quad.idx.map((i) => {
-      depth += depthOf(corners[i][0], corners[i][1], yaw);
+      depth += depthOf(corners[i][0], corners[i][1], corners[i][2], yaw);
       return project(corners[i][0], corners[i][1], corners[i][2], yaw);
     });
     if (screenArea(pts) <= 0) continue;
     faces.push({
       pts,
       depth,
-      color: shade(color, Math.max(-0.62, Math.min(0.5, quad.bias + sun.light * 0.22))),
+      color: shade(color, Math.max(-0.58, Math.min(0.46, quad.bias * 0.8 + sun.light * 0.4))),
     });
   }
 }
@@ -161,8 +163,45 @@ function screenArea(pts) {
   return area;
 }
 
+let camoCanvas = null;
+
+function camoPattern(ctx) {
+  if (!camoCanvas && typeof document !== "undefined") {
+    camoCanvas = document.createElement("canvas");
+    camoCanvas.width = 72;
+    camoCanvas.height = 72;
+    const g = camoCanvas.getContext("2d");
+    g.fillStyle = "#6a6248";
+    g.fillRect(0, 0, 72, 72);
+    const blobs = [
+      ["#4e5840", 8, 10, 22],
+      ["#3e4634", 40, 18, 18],
+      ["#7a7058", 18, 44, 20],
+      ["#2e3428", 50, 46, 16],
+      ["#5c5344", 30, 8, 10],
+    ];
+    for (const [color, x, y, r] of blobs) {
+      g.fillStyle = color;
+      g.beginPath();
+      g.ellipse(x, y, r, r * 0.62, 0.4, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.strokeStyle = "rgba(20,16,12,0.35)";
+    g.lineWidth = 1;
+    for (let i = 0; i < 6; i++) {
+      g.beginPath();
+      g.moveTo(0, 8 + i * 12);
+      g.lineTo(72, 4 + i * 12);
+      g.stroke();
+    }
+  }
+  if (!camoCanvas) return null;
+  return ctx.createPattern(camoCanvas, "repeat");
+}
+
 function paintFaces(ctx, faces) {
   faces.sort((a, b) => a.depth - b.depth);
+  const pattern = camoPattern(ctx);
   for (const face of faces) {
     ctx.beginPath();
     ctx.moveTo(face.pts[0][0], face.pts[0][1]);
@@ -170,20 +209,83 @@ function paintFaces(ctx, faces) {
     ctx.closePath();
     ctx.fillStyle = face.color;
     ctx.fill();
-    ctx.strokeStyle = "rgba(12,10,8,0.35)";
-    ctx.lineWidth = 0.7;
-    ctx.stroke();
+    if (pattern && face.depth > 0) {
+      ctx.save();
+      ctx.clip();
+      ctx.globalAlpha = 0.28;
+      ctx.fillStyle = pattern;
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const p of face.pts) {
+        minX = Math.min(minX, p[0]);
+        minY = Math.min(minY, p[1]);
+        maxX = Math.max(maxX, p[0]);
+        maxY = Math.max(maxY, p[1]);
+      }
+      ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+      ctx.restore();
+    }
   }
 }
 
-function rotor(ctx, x, y, z, span, yaw, phase) {
-  ctx.strokeStyle = "rgba(230,230,220,0.75)";
-  ctx.lineWidth = 1.4;
+function addWedge(faces, cx, cy, cz, sx, sy, sz, spin, yaw, color) {
+  const hx = sx / 2;
+  const hy = sy / 2;
+  const hz = sz / 2;
+  const raw = [
+    [-hx, -hy, -hz],
+    [hx, -hy, -hz * 0.15],
+    [hx, hy, -hz * 0.15],
+    [-hx, hy, -hz],
+    [-hx, -hy, hz],
+    [hx, -hy, hz * 0.02],
+    [hx, hy, hz * 0.02],
+    [-hx, hy, hz],
+  ];
+  const c = Math.cos(spin);
+  const s = Math.sin(spin);
+  const corners = raw.map(([x, y, z]) => [cx + x * c - y * s, cy + x * s + y * c, cz + z]);
+  const quads = [
+    { n: [0, 0, 1], idx: [4, 5, 6, 7], bias: 0.34 },
+    { n: [0, 0, -1], idx: [0, 3, 2, 1], bias: -0.5 },
+    { n: [1, 0, 0], idx: [1, 2, 6, 5], bias: -0.16 },
+    { n: [-1, 0, 0], idx: [0, 4, 7, 3], bias: -0.26 },
+    { n: [0, 1, 0], idx: [2, 3, 7, 6], bias: -0.32 },
+    { n: [0, -1, 0], idx: [0, 1, 5, 4], bias: -0.1 },
+  ];
+  for (const quad of quads) {
+    const sun = lit(quad.n[0], quad.n[1], quad.n[2], spin, yaw);
+    let depth = 0;
+    const pts = quad.idx.map((i) => {
+      depth += depthOf(corners[i][0], corners[i][1], corners[i][2], yaw);
+      return project(corners[i][0], corners[i][1], corners[i][2], yaw);
+    });
+    if (screenArea(pts) <= 0) continue;
+    faces.push({
+      pts,
+      depth,
+      color: shade(color, Math.max(-0.58, Math.min(0.46, quad.bias * 0.8 + sun.light * 0.4))),
+    });
+  }
+}
+
+function rotor(ctx, x, y, z, span, yaw, phase, blur) {
+  const p0 = project(x, y, z, yaw);
+  if (blur) {
+    ctx.fillStyle = "rgba(214, 216, 208, 0.3)";
+    ctx.beginPath();
+    ctx.ellipse(p0[0], p0[1], span * 0.92, span * 0.34, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = "rgba(236,236,228,0.82)";
+  ctx.lineWidth = blur ? 1.15 : 1.5;
   ctx.beginPath();
-  for (let i = 0; i < 4; i++) {
-    const a = phase + (i * Math.PI) / 2;
-    const p0 = project(x, y, z, yaw);
-    const p1 = project(x + Math.cos(a) * span, y + Math.sin(a) * span * 0.55, z, yaw);
+  const blades = blur ? 3 : 4;
+  for (let i = 0; i < blades; i++) {
+    const a = phase + (i * Math.PI * 2) / blades;
+    const p1 = project(x + Math.cos(a) * span, y + Math.sin(a) * span * 0.4, z, yaw);
     ctx.moveTo(p0[0], p0[1]);
     ctx.lineTo(p1[0], p1[1]);
   }
@@ -218,11 +320,25 @@ export function drawIso(ctx, spec) {
   };
   const zLift = lift / Math.max(1, u);
   const decals = [];
-  const wheel = (cx, cy, cz, r) => {
-    decals.push({ x: cx * u, y: cy * u, z: cz * u * grow + lift, r: r * u });
+  const wheel = (cx, cy, cz, r, spin) => {
+    decals.push({ x: cx * u, y: cy * u, z: cz * u * grow + lift, r: r * u, phase: spin || 0 });
+  };
+  const wedge = (cx, cy, cz, sx, sy, sz, spin, color) => {
+    addWedge(
+      faces,
+      cx * u,
+      cy * u,
+      cz * u * grow + lift,
+      sx * u,
+      sy * u,
+      Math.max(0.35, sz * u * grow),
+      spin || 0,
+      yaw,
+      color,
+    );
   };
 
-  if (spec.form === "tank") tank(box, wheel, spec, paint, dark, cloth, detail, phase, aim);
+  if (spec.form === "tank") tank({ box, wheel, wedge }, spec, paint, dark, cloth, detail, phase, aim);
   else if (spec.form === "sph") sph(box, paint, dark, detail, aim);
   else if (spec.form === "mlrs") mlrs(box, paint, dark, cloth, detail, phase);
   else if (spec.form === "ifv") ifv(box, paint, dark, cloth, detail, aim);
@@ -238,12 +354,19 @@ export function drawIso(ctx, spec) {
   else if (spec.form === "node") node(box, spec.key, paint, dark);
   else if (spec.form === "tree") tree(box, dark, paint);
   else if (spec.form === "peak") peak(box, dark, cloth);
-  else building(box, spec.form, paint, dark, cloth, detail, aim);
+  else building(box, spec, paint, dark, cloth, detail, aim);
 
   paintFaces(ctx, faces);
   paintWheels(ctx, decals, yaw);
-  if (spec.form === "heli") rotor(ctx, 0, 0, (zLift + 0.95) * u * grow, u * 1.7, yaw, phase);
-  if (spec.form === "quad") rotor(ctx, 0, 0, (zLift + 0.55) * u, u * 0.85, yaw, phase * 2);
+  if (spec.form === "heli") rotor(ctx, 0, 0, (zLift + 0.95) * u * grow, u * 1.7, yaw, phase, true);
+  if (spec.form === "quad") rotor(ctx, 0, 0, (zLift + 0.55) * u, u * 0.85, yaw, phase * 2, true);
+  if (spec.form === "jet" && (spec.drive || 0) > 0.25) {
+    const flame = project(-1.05 * u, 0, (zLift + 0.2) * u, yaw);
+    ctx.fillStyle = "rgba(255, 170, 70, 0.75)";
+    ctx.beginPath();
+    ctx.ellipse(flame[0], flame[1], u * 0.16, u * 0.07, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function paintWheels(ctx, decals, yaw) {
@@ -251,30 +374,39 @@ function paintWheels(ctx, decals, yaw) {
     const p = project(d.x, d.y, d.z, yaw);
     ctx.fillStyle = "#121412";
     ctx.beginPath();
-    ctx.ellipse(p[0], p[1], d.r, d.r * 0.82, 0, 0, Math.PI * 2);
+    ctx.ellipse(p[0], p[1], d.r, d.r * 0.7, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "#3e4038";
-    ctx.lineWidth = Math.max(0.7, d.r * 0.16);
+    const spin = d.phase || 0;
+    ctx.strokeStyle = "#6d6456";
+    ctx.lineWidth = Math.max(0.7, d.r * 0.2);
+    ctx.beginPath();
+    const dx = Math.cos(spin) * d.r * 0.72;
+    const dy = Math.sin(spin) * d.r * 0.42;
+    ctx.moveTo(p[0] - dx, p[1] - dy);
+    ctx.lineTo(p[0] + dx, p[1] + dy);
     ctx.stroke();
     ctx.fillStyle = "#8a7d62";
     ctx.beginPath();
-    ctx.ellipse(p[0], p[1], d.r * 0.32, d.r * 0.26, 0, 0, Math.PI * 2);
+    ctx.ellipse(p[0], p[1], d.r * 0.28, d.r * 0.18, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 }
 
-function tank(box, wheel, spec, paint, dark, cloth, detail, phase, aim) {
+function tank(tools, spec, paint, dark, cloth, detail, phase, aim) {
+  const { box, wheel, wedge } = tools;
   const p = TANKS[spec.key] || TANKS.altay;
+  const recoil = (spec.kick || 0) * 0.26;
   box(0, 0, p.H * 0.42, p.L, p.W * 0.78, p.H * 0.62, 0, shade(paint, -0.08));
-  box(p.L * 0.34, 0, p.H * 0.62, p.L * 0.28, p.W * 0.7, p.H * 0.28, 0, shade(paint, 0.05));
-  box(0, -p.W * 0.48, p.H * 0.28, p.L * 0.9, p.W * 0.16, p.H * 0.46, 0, "#1a1c18");
-  box(0, p.W * 0.48, p.H * 0.28, p.L * 0.9, p.W * 0.16, p.H * 0.46, 0, "#1a1c18");
+  wedge(p.L * 0.38, 0, p.H * 0.5, p.L * 0.36, p.W * 0.66, p.H * 0.4, 0, shade(paint, 0.08));
+  box(0, -p.W * 0.48, p.H * 0.28, p.L * 0.92, p.W * 0.18, p.H * 0.5, 0, "#161814");
+  box(0, p.W * 0.48, p.H * 0.28, p.L * 0.92, p.W * 0.18, p.H * 0.5, 0, "#161814");
   const span = p.L * 0.74;
   const step = span / Math.max(1, p.wheels - 1);
   for (let i = 0; i < p.wheels; i++) {
     const x = -span / 2 + i * step;
-    wheel(x, -p.W * 0.52, 0.15, i === 0 || i === p.wheels - 1 ? 0.17 : 0.145);
-    wheel(x, p.W * 0.52, 0.15, i === 0 || i === p.wheels - 1 ? 0.17 : 0.145);
+    const rad = i === 0 || i === p.wheels - 1 ? 0.18 : 0.15;
+    wheel(x, -p.W * 0.52, 0.14, rad, phase + i * 0.7);
+    wheel(x, p.W * 0.52, 0.14, rad, phase + i * 0.7);
   }
   if (detail) {
     for (let i = 0; i < 8; i++) {
@@ -289,9 +421,16 @@ function tank(box, wheel, spec, paint, dark, cloth, detail, phase, aim) {
   }
   box(p.tX, 0, p.H * 0.95, p.tL, p.tW, p.tH, aim, shade(paint, 0.1));
   box(p.tX - p.tL * 0.28, 0, p.H * 0.9, p.tL * 0.32, p.tW * 0.9, p.tH * 0.7, aim, shade(paint, -0.02));
-  box(p.tX + p.tL * 0.42, 0, p.H + 0.02, p.gun, 0.07, 0.07, aim, "#242620");
-  box(p.tX + p.tL * 0.42 + p.gun * 0.46, 0, p.H + 0.02, 0.14, 0.11, 0.11, aim, "#121412");
-  box(p.tX - p.tL * 0.05, 0, p.H + p.tH * 0.85, 0.18, 0.18, 0.16, aim, dark);
+  box(p.tX + p.tL * 0.42 - recoil, 0, p.H + 0.1, p.gun, 0.16, 0.14, aim, "#1a1c18");
+  box(p.tX + p.tL * 0.42 + p.gun * 0.46 - recoil, 0, p.H + 0.1, 0.22, 0.22, 0.18, aim, "#101210");
+  box(p.tX - p.tL * 0.05, 0, p.H + p.tH * 0.85, 0.16, 0.16, 0.14, aim, dark);
+  if (detail) {
+    box(p.tX - p.tL * 0.2, -p.tW * 0.28, p.H + p.tH * 0.55, 0.05, 0.05, 0.34, aim, "#2a2c28");
+    box(-p.L * 0.22, 0, p.H * 0.78, 0.34, 0.22, 0.12, 0, shade(cloth, -0.25));
+    box(p.L * 0.05, p.W * 0.22, p.H * 0.78, 0.22, 0.16, 0.1, 0, shade(dark, 0.1));
+    box(p.tX + 0.08, p.tW * 0.22, p.H + p.tH * 0.72, 0.08, 0.08, 0.1, aim, "#2c2e28");
+    box(p.tX + 0.08, -p.tW * 0.22, p.H + p.tH * 0.72, 0.08, 0.08, 0.1, aim, "#2c2e28");
+  }
 }
 
 function sph(box, paint, dark, detail, aim) {
@@ -313,7 +452,7 @@ function mlrs(box, paint, dark, cloth, detail, phase) {
   const tilt = -0.35;
   box(0.45, 0, 0.72, 1.15, 0.55, 0.32, tilt, shade(cloth, -0.25));
   if (detail) {
-    for (let i = 0; i < 3; i++) box(0.2 + i * 0.28, 0, 0.95, 0.5, 0.08, 0.08, tilt + phase * 0.02, "#3a342c");
+    for (let i = 0; i < 3; i++) box(0.2 + i * 0.28, 0, 0.95, 0.5, 0.08, 0.08, tilt, "#3a342c");
   }
 }
 
@@ -457,14 +596,44 @@ function peak(box, dark, cloth) {
   box(0.05, 0, 1.2, 0.16, 0.14, 0.22, 0, shade(cloth, 0.2));
 }
 
-function building(box, form, paint, dark, cloth, detail, aim) {
+function building(box, spec, paint, dark, cloth, detail, aim) {
+  const form = spec.form;
+  const grow = spec.grow == null ? 1 : spec.grow;
+  if (grow < 0.98) {
+    box(-0.7, -0.45, 0.7, 0.05, 0.05, 1.35, 0, "#8d8474");
+    box(0.7, -0.45, 0.7, 0.05, 0.05, 1.35, 0, "#8d8474");
+    box(-0.7, 0.45, 0.7, 0.05, 0.05, 1.35, 0, "#8d8474");
+    box(0.7, 0.45, 0.7, 0.05, 0.05, 1.35, 0, "#8d8474");
+    box(0, -0.45, 1.35, 1.4, 0.04, 0.04, 0, "#a39886");
+    box(0, 0.45, 1.35, 1.4, 0.04, 0.04, 0, "#a39886");
+  }
+  const pads = {
+    hq: [2.15, 1.6],
+    barracks: [2.15, 1.2],
+    shop: [2.05, 1.5],
+    strip: [3.05, 1.45],
+    tower: [1.2, 1.05],
+    sam: [1.2, 1.05],
+    bunker: [1.35, 1.15],
+    yard: [2.15, 1.15],
+    battery: [1.25, 1.2],
+  };
+  const pad = pads[form] || [1.7, 1.25];
+  box(0, 0, 0.02, pad[0] * 0.92, pad[1] * 0.92, 0.03, 0, "#3e3a34");
   if (form === "hq") {
     box(0, 0, 0.32, 1.7, 1.25, 0.48, 0, shade(paint, -0.2));
     box(0.1, -0.08, 0.68, 0.7, 0.55, 0.32, 0, shade(paint, 0.02));
+    box(-0.55, 0.15, 0.58, 0.55, 0.7, 0.36, 0, shade(paint, -0.08));
+    box(0.55, 0.2, 0.5, 0.4, 0.45, 0.28, 0, shade(dark, 0.15));
+    for (let i = 0; i < 3; i++) {
+      box(-0.35 + i * 0.28, -0.58, 0.42, 0.16, 0.04, 0.14, 0, "#1c2428");
+      box(0.05 + i * 0.18, 0.58, 0.4, 0.1, 0.04, 0.12, 0, "#1c2428");
+    }
     box(-0.15, 0.15, 0.95, 0.22, 0.16, 0.16, 0, "#8fb0bc");
     box(0.2, -0.28, 0.7, 0.16, 0.08, 0.22, 0, shade(cloth, -0.15));
     box(-0.55, 0.4, 0.22, 0.55, 0.4, 0.16, 0, shade(dark, 0.2));
     box(0.15, -0.05, 1.02, 0.06, 0.06, 0.36, 0, cloth);
+    box(0.62, -0.35, 0.78, 0.18, 0.18, 0.22, 0, shade(dark, 0.05));
     if (detail) box(0.42, 0.12, 0.92, 0.26, 0.26, 0.05, 0.5, "#c5d0d2");
   } else if (form === "barracks") {
     box(0, 0, 0.32, 1.8, 0.85, 0.48, 0, shade(paint, -0.02));
@@ -476,9 +645,16 @@ function building(box, form, paint, dark, cloth, detail, aim) {
     box(0.15, -0.58, 0.28, 0.4, 0.08, 0.4, 0, shade(dark, 0.2));
     box(0.7, -0.58, 0.28, 0.4, 0.08, 0.4, 0, shade(dark, 0.2));
   } else if (form === "strip") {
-    box(0.2, 0, 0.06, 2.4, 0.55, 0.08, 0, shade(dark, 0.35));
-    box(-0.85, 0.45, 0.28, 0.7, 0.55, 0.4, 0, shade(paint, -0.04));
-    if (detail) box(0.3, 0, 0.12, 1.2, 0.06, 0.02, 0, cloth);
+    box(0.35, 0, 0.04, 2.8, 1.15, 0.06, 0, "#5a584e");
+    box(0.45, 0, 0.08, 2.2, 0.42, 0.05, 0, shade(dark, 0.4));
+    box(-0.95, 0.55, 0.32, 0.85, 0.7, 0.48, 0, shade(paint, -0.04));
+    box(-0.95, 0.55, 0.62, 0.7, 0.62, 0.12, 0, shade(paint, 0.08));
+    if (detail && grow > 0.9) {
+      box(0.35, 0.02, 0.2, 0.85, 0.16, 0.1, 0, shade(paint, -0.12));
+      box(0.4, 0.02, 0.24, 0.22, 0.7, 0.04, 0, shade(paint, 0.02));
+      box(0.15, 0.02, 0.3, 0.16, 0.28, 0.1, 0, shade(paint, -0.02));
+    }
+    if (detail) box(0.55, 0, 0.12, 1.3, 0.04, 0.02, 0, cloth);
   } else if (form === "sam" || form === "tower") {
     box(0, 0, 0.15, 0.9, 0.7, 0.2, 0, shade(dark, 0.28));
     for (let i = 0; i < 4; i++) {

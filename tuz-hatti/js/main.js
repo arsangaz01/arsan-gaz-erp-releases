@@ -33,7 +33,7 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 11, name: "2.9" };
+const APP = { code: 12, name: "3.0" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
@@ -358,6 +358,7 @@ function frame(now) {
   if (match) {
     pruneSelection();
     updateGhost();
+    view.dt = dt;
     drawWorld(ctx, match, view);
     drawMinimap(minimap, match, view);
     updateCounters();
@@ -386,6 +387,12 @@ function acceptEvent(ev, now) {
     });
     view.fx.push({ type: "flash", x: ev.x1, y: ev.y1, heavy: ev.heavy, air: ev.air, life: 0.14, max: 0.14 });
     view.fx.push({ type: "hit", x: ev.x2, y: ev.y2, heavy: ev.heavy, life: 0.34, max: 0.34 });
+    if (ev.heavy || ev.air) {
+      view.fx.push({ type: "boom", x: ev.x2, y: ev.y2, heavy: !!ev.heavy, life: 0.48, max: 0.48 });
+      view.scorches = view.scorches || [];
+      view.scorches.push({ x: ev.x2, y: ev.y2 });
+      if (view.scorches.length > 24) view.scorches.shift();
+    }
     if (ev.targetOwner === me && ev.building) {
       const nowMs = performance.now();
       if (nowMs - (view.lastAlarm || 0) > 4000) {
@@ -397,6 +404,7 @@ function acceptEvent(ev, now) {
     view.scorches = view.scorches || [];
     view.scorches.push({ x: ev.x, y: ev.y });
     if (view.scorches.length > 24) view.scorches.shift();
+    view.fx.push({ type: "boom", x: ev.x, y: ev.y, heavy: true, life: 0.7, max: 0.7 });
     view.fx.push({
       type: "puff",
       x: ev.x,

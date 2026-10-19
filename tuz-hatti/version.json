@@ -1,6 +1,6 @@
 {
-  "versionCode": 11,
-  "versionName": "2.9",
-  "notes": "Birlikler yere oturur, dönerken kaymaz, ateş namludan çıkar. Güncelleme kurulum ekranını kendisi açar.",
+  "versionCode": 12,
+  "versionName": "3.0",
+  "notes": "Birlik ve üsler haritanın perspektifinde. Palet döner, kule hedefe bakar, uçak iz bırakır, isabet patlar.",
   "apk": "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }

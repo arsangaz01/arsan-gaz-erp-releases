@@ -583,7 +583,7 @@ function deal(state, attacker, def, target, events) {
     y2: target.y,
     attackerId: attacker.id,
     owner: attacker.owner,
-    heavy: def.armor === "heavy" || !!def.turret,
+    heavy: def.armor === "heavy" || !!def.wash || (def.damage || 0) >= 20,
     air: !!def.air,
     targetId: target.id,
     targetKind: target.kind,

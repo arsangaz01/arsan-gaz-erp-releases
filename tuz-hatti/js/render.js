@@ -1,35 +1,10 @@
-/** Dünya çizimi. Araç ve üsler özgün üç çeyrek fotoğraf plakalarıdır. */
+/** Dünya çizimi. Birlik ve üsler haritanın perspektifiyle aynı izometrik gövdelerdir. */
 
 import { faction } from "./balance.js";
-import { GROUND_A, GROUND_B, applyGround, drawIso, screenPoint, worldPoint } from "./iso.js";
+import { applyGround, drawIso, screenPoint, worldPoint } from "./iso.js";
 import { canSeeEntity, cellExplored, cellVisible, entityDef } from "./sim.js";
 
 export const SPRITE_SRC = {
-  "real-tank-w": "assets/real-tank-w.png",
-  "real-tank-s": "assets/real-tank-s.png",
-  "real-tank-n": "assets/real-tank-n.png",
-  "real-sph": "assets/real-sph.png",
-  "real-mlrs": "assets/real-mlrs.png",
-  "real-ifv": "assets/real-ifv.png",
-  "real-atgm": "assets/real-atgm.png",
-  "real-truck": "assets/real-truck.png",
-  "real-infantry": "assets/real-infantry.png",
-  "real-heli": "assets/real-heli.png",
-  "real-jet": "assets/real-jet.png",
-  "real-wing": "assets/real-wing.png",
-  "real-drone": "assets/real-drone.png",
-  "real-ship": "assets/real-ship.png",
-  "real-sam": "assets/real-sam.png",
-  "real-hq": "assets/real-hq.png",
-  "real-barracks": "assets/real-barracks.png",
-  "real-shop": "assets/real-shop.png",
-  "real-strip": "assets/real-strip.png",
-  "real-depot": "assets/real-depot.png",
-  "real-bunker": "assets/real-bunker.png",
-  "real-yard": "assets/real-yard.png",
-  "real-battery": "assets/real-battery.png",
-  "real-tree": "assets/real-tree.png",
-  "real-peak": "assets/real-peak.png",
   terrain: "assets/terrain.jpg",
   "map-tur": "assets/map-tur.jpg",
   "map-usa": "assets/map-usa.jpg",
@@ -50,7 +25,6 @@ const NODE_TINT = {
 };
 
 const images = {};
-const tintCache = {};
 
 function preloadSprites() {
   if (typeof Image === "undefined") return;
@@ -171,23 +145,21 @@ function drawDecor(ctx, state) {
 }
 
 function drawUpright(ctx, state, view, gfx) {
+  drawTrails(ctx, view);
   for (const rock of state.obstacles) {
     if (rock.kind === "water") continue;
     withModel(ctx, view, rock.x, rock.y, () => {
       const forest = rock.kind === "forest";
-      const span = rock.r * (forest ? 2.05 : 2.25);
-      if (!drawAnchored(ctx, forest ? "real-tree" : "real-peak", span, { sink: 0.14 })) {
-        drawIso(ctx, {
-          form: forest ? "tree" : "peak",
-          radius: rock.r * (forest ? 0.34 : 0.48),
-          angle: 0.4,
-          paint: forest ? "#2f6a38" : "#8a8074",
-          dark: "#3a3228",
-          cloth: "#d9d3c6",
-          detail: !!gfx.decor,
-          grow: 1,
-        });
-      }
+      drawIso(ctx, {
+        form: forest ? "tree" : "peak",
+        radius: rock.r * (forest ? 0.42 : 0.55),
+        angle: 0.4,
+        paint: forest ? "#2f6a38" : "#8a8074",
+        dark: "#3a3228",
+        cloth: "#d9d3c6",
+        detail: !!gfx.decor,
+        grow: 1,
+      });
     });
   }
   for (const n of state.nodes) {
@@ -235,109 +207,16 @@ function drawEntities(ctx, state, view, gfx) {
     withModel(ctx, view, e.x, e.y, () => {
       ctx.globalAlpha = e.isBuilding && !e.constructed ? 0.72 : 1;
       if (e.isBuilding) drawBuilding(ctx, e, def, colors, gfx);
-      else drawUnit(ctx, e, def, colors, gfx, state);
+      else drawUnit(ctx, e, def, colors, gfx, state, view);
     });
   }
 }
-
-const BUILDING_PHOTO = {
-  hq: "real-hq",
-  barracks: "real-barracks",
-  shop: "real-shop",
-  strip: "real-strip",
-  tower: "real-sam",
-  bunker: "real-bunker",
-  yard: "real-yard",
-  battery: "real-battery",
-  depot: "real-depot",
-};
-
-const BUILDING_SPAN = {
-  hq: 3.35,
-  barracks: 3.7,
-  shop: 3.55,
-  strip: 4.1,
-  tower: 3.9,
-  bunker: 3.5,
-  yard: 3.45,
-  battery: 3.3,
-  depot: 3.6,
-};
-
-const UNIT_FRAMES = {
-  tank: [
-    { key: "real-tank-w", ang: Math.PI },
-    { key: "real-tank-s", ang: Math.PI * 0.75 },
-    { key: "real-tank-n", ang: -Math.PI * 0.25 },
-  ],
-  sph: [{ key: "real-sph", ang: Math.PI }],
-  mlrs: [{ key: "real-mlrs", ang: Math.PI }],
-  ifv: [{ key: "real-ifv", ang: Math.PI }],
-  atgm: [{ key: "real-atgm", ang: Math.PI * 0.75 }],
-  truck: [{ key: "real-truck", ang: Math.PI * 0.75 }],
-  infantry: [{ key: "real-infantry", ang: Math.PI }],
-  heli: [{ key: "real-heli", ang: Math.PI }],
-  jet: [{ key: "real-jet", ang: Math.PI }],
-  wing: [{ key: "real-wing", ang: Math.PI * 0.72 }],
-  drone: [{ key: "real-drone", ang: Math.PI }],
-  quad: [{ key: "real-drone", ang: Math.PI }],
-  ship: [{ key: "real-ship", ang: Math.PI * 0.7 }],
-};
-
-const UNIT_SPAN = {
-  tank: 5.5,
-  sph: 5.3,
-  mlrs: 5.2,
-  ifv: 5.1,
-  atgm: 4.9,
-  truck: 4.7,
-  infantry: 4.6,
-  heli: 6.4,
-  jet: 6.6,
-  wing: 5.8,
-  drone: 4.4,
-  quad: 3.8,
-  ship: 6.2,
-};
 
 function angDiff(a, b) {
   let d = a - b;
   while (d > Math.PI) d -= Math.PI * 2;
   while (d < -Math.PI) d += Math.PI * 2;
   return d;
-}
-
-function screenHeading(angle) {
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-  return Math.atan2((c + s) * GROUND_B, (c - s) * GROUND_A);
-}
-
-function pickFrame(frames, heading) {
-  let best = frames[0];
-  let bestFlip = false;
-  let bestD = 99;
-  for (const frame of frames) {
-    for (const flip of [false, true]) {
-      const ang = flip ? Math.PI - frame.ang : frame.ang;
-      const d = Math.abs(angDiff(heading, ang));
-      if (d < bestD) {
-        bestD = d;
-        best = frame;
-        bestFlip = flip;
-      }
-    }
-  }
-  return { key: best.key, flip: bestFlip, ang: bestFlip ? Math.PI - best.ang : best.ang };
-}
-
-function smoothHeading(gfx, id, angle) {
-  const map = gfx._head || (gfx._head = new Map());
-  const prev = map.has(id) ? map.get(id) : angle;
-  const delta = angDiff(angle, prev);
-  const next = prev + Math.sign(delta) * Math.min(Math.abs(delta), 0.2);
-  map.set(id, next);
-  return next;
 }
 
 function drawContacts(ctx, state, view) {
@@ -347,7 +226,7 @@ function drawContacts(ctx, state, view) {
     if (e.owner !== who && !canSeeEntity(state, who, e)) continue;
     const def = entityDef(state, e);
     const air = !!def.air;
-    const rx = e.isBuilding ? e.radius * 1.28 : air ? e.radius * 1.15 : e.radius * 2.2;
+    const rx = e.isBuilding ? e.radius * 1.45 : air ? e.radius * 1.35 : e.radius * 2.6;
     ctx.fillStyle = air ? "rgba(0,0,0,0.22)" : "rgba(12,10,8,0.5)";
     ctx.beginPath();
     ctx.ellipse(e.x, e.y, rx, rx * 0.5, 0, 0, Math.PI * 2);
@@ -378,43 +257,12 @@ function drawGroundFx(ctx, view) {
   }
 }
 
-function softShadow(ctx, rx, ry) {
-  ctx.fillStyle = "rgba(0,0,0,0.32)";
-  ctx.beginPath();
-  ctx.ellipse(0, 5, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawAnchored(ctx, key, width, opt = {}) {
-  const img = images[key];
-  if (!ready(img)) return false;
-  const aspect = img.naturalWidth / Math.max(1, img.naturalHeight);
-  const dw = width;
-  const dh = width / aspect;
-  const foot = opt.foot != null ? opt.foot : dh * (opt.sink ?? 0.16);
-  ctx.save();
-  if (opt.lift) ctx.translate(0, -opt.lift);
-  if (opt.rot) ctx.rotate(opt.rot);
-  if (opt.flip) ctx.scale(-1, 1);
-  if (opt.grow != null && opt.grow < 0.995) {
-    const top = -dh + foot;
-    ctx.beginPath();
-    ctx.rect(-dw / 2 - 2, top + dh * (1 - opt.grow), dw + 4, dh * opt.grow + 4);
-    ctx.clip();
-  }
-  ctx.drawImage(img, -dw / 2, -dh + foot, dw, dh);
-  ctx.restore();
-  return true;
-}
-
 function paintStructure(ctx, def, colors, gfx, grow) {
   const shape = def.shape || "depot";
-  const span = def.radius * (BUILDING_SPAN[shape] || 3.4);
-  const key = BUILDING_PHOTO[shape] || BUILDING_PHOTO.depot;
-  if (drawAnchored(ctx, key, span, { grow, sink: 0.22 })) return span;
+  const span = def.radius * 1.15;
   drawIso(ctx, {
     form: shape,
-    radius: def.radius * 1.05,
+    radius: span,
     angle: 0.55,
     paint: colors.main,
     dark: colors.dark,
@@ -422,7 +270,7 @@ function paintStructure(ctx, def, colors, gfx, grow) {
     detail: gfx.decor !== false,
     grow,
   });
-  return span;
+  return span * 1.35;
 }
 
 function drawBuilding(ctx, e, def, colors, gfx) {
@@ -468,98 +316,90 @@ function unitForm(def) {
   return "tank";
 }
 
-function drawUnit(ctx, e, def, colors, gfx, state) {
-  const moving = e.plan && e.plan.kind !== "guard" && e.plan.kind !== "hold";
-  const phase = moving ? state.time * (def.air ? 14 : 7) + e.id : e.id;
+function poseOf(gfx, e, aim, dt, articulated) {
+  const map = gfx._motion || (gfx._motion = new Map());
+  const prev = map.get(e.id) || { x: e.x, y: e.y, track: e.id, turret: e.angle, hull: e.angle };
+  const dist = Math.hypot(e.x - prev.x, e.y - prev.y);
+  let turret = prev.turret;
+  if (articulated) {
+    const gap = angDiff(aim, turret);
+    const step = Math.max(0.016, dt || 0.016) * 3.1;
+    turret += Math.abs(gap) < step ? gap : Math.sign(gap) * step;
+  } else {
+    turret = e.angle;
+  }
+  const pose = { x: e.x, y: e.y, track: prev.track + dist, turret, hull: e.angle, prevHull: prev.hull, dist };
+  map.set(e.id, pose);
+  return pose;
+}
+
+function noteTrail(view, e, def, dist) {
+  if (!def.air || dist < 1.2) return;
+  const map = view._trails || (view._trails = new Map());
+  const pts = map.get(e.id) || [];
+  const last = pts[pts.length - 1];
+  if (!last || Math.hypot(e.x - last.x, e.y - last.y) > 10) pts.push({ x: e.x, y: e.y });
+  while (pts.length > 18) pts.shift();
+  map.set(e.id, pts);
+}
+
+function drawTrails(ctx, view) {
+  const trails = view._trails;
+  if (!trails) return;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(226, 230, 232, 0.42)";
+  ctx.lineWidth = Math.max(1.4, view.zoom * 1.6);
+  for (const pts of trails.values()) {
+    if (pts.length < 2) continue;
+    ctx.beginPath();
+    pts.forEach((p, index) => {
+      const s = screenPoint(view, p.x, p.y);
+      s.y -= 26 * view.zoom;
+      if (index) ctx.lineTo(s.x, s.y);
+      else ctx.moveTo(s.x, s.y);
+    });
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawUnit(ctx, e, def, colors, gfx, state, view) {
   let aim = e.angle;
   if (e.plan?.targetId) {
     const target = state.entities.find((item) => item.id === e.plan.targetId);
     if (target) aim = Math.atan2(target.y - e.y, target.x - e.x);
   }
   const form = unitForm(def);
-  const span = def.radius * (UNIT_SPAN[form] || 4.8);
-  const pose = gfx._pose || (gfx._pose = new Map());
-  const prev = pose.get(e.id);
-  pose.set(e.id, e.angle);
-  let bank = 0;
-  if (prev != null && def.air) {
-    bank = Math.max(-0.22, Math.min(0.22, angDiff(e.angle, prev) * 4));
-  }
-  const frames = UNIT_FRAMES[form] || UNIT_FRAMES.tank;
-  const shown = smoothHeading(gfx, e.id, def.turret ? aim : e.angle);
-  const heading = screenHeading(shown);
-  const picked = pickFrame(frames, heading);
-  let residual = angDiff(heading, picked.ang);
-  residual = Math.max(-0.42, Math.min(0.42, residual));
-  if (picked.flip) residual = -residual;
+  const articulated = form === "tank" || form === "sph" || form === "ifv" || form === "atgm" || form === "mlrs";
+  const pose = poseOf(gfx, e, aim, view.dt || 0.016, articulated);
+  noteTrail(view, e, def, pose.dist);
+  const walking = def.sprite === "infantry" && pose.dist > 0.15;
+  const phase = def.air ? state.time * 16 + e.id : walking ? state.time * 8 + e.id : pose.track * 0.22;
+  const bank = def.air ? Math.max(-0.4, Math.min(0.4, angDiff(e.angle, pose.prevHull) * -8)) : 0;
   const kick = e.kick || 0;
   if (kick > 0.02) e.kick = kick * 0.82;
-  const lift = def.air ? 34 + Math.sin(state.time * 2.2 + e.id) * 1.2 : 0;
-  const sink = def.air ? 0.02 : def.naval ? 0.22 : def.sprite === "infantry" ? 0.14 : 0.24;
-  ctx.save();
-  if (kick > 0) ctx.translate(-Math.cos(heading) * kick * 9, -Math.sin(heading) * kick * 4);
-  const drawn = drawAnchored(ctx, picked.key, span, {
-    flip: picked.flip,
+  const lift = def.air ? 28 + Math.sin(state.time * 2.2 + e.id) * 1.4 : 0;
+  drawIso(ctx, {
+    form,
+    key: def.sprite,
+    name: def.name,
+    radius: def.radius * (def.air ? 2.15 : def.naval ? 1.9 : def.worker ? 1.85 : def.sprite === "infantry" ? 1.7 : 2.05),
+    angle: e.angle,
+    aim: articulated ? pose.turret : aim,
+    paint: colors.main,
+    dark: colors.dark,
+    cloth: colors.cloth,
+    detail: gfx.decor !== false,
+    phase,
     lift,
-    rot: bank + residual,
-    sink,
+    carry: e.carry > 0,
+    bank,
+    grow: 1,
+    kick,
+    drive: e.drive || (pose.dist > 0.4 ? 1 : 0),
   });
-  if ((def.damage || 0) > 0 && kick > 0.18) {
-    ctx.fillStyle = kick > 0.65 ? "#fff4cf" : "rgba(255, 196, 90, 0.9)";
-    ctx.beginPath();
-    ctx.ellipse(Math.cos(heading) * span * 0.46, Math.sin(heading) * span * 0.2 - span * 0.16, span * 0.1, span * 0.045, heading, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-  if (!drawn) {
-    drawIso(ctx, {
-      form,
-      key: def.sprite,
-      name: def.name,
-      radius: def.radius * (def.air ? 1.7 : def.naval ? 1.55 : def.worker ? 1.45 : 1.72),
-      angle: e.angle,
-      aim,
-      paint: colors.main,
-      dark: colors.dark,
-      cloth: colors.cloth,
-      detail: gfx.decor !== false,
-      phase,
-      lift,
-      carry: e.carry > 0,
-      bank,
-      grow: 1,
-    });
-  }
-}
-
-function ready(img) {
-  return img && img.complete && img.naturalWidth > 0;
-}
-
-function drawSprite(ctx, key, size, tint) {
-  const img = images[key];
-  if (!ready(img)) return false;
-  const source = tint ? tinted(key, tint) : img;
-  if (!source) return false;
-  ctx.drawImage(source, -size / 2, -size / 2, size, size);
-  return true;
-}
-
-function tinted(key, tint) {
-  const img = images[key];
-  if (!ready(img)) return null;
-  const id = key + "|" + tint;
-  if (tintCache[id]) return tintCache[id];
-  const c = document.createElement("canvas");
-  c.width = img.naturalWidth;
-  c.height = img.naturalHeight;
-  const g = c.getContext("2d");
-  g.drawImage(img, 0, 0);
-  g.globalCompositeOperation = "source-atop";
-  g.fillStyle = tint;
-  g.fillRect(0, 0, c.width, c.height);
-  tintCache[id] = c;
-  return c;
 }
 
 function viewer(view) {
@@ -780,6 +620,23 @@ function drawFx(ctx, view) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, radius * 0.45, 0, Math.PI * 2);
       ctx.fill();
+    } else if (fx.type === "boom") {
+      const p = screenPoint(view, fx.x, fx.y);
+      const z = Math.min(view.zoom, 1.8);
+      const radius = (8 + t * (fx.heavy ? 54 : 30)) * z;
+      ctx.fillStyle = `rgba(255, 92, 28, ${0.42 * (1 - t)})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y - t * 12 * z, radius * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(255, 214, 120, ${0.9 * (1 - t)})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y - t * 6 * z, radius * 0.24, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(70, 54, 40, ${0.4 * (1 - t)})`;
+      ctx.lineWidth = 5 * z;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y - t * 20 * z, radius * 0.78, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
     }
     ctx.globalAlpha = 1;
   }
