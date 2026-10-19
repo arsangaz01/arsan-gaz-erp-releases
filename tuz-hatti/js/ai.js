@@ -1,4 +1,4 @@
-/** Rakip lonca. Ekonomi kurar, ikmal tıkanırsa ambar açar, ordu eşiğinde saldırır. */
+/** Rakip hat. Yakıtı kurar, ikmal tıkanırsa ambar açar, ordu eşiğinde saldırır. */
 
 import { buildingDef, unitDef } from "./balance.js";
 import { canPlace, command, supplyInfo } from "./sim.js";
@@ -68,7 +68,7 @@ export function aiAct(state, owner, dt, mem) {
         kind,
         n: mine.filter((e) => e.kind === kind && !e.isBuilding).length,
         cost: unitDef(factionId, kind).cost,
-        siege: (unitDef(factionId, kind).bonus?.building || 1) > 1.4,
+        siege: (unitDef(factionId, kind).bonus?.building || 1) > 1.7,
       }))
       .sort((a, b) => Number(b.siege) - Number(a.siege) || a.n - b.n || a.cost - b.cost);
     for (const opt of options) {
@@ -79,6 +79,16 @@ export function aiAct(state, owner, dt, mem) {
 
   const vehicles = mine.filter((e) => !e.isBuilding && (unitDef(factionId, e.kind)?.supply || 1) > 1).length;
   if (barracks && vehicles >= 1 && infCount < 7) tryTrain(state, owner, barracks, infKind);
+
+  if (shop && vehicles >= 1) ensureBuilding(state, owner, factionId, buildings, workers, "pist");
+  const strip = buildings.find((b) => b.kind === "pist" && b.constructed);
+  if (strip) {
+    const airKind = buildingDef(factionId, "pist").trains[0];
+    const airDef = unitDef(factionId, airKind);
+    const cap = airDef.cost < 90 ? 3 : 1;
+    const flying = mine.filter((e) => !e.isBuilding && e.kind === airKind).length;
+    if (flying < cap) tryTrain(state, owner, strip, airKind);
+  }
 
   const barracksDone = buildings.some((b) => b.kind === "barinak" && b.constructed);
   if (barracksDone && (state.time > 70 || underAttack)) {

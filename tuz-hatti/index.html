@@ -3,47 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#1c1712" />
+    <meta name="theme-color" content="#101410" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <title>Tuz Hattı</title>
+    <title>Cephe Hattı</title>
     <link rel="stylesheet" href="css/game.css" />
   </head>
   <body>
     <div id="rotate">
-      <p>Harita yan tutulunca daha rahat okunur.</p>
+      <p>Harita yan tutulunca okunur.</p>
       <button type="button" id="play-portrait">Dikey oyna</button>
     </div>
 
     <section id="menu">
       <div class="menu-card">
-        <p class="eyebrow">Tuz ovası · iki lonca</p>
-        <h1>Tuz Hattı</h1>
-        <p class="lead">
-          Kurak düzlükte kül cevheri topla, üssünü büyüt, birliklerini üret.
-          Rakip ocağı yıkan taraf ovayı alır.
-        </p>
-        <div class="factions">
-          <button type="button" class="faction selected" data-faction="tuz" id="card-tuz">
-            <span class="swatch tuz" aria-hidden="true"></span>
-            <strong>Tuz Loncası</strong>
-            <p></p>
-            <em>Sıra Kargısı · Kabuk · Çizik</em>
-          </button>
-          <button type="button" class="faction" data-faction="ruzgar" id="card-ruzgar">
-            <span class="swatch ruzgar" aria-hidden="true"></span>
-            <strong>Rüzgar Kervanı</strong>
-            <p></p>
-            <em>Toz İzci · Çekirge · Uzun Kazan</em>
-          </button>
+        <div class="menu-top">
+          <p class="eyebrow">2026 sahası · sekiz ordu</p>
+          <button type="button" id="update" class="ghost">Güncelle</button>
+          <button type="button" id="gfx-open" class="ghost">Görüntü</button>
         </div>
-        <p class="note">Seçtiğin loncanın karşısına diğeri çıkar.</p>
+        <h1>Cephe Hattı</h1>
+        <p class="lead">
+          Sekiz ordudan birini seç. Yakıt topla, karargâhı büyüt, tankını, topunu ve havadaki aracı üret.
+          Rakip karargâhı düşen taraf hattı bırakır.
+        </p>
+        <p class="pick-label">Senin hattın</p>
+        <div class="factions" id="yours"></div>
+        <p class="pick-label">Rakip hat</p>
+        <div class="factions" id="enemy"></div>
+        <p class="note" id="update-status">Sürüm 2.0 · araç adları sahadaki güncel tipler, sayılar oyun dengesidir.</p>
         <button type="button" id="start">Savaşa gir</button>
         <ul class="how">
-          <li>Taşıyıcılar kül toplar, ocak ya da ambara bırakır.</li>
-          <li>İşçiyi seç, bina kur, binaya dokunup birlik üret.</li>
-          <li>Sürükleyerek haritayı kaydır. Yere dokununca birlik yürür.</li>
-          <li>Ocağı yıkılan taraf kaybeder.</li>
+          <li>İkmal araçları yakıt toplar, karargâha veya ambara bırakır.</li>
+          <li>İkmal aracını seç, kışla, araç parkı ve uçuş pistini kur.</li>
+          <li>Sürükleyerek haritayı kaydır. Yere dokununca birlik yürür, hava aracı engelin üstünden geçer.</li>
+          <li>Karargâhı düşen taraf kaybeder.</li>
         </ul>
       </div>
     </section>
@@ -52,14 +46,16 @@
       <canvas id="view"></canvas>
       <header id="top">
         <div class="stat">
-          <span>Kül</span>
+          <span>Yakıt</span>
           <strong id="ash">0</strong>
         </div>
         <div class="stat">
           <span>İkmal</span>
           <strong id="supply">0/0</strong>
         </div>
-        <p id="goal">Rakip ocağı yık</p>
+        <p id="goal">Rakip karargâhı düşür</p>
+        <button type="button" id="update-hud">Güncelle</button>
+        <button type="button" id="gfx-hud">Görüntü</button>
         <button type="button" id="pause">Duraklat</button>
       </header>
       <p id="inspect">Kimse seçili değil</p>
@@ -78,6 +74,20 @@
         </div>
       </div>
     </section>
+    <div id="gfx" class="hidden">
+      <div class="menu-card">
+        <p class="eyebrow">Telefonuna göre</p>
+        <h2>Görüntü</h2>
+        <p id="gfx-device" class="note"></p>
+        <div class="gfx-list">
+          <button type="button" data-gfx="auto">Otomatik<span>Kurulumda telefon ölçülür, rahat eden basamak seçilir.</span></button>
+          <button type="button" data-gfx="low">Düşük<span>Zayıf telefonda takılmadan oyna.</span></button>
+          <button type="button" data-gfx="medium">Orta<span>Çoğu telefon için denge.</span></button>
+          <button type="button" data-gfx="high">Yüksek<span>Güçlü telefonda daha keskin görüntü.</span></button>
+        </div>
+        <button type="button" id="gfx-close">Kapat</button>
+      </div>
+    </div>
     <script type="module" src="js/main.js"></script>
   </body>
 </html>

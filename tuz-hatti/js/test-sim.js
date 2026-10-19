@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { unitDef } from "./balance.js";
 import { aiAct, createAiMemory } from "./ai.js";
 import { cellExplored, cellVisible, command, createMatch, getEntity, step, supplyInfo } from "./sim.js";
 
@@ -17,7 +18,7 @@ function simulate(state, seconds, owners = []) {
   }
 }
 
-const economy = createMatch({ seed: 1, playerFaction: "tuz", enemyFaction: "ruzgar" });
+const economy = createMatch({ seed: 1, playerFaction: "usa", enemyFaction: "rus" });
 const startAsh = economy.players[0].ash;
 const hq = economy.entities.find((e) => e.owner === 0 && e.kind === "ocak");
 assert.equal(hq.hp, hq.maxHp);
@@ -27,7 +28,7 @@ simulate(economy, 30);
 assert.ok(economy.players[0].ash > startAsh + 40, `kül artmadı: ${economy.players[0].ash}`);
 assert.ok(economy.players[1].gathered > 0, "rakip de kül topladı");
 
-const built = createMatch({ seed: 2, playerFaction: "tuz", enemyFaction: "ruzgar" });
+const built = createMatch({ seed: 2, playerFaction: "usa", enemyFaction: "rus" });
 const worker = built.entities.find((e) => e.owner === 0 && e.kind === "tasiyici");
 const placed = command(built, { by: 0, type: "place", workerId: worker.id, kind: "barinak", x: 450, y: 650 });
 assert.equal(placed.ok, true, placed.reason);
@@ -39,7 +40,7 @@ assert.equal(trained.ok, true, trained.reason);
 simulate(built, 8);
 assert.ok(built.entities.some((e) => e.owner === 0 && e.kind === "mizrak" && e.hp > 0));
 
-const crowded = createMatch({ seed: 3, playerFaction: "tuz", enemyFaction: "ruzgar" });
+const crowded = createMatch({ seed: 3, playerFaction: "usa", enemyFaction: "rus" });
 const hall = crowded.entities.find((e) => e.owner === 0 && e.kind === "ocak");
 const supply = supplyInfo(crowded, 0);
 const missing = supply.cap - supply.used;
@@ -48,7 +49,9 @@ for (let i = 0; i < missing + 2; i++) {
 }
 assert.ok(supplyInfo(crowded, 0).used <= supplyInfo(crowded, 0).cap);
 
-const fight = createMatch({ seed: 4, playerFaction: "tuz", enemyFaction: "ruzgar" });
+const fight = createMatch({ seed: 4, playerFaction: "usa", enemyFaction: "rus" });
+const usaInf = unitDef("usa", "mizrak");
+const rusInf = unitDef("rus", "mizrak");
 fight.entities.push(
   {
     id: 900,
@@ -57,9 +60,9 @@ fight.entities.push(
     isBuilding: false,
     x: 700,
     y: 400,
-    hp: 92,
-    maxHp: 92,
-    radius: 12,
+    hp: usaInf.hp,
+    maxHp: usaInf.hp,
+    radius: usaInf.radius,
     angle: 0,
     constructed: true,
     progress: 1,
@@ -73,19 +76,19 @@ fight.entities.push(
   {
     id: 901,
     owner: 1,
-    kind: "izci",
+    kind: "mizrak",
     isBuilding: false,
-    x: 724,
+    x: 728,
     y: 400,
-    hp: 58,
-    maxHp: 58,
-    radius: 11,
+    hp: rusInf.hp,
+    maxHp: rusInf.hp,
+    radius: rusInf.radius,
     angle: Math.PI,
     constructed: true,
     progress: 1,
     cooldown: 0,
     queue: null,
-    rallyX: 724,
+    rallyX: 728,
     rallyY: 400,
     carry: 0,
     plan: { kind: "attack", targetId: 900, leash: 400 },
@@ -96,12 +99,12 @@ simulate(fight, 8);
 const foe = fight.entities.find((e) => e.id === 901);
 assert.ok(!foe || foe.hp < before, "çatışma hasar vermedi");
 
-const end = createMatch({ seed: 5, playerFaction: "ruzgar", enemyFaction: "tuz" });
+const end = createMatch({ seed: 5, playerFaction: "rus", enemyFaction: "usa" });
 end.entities.find((e) => e.owner === 1 && e.kind === "ocak").hp = 0;
 step(end, 0.05);
 assert.equal(end.winner, 0);
 
-const skirmish = createMatch({ seed: 7, playerFaction: "tuz", enemyFaction: "ruzgar" });
+const skirmish = createMatch({ seed: 7, playerFaction: "usa", enemyFaction: "cin" });
 const saw = { barracks: [false, false], fighter: [false, false] };
 const mem = [createAiMemory(), createAiMemory()];
 for (let t = 0; t < 160; t += 0.05) {
@@ -120,7 +123,7 @@ for (let t = 0; t < 160; t += 0.05) {
 assert.deepEqual(saw.barracks, [true, true], "kışlalar bitmedi");
 assert.deepEqual(saw.fighter, [true, true], "iki taraf da birlik üretmedi");
 
-const blocked = createMatch({ seed: 8, playerFaction: "tuz", enemyFaction: "ruzgar" });
+const blocked = createMatch({ seed: 8, playerFaction: "usa", enemyFaction: "rus" });
 const overlap = command(blocked, {
   by: 0,
   type: "place",
@@ -131,7 +134,34 @@ const overlap = command(blocked, {
 });
 assert.equal(overlap.ok, false);
 
-console.log("tuz-hatti sim tamam");
+const flight = createMatch({ seed: 11, playerFaction: "tur", enemyFaction: "irn" });
+flight.entities.push({
+  id: 880,
+  owner: 0,
+  kind: "avci",
+  isBuilding: false,
+  x: 900,
+  y: 650,
+  hp: 100,
+  maxHp: 100,
+  radius: 14,
+  angle: 0,
+  constructed: true,
+  progress: 1,
+  cooldown: 0,
+  queue: null,
+  rallyX: 900,
+  rallyY: 650,
+  carry: 0,
+  plan: { kind: "move", x: 1200, y: 650 },
+});
+flight.nextId = 900;
+simulate(flight, 4);
+const jet = flight.entities.find((e) => e.id === 880);
+assert.ok(jet && jet.x > 1150, `uçak ilerleyemedi: ${jet && jet.x}`);
+assert.ok(jet && Math.abs(jet.y - 650) < 18, `uçak kayaya saplandı: ${jet && jet.y}`);
+
+console.log("cephe sim tamam");
 console.log(
   JSON.stringify({
     ash: economy.players[0].ash,

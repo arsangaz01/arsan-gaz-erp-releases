@@ -49,7 +49,7 @@ export function mulberry32(seed) {
   };
 }
 
-export function createMatch({ seed = 1, playerFaction = "tuz", enemyFaction = "ruzgar" } = {}) {
+export function createMatch({ seed = 1, playerFaction = "tur", enemyFaction = "rus" } = {}) {
   const rng = mulberry32(seed);
   const cols = Math.ceil(MAP_W / CELL);
   const rows = Math.ceil(MAP_H / CELL);
@@ -426,13 +426,9 @@ function updateTraining(state, building, dt, spawned, events) {
   const dy = building.rallyY - building.y;
   const d = Math.hypot(dx, dy) || 1;
   const dist = building.radius + udef.radius + 8;
-  const spot = freeSpot(
-    state,
-    building.x + (dx / d) * dist,
-    building.y + (dy / d) * dist,
-    udef.radius,
-    building.id,
-  );
+  const sx = building.x + (dx / d) * dist;
+  const sy = building.y + (dy / d) * dist;
+  const spot = udef.air ? { x: sx, y: sy } : freeSpot(state, sx, sy, udef.radius, building.id);
   const unit = makeUnit(state, building.owner, job.kind, spot.x, spot.y);
   if (udef.worker) {
     const node = nearestOre(state, unit.x, unit.y);
@@ -550,6 +546,7 @@ function deal(state, attacker, def, target, events) {
     y2: target.y,
     owner: attacker.owner,
     heavy: def.armor === "heavy" || !!def.turret,
+    air: !!def.air,
     targetId: target.id,
     targetKind: target.kind,
     targetOwner: target.owner,
@@ -721,7 +718,7 @@ function moveToward(state, e, tx, ty, step, stopDist, ignoreId) {
   let vx = dx / dist;
   let vy = dy / dist;
   const look = 26;
-  if (circleBlocked(state, e.x + vx * look, e.y + vy * look, e.radius * 0.75, ignoreId)) {
+  if (!isAir(state, e) && circleBlocked(state, e.x + vx * look, e.y + vy * look, e.radius * 0.75, ignoreId)) {
     const base = Math.atan2(vy, vx);
     let steered = false;
     for (const off of [0.8, -0.8, 1.4, -1.4, 2.2, -2.2, 3]) {
@@ -770,12 +767,17 @@ function circleBlocked(state, x, y, r, ignoreId) {
   return false;
 }
 
+function isAir(state, e) {
+  return !e.isBuilding && !!entityDef(state, e).air;
+}
+
 function separateUnits(state) {
   const units = state.entities.filter((e) => !e.isBuilding && e.hp > 0);
   for (let i = 0; i < units.length; i++) {
     for (let j = i + 1; j < units.length; j++) {
       const a = units[i];
       const b = units[j];
+      if (isAir(state, a) !== isAir(state, b)) continue;
       let dx = b.x - a.x;
       let dy = b.y - a.y;
       const min = a.radius + b.radius - 1;
@@ -797,6 +799,11 @@ function separateUnits(state) {
     }
   }
   for (const u of units) {
+    if (isAir(state, u)) {
+      u.x = clamp(u.x, u.radius, MAP_W - u.radius);
+      u.y = clamp(u.y, u.radius, MAP_H - u.radius);
+      continue;
+    }
     for (const o of state.obstacles) pushOut(u, o.x, o.y, o.r);
     for (const b of state.entities) {
       if (!b.isBuilding || b.hp <= 0) continue;

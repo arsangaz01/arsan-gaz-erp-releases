@@ -1,6 +1,7 @@
 /** Dokunmatik arayüz. Sürükle kaydırır, dokunuş seçer veya emir verir. */
 
-import { BUILD_ORDER, buildingDef, faction, unitDef } from "./balance.js";
+import { GFX_PRESETS, suggestTier, tierAbove } from "./gfx.js";
+import { BUILD_ORDER, FACTION_IDS, buildingDef, faction, unitDef } from "./balance.js";
 import { playEvent, unlockAudio } from "./audio.js";
 import { aiAct, createAiMemory } from "./ai.js";
 import { drawMinimap, drawWorld } from "./render.js";
@@ -20,15 +21,19 @@ import {
 } from "./sim.js";
 
 const REASONS = {
-  ash: "Kül yetmiyor",
+  ash: "Yakıt yetmiyor",
   supply: "İkmal dolu",
   space: "Buraya kurulamaz",
-  worker: "Uygun taşıyıcı yok",
+  worker: "Uygun ikmal aracı yok",
   queue: "Üretim kuyruğu dolu",
   building: "Bu bina hazır değil",
   units: "Önce birlik seç",
   target: "Hedef yok",
 };
+
+const APP = { code: 2, name: "2.0" };
+const VERSION_URL =
+  "https://cdn.jsdelivr.net/gh/arsangaz01/arsan-gaz-erp-releases@cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
 
 const menu = document.querySelector("#menu");
 const stage = document.querySelector("#stage");
@@ -64,7 +69,8 @@ const view = {
 
 let match = null;
 let aiMem = null;
-let playerFaction = "tuz";
+let playerFaction = "tur";
+let enemyFaction = "rus";
 let paused = false;
 let tool = null;
 let pointer = null;
@@ -74,22 +80,14 @@ let toastTimer = 0;
 let last = 0;
 let running = false;
 
-document.querySelectorAll(".faction").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    playerFaction = btn.dataset.faction;
-    document.querySelectorAll(".faction").forEach((el) => el.classList.toggle("selected", el === btn));
-    unlockAudio();
-  });
-});
-
 document.querySelector("#start").addEventListener("click", () => {
   unlockAudio();
-  startMatch(playerFaction);
+  startMatch();
 });
 
 document.querySelector("#again").addEventListener("click", () => {
   unlockAudio();
-  startMatch(playerFaction);
+  startMatch();
 });
 
 document.querySelector("#back-menu").addEventListener("click", () => {
@@ -144,12 +142,11 @@ minimap.addEventListener("pointermove", (ev) => {
   if (ev.buttons) onMinimap(ev);
 });
 
-function startMatch(chosen) {
-  const enemy = chosen === "tuz" ? "ruzgar" : "tuz";
+function startMatch() {
   match = createMatch({
     seed: (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0,
-    playerFaction: chosen,
-    enemyFaction: enemy,
+    playerFaction,
+    enemyFaction,
   });
   aiMem = createAiMemory();
   view.selected.clear();
@@ -168,7 +165,7 @@ function startMatch(chosen) {
     focusHome();
   });
   last = performance.now();
-  toast("Taşıyıcılar kül toplar. İşçi seç, bina kur, birliklerle rakip ocağa yürü.");
+  toast("İkmal araçları yakıt toplar. İşçi seç, üssü kur, tank ve hava aracını üret.");
   if (!looping) {
     looping = true;
     requestAnimationFrame(frame);
@@ -180,13 +177,15 @@ let looping = false;
 function resize() {
   const rect = canvas.getBoundingClientRect();
   if (rect.width < 2 || rect.height < 2) return;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const gfx = view.gfx || GFX_PRESETS.medium;
+  const dpr = Math.min(window.devicePixelRatio || 1, gfx.dpr || 1);
   canvas.width = Math.max(1, Math.floor(rect.width * dpr));
   canvas.height = Math.max(1, Math.floor(rect.height * dpr));
   const mini = minimap.getBoundingClientRect();
-  minimap.width = Math.max(1, Math.floor(mini.width * dpr));
-  minimap.height = Math.max(1, Math.floor(mini.height * dpr));
-  const desired = rect.width < 900 ? 980 : 1200;
+  const miniDpr = Math.min(dpr, 1.5);
+  minimap.width = Math.max(1, Math.floor(mini.width * miniDpr));
+  minimap.height = Math.max(1, Math.floor(mini.height * miniDpr));
+  const desired = rect.width < 900 ? gfx.viewWidth : Math.round(gfx.viewWidth * 1.12);
   view.zoom = canvas.width / desired;
   view.canvasWidth = canvas.width;
   view.canvasHeight = canvas.height;
@@ -246,6 +245,7 @@ function acceptEvent(ev, now) {
       x2: ev.x2,
       y2: ev.y2,
       heavy: ev.heavy,
+      air: ev.air,
       life: 0.12,
       max: 0.12,
     });
@@ -255,13 +255,15 @@ function acceptEvent(ev, now) {
       type: "puff",
       x: ev.x,
       y: ev.y,
-      color: ev.building ? "#c46a3a" : "#f0d2bc",
+      color: ev.building ? "#6a5340" : "#c8bba8",
       life: 0.35,
       max: 0.35,
     });
   } else if (ev.type === "built" && ev.owner === 0) {
     toast(`${buildingDef(match.players[0].faction, ev.kind).name} hazır`);
   }
+  const cap = view.gfx?.fxCap || 28;
+  while (view.fx.length > cap) view.fx.shift();
 }
 
 function tickFx(dt) {
@@ -497,8 +499,8 @@ function buttonModel(ents) {
   if (!own.length) {
     return [
       { id: "army", label: "Ordu" },
-      { id: "workers", label: "İşçiler" },
-      { id: "home", label: "Ocağım" },
+      { id: "workers", label: "İkmal" },
+      { id: "home", label: "Karargâh" },
       { id: "box", label: "Kutu seç" },
     ];
   }
@@ -508,7 +510,7 @@ function buttonModel(ents) {
     const b = buildings[0];
     const def = entityDef(match, b);
     const items = [];
-    if (!b.constructed) items.push({ id: "send-build", label: "İşçi gönder" });
+    if (!b.constructed) items.push({ id: "send-build", label: "İkmal gönder" });
     else {
       for (const kind of def.trains || []) {
         const udef = unitDef(fac, kind);
@@ -529,7 +531,7 @@ function buttonModel(ents) {
     { id: "stop", label: "Dur" },
   ];
   const workers = units.filter((e) => entityDef(match, e).worker);
-  if (workers.length) items.push({ id: "harvest", label: "Topla" });
+  if (workers.length) items.push({ id: "harvest", label: "Yakıt" });
   if (workers.length && workers.length === units.length) {
     for (const kind of BUILD_ORDER) {
       const bdef = buildingDef(fac, kind);
@@ -655,11 +657,11 @@ function issueStop() {
 function showResult() {
   const you = match.winner === 0;
   const draw = match.winner === "draw";
-  resultTitle.textContent = draw ? "İki ocak da yıkıldı" : you ? "Rakip ocak yıkıldı" : "Ocağın düştü";
+  resultTitle.textContent = draw ? "İki karargâh da düştü" : you ? "Rakip karargâh düştü" : "Karargâhın düştü";
   const secs = Math.floor(match.time);
   const mm = String(Math.floor(secs / 60)).padStart(2, "0");
   const ss = String(secs % 60).padStart(2, "0");
-  resultBody.textContent = `${mm}:${ss} · toplanan kül ${Math.floor(match.players[0].gathered)} · yıkılan ${match.players[0].kills}`;
+  resultBody.textContent = `${mm}:${ss} · toplanan yakıt ${Math.floor(match.players[0].gathered)} · imha ${match.players[0].kills}`;
   resultEl.classList.remove("hidden");
   if (you) navigator.vibrate?.([20, 40, 20]);
 }
@@ -684,9 +686,166 @@ function clampTo(v, a, b) {
   return Math.max(a, Math.min(b, v));
 }
 
-const facRoot = faction("tuz");
-document.querySelector("#card-tuz p").textContent = facRoot.blurb;
-document.querySelector("#card-ruzgar p").textContent = faction("ruzgar").blurb;
+const GFX_KEY = "cephe-gfx";
+let gfxChoice = { mode: "auto" };
+
+function readDeviceInfo() {
+  if (window.CepheUpdate && typeof window.CepheUpdate.deviceInfo === "function") {
+    try {
+      const parsed = JSON.parse(window.CepheUpdate.deviceInfo() || "{}");
+      if (parsed && (parsed.ramMb || parsed.cores)) return parsed;
+    } catch (err) {
+      /* tarayıcı yolu */
+    }
+  }
+  const ramGb = navigator.deviceMemory || 0;
+  return {
+    ramMb: ramGb ? ramGb * 1024 : 0,
+    cores: navigator.hardwareConcurrency || 0,
+    width: Math.max(screen.width || 0, screen.height || 0),
+    height: Math.min(screen.width || 0, screen.height || 0),
+    density: window.devicePixelRatio || 1,
+  };
+}
+
+function loadGfxChoice() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(GFX_KEY) || "null");
+    if (saved && (saved.mode === "auto" || GFX_PRESETS[saved.mode])) return saved;
+  } catch (err) {
+    /* ilk kurulum */
+  }
+  return { mode: "auto" };
+}
+
+function deviceLine(info) {
+  const bits = [];
+  if (info.ramMb) bits.push(`${Math.max(1, Math.round(info.ramMb / 1024))} GB bellek`);
+  if (info.cores) bits.push(`${info.cores} çekirdek`);
+  return bits.join(" · ");
+}
+
+function applyGfx(choice) {
+  const info = readDeviceInfo();
+  const suggested = suggestTier(info);
+  const mode = choice?.mode || "auto";
+  const tier = mode === "auto" ? suggested : mode;
+  gfxChoice = { mode };
+  view.gfx = { ...GFX_PRESETS[tier], mode, suggested, info };
+  view.terrain = null;
+  try {
+    localStorage.setItem(GFX_KEY, JSON.stringify(gfxChoice));
+  } catch (err) {
+    /* gizli sekme */
+  }
+  const device = document.querySelector("#gfx-device");
+  if (device) {
+    const hardware = deviceLine(info);
+    const warn = mode !== "auto" && tierAbove(tier, suggested) ? " Bu basamak bu telefonda kasabilir." : "";
+    device.textContent = `${hardware ? hardware + " · " : ""}Önerilen: ${GFX_PRESETS[suggested].label}.${warn}`;
+  }
+  document.querySelectorAll("[data-gfx]").forEach((btn) => {
+    btn.classList.toggle("selected", btn.dataset.gfx === mode);
+  });
+  if (match) resize();
+}
+
+function openGfx() {
+  applyGfx(gfxChoice);
+  document.querySelector("#gfx")?.classList.remove("hidden");
+}
+
+function closeGfx() {
+  document.querySelector("#gfx")?.classList.add("hidden");
+}
+
+applyGfx(loadGfxChoice());
+
+function mountPickers() {
+  const yours = document.querySelector("#yours");
+  const enemy = document.querySelector("#enemy");
+  yours.replaceChildren();
+  enemy.replaceChildren();
+  for (const id of FACTION_IDS) {
+    yours.append(factionCard(id, "you"));
+    enemy.append(factionCard(id, "foe"));
+  }
+}
+
+function factionCard(id, role) {
+  const data = faction(id);
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "faction";
+  btn.dataset.faction = id;
+  const selected = role === "you" ? id === playerFaction : id === enemyFaction;
+  btn.classList.toggle("selected", selected);
+  btn.innerHTML = `<span class="swatch" style="background:${data.colors.main}"></span><strong>${data.name}</strong><p></p><em></em>`;
+  btn.querySelector("p").textContent = data.blurb;
+  btn.querySelector("em").textContent = data.roster;
+  btn.addEventListener("click", () => {
+    unlockAudio();
+    if (role === "you") playerFaction = id;
+    else enemyFaction = id;
+    mountPickers();
+  });
+  return btn;
+}
+
+mountPickers();
+
+function sayUpdate(text) {
+  const status = document.querySelector("#update-status");
+  if (status) status.textContent = text;
+  if (match) toast(text);
+}
+
+window.__cepheUpdate = sayUpdate;
+
+async function checkUpdate() {
+  sayUpdate("Sürüm denetleniyor");
+  if (window.CepheUpdate && typeof window.CepheUpdate.checkAndUpdate === "function") {
+    window.CepheUpdate.checkAndUpdate();
+    return;
+  }
+  try {
+    const res = await fetch(VERSION_URL + "?t=" + Math.floor(Date.now() / 3600000), { cache: "no-store" });
+    if (!res.ok) throw new Error("http");
+    const data = await res.json();
+    if ((data.versionCode | 0) > APP.code) {
+      sayUpdate("Yeni sürüm " + (data.versionName || "") + " hazır. Kurulum dosyası açılıyor.");
+      if (data.apk) window.open(data.apk, "_blank");
+    } else {
+      sayUpdate("Sürüm güncel · " + APP.name);
+    }
+  } catch (err) {
+    sayUpdate("Sürüm denetlenemedi. Bağlantıyı kontrol et.");
+  }
+}
+
+document.querySelector("#update")?.addEventListener("click", () => {
+  unlockAudio();
+  checkUpdate();
+});
+document.querySelector("#update-hud")?.addEventListener("click", () => {
+  unlockAudio();
+  checkUpdate();
+});
+document.querySelector("#gfx-open")?.addEventListener("click", () => {
+  unlockAudio();
+  openGfx();
+});
+document.querySelector("#gfx-hud")?.addEventListener("click", () => {
+  unlockAudio();
+  openGfx();
+});
+document.querySelector("#gfx-close")?.addEventListener("click", () => closeGfx());
+document.querySelectorAll("[data-gfx]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    unlockAudio();
+    applyGfx({ mode: btn.dataset.gfx });
+  });
+});
 
 if (new URLSearchParams(location.search).has("debug")) {
   window.__tuz = {

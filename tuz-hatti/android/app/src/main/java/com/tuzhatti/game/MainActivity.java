@@ -43,6 +43,7 @@ public class MainActivity extends Activity {
             }
         });
         webView.setWebChromeClient(new WebChromeClient());
+        webView.addJavascriptInterface(new UpdateBridge(this, webView), "CepheUpdate");
         setContentView(webView);
         hideSystemUi();
         webView.loadUrl(START_URL);
