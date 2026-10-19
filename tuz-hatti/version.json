@@ -1,6 +1,6 @@
 {
-  "versionCode": 4,
-  "versionName": "2.2",
-  "notes": "Karargâhtan sıralı bina ve üretim, birlik kontrolü, çıkış, su olan haritada gemi ve kıyı savunması.",
+  "versionCode": 5,
+  "versionName": "2.3",
+  "notes": "Birlikler yerde halkayla seçilir, sıra halinde yürür, harita önizlemeleri düzeldi.",
   "apk": "https://github.com/arsangaz01/arsan-gaz-erp-releases/raw/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }

@@ -87,6 +87,7 @@ export function drawWorld(ctx, state, view) {
   ctx.drawImage(view.terrain, 0, 0, state.mapW, state.mapH);
   if (gfx.decor) drawDecor(ctx, state);
   drawNodes(ctx, state, gfx);
+  drawGroundMarks(ctx, state, view);
   drawEntities(ctx, state, view, gfx);
   drawFog(ctx, state, view);
   drawBarsAndRings(ctx, state, view);
@@ -171,7 +172,7 @@ function drawDecor(ctx, state) {
 function drawNodes(ctx, state, gfx) {
   for (const n of state.nodes) {
     const left = n.amount / n.max;
-    const size = 54 * (gfx.nodeScale || 1);
+    const size = 36 * (gfx.nodeScale || 1);
     ctx.save();
     ctx.translate(n.x, n.y);
     ctx.globalAlpha = left > 0 ? 1 : 0.4;
@@ -205,7 +206,7 @@ function drawEntities(ctx, state, view, gfx) {
 }
 
 function drawBuilding(ctx, e, def, colors, gfx) {
-  const size = def.radius * 3.05;
+  const size = def.radius * 2.65;
   if (gfx.shadows) {
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.beginPath();
@@ -218,11 +219,16 @@ function drawBuilding(ctx, e, def, colors, gfx) {
     ctx.fillRect(-def.radius, -def.radius * 0.7, def.radius * 2, def.radius * 1.4);
   }
   if (!e.constructed) {
-    ctx.strokeStyle = "#e6dcc8";
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([5, 4]);
-    ctx.strokeRect(-def.radius, -def.radius, def.radius * 2, def.radius * 2);
-    ctx.setLineDash([]);
+    const grow = Math.max(0.15, Math.min(1, e.progress));
+    ctx.strokeStyle = "rgba(230, 220, 190, 0.85)";
+    ctx.lineWidth = 2;
+    const s = def.radius * grow;
+    ctx.strokeRect(-s, -s * 0.72, s * 2, s * 1.44);
+    ctx.beginPath();
+    ctx.moveTo(-s, -s * 0.72);
+    ctx.lineTo(0, -s * 1.15);
+    ctx.lineTo(s, -s * 0.72);
+    ctx.stroke();
     ctx.fillStyle = "rgba(8,10,8,0.75)";
     ctx.fillRect(-18, -3, 36, 5);
     ctx.fillStyle = "#d7c48a";
@@ -231,7 +237,10 @@ function drawBuilding(ctx, e, def, colors, gfx) {
 }
 
 function drawUnit(ctx, e, def, colors, gfx) {
-  const size = def.radius * (def.air ? 4.4 : 3.55);
+  const size = def.radius * (def.air ? 3.15 : def.worker ? 2.45 : def.naval ? 2.7 : 2.15);
+  if (gfx.decor && e.plan && (e.plan.kind === "move" || e.plan.kind === "attackMove") && !def.air) {
+    ctx.translate(0, Math.sin((e.x + e.y) * 0.35) * 1.1);
+  }
   if (gfx.shadows) {
     ctx.fillStyle = def.air ? "rgba(0,0,0,0.22)" : "rgba(0,0,0,0.35)";
     ctx.beginPath();
@@ -312,25 +321,35 @@ function drawFog(ctx, state, view) {
   ctx.drawImage(view.fogCanvas, 0, 0, state.mapW, state.mapH);
 }
 
-function drawSelection(ctx, e, view) {
-  const r = e.radius + (e.isBuilding ? 8 : 5);
-  ctx.save();
-  ctx.translate(e.x, e.y);
-  ctx.strokeStyle = e.owner === viewer(view) ? "#e7d7a4" : "#c45c3c";
-  ctx.lineWidth = 1.5 / view.zoom;
-  ctx.beginPath();
-  ctx.ellipse(0, r * 0.35, r * 1.05, r * 0.38, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  const arm = Math.max(8, r * 0.45);
-  const box = r;
-  ctx.beginPath();
-  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-    ctx.moveTo(sx * box, sy * box + sy * -arm);
-    ctx.lineTo(sx * box, sy * box);
-    ctx.lineTo(sx * box + sx * -arm, sy * box);
+function drawGroundMarks(ctx, state, view) {
+  const who = viewer(view);
+  for (const e of state.entities) {
+    if (e.hp <= 0 || !view.selected?.has(e.id)) continue;
+    if (e.owner !== who && !canSeeEntity(state, who, e)) continue;
+    const rx = e.radius * (e.isBuilding ? 1.25 : 1.05);
+    ctx.strokeStyle = e.owner === who ? "rgba(126, 196, 92, 0.95)" : "rgba(196, 92, 60, 0.95)";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y + rx * 0.08, rx, rx * 0.4, 0, 0, Math.PI * 2);
+    ctx.stroke();
   }
-  ctx.stroke();
-  ctx.restore();
+  const ping = view.ping;
+  if (ping && ping.life > 0) {
+    const t = ping.life / ping.max;
+    ctx.strokeStyle = `rgba(188, 214, 120, ${t})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(ping.x, ping.y, 6 + (1 - t) * 16, 0, Math.PI * 2);
+    ctx.moveTo(ping.x - 16, ping.y);
+    ctx.lineTo(ping.x - 5, ping.y);
+    ctx.moveTo(ping.x + 5, ping.y);
+    ctx.lineTo(ping.x + 16, ping.y);
+    ctx.moveTo(ping.x, ping.y - 16);
+    ctx.lineTo(ping.x, ping.y - 5);
+    ctx.moveTo(ping.x, ping.y + 5);
+    ctx.lineTo(ping.x, ping.y + 16);
+    ctx.stroke();
+  }
 }
 
 function drawBarsAndRings(ctx, state, view) {
@@ -344,7 +363,6 @@ function drawBarsAndRings(ctx, state, view) {
     const visibleNow = own || cellVisible(state, who, e.x, e.y) || (e.isBuilding && cellExplored(state, who, e.x, e.y));
     if (!visibleNow && !own) continue;
     const isSel = selected.has(e.id);
-    if (isSel) drawSelection(ctx, e, view);
     const showBar = isSel || e.hp < e.maxHp - 0.5;
     if (!showBar) continue;
     if (!own && e.isBuilding && !cellVisible(state, who, e.x, e.y)) continue;
@@ -375,6 +393,16 @@ function drawGhost(ctx, state, view) {
   const fac = faction(state.players[viewer(view)].faction);
   const def = fac.buildings[ghost.kind];
   if (!def) return;
+  const anchor = state.entities.find((e) => e.owner === viewer(view) && e.kind === "ocak" && e.hp > 0);
+  if (anchor) {
+    ctx.fillStyle = ghost.ok ? "rgba(143, 191, 106, 0.55)" : "rgba(196, 92, 60, 0.45)";
+    for (let x = anchor.x - 280; x <= anchor.x + 280; x += 52) {
+      for (let y = anchor.y - 280; y <= anchor.y + 280; y += 52) {
+        if (Math.hypot(x - anchor.x, y - anchor.y) > 290) continue;
+        ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
+      }
+    }
+  }
   ctx.save();
   ctx.translate(ghost.x, ghost.y);
   ctx.globalAlpha = 0.5;

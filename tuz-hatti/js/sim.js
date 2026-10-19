@@ -150,8 +150,8 @@ function makeBuilding(state, owner, kind, x, y) {
     progress: 0,
     cooldown: 0,
     queue: [],
-    rallyX: x + Math.cos(ang) * (def.radius + 40),
-    rallyY: y + Math.sin(ang) * (def.radius + 40),
+    rallyX: x + Math.cos(ang) * (def.radius + 78),
+    rallyY: y + Math.sin(ang) * (def.radius + 78),
     carry: 0,
     plan: null,
   };
@@ -384,11 +384,16 @@ function livingOwnedUnits(state, owner, ids) {
 
 function spread(x, y, n) {
   if (n <= 1) return [{ x, y }];
-  const rad = 16 + n * 3;
+  const cols = Math.ceil(Math.sqrt(n));
+  const gap = 36;
   const spots = [];
   for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    spots.push({ x: x + Math.cos(a) * rad, y: y + Math.sin(a) * rad });
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    spots.push({
+      x: x + (col - (cols - 1) / 2) * gap,
+      y: y + (row - (Math.ceil(n / cols) - 1) / 2) * gap,
+    });
   }
   return spots;
 }
@@ -437,16 +442,19 @@ function updateTraining(state, building, dt, spawned, events) {
   const dx = building.rallyX - building.x;
   const dy = building.rallyY - building.y;
   const d = Math.hypot(dx, dy) || 1;
-  const dist = building.radius + udef.radius + 8;
-  const sx = building.x + (dx / d) * dist;
-  const sy = building.y + (dy / d) * dist;
+  const dist = building.radius + udef.radius + 34;
+  building.outCount = (building.outCount || 0) + 1;
+  const side = ((building.outCount % 5) - 2) * 30;
+  const sx = building.x + (dx / d) * dist + (-dy / d) * side;
+  const sy = building.y + (dy / d) * dist + (dx / d) * side;
   const spot = udef.air ? { x: sx, y: sy } : freeSpot(state, sx, sy, udef.radius, building.id);
   const unit = makeUnit(state, building.owner, job.kind, spot.x, spot.y);
   if (udef.worker) {
     const node = nearestOre(state, unit.x, unit.y);
     if (node) unit.plan = { kind: "harvest", nodeId: node.id, phase: "toNode", gather: 0 };
   } else {
-    unit.plan = { kind: "move", x: building.rallyX, y: building.rallyY };
+    const slot = spread(building.rallyX, building.rallyY, 5)[building.outCount % 5];
+    unit.plan = { kind: "move", x: slot.x, y: slot.y };
   }
   spawned.push(unit);
   events.push({ type: "trained", owner: building.owner, kind: job.kind, x: unit.x, y: unit.y });
@@ -764,7 +772,13 @@ function moveToward(state, e, tx, ty, step, stopDist, ignoreId) {
       vy *= 0.28;
     }
   }
-  const travel = Math.min(step, dist - stopDist);
+  let aim = Math.atan2(vy, vx);
+  let gap = aim - e.angle;
+  while (gap > Math.PI) gap -= Math.PI * 2;
+  while (gap < -Math.PI) gap += Math.PI * 2;
+  const def = entityDef(state, e);
+  const align = isAir(state, e) || def.worker ? 1 : Math.max(0.4, Math.cos(gap));
+  const travel = Math.min(step * align, dist - stopDist);
   e.x += vx * travel;
   e.y += vy * travel;
   e.x = clamp(e.x, e.radius, state.mapW - e.radius);
@@ -838,7 +852,7 @@ function separateUnits(state) {
       if (isAir(state, a) !== isAir(state, b)) continue;
       let dx = b.x - a.x;
       let dy = b.y - a.y;
-      const min = a.radius + b.radius - 1;
+      const min = a.radius + b.radius + 3;
       const d2 = dx * dx + dy * dy;
       if (d2 === 0) {
         a.x -= 0.6;

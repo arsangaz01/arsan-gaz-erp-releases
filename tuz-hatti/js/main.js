@@ -32,7 +32,7 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 4, name: "2.2" };
+const APP = { code: 5, name: "2.3" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://cdn.jsdelivr.net/gh/arsangaz01/arsan-gaz-erp-releases@cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
@@ -377,6 +377,10 @@ function acceptEvent(ev, now) {
 }
 
 function tickFx(dt) {
+  if (view.ping) {
+    view.ping.life -= dt;
+    if (view.ping.life <= 0) view.ping = null;
+  }
   for (const fx of view.fx) fx.life -= dt;
   if (view.fx.length > 80) view.fx.splice(0, view.fx.length - 80);
   view.fx = view.fx.filter((fx) => fx.life > 0);
@@ -471,7 +475,10 @@ function handleTap(x, y) {
   if (tool === "attack") {
     const ids = selectedUnits().map((e) => e.id);
     if (hit && hostile(match, me, hit.owner)) issue({ type: "attack", ids, targetId: hit.id });
-    else issue({ type: "attackMove", ids, x, y });
+    else {
+      issue({ type: "attackMove", ids, x, y });
+      view.ping = { x, y, life: 0.7, max: 0.7 };
+    }
     tool = null;
     return;
   }
@@ -508,7 +515,10 @@ function handleTap(x, y) {
     return;
   }
   if (hit && hostile(match, me, hit.owner)) issue({ type: "attack", ids: units.map((u) => u.id), targetId: hit.id });
-  else issue({ type: "move", ids: units.map((u) => u.id), x, y });
+  else {
+    issue({ type: "move", ids: units.map((u) => u.id), x, y });
+    view.ping = { x, y, life: 0.7, max: 0.7 };
+  }
   recomputeFog(match);
 }
 
@@ -979,6 +989,17 @@ function factionCard(id, role) {
   return btn;
 }
 
+const MAP_ART = {
+  anadolu: "assets/map-tur.jpg",
+  ovalar: "assets/map-usa.jpg",
+  havza: "assets/map-cin.jpg",
+  tayga: "assets/map-rus.jpg",
+  vadi: "assets/map-alm.jpg",
+  ada: "assets/map-ing.jpg",
+  bozkir: "assets/map-ukr.jpg",
+  plato: "assets/map-irn.jpg",
+};
+
 function mountMaps() {
   const root = document.querySelector("#maps");
   if (!root) return;
@@ -989,7 +1010,7 @@ function mountMaps() {
     btn.type = "button";
     btn.className = "map-card" + (id === selectedMap ? " selected" : "");
     btn.innerHTML = `<img alt="" loading="lazy" /><div class="map-copy"><strong></strong><span></span></div>`;
-    btn.querySelector("img").src = `assets/${map.terrain}.jpg`;
+    btn.querySelector("img").src = MAP_ART[id] || "assets/terrain.jpg";
     btn.querySelector("strong").textContent = map.name;
     btn.querySelector("span").textContent = `${map.country} · ${map.resourceName}`;
     btn.addEventListener("click", () => {
