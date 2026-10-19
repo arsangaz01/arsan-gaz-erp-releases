@@ -1,6 +1,6 @@
 {
-  "versionCode": 10,
-  "versionName": "2.8",
-  "notes": "Tank, kamyon, piyade ve üsler fotoğraf ayrıntısında üç çeyrek plaka olarak çizilir. Palet, tekerlek ve gövde okunur.",
+  "versionCode": 11,
+  "versionName": "2.9",
+  "notes": "Birlikler yere oturur, dönerken kaymaz, ateş namludan çıkar. Güncelleme kurulum ekranını kendisi açar.",
   "apk": "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }

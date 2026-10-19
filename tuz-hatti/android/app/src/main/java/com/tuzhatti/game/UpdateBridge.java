@@ -2,25 +2,25 @@ package com.tuzhatti.game;
 
 import android.app.Activity;
 import android.app.ActivityManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.util.DisplayMetrics;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
+import android.content.pm.PackageInstaller;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
-import androidx.core.content.FileProvider;
-
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -31,6 +31,7 @@ public class UpdateBridge {
 
     private final Activity activity;
     private final WebView webView;
+    private volatile File pendingFile;
 
     public UpdateBridge(Activity activity, WebView webView) {
         this.activity = activity;
@@ -76,24 +77,20 @@ public class UpdateBridge {
                     post("Yeni sürüm " + name + " bulundu ama kurulum adresi yok.");
                     return;
                 }
-                if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
-                    post("Kurulum izni gerekli. İzin verip Güncelle'ye tekrar bas.");
-                    activity.runOnUiThread(() -> {
-                        Intent intent = new Intent(
-                                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                Uri.parse("package:" + activity.getPackageName()));
-                        activity.startActivity(intent);
-                    });
-                    return;
-                }
                 post("Sürüm " + name + " indiriliyor");
                 File file = download(apk);
                 if (file.length() < 200000) {
                     post("İndirilen dosya kurulum paketi değil.");
                     return;
                 }
-                post("Kurulum ekranı açıldı");
-                activity.runOnUiThread(() -> install(file));
+                if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
+                    pendingFile = file;
+                    post("Kurulum izni gerekli. İzin verip uygulamaya dön.");
+                    activity.runOnUiThread(this::askInstallPermission);
+                    return;
+                }
+                post("Kurulum ekranı açılıyor");
+                install(file);
             } catch (Exception ex) {
                 String detail = ex.getMessage() == null ? "bağlantı" : ex.getMessage();
                 post("Güncelleme olmadı: " + detail);
@@ -186,14 +183,67 @@ public class UpdateBridge {
         return bos.toString(StandardCharsets.UTF_8.name());
     }
 
-    private void install(File file) {
-        Uri uri = FileProvider.getUriForFile(activity, activity.getPackageName() + ".fileprovider", file);
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setDataAndType(uri, "application/vnd.android.package-archive");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-        for (ResolveInfo info : activity.getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)) {
-            activity.grantUriPermission(info.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    public void installIfReady() {
+        File file = pendingFile;
+        if (file == null || !file.exists()) return;
+        if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) return;
+        pendingFile = null;
+        post("Kurulum ekranı açılıyor");
+        install(file);
+    }
+
+    public void onInstallResult(Intent intent) {
+        if (intent == null || !"com.tuzhatti.game.INSTALL_STATUS".equals(intent.getAction())) return;
+        int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
+        if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
+            if (confirm != null) {
+                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity.startActivity(confirm);
+            }
+            return;
         }
+        if (status == PackageInstaller.STATUS_SUCCESS) {
+            post("Kurulum tamam");
+            return;
+        }
+        String msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+        post("Kurulum olmadı: " + (msg == null || msg.isEmpty() ? "paket" : msg));
+    }
+
+    private void askInstallPermission() {
+        Intent intent = new Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:" + activity.getPackageName()));
         activity.startActivity(intent);
+    }
+
+    private void install(File file) {
+        PackageInstaller.Session session = null;
+        try {
+            PackageInstaller installer = activity.getPackageManager().getPackageInstaller();
+            PackageInstaller.SessionParams params =
+                    new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            params.setSize(file.length());
+            int sessionId = installer.createSession(params);
+            session = installer.openSession(sessionId);
+            try (InputStream in = new FileInputStream(file); OutputStream out = session.openWrite("cephe.apk", 0, file.length())) {
+                byte[] buf = new byte[65536];
+                int n;
+                while ((n = in.read(buf)) >= 0) out.write(buf, 0, n);
+                session.fsync(out);
+            }
+            Intent callback = new Intent(activity, MainActivity.class);
+            callback.setAction("com.tuzhatti.game.INSTALL_STATUS");
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
+            PendingIntent pending = PendingIntent.getActivity(activity, sessionId, callback, flags);
+            session.commit(pending.getIntentSender());
+        } catch (Exception ex) {
+            String detail = ex.getMessage() == null ? "paket" : ex.getMessage();
+            post("Kurulum olmadı: " + detail);
+        } finally {
+            if (session != null) session.close();
+        }
     }
 }

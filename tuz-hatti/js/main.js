@@ -33,7 +33,7 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 10, name: "2.8" };
+const APP = { code: 11, name: "2.9" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
@@ -344,8 +344,12 @@ function frame(now) {
       for (const e of match.entities) {
         if (e.owner !== me || e.hp <= 0 || e.isBuilding) continue;
         const moving = e.plan && (e.plan.kind === "move" || e.plan.kind === "attackMove" || e.plan.kind === "harvest");
-        if (!moving) continue;
-        view.fx.push({ type: "puff", x: e.x, y: e.y + 4, color: "rgba(120,100,70,0.35)", life: 0.28, max: 0.28 });
+        if (!moving || (e.drive || 0) < 0.3) continue;
+        const def = entityDef(match, e);
+        if (def.air) continue;
+        const bx = e.x - Math.cos(e.angle) * e.radius * 0.95;
+        const by = e.y - Math.sin(e.angle) * e.radius * 0.95;
+        view.fx.push({ type: "puff", x: bx, y: by, color: "rgba(92,74,48,0.55)", life: 0.45, max: 0.45 });
       }
       const cap = view.gfx?.fxCap || 28;
       while (view.fx.length > cap) view.fx.shift();
@@ -377,9 +381,11 @@ function acceptEvent(ev, now) {
       y2: ev.y2,
       heavy: ev.heavy,
       air: ev.air,
-      life: 0.2,
-      max: 0.2,
+      life: 0.42,
+      max: 0.42,
     });
+    view.fx.push({ type: "flash", x: ev.x1, y: ev.y1, heavy: ev.heavy, air: ev.air, life: 0.14, max: 0.14 });
+    view.fx.push({ type: "hit", x: ev.x2, y: ev.y2, heavy: ev.heavy, life: 0.34, max: 0.34 });
     if (ev.targetOwner === me && ev.building) {
       const nowMs = performance.now();
       if (nowMs - (view.lastAlarm || 0) > 4000) {
@@ -1341,11 +1347,11 @@ async function checkUpdate() {
     const res = await fetch(VERSION_URL + "?t=" + Date.now(), { cache: "no-store" });
     if (!res.ok) throw new Error("http");
     const data = await res.json();
-    if ((data.versionCode | 0) > APP.code) {
-      sayUpdate(
-        "Yeni sürüm " + (data.versionName || "") + " hazır.",
-        data.apk && String(data.apk).startsWith("https://") ? data.apk : ""
-      );
+    const remote = data.versionCode | 0;
+    const apk = data.apk && String(data.apk).startsWith("https://") ? data.apk : "";
+    if (remote > APP.code) {
+      sayUpdate("Yeni sürüm " + (data.versionName || remote) + " hazır.", apk);
+      if (apk) location.href = apk;
     } else {
       sayUpdate("güncel");
     }

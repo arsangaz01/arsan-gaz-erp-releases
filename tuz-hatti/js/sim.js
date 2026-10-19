@@ -535,7 +535,7 @@ function engage(state, e, def, target, dt, events) {
     moveToward(state, e, target.x, target.y, def.speed * dt, Math.min(stand, reach - 2), target.isBuilding ? target.id : null, dt);
     return;
   }
-  face(e, target.x, target.y, dt);
+  face(e, target.x, target.y, dt, def.air ? 6 : 4.8);
   if (e.cooldown <= 0 && dist >= minR * 0.85) {
     deal(state, e, def, target, events);
   }
@@ -572,12 +572,16 @@ function deal(state, attacker, def, target, events) {
   const amount = def.damage * bonus * taken;
   target.hp -= amount;
   attacker.cooldown = def.cooldown || 0.8;
+  attacker.kick = 1;
+  const nose = attacker.isBuilding ? attacker.radius * 0.55 : attacker.radius + 10;
+  const ang = attacker.angle || 0;
   events.push({
     type: "shot",
-    x1: attacker.x,
-    y1: attacker.y,
+    x1: attacker.x + Math.cos(ang) * nose,
+    y1: attacker.y + Math.sin(ang) * nose,
     x2: target.x,
     y2: target.y,
+    attackerId: attacker.id,
     owner: attacker.owner,
     heavy: def.armor === "heavy" || !!def.turret,
     air: !!def.air,
@@ -781,20 +785,27 @@ function moveToward(state, e, tx, ty, step, stopDist, ignoreId, dt) {
   let gap = aim - e.angle;
   while (gap > Math.PI) gap -= Math.PI * 2;
   while (gap < -Math.PI) gap += Math.PI * 2;
-  const align = agile ? 1 : Math.max(0.05, Math.cos(gap));
+  const gapAbs = Math.abs(gap);
+  let align = 1;
+  if (!agile) {
+    if (gapAbs > 0.7) align = 0.04;
+    else if (gapAbs > 0.35) align = 0.22 * Math.max(0, Math.cos(gap));
+    else align = Math.max(0.4, Math.cos(gap));
+  }
   if (agile) e.drive = 1;
   else {
-    const goal = Math.abs(gap) < 0.4 ? 1 : 0.15;
-    e.drive = (e.drive ?? 0) + (goal - (e.drive ?? 0)) * Math.min(1, dt * (goal > 0.5 ? 2.2 : 5));
+    const goal = gapAbs < 0.35 ? 1 : 0.05;
+    e.drive = (e.drive ?? 0) + (goal - (e.drive ?? 0)) * Math.min(1, dt * (goal > 0.5 ? 3.2 : 6));
   }
-  const travel = Math.min(step * align * (agile ? 1 : 0.22 + 0.78 * e.drive), dist - stopDist);
+  const travel = Math.min(step * align * (agile ? 1 : 0.15 + 0.85 * (e.drive || 0)), dist - stopDist);
   if (travel > 0) {
     e.x += vx * travel;
     e.y += vy * travel;
   }
   e.x = clamp(e.x, e.radius, state.mapW - e.radius);
   e.y = clamp(e.y, e.radius, state.mapH - e.radius);
-  face(e, e.x + vx * 30, e.y + vy * 30, dt, agile ? (def.air ? 9 : 7) : 2.35);
+  const turn = agile ? (def.air ? 9 : 7) : def.sprite === "infantry" ? 5.4 : 4.6;
+  face(e, e.x + vx * 40, e.y + vy * 40, dt, turn);
   return Math.hypot(tx - e.x, ty - e.y) <= stopDist + 1.25;
 }
 

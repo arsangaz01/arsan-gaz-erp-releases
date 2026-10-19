@@ -87,6 +87,8 @@ export function drawWorld(ctx, state, view) {
   ctx.imageSmoothingEnabled = !!gfx.smoothing;
   ctx.drawImage(view.terrain, 0, 0, state.mapW, state.mapH);
   if (gfx.decor) drawDecor(ctx, state);
+  drawContacts(ctx, state, view);
+  drawGroundFx(ctx, view);
   drawGroundMarks(ctx, state, view);
   drawFog(ctx, state, view);
   drawGhostPlan(ctx, state, view);
@@ -173,9 +175,8 @@ function drawUpright(ctx, state, view, gfx) {
     if (rock.kind === "water") continue;
     withModel(ctx, view, rock.x, rock.y, () => {
       const forest = rock.kind === "forest";
-      const span = rock.r * (forest ? 2.2 : 2.45);
-      softShadow(ctx, span * 0.34, span * 0.12);
-      if (!drawAnchored(ctx, forest ? "real-tree" : "real-peak", span)) {
+      const span = rock.r * (forest ? 2.05 : 2.25);
+      if (!drawAnchored(ctx, forest ? "real-tree" : "real-peak", span, { sink: 0.14 })) {
         drawIso(ctx, {
           form: forest ? "tree" : "peak",
           radius: rock.r * (forest ? 0.34 : 0.48),
@@ -327,7 +328,54 @@ function pickFrame(frames, heading) {
       }
     }
   }
-  return { key: best.key, flip: bestFlip };
+  return { key: best.key, flip: bestFlip, ang: bestFlip ? Math.PI - best.ang : best.ang };
+}
+
+function smoothHeading(gfx, id, angle) {
+  const map = gfx._head || (gfx._head = new Map());
+  const prev = map.has(id) ? map.get(id) : angle;
+  const delta = angDiff(angle, prev);
+  const next = prev + Math.sign(delta) * Math.min(Math.abs(delta), 0.2);
+  map.set(id, next);
+  return next;
+}
+
+function drawContacts(ctx, state, view) {
+  const who = viewer(view);
+  for (const e of state.entities) {
+    if (e.hp <= 0) continue;
+    if (e.owner !== who && !canSeeEntity(state, who, e)) continue;
+    const def = entityDef(state, e);
+    const air = !!def.air;
+    const rx = e.isBuilding ? e.radius * 1.28 : air ? e.radius * 1.15 : e.radius * 2.2;
+    ctx.fillStyle = air ? "rgba(0,0,0,0.22)" : "rgba(12,10,8,0.5)";
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y, rx, rx * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (!air && !e.isBuilding && (e.drive || 0) > 0.4) {
+      const bx = e.x - Math.cos(e.angle) * e.radius * 1.15;
+      const by = e.y - Math.sin(e.angle) * e.radius * 1.15;
+      ctx.strokeStyle = "rgba(28,22,16,0.55)";
+      ctx.lineWidth = e.radius > 14 ? 3 : 1.6;
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawGroundFx(ctx, view) {
+  for (const fx of view.fx || []) {
+    if (fx.type !== "puff") continue;
+    const t = 1 - fx.life / fx.max;
+    ctx.globalAlpha = Math.max(0, (fx.life / fx.max) * 0.75);
+    ctx.fillStyle = fx.color;
+    ctx.beginPath();
+    ctx.ellipse(fx.x, fx.y, 4 + t * 12, 2.4 + t * 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
 }
 
 function softShadow(ctx, rx, ry) {
@@ -343,7 +391,7 @@ function drawAnchored(ctx, key, width, opt = {}) {
   const aspect = img.naturalWidth / Math.max(1, img.naturalHeight);
   const dw = width;
   const dh = width / aspect;
-  const foot = opt.foot ?? Math.min(6, width * 0.04);
+  const foot = opt.foot != null ? opt.foot : dh * (opt.sink ?? 0.16);
   ctx.save();
   if (opt.lift) ctx.translate(0, -opt.lift);
   if (opt.rot) ctx.rotate(opt.rot);
@@ -362,9 +410,8 @@ function drawAnchored(ctx, key, width, opt = {}) {
 function paintStructure(ctx, def, colors, gfx, grow) {
   const shape = def.shape || "depot";
   const span = def.radius * (BUILDING_SPAN[shape] || 3.4);
-  if (gfx.shadows !== false) softShadow(ctx, span * 0.34, span * 0.13);
   const key = BUILDING_PHOTO[shape] || BUILDING_PHOTO.depot;
-  if (drawAnchored(ctx, key, span, { grow, foot: span * 0.02 })) return span;
+  if (drawAnchored(ctx, key, span, { grow, sink: 0.22 })) return span;
   drawIso(ctx, {
     form: shape,
     radius: def.radius * 1.05,
@@ -380,7 +427,14 @@ function paintStructure(ctx, def, colors, gfx, grow) {
 
 function drawBuilding(ctx, e, def, colors, gfx) {
   const grow = e.constructed ? 1 : Math.max(0.18, Math.min(1, e.progress));
+  if ((e.kick || 0) > 0.02) e.kick *= 0.84;
   const span = paintStructure(ctx, def, colors, gfx, grow);
+  if ((e.kick || 0) > 0.2) {
+    ctx.fillStyle = `rgba(255, 214, 120, ${e.kick})`;
+    ctx.beginPath();
+    ctx.arc(def.radius * 0.15, -span * 0.28, 7 + e.kick * 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
   if (!e.constructed) {
     ctx.fillStyle = "#d7e8b0";
     ctx.font = "13px sans-serif";
@@ -424,31 +478,40 @@ function drawUnit(ctx, e, def, colors, gfx, state) {
   }
   const form = unitForm(def);
   const span = def.radius * (UNIT_SPAN[form] || 4.8);
-  if (gfx.shadows !== false) {
-    ctx.fillStyle = def.air ? "rgba(0,0,0,0.22)" : "rgba(0,0,0,0.34)";
-    ctx.beginPath();
-    ctx.ellipse(def.air ? 8 : 0, def.air ? 14 : 6, span * (def.air ? 0.22 : 0.28), span * 0.09, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
   const pose = gfx._pose || (gfx._pose = new Map());
   const prev = pose.get(e.id);
   pose.set(e.id, e.angle);
   let bank = 0;
   if (prev != null && def.air) {
-    bank = Math.max(-0.28, Math.min(0.28, angDiff(e.angle, prev) * 5));
+    bank = Math.max(-0.22, Math.min(0.22, angDiff(e.angle, prev) * 4));
   }
   const frames = UNIT_FRAMES[form] || UNIT_FRAMES.tank;
-  const face = def.turret ? aim : e.angle;
-  const picked = pickFrame(frames, screenHeading(face));
-  const lift = def.air ? 36 + Math.sin(state.time * 3 + e.id) * 1.6 : 0;
-  if (
-    !drawAnchored(ctx, picked.key, span, {
-      flip: picked.flip,
-      lift,
-      rot: bank,
-      foot: span * 0.04,
-    })
-  ) {
+  const shown = smoothHeading(gfx, e.id, def.turret ? aim : e.angle);
+  const heading = screenHeading(shown);
+  const picked = pickFrame(frames, heading);
+  let residual = angDiff(heading, picked.ang);
+  residual = Math.max(-0.42, Math.min(0.42, residual));
+  if (picked.flip) residual = -residual;
+  const kick = e.kick || 0;
+  if (kick > 0.02) e.kick = kick * 0.82;
+  const lift = def.air ? 34 + Math.sin(state.time * 2.2 + e.id) * 1.2 : 0;
+  const sink = def.air ? 0.02 : def.naval ? 0.22 : def.sprite === "infantry" ? 0.14 : 0.24;
+  ctx.save();
+  if (kick > 0) ctx.translate(-Math.cos(heading) * kick * 9, -Math.sin(heading) * kick * 4);
+  const drawn = drawAnchored(ctx, picked.key, span, {
+    flip: picked.flip,
+    lift,
+    rot: bank + residual,
+    sink,
+  });
+  if ((def.damage || 0) > 0 && kick > 0.18) {
+    ctx.fillStyle = kick > 0.65 ? "#fff4cf" : "rgba(255, 196, 90, 0.9)";
+    ctx.beginPath();
+    ctx.ellipse(Math.cos(heading) * span * 0.46, Math.sin(heading) * span * 0.2 - span * 0.16, span * 0.1, span * 0.045, heading, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  if (!drawn) {
     drawIso(ctx, {
       form,
       key: def.sprite,
@@ -678,18 +741,44 @@ function drawFx(ctx, view) {
     if (fx.type === "shot") {
       const a = screenPoint(view, fx.x1, fx.y1);
       const b = screenPoint(view, fx.x2, fx.y2);
-      const k = Math.min(1, t * 1.4);
-      ctx.strokeStyle = fx.air ? "#f4fbff" : fx.heavy ? "#ffe08a" : "#fff4cf";
-      ctx.lineWidth = fx.heavy ? 2.8 : 1.8;
+      a.y -= fx.air ? 26 : 16;
+      const k = Math.min(1, t * 1.2);
+      const x = a.x + (b.x - a.x) * k;
+      const y = a.y + (b.y - a.y) * k;
+      ctx.strokeStyle = fx.heavy ? "rgba(255, 170, 60, 0.55)" : "rgba(255, 244, 200, 0.45)";
+      ctx.lineWidth = fx.heavy ? 8 : 5;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
-      ctx.lineTo(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k);
+      ctx.lineTo(x, y);
       ctx.stroke();
-    } else if (fx.type === "puff") {
-      const p = screenPoint(view, fx.x, fx.y);
-      ctx.fillStyle = fx.color;
+      ctx.strokeStyle = fx.air ? "#f7fbff" : fx.heavy ? "#ffe39a" : "#fffaf0";
+      ctx.lineWidth = fx.heavy ? 2.6 : 1.7;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, (4 + t * 14) * Math.min(view.zoom, 2.2), 0, Math.PI * 2);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.fillStyle = "#fff6d0";
+      ctx.beginPath();
+      ctx.arc(x, y, fx.heavy ? 5 : 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (fx.type === "flash") {
+      const p = screenPoint(view, fx.x, fx.y);
+      p.y -= fx.air ? 24 : 16;
+      ctx.fillStyle = fx.heavy ? "rgba(255, 186, 70, 0.95)" : "rgba(255, 244, 214, 0.95)";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, (7 + t * 14) * Math.min(view.zoom, 1.5), 0, Math.PI * 2);
+      ctx.fill();
+    } else if (fx.type === "hit") {
+      const p = screenPoint(view, fx.x, fx.y);
+      const radius = (5 + t * 26) * Math.min(view.zoom, 1.7);
+      ctx.strokeStyle = fx.heavy ? "#ffb15a" : "#ffe6b0";
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = fx.heavy ? "rgba(255, 140, 50, 0.35)" : "rgba(255, 220, 140, 0.3)";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, radius * 0.45, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;

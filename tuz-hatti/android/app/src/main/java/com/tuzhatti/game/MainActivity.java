@@ -1,6 +1,7 @@
 package com.tuzhatti.game;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
@@ -16,6 +17,7 @@ import androidx.webkit.WebViewAssetLoader;
 public class MainActivity extends Activity {
     private static final String START_URL = "https://appassets.androidplatform.net/assets/www/index.html";
     private WebView webView;
+    private UpdateBridge updates;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,10 +45,25 @@ public class MainActivity extends Activity {
             }
         });
         webView.setWebChromeClient(new WebChromeClient());
-        webView.addJavascriptInterface(new UpdateBridge(this, webView), "CepheUpdate");
+        updates = new UpdateBridge(this, webView);
+        webView.addJavascriptInterface(updates, "CepheUpdate");
         setContentView(webView);
         hideSystemUi();
         webView.loadUrl(START_URL);
+        updates.onInstallResult(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (updates != null) updates.onInstallResult(intent);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (updates != null) updates.installIfReady();
     }
 
     @Override
