@@ -1,0 +1,57 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.tuzhatti.game"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.tuzhatti.game"
+        minSdk 24
+        targetSdk 35
+        versionCode 16
+        versionName "3.4"
+    }
+
+    signingConfigs {
+        cephe {
+            storeFile file("../cephe-debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+        debug {
+            minifyEnabled false
+            signingConfig signingConfigs.cephe
+        }
+    }
+}
+
+def webDir = layout.projectDirectory.dir("src/main/assets/www")
+
+tasks.register("syncWeb", Copy) {
+    from(rootProject.file("../oyna.html"))
+    into(webDir)
+    rename { "index.html" }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn("syncWeb")
+}
+
+dependencies {
+    implementation "androidx.webkit:webkit:1.12.1"
+    implementation "androidx.core:core:1.13.1"
+}

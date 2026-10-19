@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#101410" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Cephe Hattı</title>
+    <link rel="stylesheet" href="css/game.css" />
+  </head>
+  <body>
+    <div id="rotate">
+      <p>Harita yan tutulunca okunur.</p>
+      <button type="button" id="play-portrait">Dikey oyna</button>
+    </div>
+
+    <section id="menu">
+      <div class="menu-card">
+        <div class="menu-top">
+          <p class="eyebrow">2026 sahası · sekiz ordu</p>
+          <button type="button" id="update" class="ghost">Güncelle</button>
+          <span class="ver" id="ver-menu">3.4</span>
+          <button type="button" id="gfx-open" class="ghost">Görüntü</button>
+        </div>
+        <h1>Cephe Hattı</h1>
+        <p class="lead">
+          Sekiz cephe haritası, 2–8 kişilik hatlar. Kaynak toplamı haritalarda eşit; fark geçit ve açık alanda.
+          Boş koltukları yapay zekâ doldurur; oda kodu ile karşılıklı da oynanır.
+        </p>
+        <p class="pick-label">Harita</p>
+        <div class="maps" id="maps"></div>
+        <p class="map-blurb" id="map-blurb"></p>
+        <p class="pick-label">Oyuncu sayısı</p>
+        <div class="sizes" id="sizes"></div>
+        <p class="pick-label">Senin hattın</p>
+        <div class="factions" id="yours"></div>
+        <p class="pick-label">Rakip hat</p>
+        <div class="factions" id="enemy"></div>
+        <p class="pick-label">Online oda</p>
+        <div class="room">
+          <input id="room-code" type="text" maxlength="4" autocomplete="off" spellcheck="false" placeholder="KOD" aria-label="Oda kodu" />
+          <button type="button" id="room-host" class="ghost">Oda aç</button>
+          <button type="button" id="room-join" class="ghost">Katıl</button>
+        </div>
+        <p class="note" id="room-status">Yapay zekâ boş koltukları doldurur. Oda kodu ile karşılıklı da oynanır.</p>
+        <p class="note" id="update-status"></p>
+        <button type="button" id="start">Savaşa gir</button>
+        <ul class="how">
+          <li>Harita kaynak adı (maden, petrol, kömür…) görseldir; miktar aynı oyuncu sayısında eşittir.</li>
+          <li>Geçitli haritada savunma daralır, açık bozkırda saldırı hızlanır.</li>
+          <li>2: 1’e 1 · 3: herkes herkese · 4/6/8: takım hatları.</li>
+          <li>Karargâha dokununca altta bina kartları açılır. Kilitli kart, önce hangi binanın biteceğini yazar.</li>
+          <li>Askere dokun, yere dokun: yürür. Düşmana dokun: saldırır. Çift dokunuş aynı tipi seçer.</li>
+          <li>Oda açıp kodu paylaş; boş koltuklar yapay zekâyla doldurulur.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="stage" class="hidden">
+      <canvas id="view"></canvas>
+      <header id="top">
+        <div class="stat">
+          <span>Yakıt</span>
+          <strong id="ash">0</strong>
+        </div>
+        <div class="stat">
+          <span>İkmal</span>
+          <strong id="supply">0/0</strong>
+        </div>
+        <p id="goal">Rakip karargâhı düşür</p>
+        <button type="button" id="update-hud">Güncelle</button>
+        <span class="ver" id="ver-hud">3.4</span>
+        <button type="button" id="gfx-hud">Görüntü</button>
+        <button type="button" id="pause">Duraklat</button>
+        <button type="button" id="leave">Çıkış</button>
+      </header>
+      <p id="inspect">Kimse seçili değil</p>
+      <p id="hint">Sürükle: haritayı kaydır</p>
+      <canvas id="minimap" aria-label="Küçük harita"></canvas>
+      <p id="toast" class="hidden"></p>
+      <footer id="bar"></footer>
+      <div id="result" class="hidden">
+        <div class="menu-card">
+          <h2 id="result-title"></h2>
+          <p id="result-body"></p>
+          <div class="result-actions">
+            <button type="button" id="again">Tekrar</button>
+            <button type="button" id="back-menu" class="ghost">Menü</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div id="gfx" class="hidden">
+      <div class="menu-card">
+        <p class="eyebrow">Telefonuna göre</p>
+        <h2>Görüntü</h2>
+        <p id="gfx-device" class="note"></p>
+        <div class="gfx-list">
+          <button type="button" data-gfx="auto">Otomatik<span>Kurulumda telefon ölçülür, rahat eden basamak seçilir.</span></button>
+          <button type="button" data-gfx="low">Düşük<span>Zayıf telefonda takılmadan oyna.</span></button>
+          <button type="button" data-gfx="medium">Orta<span>Çoğu telefon için denge.</span></button>
+          <button type="button" data-gfx="high">Yüksek<span>Güçlü telefonda daha keskin görüntü.</span></button>
+        </div>
+        <button type="button" id="gfx-close">Kapat</button>
+      </div>
+    </div>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
