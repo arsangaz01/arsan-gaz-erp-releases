@@ -49,7 +49,7 @@ function project(x, y, z, yaw) {
 }
 
 export const GROUND_A = 1.04;
-export const GROUND_B = 0.5;
+export const GROUND_B = 0.82;
 
 export function groundPoint(x, y) {
   return { x: (x - y) * GROUND_A, y: (x + y) * GROUND_B };

@@ -13,8 +13,8 @@ function simulate(state, seconds, owners = []) {
     for (const e of state.entities) {
       assert.equal(Number.isFinite(e.x), true, "x");
       assert.equal(Number.isFinite(e.y), true, "y");
-      assert.ok(e.x > -2 && e.x < 2102, "bounds x");
-      assert.ok(e.y > -2 && e.y < 1302, "bounds y");
+      assert.ok(e.x > -2 && e.x < state.mapW + 2, "bounds x");
+      assert.ok(e.y > -2 && e.y < state.mapH + 2, "bounds y");
     }
   }
 }
@@ -23,15 +23,15 @@ const economy = createMatch({ seed: 1, playerFaction: "usa", enemyFaction: "rus"
 const startAsh = economy.players[0].ash;
 const hq = economy.entities.find((e) => e.owner === 0 && e.kind === "ocak");
 assert.equal(hq.hp, hq.maxHp);
-assert.equal(cellExplored(economy, 0, 1800, 650), false);
-assert.equal(cellVisible(economy, 0, 540, 500), true);
+assert.equal(cellExplored(economy, 0, 3600, 1300), false);
+assert.equal(cellVisible(economy, 0, 760, 1300), true);
 simulate(economy, 30);
 assert.ok(economy.players[0].ash > startAsh + 40, `kül artmadı: ${economy.players[0].ash}`);
 assert.ok(economy.players[1].gathered > 0, "rakip de kül topladı");
 
 const built = createMatch({ seed: 2, playerFaction: "usa", enemyFaction: "rus" });
 const worker = built.entities.find((e) => e.owner === 0 && e.kind === "tasiyici");
-const placed = command(built, { by: 0, type: "place", workerId: worker.id, kind: "barinak", x: 450, y: 650 });
+const placed = command(built, { by: 0, type: "place", workerId: worker.id, kind: "barinak", x: 820, y: 1300 });
 assert.equal(placed.ok, true, placed.reason);
 simulate(built, 20);
 const barracks = getEntity(built, placed.id);
@@ -130,8 +130,8 @@ const overlap = command(blocked, {
   type: "place",
   workerId: blocked.entities.find((e) => e.owner === 0 && e.kind === "tasiyici").id,
   kind: "kule",
-  x: 300,
-  y: 650,
+  x: 600,
+  y: 1300,
 });
 assert.equal(overlap.ok, false);
 
@@ -141,8 +141,8 @@ flight.entities.push({
   owner: 0,
   kind: "avci",
   isBuilding: false,
-  x: 900,
-  y: 650,
+  x: 1800,
+  y: 1300,
   hp: 100,
   maxHp: 100,
   radius: 14,
@@ -151,16 +151,16 @@ flight.entities.push({
   progress: 1,
   cooldown: 0,
   queue: null,
-  rallyX: 900,
-  rallyY: 650,
+  rallyX: 1800,
+  rallyY: 1300,
   carry: 0,
-  plan: { kind: "move", x: 1200, y: 650 },
+  plan: { kind: "move", x: 2400, y: 1300 },
 });
 flight.nextId = 900;
 simulate(flight, 4);
 const jet = flight.entities.find((e) => e.id === 880);
-assert.ok(jet && jet.x > 1150, `uçak ilerleyemedi: ${jet && jet.x}`);
-assert.ok(jet && Math.abs(jet.y - 650) < 18, `uçak kayaya saplandı: ${jet && jet.y}`);
+assert.ok(jet && jet.x > 2300, `uçak ilerleyemedi: ${jet && jet.x}`);
+assert.ok(jet && Math.abs(jet.y - 1300) < 18, `uçak kayaya saplandı: ${jet && jet.y}`);
 
 for (const count of MATCH_SIZES) {
   const totals = MAP_IDS.map((id) => resourceTotal(battlePlan(id, count)));

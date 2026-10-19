@@ -1,6 +1,6 @@
 {
-  "versionCode": 13,
-  "versionName": "3.1",
-  "notes": "Karargâh, kamyon, tank ve piyade ayrıntılı model. İsabet büyük alev topu.",
+  "versionCode": 14,
+  "versionName": "3.2",
+  "notes": "Araçlar tek renkte kalır, tekerlek ve temel yere oturur, kara birlikleri önce dönüp sonra ileri gider. Harita iki kat, uzaklaştırma iki kat, zemin daha düz.",
   "apk": "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }

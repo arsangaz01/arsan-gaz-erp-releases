@@ -6,11 +6,8 @@ import { canSeeEntity, cellExplored, cellVisible, entityDef } from "./sim.js";
 
 export const SPRITE_SRC = {
   "iso-tank-sw": "assets/iso-tank-sw.png",
-  "iso-tank-nw": "assets/iso-tank-nw.png",
   "iso-truck-sw": "assets/iso-truck-sw.png",
-  "iso-truck-nw": "assets/iso-truck-nw.png",
   "iso-infantry-sw": "assets/iso-infantry-sw.png",
-  "iso-infantry-nw": "assets/iso-infantry-nw.png",
   "iso-hq-iso": "assets/iso-hq-iso.png",
   "iso-barracks-iso": "assets/iso-barracks-iso.png",
   "iso-shop-iso": "assets/iso-shop-iso.png",
@@ -150,9 +147,9 @@ function paintObstacle(g, rock) {
 function drawDecor(ctx, state) {
   for (const d of state.decor) {
     if (d.kind !== "bush") continue;
-    ctx.fillStyle = "rgba(48,62,34,0.35)";
+    ctx.fillStyle = "rgba(74, 108, 58, 0.22)";
     ctx.beginPath();
-    ctx.ellipse(d.x, d.y, d.r * 0.8, d.r * 0.45, 0, 0, Math.PI * 2);
+    ctx.ellipse(d.x, d.y, d.r * 0.42, d.r * 0.2, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -221,6 +218,14 @@ function drawEntities(ctx, state, view, gfx) {
       ctx.globalAlpha = e.isBuilding && !e.constructed ? 0.72 : 1;
       if (e.isBuilding) drawBuilding(ctx, e, def, colors, gfx);
       else drawUnit(ctx, e, def, colors, gfx, state, view);
+      if (view.selected?.has(e.id)) {
+        const ring = def.radius * (e.isBuilding ? 1.7 : 2.4);
+        ctx.strokeStyle = e.owner === viewer(view) ? "rgba(126, 196, 92, 0.95)" : "rgba(196, 92, 60, 0.95)";
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.ellipse(0, 2, ring, Math.max(5, ring * 0.2), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     });
   }
 }
@@ -238,23 +243,30 @@ function drawContacts(ctx, state, view) {
     if (e.hp <= 0) continue;
     if (e.owner !== who && !canSeeEntity(state, who, e)) continue;
     const def = entityDef(state, e);
-    const air = !!def.air;
-    const rx = e.isBuilding ? e.radius * 1.45 : air ? e.radius * 1.35 : e.radius * 2.6;
-    ctx.fillStyle = air ? "rgba(0,0,0,0.22)" : "rgba(12,10,8,0.5)";
-    ctx.beginPath();
-    ctx.ellipse(e.x, e.y, rx, rx * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    if (!air && !e.isBuilding && (e.drive || 0) > 0.4) {
-      const bx = e.x - Math.cos(e.angle) * e.radius * 1.15;
-      const by = e.y - Math.sin(e.angle) * e.radius * 1.15;
-      ctx.strokeStyle = "rgba(28,22,16,0.55)";
-      ctx.lineWidth = e.radius > 14 ? 3 : 1.6;
+    if (def.air) {
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
       ctx.beginPath();
-      ctx.moveTo(e.x, e.y);
-      ctx.lineTo(bx, by);
-      ctx.stroke();
+      ctx.ellipse(e.x, e.y, e.radius * 1.1, e.radius * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
     }
+    if (e.isBuilding || (e.drive || 0) < 0.45) continue;
+    const bx = e.x - Math.cos(e.angle) * e.radius * 0.85;
+    const by = e.y - Math.sin(e.angle) * e.radius * 0.85;
+    ctx.strokeStyle = "rgba(36, 28, 18, 0.45)";
+    ctx.lineWidth = e.radius > 14 ? 2.2 : 1.3;
+    ctx.beginPath();
+    ctx.moveTo(e.x, e.y);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
   }
+}
+
+function footShadow(ctx, width) {
+  ctx.fillStyle = "rgba(20, 16, 12, 0.32)";
+  ctx.beginPath();
+  ctx.ellipse(0, 1, width * 0.26, Math.max(3, width * 0.04), 0, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawGroundFx(ctx, view) {
@@ -290,10 +302,17 @@ const BUILDING_SPAN = {
   yard: 3.3,
 };
 
-const TANK_FRAMES = [
-  { key: "iso-tank-sw", ang: Math.PI * 0.78 },
-  { key: "iso-tank-nw", ang: -Math.PI * 0.7 },
-];
+const BUILDING_SINK = {
+  hq: 0.18,
+  barracks: 0.16,
+  shop: 0.18,
+  strip: 0.18,
+  depot: 0.16,
+  bunker: 0.18,
+  yard: 0.18,
+};
+
+const TANK_FRAMES = [{ key: "iso-tank-sw", ang: Math.PI * 0.78 }];
 
 const UNIT_FRAMES = {
   tank: TANK_FRAMES,
@@ -301,14 +320,8 @@ const UNIT_FRAMES = {
   mlrs: TANK_FRAMES,
   ifv: TANK_FRAMES,
   atgm: TANK_FRAMES,
-  truck: [
-    { key: "iso-truck-sw", ang: Math.PI * 0.7 },
-    { key: "iso-truck-nw", ang: -Math.PI * 0.68 },
-  ],
-  infantry: [
-    { key: "iso-infantry-sw", ang: Math.PI * 0.75 },
-    { key: "iso-infantry-nw", ang: -Math.PI * 0.68 },
-  ],
+  truck: [{ key: "iso-truck-sw", ang: Math.PI * 0.7 }],
+  infantry: [{ key: "iso-infantry-sw", ang: Math.PI * 0.75 }],
   heli: [{ key: "iso-heli-sw", ang: Math.PI * 0.62 }],
   jet: [{ key: "iso-jet-sw", ang: Math.PI * 0.5 }],
   wing: [{ key: "iso-jet-sw", ang: Math.PI * 0.5 }],
@@ -337,20 +350,26 @@ function screenHeading(angle) {
   return Math.atan2((c + s) * GROUND_B, (c - s) * GROUND_A);
 }
 
-function pickFrame(frames, heading) {
+function pickFrame(frames, heading, hold) {
   let best = frames[0];
   let bestFlip = false;
   let bestD = 99;
+  let holdD = null;
   for (const frame of frames) {
     for (const flip of [false, true]) {
       const ang = flip ? Math.PI - frame.ang : frame.ang;
       const d = Math.abs(angDiff(heading, ang));
+      if (hold && hold.key === frame.key && hold.flip === flip) holdD = d;
       if (d < bestD) {
         bestD = d;
         best = frame;
         bestFlip = flip;
       }
     }
+  }
+  if (hold && holdD != null && holdD < bestD + 0.55) {
+    best = frames.find((frame) => frame.key === hold.key) || best;
+    bestFlip = hold.flip;
   }
   return { key: best.key, flip: bestFlip, ang: bestFlip ? Math.PI - best.ang : best.ang };
 }
@@ -369,6 +388,11 @@ function drawAnchored(ctx, key, width, opt = {}) {
   ctx.save();
   if (opt.lift) ctx.translate(0, -opt.lift);
   if (opt.flip) ctx.scale(-1, 1);
+  if (opt.clipGround) {
+    ctx.beginPath();
+    ctx.rect(-dw * 1.4, -dh * 4, dw * 2.8, dh * 4);
+    ctx.clip();
+  }
   if (opt.grow != null && opt.grow < 0.995) {
     const top = -dh + foot;
     ctx.beginPath();
@@ -384,7 +408,10 @@ function paintStructure(ctx, def, colors, gfx, grow) {
   const shape = def.shape || "depot";
   const span = def.radius * (BUILDING_SPAN[shape] || 3.1);
   const key = BUILDING_PHOTO[shape];
-  if (key && drawAnchored(ctx, key, span, { grow, sink: 0.06 })) return span * 0.72;
+  if (key && images[key]) {
+    footShadow(ctx, span * 0.92);
+    if (drawAnchored(ctx, key, span, { grow, sink: BUILDING_SINK[shape] || 0.32, clipGround: true })) return span * 0.62;
+  }
   drawIso(ctx, {
     form: shape,
     radius: def.radius * 1.15,
@@ -453,7 +480,16 @@ function poseOf(gfx, e, aim, dt, articulated) {
   } else {
     turret = e.angle;
   }
-  const pose = { x: e.x, y: e.y, track: prev.track + dist, turret, hull: e.angle, prevHull: prev.hull, dist };
+  const pose = {
+    x: e.x,
+    y: e.y,
+    track: prev.track + dist,
+    turret,
+    hull: e.angle,
+    prevHull: prev.hull,
+    dist,
+    frame: prev.frame,
+  };
   map.set(e.id, pose);
   return pose;
 }
@@ -510,14 +546,17 @@ function drawUnit(ctx, e, def, colors, gfx, state, view) {
   if (frames) {
     const shown = articulated ? pose.turret : e.angle;
     const heading = screenHeading(shown);
-    const picked = pickFrame(frames, heading);
+    const picked = pickFrame(frames, heading, pose.frame);
+    pose.frame = { key: picked.key, flip: picked.flip };
     const span = def.radius * (UNIT_SPAN[form] || 5);
     ctx.save();
+    if (!def.air) footShadow(ctx, span * 0.9);
     if (kick > 0) ctx.translate(-Math.cos(heading) * kick * 7, -Math.sin(heading) * kick * 3);
     const drawn = drawAnchored(ctx, picked.key, span, {
       flip: picked.flip,
       lift,
-      sink: def.air ? 0.02 : 0.08,
+      sink: def.air ? 0.02 : 0.07,
+      clipGround: !def.air,
     });
     if (drawn && (def.damage || 0) > 0 && kick > 0.2) {
       ctx.fillStyle = kick > 0.65 ? "#fff1c4" : "rgba(255, 170, 60, 0.9)";
@@ -607,16 +646,6 @@ function drawFlag(ctx, x, y, color) {
 
 function drawGroundMarks(ctx, state, view) {
   const who = viewer(view);
-  for (const e of state.entities) {
-    if (e.hp <= 0 || !view.selected?.has(e.id)) continue;
-    if (e.owner !== who && !canSeeEntity(state, who, e)) continue;
-    const rx = e.radius * (e.isBuilding ? 1.25 : 1.05);
-    ctx.strokeStyle = e.owner === who ? "rgba(126, 196, 92, 0.95)" : "rgba(196, 92, 60, 0.95)";
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.ellipse(e.x, e.y + rx * 0.08, rx, rx * 0.4, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
   for (const e of state.entities) {
     if (e.hp <= 0 || e.owner !== who || !view.selected?.has(e.id)) continue;
     if (e.isBuilding && e.constructed && e.rallyX) {

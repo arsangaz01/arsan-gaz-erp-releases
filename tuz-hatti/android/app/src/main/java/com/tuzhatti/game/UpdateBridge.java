@@ -3,15 +3,18 @@ package com.tuzhatti.game;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.PendingIntent;
+import android.content.ClipData;
 import android.content.Context;
-import android.util.DisplayMetrics;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
+
+import androidx.core.content.FileProvider;
 
 import org.json.JSONObject;
 
@@ -32,6 +35,8 @@ public class UpdateBridge {
     private final Activity activity;
     private final WebView webView;
     private volatile File pendingFile;
+    private volatile Intent pendingConfirm;
+    private volatile String pendingApk;
 
     public UpdateBridge(Activity activity, WebView webView) {
         this.activity = activity;
@@ -73,6 +78,7 @@ public class UpdateBridge {
                     post("güncel");
                     return;
                 }
+                pendingApk = apk;
                 if (!apk.startsWith("https://")) {
                     post("Yeni sürüm " + name + " bulundu ama kurulum adresi yok.");
                     return;
@@ -184,6 +190,7 @@ public class UpdateBridge {
     }
 
     public void installIfReady() {
+        launchConfirm();
         File file = pendingFile;
         if (file == null || !file.exists()) return;
         if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) return;
@@ -196,10 +203,12 @@ public class UpdateBridge {
         if (intent == null || !"com.tuzhatti.game.INSTALL_STATUS".equals(intent.getAction())) return;
         int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-            Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
+            Intent confirm = readConfirm(intent);
             if (confirm != null) {
-                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                activity.startActivity(confirm);
+                pendingConfirm = confirm;
+                activity.runOnUiThread(this::launchConfirm);
+            } else {
+                post("Kurulum onayı gelmedi." + apkHint());
             }
             return;
         }
@@ -219,12 +228,47 @@ public class UpdateBridge {
     }
 
     private void install(File file) {
+        activity.runOnUiThread(() -> {
+            if (openInstaller(file)) {
+                post("Kurulum ekranı açılıyor");
+                return;
+            }
+            if (commitSession(file)) {
+                post("Kurulum ekranı açılıyor");
+                return;
+            }
+            post("Kurulum olmadı: yükleyici açılmadı." + apkHint());
+        });
+    }
+
+    private boolean openInstaller(File file) {
+        try {
+            Uri uri = FileProvider.getUriForFile(activity, activity.getPackageName() + ".fileprovider", file);
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(uri, "application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.setClipData(ClipData.newRawUri("apk", uri));
+            activity.startActivity(intent);
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private boolean commitSession(File file) {
         PackageInstaller.Session session = null;
+        boolean committed = false;
         try {
             PackageInstaller installer = activity.getPackageManager().getPackageInstaller();
             PackageInstaller.SessionParams params =
                     new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
             params.setSize(file.length());
+            if (Build.VERSION.SDK_INT >= 31) {
+                params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED);
+            }
+            if (Build.VERSION.SDK_INT >= 33) {
+                params.setAppPackageName(activity.getPackageName());
+            }
             int sessionId = installer.createSession(params);
             session = installer.openSession(sessionId);
             try (InputStream in = new FileInputStream(file); OutputStream out = session.openWrite("cephe.apk", 0, file.length())) {
@@ -239,11 +283,48 @@ public class UpdateBridge {
             if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
             PendingIntent pending = PendingIntent.getActivity(activity, sessionId, callback, flags);
             session.commit(pending.getIntentSender());
+            committed = true;
+            return true;
         } catch (Exception ex) {
-            String detail = ex.getMessage() == null ? "paket" : ex.getMessage();
-            post("Kurulum olmadı: " + detail);
+            return false;
         } finally {
-            if (session != null) session.close();
+            if (session != null && !committed) {
+                try {
+                    session.abandon();
+                } catch (Exception ignored) {
+                    // Oturum kurulmadıysa sistem kaydı temizlenir.
+                }
+                session.close();
+            }
         }
+    }
+
+    private void launchConfirm() {
+        Intent confirm = pendingConfirm;
+        if (confirm == null) return;
+        try {
+            confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(confirm);
+            pendingConfirm = null;
+        } catch (Exception ex) {
+            post("Kurulum onayı bekliyor." + apkHint());
+        }
+    }
+
+    private Intent readConfirm(Intent intent) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            return intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent.class);
+        }
+        return legacyConfirm(intent);
+    }
+
+    @SuppressWarnings("deprecation")
+    private Intent legacyConfirm(Intent intent) {
+        return intent.getParcelableExtra(Intent.EXTRA_INTENT);
+    }
+
+    private String apkHint() {
+        String apk = pendingApk;
+        return apk == null || apk.isEmpty() ? "" : " " + apk;
     }
 }

@@ -2,8 +2,9 @@
  *  Fark, geçit ve açık alanın savunmayı veya saldırıyı kolaylaştırmasındadır.
  */
 
-export const MAP_W = 2100;
-export const MAP_H = 1300;
+const MAP_SCALE = 2;
+export const MAP_W = 2100 * MAP_SCALE;
+export const MAP_H = 1300 * MAP_SCALE;
 
 const SLOTS = [
   { x: 360, y: 280, team: 0 },
@@ -14,7 +15,7 @@ const SLOTS = [
   { x: 1800, y: 650, team: 1 },
   { x: 1740, y: 1040, team: 1 },
   { x: 1280, y: 1080, team: 1 },
-];
+].map((slot) => ({ x: slot.x * MAP_SCALE, y: slot.y * MAP_SCALE, team: slot.team }));
 
 export const MATCH_SIZES = [2, 3, 4, 6, 8];
 
@@ -42,7 +43,13 @@ function ridge(x0, y0, x1, y1, r, step, kind) {
 }
 
 function mapDef(partial) {
-  return { w: MAP_W, h: MAP_H, slots: SLOTS, ...partial };
+  const obstacles = (partial.obstacles || []).map((rock) => ({
+    ...rock,
+    x: rock.x * MAP_SCALE,
+    y: rock.y * MAP_SCALE,
+    r: rock.r * MAP_SCALE,
+  }));
+  return { w: MAP_W, h: MAP_H, slots: SLOTS, ...partial, obstacles };
 }
 
 export const MAPS = {
@@ -210,8 +217,8 @@ export function battlePlan(mapId, count) {
       });
     });
   }
-  nodes.push({ x: map.w / 2, y: map.h / 2 - 180, amount: NODE_AMOUNT, kind: map.resource, contested: true });
-  nodes.push({ x: map.w / 2, y: map.h / 2 + 180, amount: NODE_AMOUNT, kind: map.resource, contested: true });
+  nodes.push({ x: map.w / 2, y: map.h / 2 - 180 * MAP_SCALE, amount: NODE_AMOUNT, kind: map.resource, contested: true });
+  nodes.push({ x: map.w / 2, y: map.h / 2 + 180 * MAP_SCALE, amount: NODE_AMOUNT, kind: map.resource, contested: true });
   return { map, count: safeCount, slots, nodes, battle: safeCount === 3 ? "ffa" : "teams" };
 }
 

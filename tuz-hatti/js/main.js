@@ -33,7 +33,7 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 13, name: "3.1" };
+const APP = { code: 14, name: "3.2" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
@@ -1012,7 +1012,7 @@ function setUserZoom(next, anchor) {
       sy: (g.y - view.camY) * prev,
     };
   }
-  view.userZoom = clampTo(next, 0.7, 3.2);
+  view.userZoom = clampTo(next, 0.35, 3.2);
   view.zoom = (view.fitZoom || prev) * view.userZoom;
   if (hold) {
     view.camX = hold.x - hold.sx / view.zoom;
@@ -1328,19 +1328,23 @@ document.querySelector("#room-join")?.addEventListener("click", () => {
 
 function sayUpdate(text, href) {
   const status = document.querySelector("#update-status");
+  const raw = String(text || "");
+  const found = raw.match(/https:\/\/\S+/);
+  const label = found ? raw.slice(0, found.index).trim() : raw;
+  const linkHref = href || (found ? found[0] : "");
   if (status) {
-    status.textContent = text;
-    if (href) {
+    status.textContent = label;
+    if (linkHref) {
       status.appendChild(document.createTextNode(" "));
       const link = document.createElement("a");
-      link.href = href;
+      link.href = linkHref;
       link.target = "_blank";
       link.rel = "noopener";
       link.textContent = "Kurulumu indir";
       status.appendChild(link);
     }
   }
-  if (match) toast(text);
+  if (match) toast(label);
 }
 
 window.__cepheUpdate = sayUpdate;

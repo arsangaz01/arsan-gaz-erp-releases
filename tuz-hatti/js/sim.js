@@ -760,7 +760,7 @@ function moveToward(state, e, tx, ty, step, stopDist, ignoreId, dt) {
   let vx = dx / dist;
   let vy = dy / dist;
   const def = entityDef(state, e);
-  const agile = !!(def.air || def.worker);
+  const agile = !!def.air;
   const look = def.air ? 18 : 32;
   const naval = isNaval(state, e);
   if (!def.air && circleBlocked(state, e.x + vx * look, e.y + vy * look, e.radius * 0.75, ignoreId, naval)) {
@@ -798,14 +798,24 @@ function moveToward(state, e, tx, ty, step, stopDist, ignoreId, dt) {
     e.drive = (e.drive ?? 0) + (goal - (e.drive ?? 0)) * Math.min(1, dt * (goal > 0.5 ? 3.2 : 6));
   }
   const travel = Math.min(step * align * (agile ? 1 : 0.15 + 0.85 * (e.drive || 0)), dist - stopDist);
+  const turn = agile ? 9 : def.worker ? 6.2 : def.sprite === "infantry" ? 4.2 : 3.4;
+  face(e, e.x + vx * 48, e.y + vy * 48, dt, turn);
   if (travel > 0) {
-    e.x += vx * travel;
-    e.y += vy * travel;
+    if (agile) {
+      e.x += vx * travel;
+      e.y += vy * travel;
+    } else {
+      const fx = Math.cos(e.angle);
+      const fy = Math.sin(e.angle);
+      const forward = fx * vx + fy * vy;
+      if (forward > 0.25) {
+        e.x += fx * travel * forward;
+        e.y += fy * travel * forward;
+      }
+    }
   }
   e.x = clamp(e.x, e.radius, state.mapW - e.radius);
   e.y = clamp(e.y, e.radius, state.mapH - e.radius);
-  const turn = agile ? (def.air ? 9 : 7) : def.sprite === "infantry" ? 5.4 : 4.6;
-  face(e, e.x + vx * 40, e.y + vy * 40, dt, turn);
   return Math.hypot(tx - e.x, ty - e.y) <= stopDist + 1.25;
 }
 
