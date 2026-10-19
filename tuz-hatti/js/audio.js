@@ -1,32 +1,32 @@
 /** Kısa sentez sesler. Dosya yok, ilk dokunuşta açılır. */
 
-let ctx = null;
+let audioCtx = null;
 let lastShot = 0;
 
 export function unlockAudio() {
   const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
   if (!AC) return;
-  if (!ctx) ctx = new AC();
-  if (ctx.state === "suspended") ctx.resume();
+  if (!audioCtx) audioCtx = new AC();
+  if (audioCtx.state === "suspended") audioCtx.resume();
 }
 
 function tone(freq, dur, type, gain, delay = 0) {
-  if (!ctx) return;
-  const t = ctx.currentTime + delay;
-  const osc = ctx.createOscillator();
-  const amp = ctx.createGain();
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime + delay;
+  const osc = audioCtx.createOscillator();
+  const amp = audioCtx.createGain();
   osc.type = type;
   osc.frequency.setValueAtTime(freq, t);
   amp.gain.setValueAtTime(gain, t);
   amp.gain.exponentialRampToValueAtTime(0.001, t + dur);
   osc.connect(amp);
-  amp.connect(ctx.destination);
+  amp.connect(audioCtx.destination);
   osc.start(t);
   osc.stop(t + dur + 0.02);
 }
 
 export function playEvent(event, nowMs) {
-  if (!ctx) return;
+  if (!audioCtx) return;
   if (event.type === "shot") {
     if (nowMs - lastShot < 70) return;
     lastShot = nowMs;

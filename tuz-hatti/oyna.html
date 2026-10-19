@@ -1,0 +1,3030 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#1c1712" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Tuz Hattı</title>
+    <style>
+:root {
+  --bg: #1c1712;
+  --paper: #f3e6cf;
+  --ink: #241910;
+  --muted: #6d5846;
+  --copper: #c46a3a;
+  --tide: #1f8f86;
+  --line: #3a2c22;
+  --indigo: #3f4f86;
+  --gold: #e6c56e;
+  color-scheme: dark;
+  font-family: "Segoe UI", "Avenir Next", "Trebuchet MS", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--paper);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+button, canvas { font: inherit; }
+
+button {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 12px;
+  min-height: 48px;
+  padding: 0 16px;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.hidden { display: none !important; }
+
+#menu, #result {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(196, 106, 58, 0.22), transparent 42%),
+    radial-gradient(circle at 80% 90%, rgba(31, 143, 134, 0.16), transparent 40%),
+    var(--bg);
+  overflow: auto;
+}
+
+.menu-card {
+  width: min(720px, 100%);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 22px;
+  padding: 22px 22px 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+.eyebrow {
+  margin: 0;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--copper);
+}
+
+h1, h2 {
+  font-family: Palatino, "Iowan Old Style", Georgia, serif;
+  font-weight: 600;
+  margin: 4px 0 8px;
+  font-size: 40px;
+  line-height: 1;
+}
+
+h2 { font-size: 32px; }
+
+.lead, .note, .how, #result-body {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.factions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 16px 0 8px;
+}
+
+.faction {
+  text-align: left;
+  background: #fffaf1;
+  border: 2px solid transparent;
+  padding: 12px;
+  min-height: 132px;
+}
+
+.faction.selected { border-color: var(--copper); }
+
+.faction strong { display: block; margin: 6px 0 4px; }
+
+.faction p, .faction em {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.swatch {
+  display: inline-block;
+  width: 28px;
+  height: 12px;
+  border-radius: 99px;
+}
+
+.swatch.tuz { background: linear-gradient(90deg, #d4784a, #f0d2bc); }
+.swatch.ruzgar { background: linear-gradient(90deg, #3f4f86, #e6c56e); }
+
+#start, #again {
+  width: 100%;
+  margin-top: 12px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 0;
+  font-size: 18px;
+}
+
+.how {
+  padding-left: 18px;
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+.how li { margin: 4px 0; }
+
+.note { font-size: 13px; }
+
+#stage { position: fixed; inset: 0; }
+
+#view {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+#top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: calc(8px + env(safe-area-inset-top)) 10px 8px;
+  background: linear-gradient(#1c1712f2, #1c171200);
+  pointer-events: none;
+}
+
+#top button, #minimap, #bar, #result, #rotate button { pointer-events: auto; }
+
+.stat {
+  background: #1c1712e6;
+  border: 1px solid #4a382c;
+  border-radius: 12px;
+  padding: 4px 10px 6px;
+  min-width: 74px;
+}
+
+.stat span {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #cbb89a;
+}
+
+.stat strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 20px;
+}
+
+#goal {
+  margin: 0;
+  flex: 1;
+  text-align: center;
+  font-family: Palatino, Georgia, serif;
+  color: #f3e6cf;
+  text-shadow: 0 1px 2px #000;
+}
+
+#pause {
+  background: #1c1712e6;
+  color: var(--paper);
+  border-color: #4a382c;
+  min-height: 42px;
+}
+
+#inspect, #hint {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  pointer-events: none;
+  text-shadow: 0 1px 2px #000;
+}
+
+#inspect {
+  top: calc(62px + env(safe-area-inset-top));
+  left: 12px;
+  right: 160px;
+  font-size: 15px;
+}
+
+#hint {
+  top: calc(86px + env(safe-area-inset-top));
+  left: 12px;
+  right: 160px;
+  color: #eadcc4;
+  font-size: 13px;
+}
+
+#minimap {
+  position: absolute;
+  z-index: 2;
+  top: calc(58px + env(safe-area-inset-top));
+  right: 10px;
+  width: 132px;
+  height: 82px;
+  border-radius: 10px;
+  border: 1px solid #f3e6cf;
+  background: #cbb892;
+  touch-action: none;
+}
+
+#toast {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: calc(92px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  max-width: min(520px, calc(100% - 24px));
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #f3e6cff2;
+  color: var(--ink);
+  pointer-events: none;
+  text-align: center;
+}
+
+#bar {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(#1c171200, #1c1712f5 28%);
+}
+
+.cmd {
+  flex: 0 0 auto;
+  background: #f3e6cf;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.cmd.poor { opacity: 0.55; }
+
+#result { background: rgba(18, 14, 10, 0.62); }
+
+.result-actions { display: flex; gap: 8px; }
+
+#back-menu.ghost, button.ghost {
+  background: transparent;
+  color: var(--ink);
+}
+
+#rotate {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  background: rgba(18, 14, 10, 0.88);
+  color: var(--paper);
+  place-items: center;
+  text-align: center;
+  padding: 24px;
+}
+
+@media (orientation: portrait) and (max-width: 800px) {
+  body:not(.allow-portrait) #rotate { display: grid; }
+}
+
+@media (max-width: 640px) {
+  .factions { grid-template-columns: 1fr; }
+  h1 { font-size: 34px; }
+  #goal { display: none; }
+  #minimap { width: 104px; height: 66px; }
+}
+
+</style>
+  </head>
+  <body>
+    <div id="rotate">
+      <p>Harita yan tutulunca daha rahat okunur.</p>
+      <button type="button" id="play-portrait">Dikey oyna</button>
+    </div>
+
+    <section id="menu">
+      <div class="menu-card">
+        <p class="eyebrow">Tuz ovası · iki lonca</p>
+        <h1>Tuz Hattı</h1>
+        <p class="lead">
+          Kurak düzlükte kül cevheri topla, üssünü büyüt, birliklerini üret.
+          Rakip ocağı yıkan taraf ovayı alır.
+        </p>
+        <div class="factions">
+          <button type="button" class="faction selected" data-faction="tuz" id="card-tuz">
+            <span class="swatch tuz" aria-hidden="true"></span>
+            <strong>Tuz Loncası</strong>
+            <p></p>
+            <em>Sıra Kargısı · Kabuk · Çizik</em>
+          </button>
+          <button type="button" class="faction" data-faction="ruzgar" id="card-ruzgar">
+            <span class="swatch ruzgar" aria-hidden="true"></span>
+            <strong>Rüzgar Kervanı</strong>
+            <p></p>
+            <em>Toz İzci · Çekirge · Uzun Kazan</em>
+          </button>
+        </div>
+        <p class="note">Seçtiğin loncanın karşısına diğeri çıkar.</p>
+        <button type="button" id="start">Savaşa gir</button>
+        <ul class="how">
+          <li>Taşıyıcılar kül toplar, ocak ya da ambara bırakır.</li>
+          <li>İşçiyi seç, bina kur, binaya dokunup birlik üret.</li>
+          <li>Sürükleyerek haritayı kaydır. Yere dokununca birlik yürür.</li>
+          <li>Ocağı yıkılan taraf kaybeder.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="stage" class="hidden">
+      <canvas id="view"></canvas>
+      <header id="top">
+        <div class="stat">
+          <span>Kül</span>
+          <strong id="ash">0</strong>
+        </div>
+        <div class="stat">
+          <span>İkmal</span>
+          <strong id="supply">0/0</strong>
+        </div>
+        <p id="goal">Rakip ocağı yık</p>
+        <button type="button" id="pause">Duraklat</button>
+      </header>
+      <p id="inspect">Kimse seçili değil</p>
+      <p id="hint">Sürükle: haritayı kaydır</p>
+      <canvas id="minimap" aria-label="Küçük harita"></canvas>
+      <p id="toast" class="hidden"></p>
+      <footer id="bar"></footer>
+      <div id="result" class="hidden">
+        <div class="menu-card">
+          <h2 id="result-title"></h2>
+          <p id="result-body"></p>
+          <div class="result-actions">
+            <button type="button" id="again">Tekrar</button>
+            <button type="button" id="back-menu" class="ghost">Menü</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <script>
+/** Tuz Hattı — özgün loncalar, birimler ve binalar. */
+
+const FACTIONS = {
+  tuz: {
+    id: "tuz",
+    name: "Tuz Loncası",
+    blurb: "Yavaş, kalın zırh, uzun menzilli delici. Hattı tutar.",
+    colors: {
+      main: "#d4784a",
+      dark: "#7a3d28",
+      cloth: "#f0d2bc",
+      ink: "#2a160f",
+    },
+    units: {
+      tasiyici: {
+        name: "Tuz Taşıyıcı",
+        shape: "worker",
+        hp: 72,
+        speed: 78,
+        radius: 13,
+        sight: 200,
+        damage: 0,
+        range: 0,
+        cooldown: 1,
+        armor: "light",
+        bonus: { light: 1, heavy: 1, building: 1 },
+        cost: 50,
+        time: 7,
+        supply: 1,
+        worker: true,
+        carry: 48,
+        gather: 2.15,
+      },
+      mizrak: {
+        name: "Sıra Kargısı",
+        shape: "spear",
+        hp: 92,
+        speed: 66,
+        radius: 12,
+        sight: 190,
+        damage: 10,
+        range: 36,
+        cooldown: 0.72,
+        armor: "light",
+        bonus: { light: 1.25, heavy: 0.62, building: 0.75 },
+        cost: 45,
+        time: 6,
+        supply: 1,
+      },
+      kabuk: {
+        name: "Kabuk",
+        shape: "tank",
+        hp: 280,
+        speed: 42,
+        radius: 16,
+        sight: 210,
+        damage: 16,
+        range: 86,
+        cooldown: 1.15,
+        armor: "heavy",
+        bonus: { light: 1.05, heavy: 1, building: 1.6 },
+        cost: 145,
+        time: 11,
+        supply: 2,
+      },
+      cizik: {
+        name: "Çizik",
+        shape: "lance",
+        hp: 104,
+        speed: 54,
+        radius: 13,
+        sight: 230,
+        damage: 22,
+        range: 132,
+        cooldown: 1.35,
+        armor: "light",
+        bonus: { light: 0.75, heavy: 2.15, building: 0.65 },
+        cost: 115,
+        time: 9,
+        supply: 2,
+      },
+    },
+    buildings: {
+      ocak: {
+        name: "Ocak",
+        shape: "hq",
+        hp: 1200,
+        radius: 48,
+        sight: 340,
+        armor: "building",
+        cost: 0,
+        time: 1,
+        supply: 12,
+        hq: true,
+        dropoff: true,
+        trains: ["tasiyici"],
+      },
+      barinak: {
+        name: "Kışla",
+        shape: "barracks",
+        hp: 560,
+        radius: 38,
+        sight: 180,
+        armor: "building",
+        cost: 160,
+        time: 13,
+        supply: 0,
+        trains: ["mizrak"],
+      },
+      atolye: {
+        name: "Döküm",
+        shape: "shop",
+        hp: 600,
+        radius: 42,
+        sight: 180,
+        armor: "building",
+        cost: 210,
+        time: 16,
+        supply: 0,
+        trains: ["kabuk", "cizik"],
+      },
+      kule: {
+        name: "Tuz Kulesi",
+        shape: "tower",
+        hp: 240,
+        radius: 22,
+        sight: 230,
+        damage: 15,
+        range: 152,
+        cooldown: 0.9,
+        armor: "building",
+        bonus: { light: 1, heavy: 1, building: 1 },
+        cost: 130,
+        time: 11,
+        supply: 0,
+        turret: true,
+      },
+      depo: {
+        name: "Ambar",
+        shape: "depot",
+        hp: 380,
+        radius: 32,
+        sight: 160,
+        armor: "building",
+        cost: 90,
+        time: 8,
+        supply: 8,
+        dropoff: true,
+      },
+    },
+  },
+  ruzgar: {
+    id: "ruzgar",
+    name: "Rüzgar Kervanı",
+    blurb: "Hızlı taşıma, ucuz izciler, uzağa ateş eden kazan. Baskın yapar.",
+    colors: {
+      main: "#3f4f86",
+      dark: "#232a48",
+      cloth: "#e6c56e",
+      ink: "#14182a",
+    },
+    units: {
+      tasiyici: {
+        name: "Kervan Taşıyıcı",
+        shape: "worker",
+        hp: 50,
+        speed: 104,
+        radius: 12,
+        sight: 210,
+        damage: 0,
+        range: 0,
+        cooldown: 1,
+        armor: "light",
+        bonus: { light: 1, heavy: 1, building: 1 },
+        cost: 40,
+        time: 5,
+        supply: 1,
+        worker: true,
+        carry: 30,
+        gather: 1.55,
+      },
+      izci: {
+        name: "Toz İzci",
+        shape: "scout",
+        hp: 58,
+        speed: 102,
+        radius: 11,
+        sight: 220,
+        damage: 8,
+        range: 30,
+        cooldown: 0.46,
+        armor: "light",
+        bonus: { light: 1.45, heavy: 0.4, building: 0.22 },
+        cost: 32,
+        time: 4.5,
+        supply: 1,
+      },
+      cekirge: {
+        name: "Çekirge",
+        shape: "buggy",
+        hp: 98,
+        speed: 112,
+        radius: 14,
+        sight: 220,
+        damage: 11,
+        range: 74,
+        cooldown: 0.6,
+        armor: "light",
+        bonus: { light: 1.15, heavy: 0.7, building: 0.85 },
+        cost: 85,
+        time: 7,
+        supply: 1,
+      },
+      havan: {
+        name: "Uzun Kazan",
+        shape: "mortar",
+        hp: 78,
+        speed: 36,
+        radius: 15,
+        sight: 250,
+        damage: 28,
+        range: 176,
+        minRange: 82,
+        cooldown: 2.15,
+        armor: "light",
+        bonus: { light: 0.5, heavy: 0.85, building: 2.45 },
+        cost: 150,
+        time: 12,
+        supply: 2,
+      },
+    },
+    buildings: {
+      ocak: {
+        name: "Direk",
+        shape: "hq",
+        hp: 980,
+        radius: 46,
+        sight: 340,
+        armor: "building",
+        cost: 0,
+        time: 1,
+        supply: 12,
+        hq: true,
+        dropoff: true,
+        trains: ["tasiyici"],
+      },
+      barinak: {
+        name: "Çadır",
+        shape: "barracks",
+        hp: 360,
+        radius: 36,
+        sight: 180,
+        armor: "building",
+        cost: 120,
+        time: 9,
+        supply: 0,
+        trains: ["izci"],
+      },
+      atolye: {
+        name: "Tezgah",
+        shape: "shop",
+        hp: 400,
+        radius: 40,
+        sight: 180,
+        armor: "building",
+        cost: 170,
+        time: 12,
+        supply: 0,
+        trains: ["cekirge", "havan"],
+      },
+      kule: {
+        name: "İskele",
+        shape: "tower",
+        hp: 150,
+        radius: 20,
+        sight: 220,
+        damage: 9,
+        range: 134,
+        cooldown: 0.42,
+        armor: "building",
+        bonus: { light: 1.1, heavy: 0.8, building: 1 },
+        cost: 100,
+        time: 8,
+        supply: 0,
+        turret: true,
+      },
+      depo: {
+        name: "Yük",
+        shape: "depot",
+        hp: 280,
+        radius: 30,
+        sight: 160,
+        armor: "building",
+        cost: 70,
+        time: 6,
+        supply: 8,
+        dropoff: true,
+      },
+    },
+  },
+};
+
+const ARMOR_TAKEN = { light: 1, heavy: 0.7, building: 0.82 };
+
+const BUILD_ORDER = ["barinak", "atolye", "kule", "depo"];
+
+const SUPPLY_CAP = 36;
+
+function faction(id) {
+  return FACTIONS[id];
+}
+
+function unitDef(factionId, kind) {
+  return FACTIONS[factionId]?.units[kind] ?? null;
+}
+
+function buildingDef(factionId, kind) {
+  return FACTIONS[factionId]?.buildings[kind] ?? null;
+}
+
+function defFor(factionId, entity) {
+  return entity.isBuilding ? buildingDef(factionId, entity.kind) : unitDef(factionId, entity.kind);
+}
+
+/** Tuz Hattı simülasyonu. DOM yok; tarayıcı ve node testleri aynı kodu çalıştırır. */
+
+const MAP_W = 2100;
+const MAP_H = 1300;
+const CELL = 22;
+const BUILD_RADIUS = 290;
+
+const BASES = {
+  0: { x: 300, y: 650 },
+  1: { x: 1800, y: 650 },
+};
+
+const NODE_LAYOUT = [
+  { x: 540, y: 500, amount: 2000 },
+  { x: 1560, y: 820, amount: 2000 },
+  { x: 1050, y: 240, amount: 1500 },
+  { x: 1050, y: 1060, amount: 1500 },
+];
+
+const ROCKS = [
+  [1050, 650, 52],
+  [900, 500, 34],
+  [1220, 800, 36],
+  [820, 860, 28],
+  [1260, 430, 30],
+  [680, 260, 24],
+  [1420, 1080, 26],
+  [430, 1040, 30],
+  [1680, 280, 28],
+  [1050, 900, 22],
+];
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function rng() {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function createMatch({ seed = 1, playerFaction = "tuz", enemyFaction = "ruzgar" } = {}) {
+  const rng = mulberry32(seed);
+  const cols = Math.ceil(MAP_W / CELL);
+  const rows = Math.ceil(MAP_H / CELL);
+  const cells = cols * rows;
+  const state = {
+    seed,
+    rng,
+    time: 0,
+    winner: null,
+    nextId: 1,
+    cols,
+    rows,
+    entities: [],
+    nodes: NODE_LAYOUT.map((n, i) => ({
+      id: i + 1,
+      x: n.x,
+      y: n.y,
+      amount: n.amount,
+      max: n.amount,
+      radius: 26,
+    })),
+    obstacles: ROCKS.map(([x, y, r]) => ({ x, y, r })),
+    decor: [],
+    players: {
+      0: blankPlayer(playerFaction),
+      1: blankPlayer(enemyFaction),
+    },
+    visible: { 0: new Uint8Array(cells), 1: new Uint8Array(cells) },
+    explored: { 0: new Uint8Array(cells), 1: new Uint8Array(cells) },
+  };
+
+  for (let i = 0; i < 16; i++) {
+    state.decor.push({
+      x: 40 + rng() * (MAP_W - 80),
+      y: 40 + rng() * (MAP_H - 80),
+      r: 10 + rng() * 18,
+      kind: rng() > 0.55 ? "bush" : "crack",
+    });
+  }
+
+  spawnBase(state, 0);
+  spawnBase(state, 1);
+  revealDisk(state, 0, BASES[0].x, BASES[0].y, 420);
+  revealDisk(state, 1, BASES[1].x, BASES[1].y, 420);
+  recomputeFog(state);
+  return state;
+}
+
+function blankPlayer(factionId) {
+  return { faction: factionId, ash: 420, gathered: 0, kills: 0 };
+}
+
+function spawnBase(state, owner) {
+  const base = BASES[owner];
+  const dir = owner === 0 ? 1 : -1;
+  const hq = makeBuilding(state, owner, "ocak", base.x, base.y);
+  hq.constructed = true;
+  hq.progress = 1;
+  hq.hp = hq.maxHp;
+  state.entities.push(hq);
+  const spots = [
+    [base.x + dir * 86, base.y + 42],
+    [base.x + dir * 86, base.y - 42],
+  ];
+  for (const [x, y] of spots) {
+    const worker = makeUnit(state, owner, "tasiyici", x, y);
+    const node = nearestOre(state, x, y);
+    if (node) worker.plan = { kind: "harvest", nodeId: node.id, phase: "toNode", gather: 0 };
+    state.entities.push(worker);
+  }
+}
+
+function makeBuilding(state, owner, kind, x, y) {
+  const def = buildingDef(state.players[owner].faction, kind);
+  const dir = owner === 0 ? 1 : -1;
+  return {
+    id: state.nextId++,
+    owner,
+    kind,
+    isBuilding: true,
+    x,
+    y,
+    hp: Math.round(def.hp * 0.2),
+    maxHp: def.hp,
+    radius: def.radius,
+    angle: owner === 0 ? 0 : Math.PI,
+    constructed: false,
+    progress: 0,
+    cooldown: 0,
+    queue: [],
+    rallyX: x + dir * (def.radius + 40),
+    rallyY: y,
+    carry: 0,
+    plan: null,
+  };
+}
+
+function makeUnit(state, owner, kind, x, y) {
+  const def = unitDef(state.players[owner].faction, kind);
+  return {
+    id: state.nextId++,
+    owner,
+    kind,
+    isBuilding: false,
+    x,
+    y,
+    hp: def.hp,
+    maxHp: def.hp,
+    radius: def.radius,
+    angle: owner === 0 ? 0 : Math.PI,
+    constructed: true,
+    progress: 1,
+    cooldown: 0,
+    queue: null,
+    rallyX: x,
+    rallyY: y,
+    carry: 0,
+    plan: null,
+  };
+}
+
+function factionOf(state, owner) {
+  return state.players[owner].faction;
+}
+
+function entityDef(state, entity) {
+  return defFor(factionOf(state, entity.owner), entity);
+}
+
+function getEntity(state, id) {
+  return state.entities.find((e) => e.id === id) ?? null;
+}
+
+function supplyInfo(state, owner) {
+  let cap = 0;
+  let used = 0;
+  for (const e of state.entities) {
+    if (e.owner !== owner || e.hp <= 0) continue;
+    if (e.isBuilding) {
+      const def = entityDef(state, e);
+      if (e.constructed) cap += def.supply || 0;
+      if (e.queue) {
+        for (const job of e.queue) used += job.supply;
+      }
+    } else {
+      used += entityDef(state, e).supply || 1;
+    }
+  }
+  return { used, cap: Math.min(SUPPLY_CAP, cap) };
+}
+
+function canPlace(state, owner, kind, x, y) {
+  const def = buildingDef(state.players[owner].faction, kind);
+  if (!def || def.hq) return false;
+  const r = def.radius;
+  if (x < r + 16 || y < r + 16 || x > MAP_W - r - 16 || y > MAP_H - r - 16) return false;
+
+  let nearFriendly = false;
+  for (const e of state.entities) {
+    if (e.hp <= 0) continue;
+    const dist = Math.hypot(e.x - x, e.y - y);
+    if (e.isBuilding && e.owner === owner && e.constructed && dist <= BUILD_RADIUS + r) {
+      nearFriendly = true;
+    }
+    if (dist < e.radius + r + 10) return false;
+  }
+  if (!nearFriendly) return false;
+
+  for (const o of state.obstacles) {
+    if (Math.hypot(o.x - x, o.y - y) < o.r + r + 8) return false;
+  }
+  for (const n of state.nodes) {
+    if (n.amount > 0 && Math.hypot(n.x - x, n.y - y) < n.radius + r + 10) return false;
+  }
+  return true;
+}
+
+function command(state, cmd) {
+  if (!cmd || state.winner !== null) return { ok: false, reason: "over" };
+  const owner = cmd.by;
+  const player = state.players[owner];
+  if (!player) return { ok: false, reason: "owner" };
+
+  switch (cmd.type) {
+    case "move":
+    case "attackMove": {
+      const ids = livingOwnedUnits(state, owner, cmd.ids);
+      if (!ids.length) return { ok: false, reason: "units" };
+      const spots = spread(cmd.x, cmd.y, ids.length);
+      ids.forEach((e, i) => {
+        e.plan = { kind: cmd.type === "move" ? "move" : "attackMove", x: spots[i].x, y: spots[i].y };
+      });
+      return { ok: true };
+    }
+    case "attack": {
+      const target = getEntity(state, cmd.targetId);
+      if (!target || target.hp <= 0 || target.owner === owner) return { ok: false, reason: "target" };
+      const ids = livingOwnedUnits(state, owner, cmd.ids);
+      if (!ids.length) return { ok: false, reason: "units" };
+      for (const e of ids) {
+        if ((entityDef(state, e).damage || 0) <= 0) {
+          e.plan = { kind: "move", x: target.x, y: target.y };
+        } else {
+          e.plan = { kind: "attack", targetId: target.id, leash: 720 };
+        }
+      }
+      return { ok: true };
+    }
+    case "stop": {
+      for (const id of cmd.ids || []) {
+        const e = ownedAlive(state, owner, id);
+        if (!e) continue;
+        if (e.isBuilding) {
+          refundQueue(state, e);
+          e.queue = [];
+        } else {
+          e.plan = { kind: "guard", x: e.x, y: e.y };
+        }
+      }
+      return { ok: true };
+    }
+    case "harvest": {
+      let any = false;
+      for (const id of cmd.ids || []) {
+        const e = ownedAlive(state, owner, id);
+        if (!e || e.isBuilding || !entityDef(state, e).worker) continue;
+        if (e.plan?.kind === "construct") continue;
+        const node = nearestOre(state, e.x, e.y);
+        if (!node && e.carry <= 0) continue;
+        e.plan = {
+          kind: "harvest",
+          nodeId: node ? node.id : e.plan?.nodeId ?? 0,
+          phase: e.carry > 0 ? "return" : "toNode",
+          gather: 0,
+        };
+        any = true;
+      }
+      return any ? { ok: true } : { ok: false, reason: "worker" };
+    }
+    case "train": {
+      const b = ownedAlive(state, owner, cmd.buildingId);
+      if (!b || !b.isBuilding || !b.constructed) return { ok: false, reason: "building" };
+      const bdef = entityDef(state, b);
+      if (!bdef.trains?.includes(cmd.unitKind)) return { ok: false, reason: "unit" };
+      if ((b.queue?.length || 0) >= 5) return { ok: false, reason: "queue" };
+      const udef = unitDef(player.faction, cmd.unitKind);
+      if (player.ash < udef.cost) return { ok: false, reason: "ash" };
+      const supply = supplyInfo(state, owner);
+      if (supply.used + udef.supply > supply.cap) return { ok: false, reason: "supply" };
+      player.ash -= udef.cost;
+      b.queue.push({
+        kind: cmd.unitKind,
+        left: udef.time,
+        total: udef.time,
+        cost: udef.cost,
+        supply: udef.supply,
+      });
+      return { ok: true };
+    }
+    case "place": {
+      const worker = ownedAlive(state, owner, cmd.workerId);
+      if (!worker || worker.isBuilding || !entityDef(state, worker).worker) {
+        return { ok: false, reason: "worker" };
+      }
+      const def = buildingDef(player.faction, cmd.kind);
+      if (!def || def.hq) return { ok: false, reason: "kind" };
+      if (player.ash < def.cost) return { ok: false, reason: "ash" };
+      if (!canPlace(state, owner, cmd.kind, cmd.x, cmd.y)) return { ok: false, reason: "space" };
+      player.ash -= def.cost;
+      const building = makeBuilding(state, owner, cmd.kind, cmd.x, cmd.y);
+      state.entities.push(building);
+      worker.plan = { kind: "construct", buildingId: building.id };
+      return { ok: true, id: building.id };
+    }
+    case "construct": {
+      const building = ownedAlive(state, owner, cmd.buildingId);
+      if (!building || !building.isBuilding || building.constructed) return { ok: false, reason: "building" };
+      let any = false;
+      for (const id of cmd.workerIds || []) {
+        const e = ownedAlive(state, owner, id);
+        if (!e || e.isBuilding || !entityDef(state, e).worker) continue;
+        e.plan = { kind: "construct", buildingId: building.id };
+        any = true;
+      }
+      return any ? { ok: true } : { ok: false, reason: "worker" };
+    }
+    case "rally": {
+      const b = ownedAlive(state, owner, cmd.buildingId);
+      if (!b || !b.isBuilding) return { ok: false, reason: "building" };
+      b.rallyX = clamp(cmd.x, 20, MAP_W - 20);
+      b.rallyY = clamp(cmd.y, 20, MAP_H - 20);
+      return { ok: true };
+    }
+    default:
+      return { ok: false, reason: "type" };
+  }
+}
+
+function refundQueue(state, building) {
+  if (!building.queue?.length) return;
+  const player = state.players[building.owner];
+  for (const job of building.queue) player.ash += job.cost;
+  building.queue = [];
+}
+
+function ownedAlive(state, owner, id) {
+  const e = getEntity(state, id);
+  if (!e || e.owner !== owner || e.hp <= 0) return null;
+  return e;
+}
+
+function livingOwnedUnits(state, owner, ids) {
+  const out = [];
+  for (const id of ids || []) {
+    const e = ownedAlive(state, owner, id);
+    if (e && !e.isBuilding) out.push(e);
+  }
+  return out;
+}
+
+function spread(x, y, n) {
+  if (n <= 1) return [{ x, y }];
+  const rad = 16 + n * 3;
+  const spots = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    spots.push({ x: x + Math.cos(a) * rad, y: y + Math.sin(a) * rad });
+  }
+  return spots;
+}
+
+function step(state, dt) {
+  const events = [];
+  if (state.winner !== null) return events;
+  dt = Math.max(0, Math.min(0.05, dt));
+  state.time += dt;
+  const spawned = [];
+
+  for (const e of state.entities) {
+    if (e.hp <= 0) continue;
+    if (e.cooldown > 0) e.cooldown -= dt;
+    const def = entityDef(state, e);
+    if (e.isBuilding) {
+      if (e.constructed) updateTraining(state, e, dt, spawned, events);
+      if (def.turret && e.constructed) fireAtNearest(state, e, def, events);
+      continue;
+    }
+    updateUnit(state, e, def, dt, events);
+  }
+
+  for (const s of spawned) state.entities.push(s);
+  separateUnits(state);
+
+  const alive = [];
+  for (const e of state.entities) {
+    if (e.hp <= 0) continue;
+    alive.push(e);
+  }
+  state.entities = alive;
+
+  recomputeFog(state);
+  checkWinner(state);
+  return events;
+}
+
+function updateTraining(state, building, dt, spawned, events) {
+  if (!building.queue.length) return;
+  const job = building.queue[0];
+  job.left -= dt;
+  if (job.left > 0) return;
+  building.queue.shift();
+  const udef = unitDef(factionOf(state, building.owner), job.kind);
+  const dx = building.rallyX - building.x;
+  const dy = building.rallyY - building.y;
+  const d = Math.hypot(dx, dy) || 1;
+  const dist = building.radius + udef.radius + 8;
+  const spot = freeSpot(
+    state,
+    building.x + (dx / d) * dist,
+    building.y + (dy / d) * dist,
+    udef.radius,
+    building.id,
+  );
+  const unit = makeUnit(state, building.owner, job.kind, spot.x, spot.y);
+  if (udef.worker) {
+    const node = nearestOre(state, unit.x, unit.y);
+    if (node) unit.plan = { kind: "harvest", nodeId: node.id, phase: "toNode", gather: 0 };
+  } else {
+    unit.plan = { kind: "move", x: building.rallyX, y: building.rallyY };
+  }
+  spawned.push(unit);
+  events.push({ type: "trained", owner: building.owner, kind: job.kind, x: unit.x, y: unit.y });
+}
+
+function updateUnit(state, e, def, dt, events) {
+  const plan = e.plan;
+  if (!plan || plan.kind === "guard") {
+    const home = plan?.kind === "guard" ? plan : { x: e.x, y: e.y };
+    if (!e.plan) e.plan = { kind: "guard", x: e.x, y: e.y };
+    if ((def.damage || 0) > 0) {
+      const foe = nearestEnemy(state, e, (def.range || 0) + 28);
+      if (foe) e.plan = { kind: "attack", targetId: foe.id, leash: 200, homeX: home.x, homeY: home.y };
+    }
+    return;
+  }
+
+  if (plan.kind === "move") {
+    const arrived = moveToward(state, e, plan.x, plan.y, def.speed * dt, 10, null);
+    if (arrived) e.plan = { kind: "guard", x: e.x, y: e.y };
+    return;
+  }
+
+  if (plan.kind === "attackMove") {
+    const foe = nearestEnemy(state, e, Math.min(def.sight || 160, (def.range || 40) + 70));
+    if (foe && (def.damage || 0) > 0) {
+      e.plan = { kind: "attack", targetId: foe.id, leash: 260, resume: { kind: "attackMove", x: plan.x, y: plan.y } };
+      return;
+    }
+    const arrived = moveToward(state, e, plan.x, plan.y, def.speed * dt, 12, null);
+    if (arrived) e.plan = { kind: "guard", x: e.x, y: e.y };
+    return;
+  }
+
+  if (plan.kind === "attack") {
+    const target = getEntity(state, plan.targetId);
+    if (!target || target.hp <= 0) {
+      e.plan = plan.resume || { kind: "guard", x: plan.homeX ?? e.x, y: plan.homeY ?? e.y };
+      return;
+    }
+    if (plan.homeX !== undefined) {
+      const away = Math.hypot(e.x - plan.homeX, e.y - plan.homeY);
+      if (away > (plan.leash || 200)) {
+        e.plan = { kind: "move", x: plan.homeX, y: plan.homeY };
+        return;
+      }
+    }
+    engage(state, e, def, target, dt, events);
+    return;
+  }
+
+  if (plan.kind === "harvest") {
+    updateHarvest(state, e, def, dt, events);
+    return;
+  }
+
+  if (plan.kind === "construct") {
+    updateConstruct(state, e, def, dt, events);
+  }
+}
+
+function shotReach(def, target) {
+  return (def.range || 0) + target.radius;
+}
+
+function engage(state, e, def, target, dt, events) {
+  const dist = Math.hypot(target.x - e.x, target.y - e.y);
+  const reach = shotReach(def, target);
+  const minR = def.minRange || 0;
+  if (minR && dist < minR) {
+    const ang = Math.atan2(e.y - target.y, e.x - target.x);
+    moveToward(state, e, e.x + Math.cos(ang) * 90, e.y + Math.sin(ang) * 90, def.speed * dt, 4, null);
+    return;
+  }
+  if (dist > reach) {
+    const stand = target.radius + e.radius + 1;
+    moveToward(state, e, target.x, target.y, def.speed * dt, Math.min(stand, reach - 2), target.isBuilding ? target.id : null);
+    return;
+  }
+  face(e, target.x, target.y, dt);
+  if (e.cooldown <= 0 && dist >= minR * 0.85) {
+    deal(state, e, def, target, events);
+  }
+}
+
+function fireAtNearest(state, e, def, events) {
+  if (e.cooldown > 0 || !(def.damage > 0)) return;
+  const target = nearestEnemy(state, e, shotReach(def, { radius: 0 }));
+  if (!target) return;
+  const dist = Math.hypot(target.x - e.x, target.y - e.y);
+  if (dist > shotReach(def, target)) return;
+  face(e, target.x, target.y, 1);
+  deal(state, e, def, target, events);
+}
+
+function deal(state, attacker, def, target, events) {
+  if (target.hp <= 0) return;
+  const tdef = entityDef(state, target);
+  const bonus = def.bonus?.[tdef.armor] ?? 1;
+  const taken = ARMOR_TAKEN[tdef.armor] ?? 1;
+  const amount = def.damage * bonus * taken;
+  target.hp -= amount;
+  attacker.cooldown = def.cooldown || 0.8;
+  events.push({
+    type: "shot",
+    x1: attacker.x,
+    y1: attacker.y,
+    x2: target.x,
+    y2: target.y,
+    owner: attacker.owner,
+    heavy: def.armor === "heavy" || !!def.turret,
+    targetId: target.id,
+    targetKind: target.kind,
+    targetOwner: target.owner,
+  });
+  if (target.hp <= 0) kill(state, target, attacker, events);
+}
+
+function kill(state, victim, killer, events) {
+  victim.hp = 0;
+  if (victim.isBuilding) {
+    const def = entityDef(state, victim);
+    let refund = 0;
+    if (!victim.constructed) refund += Math.round(def.cost * 0.5);
+    if (victim.queue?.length) {
+      for (const job of victim.queue) refund += job.cost;
+      victim.queue = [];
+    }
+    if (refund > 0) state.players[victim.owner].ash += refund;
+  }
+  if (killer && killer.owner !== victim.owner) state.players[killer.owner].kills += 1;
+  events.push({
+    type: "death",
+    x: victim.x,
+    y: victim.y,
+    owner: victim.owner,
+    kind: victim.kind,
+    building: victim.isBuilding,
+    killer: killer ? killer.owner : null,
+  });
+}
+
+function updateHarvest(state, e, def, dt, events) {
+  const plan = e.plan;
+  if (e.carry > 0 && plan.phase !== "return") plan.phase = "return";
+  if (plan.phase === "return") {
+    const drop = nearestDropoff(state, e.owner, e.x, e.y);
+    if (!drop) {
+      e.plan = { kind: "guard", x: e.x, y: e.y };
+      return;
+    }
+    const arrived = moveToward(state, e, drop.x, drop.y, def.speed * dt, drop.radius + e.radius + 6, drop.id);
+    if (arrived) {
+      state.players[e.owner].ash += e.carry;
+      state.players[e.owner].gathered += e.carry;
+      events.push({ type: "bank", owner: e.owner, amount: e.carry, x: drop.x, y: drop.y });
+      e.carry = 0;
+      const next = nearestOre(state, e.x, e.y);
+      if (!next) e.plan = { kind: "guard", x: e.x, y: e.y };
+      else e.plan = { kind: "harvest", nodeId: next.id, phase: "toNode", gather: 0 };
+    }
+    return;
+  }
+
+  let node = state.nodes.find((n) => n.id === plan.nodeId && n.amount > 0);
+  if (!node) node = nearestOre(state, e.x, e.y);
+  if (!node) {
+    e.plan = { kind: "guard", x: e.x, y: e.y };
+    return;
+  }
+  plan.nodeId = node.id;
+  if (plan.phase !== "gather") {
+    const arrived = moveToward(state, e, node.x, node.y, def.speed * dt, 8, null);
+    if (arrived) {
+      plan.phase = "gather";
+      plan.gather = 0;
+    }
+    return;
+  }
+  if (Math.hypot(node.x - e.x, node.y - e.y) > node.radius + e.radius) {
+    plan.phase = "toNode";
+    return;
+  }
+  face(e, node.x, node.y, dt);
+  plan.gather += dt;
+  if (plan.gather < (def.gather || 2)) return;
+  const take = Math.min(def.carry || 40, node.amount);
+  node.amount -= take;
+  e.carry = take;
+  plan.phase = "return";
+  plan.gather = 0;
+  if (take > 0) events.push({ type: "scoop", owner: e.owner, x: node.x, y: node.y, amount: take });
+}
+
+function updateConstruct(state, e, def, dt, events) {
+  const b = getEntity(state, e.plan.buildingId);
+  if (!b || b.hp <= 0 || !b.isBuilding) {
+    const node = nearestOre(state, e.x, e.y);
+    e.plan = node
+      ? { kind: "harvest", nodeId: node.id, phase: e.carry > 0 ? "return" : "toNode", gather: 0 }
+      : { kind: "guard", x: e.x, y: e.y };
+    return;
+  }
+  if (b.constructed) {
+    const node = nearestOre(state, e.x, e.y);
+    e.plan = node
+      ? { kind: "harvest", nodeId: node.id, phase: e.carry > 0 ? "return" : "toNode", gather: 0 }
+      : { kind: "guard", x: e.x, y: e.y };
+    return;
+  }
+  const bdef = entityDef(state, b);
+  const arrived = moveToward(state, e, b.x, b.y, def.speed * dt, b.radius + e.radius + 4, b.id);
+  if (!arrived) return;
+  face(e, b.x, b.y, dt);
+  b.progress += dt / bdef.time;
+  b.hp = Math.min(b.maxHp, b.maxHp * (0.2 + 0.8 * b.progress));
+  if (b.progress >= 1) {
+    b.progress = 1;
+    b.constructed = true;
+    b.hp = b.maxHp;
+    events.push({ type: "built", owner: b.owner, kind: b.kind, x: b.x, y: b.y });
+  }
+}
+
+function nearestEnemy(state, e, range) {
+  let best = null;
+  let bestD = Infinity;
+  for (const o of state.entities) {
+    if (o.owner === e.owner || o.hp <= 0) continue;
+    if (o.isBuilding && !o.constructed && o.progress <= 0) continue;
+    const d = Math.hypot(o.x - e.x, o.y - e.y);
+    if (d <= range + o.radius && d < bestD) {
+      if (!o.isBuilding && !cellVisible(state, e.owner, o.x, o.y) && d > (entityDef(state, e).sight || range)) {
+        continue;
+      }
+      best = o;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+function nearestOre(state, x, y) {
+  let best = null;
+  let bd = Infinity;
+  for (const n of state.nodes) {
+    if (n.amount <= 0) continue;
+    const d = Math.hypot(n.x - x, n.y - y);
+    if (d < bd) {
+      bd = d;
+      best = n;
+    }
+  }
+  return best;
+}
+
+function nearestDropoff(state, owner, x, y) {
+  let best = null;
+  let bd = Infinity;
+  for (const e of state.entities) {
+    if (e.owner !== owner || e.hp <= 0 || !e.isBuilding || !e.constructed) continue;
+    if (!entityDef(state, e).dropoff) continue;
+    const d = Math.hypot(e.x - x, e.y - y);
+    if (d < bd) {
+      bd = d;
+      best = e;
+    }
+  }
+  return best;
+}
+
+function moveToward(state, e, tx, ty, step, stopDist, ignoreId) {
+  let dx = tx - e.x;
+  let dy = ty - e.y;
+  let dist = Math.hypot(dx, dy);
+  if (dist <= stopDist + 1.25) {
+    face(e, tx, ty, 0.05);
+    return true;
+  }
+  let vx = dx / dist;
+  let vy = dy / dist;
+  const look = 26;
+  if (circleBlocked(state, e.x + vx * look, e.y + vy * look, e.radius * 0.75, ignoreId)) {
+    const base = Math.atan2(vy, vx);
+    let steered = false;
+    for (const off of [0.8, -0.8, 1.4, -1.4, 2.2, -2.2, 3]) {
+      const ax = Math.cos(base + off);
+      const ay = Math.sin(base + off);
+      if (!circleBlocked(state, e.x + ax * look, e.y + ay * look, e.radius * 0.7, ignoreId)) {
+        vx = ax;
+        vy = ay;
+        steered = true;
+        break;
+      }
+    }
+    if (!steered) {
+      vx *= 0.35;
+      vy *= 0.35;
+    }
+  }
+  const travel = Math.min(step, dist - stopDist);
+  e.x += vx * travel;
+  e.y += vy * travel;
+  e.x = clamp(e.x, e.radius, MAP_W - e.radius);
+  e.y = clamp(e.y, e.radius, MAP_H - e.radius);
+  face(e, e.x + vx, e.y + vy, 0.16);
+  return Math.hypot(tx - e.x, ty - e.y) <= stopDist + 1.25;
+}
+
+function face(e, x, y, dt) {
+  const target = Math.atan2(y - e.y, x - e.x);
+  let d = target - e.angle;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  const max = Math.max(0.05, dt) * 8;
+  if (Math.abs(d) < max) e.angle = target;
+  else e.angle += Math.sign(d) * max;
+}
+
+function circleBlocked(state, x, y, r, ignoreId) {
+  if (x < r || y < r || x > MAP_W - r || y > MAP_H - r) return true;
+  for (const o of state.obstacles) {
+    if (Math.hypot(o.x - x, o.y - y) < o.r + r) return true;
+  }
+  for (const b of state.entities) {
+    if (!b.isBuilding || b.hp <= 0 || b.id === ignoreId) continue;
+    if (Math.hypot(b.x - x, b.y - y) < b.radius + r) return true;
+  }
+  return false;
+}
+
+function separateUnits(state) {
+  const units = state.entities.filter((e) => !e.isBuilding && e.hp > 0);
+  for (let i = 0; i < units.length; i++) {
+    for (let j = i + 1; j < units.length; j++) {
+      const a = units[i];
+      const b = units[j];
+      let dx = b.x - a.x;
+      let dy = b.y - a.y;
+      const min = a.radius + b.radius - 1;
+      const d2 = dx * dx + dy * dy;
+      if (d2 === 0) {
+        a.x -= 0.6;
+        b.x += 0.6;
+        continue;
+      }
+      if (d2 >= min * min) continue;
+      const d = Math.sqrt(d2);
+      const push = (min - d) / 2;
+      dx /= d;
+      dy /= d;
+      a.x -= dx * push;
+      a.y -= dy * push;
+      b.x += dx * push;
+      b.y += dy * push;
+    }
+  }
+  for (const u of units) {
+    for (const o of state.obstacles) pushOut(u, o.x, o.y, o.r);
+    for (const b of state.entities) {
+      if (!b.isBuilding || b.hp <= 0) continue;
+      if (u.plan?.kind === "construct" && u.plan.buildingId === b.id) continue;
+      if (u.plan?.kind === "harvest" && u.plan.phase === "return") {
+        const drop = nearestDropoff(state, u.owner, u.x, u.y);
+        if (drop && drop.id === b.id) continue;
+      }
+      pushOut(u, b.x, b.y, b.radius);
+    }
+    u.x = clamp(u.x, u.radius, MAP_W - u.radius);
+    u.y = clamp(u.y, u.radius, MAP_H - u.radius);
+  }
+}
+
+function pushOut(u, x, y, r) {
+  let dx = u.x - x;
+  let dy = u.y - y;
+  const min = r + u.radius;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= min * min) return;
+  if (d2 < 0.0001) {
+    u.x += min;
+    return;
+  }
+  const d = Math.sqrt(d2);
+  dx /= d;
+  dy /= d;
+  u.x = x + dx * min;
+  u.y = y + dy * min;
+}
+
+function freeSpot(state, x, y, radius, ignoreId) {
+  if (!circleBlocked(state, x, y, radius, ignoreId)) return { x, y };
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    const nx = x + Math.cos(a) * (radius + 18);
+    const ny = y + Math.sin(a) * (radius + 18);
+    if (!circleBlocked(state, nx, ny, radius, ignoreId)) return { x: nx, y: ny };
+  }
+  return { x, y };
+}
+
+function checkWinner(state) {
+  const a = state.entities.some((e) => e.owner === 0 && e.kind === "ocak" && e.hp > 0);
+  const b = state.entities.some((e) => e.owner === 1 && e.kind === "ocak" && e.hp > 0);
+  if (!a && !b) state.winner = "draw";
+  else if (!a) state.winner = 1;
+  else if (!b) state.winner = 0;
+}
+
+function cellIndex(state, x, y) {
+  const cx = clamp(Math.floor(x / CELL), 0, state.cols - 1);
+  const cy = clamp(Math.floor(y / CELL), 0, state.rows - 1);
+  return cy * state.cols + cx;
+}
+
+function cellVisible(state, owner, x, y) {
+  return state.visible[owner][cellIndex(state, x, y)] === 1;
+}
+
+function cellExplored(state, owner, x, y) {
+  return state.explored[owner][cellIndex(state, x, y)] === 1;
+}
+
+function canSeeEntity(state, viewer, entity) {
+  if (entity.owner === viewer) return true;
+  if (entity.isBuilding && cellExplored(state, viewer, entity.x, entity.y)) return true;
+  return cellVisible(state, viewer, entity.x, entity.y);
+}
+
+function revealDisk(state, owner, x, y, r) {
+  const r2 = r * r;
+  const x0 = clamp(Math.floor((x - r) / CELL), 0, state.cols - 1);
+  const x1 = clamp(Math.floor((x + r) / CELL), 0, state.cols - 1);
+  const y0 = clamp(Math.floor((y - r) / CELL), 0, state.rows - 1);
+  const y1 = clamp(Math.floor((y + r) / CELL), 0, state.rows - 1);
+  for (let cy = y0; cy <= y1; cy++) {
+    for (let cx = x0; cx <= x1; cx++) {
+      const px = cx * CELL + CELL / 2;
+      const py = cy * CELL + CELL / 2;
+      const dx = px - x;
+      const dy = py - y;
+      if (dx * dx + dy * dy <= r2) state.explored[owner][cy * state.cols + cx] = 1;
+    }
+  }
+}
+
+function recomputeFog(state) {
+  state.visible[0].fill(0);
+  state.visible[1].fill(0);
+  for (const e of state.entities) {
+    if (e.hp <= 0) continue;
+    const def = entityDef(state, e);
+    let r = def.sight || 0;
+    if (e.isBuilding && !e.constructed) r = 100;
+    if (r <= 0) continue;
+    const r2 = r * r;
+    const x0 = clamp(Math.floor((e.x - r) / CELL), 0, state.cols - 1);
+    const x1 = clamp(Math.floor((e.x + r) / CELL), 0, state.cols - 1);
+    const y0 = clamp(Math.floor((e.y - r) / CELL), 0, state.rows - 1);
+    const y1 = clamp(Math.floor((e.y + r) / CELL), 0, state.rows - 1);
+    const vis = state.visible[e.owner];
+    const exp = state.explored[e.owner];
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const px = cx * CELL + CELL / 2;
+        const py = cy * CELL + CELL / 2;
+        const dx = px - e.x;
+        const dy = py - e.y;
+        if (dx * dx + dy * dy > r2) continue;
+        const i = cy * state.cols + cx;
+        vis[i] = 1;
+        exp[i] = 1;
+      }
+    }
+  }
+}
+
+function pickEntity(state, x, y, viewer) {
+  let best = null;
+  let score = Infinity;
+  for (const e of state.entities) {
+    if (e.hp <= 0) continue;
+    if (viewer !== undefined && !canSeeEntity(state, viewer, e)) continue;
+    const d = Math.hypot(e.x - x, e.y - y);
+    if (d > e.radius + 12) continue;
+    const s = d - (e.isBuilding ? 0 : 14);
+    if (s < score) {
+      score = s;
+      best = e;
+    }
+  }
+  return best;
+}
+
+function clamp(v, a, b) {
+  return Math.max(a, Math.min(b, v));
+}
+
+/** Rakip lonca. Ekonomi kurar, ikmal tıkanırsa ambar açar, ordu eşiğinde saldırır. */
+
+function createAiMemory() {
+  return { acc: 0, attackLock: 0 };
+}
+
+function aiAct(state, owner, dt, mem) {
+  if (state.winner !== null) return;
+  mem.acc += dt;
+  mem.attackLock = Math.max(0, mem.attackLock - dt);
+  if (mem.acc < 0.55) return;
+  mem.acc = 0;
+
+  const factionId = state.players[owner].faction;
+  const mine = state.entities.filter((e) => e.owner === owner && e.hp > 0);
+  const workers = mine.filter((e) => !e.isBuilding && unitDef(factionId, e.kind)?.worker);
+  const fighters = mine.filter((e) => !e.isBuilding && (unitDef(factionId, e.kind)?.damage || 0) > 0);
+  const buildings = mine.filter((e) => e.isBuilding);
+
+  for (const w of workers) {
+    if (!w.plan || w.plan.kind === "guard") command(state, { by: owner, type: "harvest", ids: [w.id] });
+  }
+  resumeConstruction(state, owner, workers, buildings);
+
+  const underAttack = threatPoint(state, owner, buildings);
+  if (underAttack && fighters.length) {
+    const ready = fighters.filter((f) => f.plan?.kind !== "attack");
+    if (ready.length) {
+      command(state, { by: owner, type: "attackMove", ids: ready.map((f) => f.id), x: underAttack.x, y: underAttack.y });
+    }
+  }
+
+  const ash = state.players[owner].ash;
+  const supply = supplyInfo(state, owner);
+  const queuedWorkers = buildings.reduce(
+    (n, b) => n + (b.queue?.filter((job) => job.kind === "tasiyici").length || 0),
+    0,
+  );
+  const workerCount = workers.length + queuedWorkers;
+  const hq = buildings.find((b) => b.kind === "ocak" && b.constructed);
+
+  if (hq && workerCount < 3 && ash >= costOfUnit(factionId, "tasiyici") && supply.used + 1 <= supply.cap) {
+    if ((hq.queue?.length || 0) < 2) {
+      command(state, { by: owner, type: "train", buildingId: hq.id, unitKind: "tasiyici" });
+    }
+  }
+
+  ensureBuilding(state, owner, factionId, buildings, workers, "barinak");
+
+  const barracks = buildings.find((b) => b.kind === "barinak" && b.constructed);
+  const infKind = barracks ? buildingDef(factionId, "barinak").trains[0] : null;
+  const infCount = infKind ? mine.filter((e) => !e.isBuilding && e.kind === infKind).length : 0;
+  if (barracks && infCount < 3) tryTrain(state, owner, barracks, infKind);
+
+  if (barracks) ensureBuilding(state, owner, factionId, buildings, workers, "atolye");
+
+  if (supply.cap > 0 && supply.used + 2 > supply.cap && countKind(buildings, "depo") < 3) {
+    ensureBuilding(state, owner, factionId, buildings, workers, "depo");
+  }
+
+  const shop = buildings.find((b) => b.kind === "atolye" && b.constructed);
+  if (shop) {
+    const options = buildingDef(factionId, "atolye").trains
+      .map((kind) => ({
+        kind,
+        n: mine.filter((e) => e.kind === kind && !e.isBuilding).length,
+        cost: unitDef(factionId, kind).cost,
+        siege: (unitDef(factionId, kind).bonus?.building || 1) > 1.4,
+      }))
+      .sort((a, b) => Number(b.siege) - Number(a.siege) || a.n - b.n || a.cost - b.cost);
+    for (const opt of options) {
+      if (opt.n >= (opt.siege ? 1 : 2)) continue;
+      if (tryTrain(state, owner, shop, opt.kind)) break;
+    }
+  }
+
+  const vehicles = mine.filter((e) => !e.isBuilding && (unitDef(factionId, e.kind)?.supply || 1) > 1).length;
+  if (barracks && vehicles >= 1 && infCount < 7) tryTrain(state, owner, barracks, infKind);
+
+  const barracksDone = buildings.some((b) => b.kind === "barinak" && b.constructed);
+  if (barracksDone && (state.time > 70 || underAttack)) {
+    ensureBuilding(state, owner, factionId, buildings, workers, "kule");
+  }
+
+  if (!underAttack && state.time > 62 && mem.attackLock <= 0 && fighters.length >= 4) {
+    const enemyHq = state.entities.find((e) => e.owner !== owner && e.kind === "ocak" && e.hp > 0);
+    if (enemyHq) {
+      const idle = fighters.filter((f) => !f.plan || f.plan.kind === "guard" || f.plan.kind === "move");
+      const pack = idle.length >= 4 ? idle : fighters;
+      const jx = (state.rng() - 0.5) * 90;
+      const jy = (state.rng() - 0.5) * 90;
+      command(state, {
+        by: owner,
+        type: "attackMove",
+        ids: pack.map((f) => f.id),
+        x: enemyHq.x + jx,
+        y: enemyHq.y + jy,
+      });
+      mem.attackLock = 20;
+    }
+  }
+}
+
+function costOfUnit(factionId, kind) {
+  return unitDef(factionId, kind).cost;
+}
+
+function freeWorker(workers) {
+  return workers.find((w) => w.plan?.kind !== "construct") || null;
+}
+
+function resumeConstruction(state, owner, workers, buildings) {
+  const pending = buildings
+    .filter((b) => !b.constructed)
+    .sort((a, b) => b.progress - a.progress);
+  for (const building of pending) {
+    const busy = workers.some((w) => w.plan?.kind === "construct" && w.plan.buildingId === building.id);
+    if (busy) continue;
+    const worker = freeWorker(workers);
+    if (!worker) return;
+    command(state, { by: owner, type: "construct", buildingId: building.id, workerIds: [worker.id] });
+  }
+}
+
+function countKind(buildings, kind) {
+  return buildings.filter((b) => b.kind === kind).length;
+}
+
+function ensureBuilding(state, owner, factionId, buildings, workers, kind) {
+  if (countKind(buildings, kind) > 0) return false;
+  const def = buildingDef(factionId, kind);
+  if (state.players[owner].ash < def.cost) return false;
+  const worker = freeWorker(workers);
+  if (!worker) return false;
+  const anchor = buildings.find((b) => b.kind === "ocak") || buildings[0];
+  if (!anchor) return false;
+  const spot = findSpot(state, owner, kind, anchor);
+  if (!spot) return false;
+  return command(state, { by: owner, type: "place", workerId: worker.id, kind, x: spot.x, y: spot.y }).ok;
+}
+
+function findSpot(state, owner, kind, anchor) {
+  const enemy = state.entities.find((e) => e.owner !== owner && e.kind === "ocak");
+  const bias = enemy ? Math.atan2(enemy.y - anchor.y, enemy.x - anchor.x) : 0;
+  for (const dist of [130, 170, 210, 250, 300]) {
+    for (let i = 0; i < 18; i++) {
+      const ang = bias + (i / 18) * Math.PI * 2;
+      const x = anchor.x + Math.cos(ang) * dist;
+      const y = anchor.y + Math.sin(ang) * dist * 0.86;
+      if (commandWouldFit(state, owner, kind, x, y)) return { x, y };
+    }
+  }
+  return null;
+}
+
+function commandWouldFit(state, owner, kind, x, y) {
+  return canPlace(state, owner, kind, x, y);
+}
+
+function tryTrain(state, owner, building, unitKind) {
+  const result = command(state, { by: owner, type: "train", buildingId: building.id, unitKind });
+  return result.ok;
+}
+
+function threatPoint(state, owner, buildings) {
+  if (!buildings.length) return null;
+  let sx = 0;
+  let sy = 0;
+  let n = 0;
+  for (const foe of state.entities) {
+    if (foe.owner === owner || foe.hp <= 0 || foe.isBuilding) continue;
+    for (const b of buildings) {
+      if (Math.hypot(foe.x - b.x, foe.y - b.y) < 460) {
+        sx += foe.x;
+        sy += foe.y;
+        n += 1;
+        break;
+      }
+    }
+  }
+  if (!n) return null;
+  return { x: sx / n, y: sy / n };
+}
+
+/** Kısa sentez sesler. Dosya yok, ilk dokunuşta açılır. */
+
+let audioCtx = null;
+let lastShot = 0;
+
+function unlockAudio() {
+  const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!AC) return;
+  if (!audioCtx) audioCtx = new AC();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+}
+
+function tone(freq, dur, type, gain, delay = 0) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime + delay;
+  const osc = audioCtx.createOscillator();
+  const amp = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  amp.gain.setValueAtTime(gain, t);
+  amp.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.connect(amp);
+  amp.connect(audioCtx.destination);
+  osc.start(t);
+  osc.stop(t + dur + 0.02);
+}
+
+function playEvent(event, nowMs) {
+  if (!audioCtx) return;
+  if (event.type === "shot") {
+    if (nowMs - lastShot < 70) return;
+    lastShot = nowMs;
+    tone(180 + (event.heavy ? 0 : 90), 0.07, "square", 0.03);
+    return;
+  }
+  if (event.type === "bank") {
+    tone(520, 0.06, "sine", 0.04);
+    tone(760, 0.08, "sine", 0.03, 0.05);
+    return;
+  }
+  if (event.type === "built") {
+    tone(240, 0.12, "triangle", 0.05);
+    tone(360, 0.14, "triangle", 0.04, 0.08);
+    return;
+  }
+  if (event.type === "death") {
+    tone(event.building ? 90 : 140, 0.18, "sawtooth", 0.04);
+    return;
+  }
+  if (event.type === "place") {
+    tone(300, 0.08, "triangle", 0.04);
+  }
+}
+
+/** Dünya çizimi. Arazi bir kez üretilir, sis her karede küçük bir ızgaradan büyütülür. */
+
+function drawWorld(ctx, state, view) {
+  ensureTerrain(view, state);
+  ctx.setTransform(view.zoom, 0, 0, view.zoom, -view.camX * view.zoom, -view.camY * view.zoom);
+  ctx.drawImage(view.terrain, 0, 0, MAP_W, MAP_H);
+  drawDecor(ctx, state);
+  drawNodes(ctx, state);
+  drawEntities(ctx, state, view);
+  drawFog(ctx, state, view);
+  drawBarsAndRings(ctx, state, view);
+  drawGhost(ctx, state, view);
+  drawFx(ctx, view);
+  if (view.box) drawBox(ctx, view.box);
+}
+
+function ensureTerrain(view, state) {
+  if (view.terrain && view.terrainSeed === state.seed) return;
+  const scale = 0.5;
+  const c = document.createElement("canvas");
+  c.width = Math.floor(MAP_W * scale);
+  c.height = Math.floor(MAP_H * scale);
+  const g = c.getContext("2d");
+  g.scale(scale, scale);
+  g.fillStyle = "#e7d3ae";
+  g.fillRect(0, 0, MAP_W, MAP_H);
+
+  const rng = mulberry(state.seed + 17);
+  for (let i = 0; i < 28; i++) {
+    const x = rng() * MAP_W;
+    const y = rng() * MAP_H;
+    const r = 40 + rng() * 120;
+    g.fillStyle = rng() > 0.5 ? "rgba(255,248,230,0.28)" : "rgba(176,142,96,0.18)";
+    g.beginPath();
+    g.ellipse(x, y, r, r * (0.55 + rng() * 0.3), rng() * 3, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  g.strokeStyle = "rgba(120,86,48,0.18)";
+  g.lineWidth = 2;
+  for (let i = 0; i < 18; i++) {
+    const x = rng() * MAP_W;
+    const y = rng() * MAP_H;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + 30 + rng() * 50, y + (rng() - 0.5) * 20);
+    g.stroke();
+  }
+
+  for (const rock of state.obstacles) drawRock(g, rock.x, rock.y, rock.r);
+
+  const grd = g.createLinearGradient(0, 0, 0, MAP_H);
+  grd.addColorStop(0, "rgba(90,60,30,0.05)");
+  grd.addColorStop(0.5, "rgba(255,255,255,0)");
+  grd.addColorStop(1, "rgba(70,48,24,0.08)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, MAP_W, MAP_H);
+
+  view.terrain = c;
+  view.terrainSeed = state.seed;
+}
+
+function drawRock(g, x, y, r) {
+  g.fillStyle = "rgba(70,52,36,0.25)";
+  g.beginPath();
+  g.ellipse(x + 4, y + r * 0.35, r * 0.9, r * 0.35, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = "#b7a48b";
+  g.beginPath();
+  g.moveTo(x - r, y + r * 0.15);
+  g.lineTo(x - r * 0.2, y - r * 0.85);
+  g.lineTo(x + r * 0.7, y - r * 0.2);
+  g.lineTo(x + r * 0.45, y + r * 0.35);
+  g.closePath();
+  g.fill();
+  g.fillStyle = "#8d7b66";
+  g.beginPath();
+  g.moveTo(x - r * 0.15, y + r * 0.2);
+  g.lineTo(x + r * 0.15, y - r * 0.45);
+  g.lineTo(x + r * 0.85, y + r * 0.05);
+  g.closePath();
+  g.fill();
+}
+
+function drawDecor(ctx, state) {
+  for (const d of state.decor) {
+    if (d.kind === "bush") {
+      ctx.fillStyle = "rgba(90,110,62,0.55)";
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.r * 0.45, 0, Math.PI * 2);
+      ctx.arc(d.x + d.r * 0.35, d.y + 2, d.r * 0.32, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawNodes(ctx, state) {
+  for (const n of state.nodes) {
+    const left = n.amount / n.max;
+    ctx.fillStyle = left > 0 ? "#1f8f86" : "#8a8174";
+    ctx.beginPath();
+    ctx.moveTo(n.x, n.y - 16);
+    ctx.lineTo(n.x + 12, n.y - 2);
+    ctx.lineTo(n.x + 6, n.y + 14);
+    ctx.lineTo(n.x - 8, n.y + 12);
+    ctx.lineTo(n.x - 14, n.y - 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = left > 0 ? "#b7fff4" : "#d9d3c8";
+    ctx.beginPath();
+    ctx.moveTo(n.x, n.y - 8);
+    ctx.lineTo(n.x + 5, n.y);
+    ctx.lineTo(n.x, n.y + 7);
+    ctx.lineTo(n.x - 5, n.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function drawEntities(ctx, state, view) {
+  const list = [...state.entities].sort((a, b) => a.y - b.y);
+  for (const e of list) {
+    if (e.hp <= 0) continue;
+    if (e.owner !== 0 && !canSeeEntity(state, 0, e)) continue;
+    const colors = faction(state.players[e.owner].faction).colors;
+    const def = entityDef(state, e);
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.globalAlpha = e.isBuilding && !e.constructed ? 0.85 : 1;
+    if (e.isBuilding) drawBuilding(ctx, e, def, colors);
+    else drawUnit(ctx, e, def, colors);
+    ctx.restore();
+  }
+}
+
+function drawBuilding(ctx, e, def, colors) {
+  ctx.fillStyle = "rgba(40,28,16,0.18)";
+  ctx.beginPath();
+  ctx.ellipse(3, def.radius * 0.45, def.radius * 0.95, def.radius * 0.38, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const shape = def.shape;
+  if (shape === "hq") {
+    roundPoly(ctx, 0, 0, def.radius, 8, colors.dark);
+    roundPoly(ctx, 0, -4, def.radius * 0.62, 6, colors.main);
+    ctx.fillStyle = colors.cloth;
+    ctx.fillRect(-6, -def.radius - 8, 12, 16);
+  } else if (shape === "barracks") {
+    ctx.fillStyle = colors.dark;
+    ctx.fillRect(-def.radius, -def.radius * 0.7, def.radius * 2, def.radius * 1.35);
+    ctx.fillStyle = colors.main;
+    ctx.beginPath();
+    ctx.moveTo(-def.radius - 4, -def.radius * 0.7);
+    ctx.lineTo(0, -def.radius - 8);
+    ctx.lineTo(def.radius + 4, -def.radius * 0.7);
+    ctx.closePath();
+    ctx.fill();
+  } else if (shape === "shop") {
+    ctx.fillStyle = colors.dark;
+    ctx.fillRect(-def.radius, -def.radius * 0.55, def.radius * 2, def.radius * 1.2);
+    ctx.fillStyle = colors.cloth;
+    ctx.fillRect(-def.radius * 0.7, -def.radius * 0.2, def.radius * 0.5, def.radius * 0.7);
+    ctx.fillStyle = colors.main;
+    ctx.fillRect(def.radius * 0.1, -def.radius - 2, 8, def.radius * 0.7);
+  } else if (shape === "tower") {
+    ctx.fillStyle = colors.dark;
+    ctx.beginPath();
+    ctx.arc(0, 0, def.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = colors.cloth;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, 4);
+    ctx.lineTo(Math.cos(e.angle) * (def.radius + 10), Math.sin(e.angle) * (def.radius + 10));
+    ctx.stroke();
+    ctx.fillStyle = colors.main;
+    ctx.beginPath();
+    ctx.arc(0, 0, 6, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (shape === "depot") {
+    ctx.fillStyle = colors.main;
+    ctx.fillRect(-def.radius, -def.radius * 0.45, def.radius * 2, def.radius);
+    ctx.fillStyle = colors.dark;
+    ctx.fillRect(-def.radius, -def.radius * 0.45, def.radius * 2, 8);
+  }
+  if (!e.constructed) {
+    ctx.strokeStyle = colors.cloth;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(-def.radius, -def.radius, def.radius * 2, def.radius * 2);
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(20,14,8,0.7)";
+    ctx.fillRect(-16, -3, 32, 6);
+    ctx.fillStyle = colors.cloth;
+    ctx.fillRect(-16, -3, 32 * Math.max(0, Math.min(1, e.progress)), 6);
+  }
+}
+
+function drawUnit(ctx, e, def, colors) {
+  ctx.rotate(e.angle);
+  ctx.fillStyle = "rgba(40,28,16,0.2)";
+  ctx.beginPath();
+  ctx.ellipse(2, 8, def.radius * 0.8, def.radius * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const shape = def.shape;
+  if (shape === "worker") {
+    ctx.fillStyle = colors.main;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = colors.dark;
+    ctx.fillRect(4, -4, 12, 8);
+    if (e.carry > 0) {
+      ctx.fillStyle = "#1f8f86";
+      ctx.fillRect(8, -8, 6, 6);
+    }
+  } else if (shape === "spear") {
+    ctx.fillStyle = colors.cloth;
+    ctx.fillRect(-4, -5, 10, 10);
+    ctx.strokeStyle = colors.dark;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(2, 0);
+    ctx.lineTo(16, 0);
+    ctx.stroke();
+  } else if (shape === "tank") {
+    ctx.fillStyle = colors.dark;
+    ctx.fillRect(-14, -9, 28, 18);
+    ctx.fillStyle = colors.main;
+    ctx.beginPath();
+    ctx.arc(2, 0, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(6, -2, 14, 4);
+  } else if (shape === "lance") {
+    ctx.fillStyle = colors.dark;
+    ctx.fillRect(-10, -5, 18, 10);
+    ctx.fillStyle = colors.cloth;
+    ctx.fillRect(6, -1.5, 16, 3);
+  } else if (shape === "scout") {
+    ctx.fillStyle = colors.cloth;
+    ctx.beginPath();
+    ctx.moveTo(12, 0);
+    ctx.lineTo(-8, 7);
+    ctx.lineTo(-4, 0);
+    ctx.lineTo(-8, -7);
+    ctx.closePath();
+    ctx.fill();
+  } else if (shape === "buggy") {
+    ctx.fillStyle = colors.ink;
+    ctx.beginPath();
+    ctx.arc(-6, 7, 3.5, 0, Math.PI * 2);
+    ctx.arc(6, 7, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = colors.cloth;
+    ctx.beginPath();
+    ctx.moveTo(12, 0);
+    ctx.lineTo(-8, 6);
+    ctx.lineTo(-8, -6);
+    ctx.closePath();
+    ctx.fill();
+  } else if (shape === "mortar") {
+    ctx.fillStyle = colors.dark;
+    ctx.fillRect(-10, -8, 18, 16);
+    ctx.strokeStyle = colors.cloth;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(16, -8);
+    ctx.stroke();
+  }
+}
+
+function drawFog(ctx, state, view) {
+  const { cols, rows } = state;
+  if (!view.fogCanvas) {
+    view.fogCanvas = document.createElement("canvas");
+    view.fogCanvas.width = cols;
+    view.fogCanvas.height = rows;
+    view.fogImg = new ImageData(cols, rows);
+  }
+  const data = view.fogImg.data;
+  const vis = state.visible[0];
+  const exp = state.explored[0];
+  for (let i = 0; i < cols * rows; i++) {
+    const a = vis[i] ? 0 : exp[i] ? 128 : 228;
+    const o = i * 4;
+    data[o] = 22;
+    data[o + 1] = 16;
+    data[o + 2] = 12;
+    data[o + 3] = a;
+  }
+  const g = view.fogCanvas.getContext("2d");
+  g.putImageData(view.fogImg, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(view.fogCanvas, 0, 0, MAP_W, MAP_H);
+  ctx.imageSmoothingEnabled = true;
+}
+
+function drawBarsAndRings(ctx, state, view) {
+  const selected = view.selected;
+  for (const e of state.entities) {
+    if (e.hp <= 0) continue;
+    const own = e.owner === 0;
+    const seen = own || canSeeEntity(state, 0, e);
+    if (!seen) continue;
+    const visibleNow = own || cellVisible(state, 0, e.x, e.y) || (e.isBuilding && cellExplored(state, 0, e.x, e.y));
+    if (!visibleNow && !own) continue;
+    const isSel = selected.has(e.id);
+    if (isSel) {
+      ctx.strokeStyle = "#fff8ea";
+      ctx.lineWidth = 2 / view.zoom;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius + 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    const showBar = isSel || e.hp < e.maxHp - 0.5;
+    if (!showBar) continue;
+    if (!own && e.isBuilding && !cellVisible(state, 0, e.x, e.y)) continue;
+    const w = Math.max(18, e.radius * 2);
+    const x = e.x - w / 2;
+    const y = e.y - e.radius - 10;
+    ctx.fillStyle = "rgba(20,12,8,0.75)";
+    ctx.fillRect(x, y, w, 4);
+    ctx.fillStyle = e.hp / e.maxHp > 0.35 ? "#d6e27a" : "#e07a4a";
+    ctx.fillRect(x, y, w * Math.max(0, e.hp / e.maxHp), 4);
+  }
+
+  if (view.rally) {
+    ctx.strokeStyle = "#fff8ea";
+    ctx.lineWidth = 1.5 / view.zoom;
+    ctx.beginPath();
+    ctx.moveTo(view.rally.x - 6, view.rally.y);
+    ctx.lineTo(view.rally.x + 6, view.rally.y);
+    ctx.moveTo(view.rally.x, view.rally.y - 8);
+    ctx.lineTo(view.rally.x, view.rally.y + 6);
+    ctx.stroke();
+  }
+}
+
+function drawGhost(ctx, state, view) {
+  const ghost = view.ghost;
+  if (!ghost) return;
+  const def = faction(state.players[0].faction).buildings[ghost.kind];
+  if (!def) return;
+  ctx.save();
+  ctx.translate(ghost.x, ghost.y);
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = ghost.ok ? "#d6e27a" : "#e07a4a";
+  ctx.beginPath();
+  ctx.arc(0, 0, def.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFx(ctx, view) {
+  for (const fx of view.fx) {
+    const t = 1 - fx.life / fx.max;
+    ctx.globalAlpha = Math.max(0, fx.life / fx.max);
+    if (fx.type === "shot") {
+      ctx.strokeStyle = fx.heavy ? "#f2d2bc" : "#fff4d2";
+      ctx.lineWidth = (fx.heavy ? 2.4 : 1.4) / view.zoom;
+      ctx.beginPath();
+      ctx.moveTo(fx.x1, fx.y1);
+      ctx.lineTo(fx.x1 + (fx.x2 - fx.x1) * Math.min(1, t * 1.4), fx.y1 + (fx.y2 - fx.y1) * Math.min(1, t * 1.4));
+      ctx.stroke();
+    } else if (fx.type === "puff") {
+      ctx.fillStyle = fx.color;
+      ctx.beginPath();
+      ctx.arc(fx.x, fx.y, 4 + t * 14, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawBox(ctx, box) {
+  const x = Math.min(box.x1, box.x2);
+  const y = Math.min(box.y1, box.y2);
+  const w = Math.abs(box.x2 - box.x1);
+  const h = Math.abs(box.y2 - box.y1);
+  ctx.fillStyle = "rgba(255,248,234,0.12)";
+  ctx.strokeStyle = "#fff8ea";
+  ctx.lineWidth = 1.5;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeRect(x, y, w, h);
+}
+
+function drawMinimap(canvas, state, view) {
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#cbb892";
+  ctx.fillRect(0, 0, w, h);
+  const sx = w / MAP_W;
+  const sy = h / MAP_H;
+  ctx.fillStyle = "rgba(22,16,12,0.72)";
+  const cellW = (MAP_W / state.cols) * sx;
+  const cellH = (MAP_H / state.rows) * sy;
+  for (let cy = 0; cy < state.rows; cy++) {
+    for (let cx = 0; cx < state.cols; cx++) {
+      const i = cy * state.cols + cx;
+      if (state.visible[0][i]) continue;
+      ctx.globalAlpha = state.explored[0][i] ? 0.45 : 0.85;
+      ctx.fillRect(cx * cellW, cy * cellH, cellW + 0.5, cellH + 0.5);
+    }
+  }
+  ctx.globalAlpha = 1;
+  for (const n of state.nodes) {
+    if (!cellExplored(state, 0, n.x, n.y) || n.amount <= 0) continue;
+    ctx.fillStyle = "#1f8f86";
+    ctx.fillRect(n.x * sx - 2, n.y * sy - 2, 4, 4);
+  }
+  for (const e of state.entities) {
+    if (e.hp <= 0) continue;
+    if (e.owner !== 0 && !canSeeEntity(state, 0, e)) continue;
+    ctx.fillStyle = faction(state.players[e.owner].faction).colors.main;
+    const r = e.isBuilding ? 3 : 1.6;
+    ctx.fillRect(e.x * sx - r / 2, e.y * sy - r / 2, r, r);
+  }
+  const viewW = canvas.clientWidth ? (view.canvasWidth / view.zoom) * sx : 20;
+  const viewH = (view.canvasHeight / view.zoom) * sy;
+  ctx.strokeStyle = "#fff8ea";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(view.camX * sx, view.camY * sy, viewW, viewH);
+}
+
+function roundPoly(ctx, x, y, r, sides, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < sides; i++) {
+    const a = (i / sides) * Math.PI * 2 - Math.PI / 2;
+    const px = x + Math.cos(a) * r;
+    const py = y + Math.sin(a) * r * 0.82;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function mulberry(seed) {
+  let a = seed >>> 0;
+  return function rng() {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Dokunmatik arayüz. Sürükle kaydırır, dokunuş seçer veya emir verir. */
+
+const REASONS = {
+  ash: "Kül yetmiyor",
+  supply: "İkmal dolu",
+  space: "Buraya kurulamaz",
+  worker: "Uygun taşıyıcı yok",
+  queue: "Üretim kuyruğu dolu",
+  building: "Bu bina hazır değil",
+  units: "Önce birlik seç",
+  target: "Hedef yok",
+};
+
+const menu = document.querySelector("#menu");
+const stage = document.querySelector("#stage");
+const canvas = document.querySelector("#view");
+const minimap = document.querySelector("#minimap");
+const bar = document.querySelector("#bar");
+const ashEl = document.querySelector("#ash");
+const supplyEl = document.querySelector("#supply");
+const hintEl = document.querySelector("#hint");
+const inspectEl = document.querySelector("#inspect");
+const toastEl = document.querySelector("#toast");
+const resultEl = document.querySelector("#result");
+const resultTitle = document.querySelector("#result-title");
+const resultBody = document.querySelector("#result-body");
+const pauseBtn = document.querySelector("#pause");
+const portraitBtn = document.querySelector("#play-portrait");
+
+const ctx = canvas.getContext("2d");
+const view = {
+  camX: 0,
+  camY: 0,
+  zoom: 1,
+  canvasWidth: 1,
+  canvasHeight: 1,
+  selected: new Set(),
+  fx: [],
+  ghost: null,
+  box: null,
+  rally: null,
+  terrain: null,
+  terrainSeed: null,
+};
+
+let match = null;
+let aiMem = null;
+let playerFaction = "tuz";
+let paused = false;
+let tool = null;
+let pointer = null;
+let hover = null;
+let hudSig = "";
+let toastTimer = 0;
+let last = 0;
+let running = false;
+
+document.querySelectorAll(".faction").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    playerFaction = btn.dataset.faction;
+    document.querySelectorAll(".faction").forEach((el) => el.classList.toggle("selected", el === btn));
+    unlockAudio();
+  });
+});
+
+document.querySelector("#start").addEventListener("click", () => {
+  unlockAudio();
+  startMatch(playerFaction);
+});
+
+document.querySelector("#again").addEventListener("click", () => {
+  unlockAudio();
+  startMatch(playerFaction);
+});
+
+document.querySelector("#back-menu").addEventListener("click", () => {
+  running = false;
+  match = null;
+  resultEl.classList.add("hidden");
+  stage.classList.add("hidden");
+  menu.classList.remove("hidden");
+});
+
+pauseBtn.addEventListener("click", () => {
+  paused = !paused;
+  pauseBtn.textContent = paused ? "Sürdür" : "Duraklat";
+  pauseBtn.setAttribute("aria-pressed", paused ? "true" : "false");
+});
+
+portraitBtn.addEventListener("click", () => {
+  document.body.classList.add("allow-portrait");
+});
+
+window.addEventListener("resize", () => {
+  if (match) resize();
+});
+
+window.addEventListener("keydown", (ev) => {
+  if (!match) return;
+  if (ev.key === "Escape") {
+    tool = null;
+    view.selected.clear();
+    refreshHud(true);
+  } else if (ev.key === " ") {
+    ev.preventDefault();
+    pauseBtn.click();
+  } else if (ev.key === "h" || ev.key === "H") focusHome();
+  else if (ev.key === "a" || ev.key === "A") armAttack();
+  else if (ev.key === "s" || ev.key === "S") issueStop();
+  else if (ev.key === "ArrowLeft") view.camX -= 40;
+  else if (ev.key === "ArrowRight") view.camX += 40;
+  else if (ev.key === "ArrowUp") view.camY -= 40;
+  else if (ev.key === "ArrowDown") view.camY += 40;
+  clampCam();
+});
+
+canvas.addEventListener("pointerdown", onPointerDown);
+canvas.addEventListener("pointermove", onPointerMove);
+canvas.addEventListener("pointerup", onPointerUp);
+canvas.addEventListener("pointercancel", onPointerUp);
+canvas.addEventListener("contextmenu", (ev) => ev.preventDefault());
+
+minimap.addEventListener("pointerdown", onMinimap);
+minimap.addEventListener("pointermove", (ev) => {
+  if (ev.buttons) onMinimap(ev);
+});
+
+function startMatch(chosen) {
+  const enemy = chosen === "tuz" ? "ruzgar" : "tuz";
+  match = createMatch({
+    seed: (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0,
+    playerFaction: chosen,
+    enemyFaction: enemy,
+  });
+  aiMem = createAiMemory();
+  view.selected.clear();
+  view.fx = [];
+  view.terrain = null;
+  tool = null;
+  paused = false;
+  pauseBtn.textContent = "Duraklat";
+  hudSig = "";
+  resultEl.classList.add("hidden");
+  menu.classList.add("hidden");
+  stage.classList.remove("hidden");
+  running = true;
+  requestAnimationFrame(() => {
+    resize();
+    focusHome();
+  });
+  last = performance.now();
+  toast("Taşıyıcılar kül toplar. İşçi seç, bina kur, birliklerle rakip ocağa yürü.");
+  if (!looping) {
+    looping = true;
+    requestAnimationFrame(frame);
+  }
+}
+
+let looping = false;
+
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width < 2 || rect.height < 2) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  const mini = minimap.getBoundingClientRect();
+  minimap.width = Math.max(1, Math.floor(mini.width * dpr));
+  minimap.height = Math.max(1, Math.floor(mini.height * dpr));
+  const desired = rect.width < 900 ? 980 : 1200;
+  view.zoom = canvas.width / desired;
+  view.canvasWidth = canvas.width;
+  view.canvasHeight = canvas.height;
+  clampCam();
+}
+
+function focusHome() {
+  const hq = match.entities.find((e) => e.owner === 0 && e.kind === "ocak");
+  if (!hq) return;
+  const viewW = view.canvasWidth / view.zoom;
+  const viewH = view.canvasHeight / view.zoom;
+  view.camX = hq.x - viewW * 0.38;
+  view.camY = hq.y - viewH * 0.5;
+  clampCam();
+}
+
+function clampCam() {
+  const viewW = view.canvasWidth / view.zoom;
+  const viewH = view.canvasHeight / view.zoom;
+  view.camX = clampTo(view.camX, 0, Math.max(0, MAP_W - viewW));
+  view.camY = clampTo(view.camY, 0, Math.max(0, MAP_H - viewH));
+}
+
+function frame(now) {
+  if (!looping) return;
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (running && match && !paused && match.winner === null) {
+    aiAct(match, 1, dt, aiMem);
+    const events = step(match, dt);
+    for (const ev of events) acceptEvent(ev, now);
+    if (match.winner !== null) showResult();
+  }
+  tickFx(dt);
+  if (match) {
+    pruneSelection();
+    updateGhost();
+    drawWorld(ctx, match, view);
+    drawMinimap(minimap, match, view);
+    updateCounters();
+    refreshHud(false);
+    if (toastTimer > 0) {
+      toastTimer -= dt;
+      if (toastTimer <= 0) toastEl.classList.add("hidden");
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function acceptEvent(ev, now) {
+  playEvent(ev, now);
+  if (ev.type === "shot") {
+    view.fx.push({
+      type: "shot",
+      x1: ev.x1,
+      y1: ev.y1,
+      x2: ev.x2,
+      y2: ev.y2,
+      heavy: ev.heavy,
+      life: 0.12,
+      max: 0.12,
+    });
+    if (ev.targetOwner === 0 && ev.targetKind === "ocak") navigator.vibrate?.(18);
+  } else if (ev.type === "death") {
+    view.fx.push({
+      type: "puff",
+      x: ev.x,
+      y: ev.y,
+      color: ev.building ? "#c46a3a" : "#f0d2bc",
+      life: 0.35,
+      max: 0.35,
+    });
+  } else if (ev.type === "built" && ev.owner === 0) {
+    toast(`${buildingDef(match.players[0].faction, ev.kind).name} hazır`);
+  }
+}
+
+function tickFx(dt) {
+  for (const fx of view.fx) fx.life -= dt;
+  if (view.fx.length > 80) view.fx.splice(0, view.fx.length - 80);
+  view.fx = view.fx.filter((fx) => fx.life > 0);
+}
+
+function onPointerDown(ev) {
+  if (!match) return;
+  unlockAudio();
+  canvas.setPointerCapture(ev.pointerId);
+  const world = worldFromEvent(ev);
+  pointer = {
+    id: ev.pointerId,
+    x: ev.clientX,
+    y: ev.clientY,
+    ox: ev.clientX,
+    oy: ev.clientY,
+    wx: world.x,
+    wy: world.y,
+    moved: false,
+  };
+  hover = world;
+}
+
+function onPointerMove(ev) {
+  if (!match || !pointer || ev.pointerId !== pointer.id) return;
+  const world = worldFromEvent(ev);
+  hover = world;
+  const dx = ev.clientX - pointer.ox;
+  const dy = ev.clientY - pointer.oy;
+  if (!pointer.moved && Math.hypot(dx, dy) > 10) pointer.moved = true;
+  if (tool === "box") {
+    if (pointer.moved) view.box = { x1: pointer.wx, y1: pointer.wy, x2: world.x, y2: world.y };
+    return;
+  }
+  if (pointer.moved) {
+    const cssPerWorld = canvas.getBoundingClientRect().width / (view.canvasWidth / view.zoom);
+    view.camX -= (ev.clientX - pointer.x) / cssPerWorld;
+    view.camY -= (ev.clientY - pointer.y) / cssPerWorld;
+    clampCam();
+  }
+  pointer.x = ev.clientX;
+  pointer.y = ev.clientY;
+}
+
+function onPointerUp(ev) {
+  if (!match || !pointer || ev.pointerId !== pointer.id) return;
+  const world = worldFromEvent(ev);
+  if (tool === "box" && pointer.moved) {
+    selectBox(pointer.wx, pointer.wy, world.x, world.y);
+    tool = null;
+  } else if (!pointer.moved) {
+    handleTap(world.x, world.y);
+  }
+  pointer = null;
+  view.box = null;
+  refreshHud(true);
+}
+
+function onMinimap(ev) {
+  if (!match) return;
+  const rect = minimap.getBoundingClientRect();
+  const x = ((ev.clientX - rect.left) / rect.width) * MAP_W;
+  const y = ((ev.clientY - rect.top) / rect.height) * MAP_H;
+  const viewW = view.canvasWidth / view.zoom;
+  const viewH = view.canvasHeight / view.zoom;
+  view.camX = x - viewW / 2;
+  view.camY = y - viewH / 2;
+  clampCam();
+}
+
+function handleTap(x, y) {
+  if (tool?.type === "place") {
+    const result = command(match, { by: 0, type: "place", workerId: tool.workerId, kind: tool.kind, x, y });
+    if (!result.ok) toast(REASONS[result.reason] || "Kurulamadı");
+    else {
+      tool = null;
+      navigator.vibrate?.(12);
+    }
+    recomputeFog(match);
+    return;
+  }
+  if (tool === "rally") {
+    const building = [...view.selected]
+      .map((id) => getEntity(match, id))
+      .find((e) => e && e.isBuilding);
+    if (building) command(match, { by: 0, type: "rally", buildingId: building.id, x, y });
+    tool = null;
+    recomputeFog(match);
+    return;
+  }
+  const hit = pickEntity(match, x, y, 0);
+  if (tool === "attack") {
+    const ids = selectedUnits().map((e) => e.id);
+    if (hit && hit.owner !== 0) command(match, { by: 0, type: "attack", ids, targetId: hit.id });
+    else command(match, { by: 0, type: "attackMove", ids, x, y });
+    tool = null;
+    return;
+  }
+  if (hit && hit.owner === 0) {
+    if (!hit.constructed && hit.isBuilding && selectedWorkers().length) {
+      const result = command(match, {
+        by: 0,
+        type: "construct",
+        buildingId: hit.id,
+        workerIds: selectedWorkers().map((w) => w.id),
+      });
+      if (!result.ok) toast(REASONS[result.reason] || "İnşa başlamadı");
+      return;
+    }
+    view.selected.clear();
+    view.selected.add(hit.id);
+    return;
+  }
+  const units = selectedUnits();
+  if (!units.length) {
+    if (hit && hit.owner !== 0) {
+      view.selected.clear();
+      view.selected.add(hit.id);
+    } else view.selected.clear();
+    return;
+  }
+  if (hit && hit.owner !== 0) command(match, { by: 0, type: "attack", ids: units.map((u) => u.id), targetId: hit.id });
+  else command(match, { by: 0, type: "move", ids: units.map((u) => u.id), x, y });
+  recomputeFog(match);
+}
+
+function selectBox(x1, y1, x2, y2) {
+  const minX = Math.min(x1, x2);
+  const maxX = Math.max(x1, x2);
+  const minY = Math.min(y1, y2);
+  const maxY = Math.max(y1, y2);
+  view.selected.clear();
+  for (const e of match.entities) {
+    if (e.owner !== 0 || e.hp <= 0) continue;
+    if (e.x < minX || e.x > maxX || e.y < minY || e.y > maxY) continue;
+    view.selected.add(e.id);
+  }
+  if (!view.selected.size) toast("Bu alanda senin birliğin yok");
+}
+
+function selectedEntities() {
+  return [...view.selected].map((id) => getEntity(match, id)).filter((e) => e && e.hp > 0);
+}
+
+function selectedUnits() {
+  return selectedEntities().filter((e) => !e.isBuilding);
+}
+
+function selectedWorkers() {
+  return selectedUnits().filter((e) => entityDef(match, e).worker);
+}
+
+function pruneSelection() {
+  for (const id of [...view.selected]) {
+    const e = getEntity(match, id);
+    if (!e || e.hp <= 0 || (e.owner !== 0 && !canSeeEntity(match, 0, e))) view.selected.delete(id);
+  }
+}
+
+function updateGhost() {
+  view.ghost = null;
+  view.rally = null;
+  if (tool?.type === "place" && hover) {
+    view.ghost = { kind: tool.kind, x: hover.x, y: hover.y, ok: canPlace(match, 0, tool.kind, hover.x, hover.y) };
+  }
+  const only = selectedEntities();
+  if (only.length === 1 && only[0].isBuilding && only[0].constructed && entityDef(match, only[0]).trains) {
+    view.rally = { x: only[0].rallyX, y: only[0].rallyY };
+  }
+}
+
+function updateCounters() {
+  const p = match.players[0];
+  const supply = supplyInfo(match, 0);
+  ashEl.textContent = String(Math.floor(p.ash));
+  supplyEl.textContent = `${supply.used}/${supply.cap}`;
+}
+
+function refreshHud(force) {
+  const ents = selectedEntities();
+  const sig = [
+    ents.map((e) => e.id).join(","),
+    tool?.type || tool || "",
+    tool?.kind || "",
+    paused,
+    Math.floor(match.players[0].ash / 5),
+    ents
+      .filter((e) => e.isBuilding)
+      .map((e) => `${e.queue?.length || 0}:${e.constructed ? 1 : 0}`)
+      .join(","),
+  ].join("|");
+  if (!force && sig === hudSig) {
+    paintInspect(ents);
+    return;
+  }
+  hudSig = sig;
+  paintInspect(ents);
+  bar.replaceChildren();
+  for (const item of buttonModel(ents)) bar.append(makeButton(item));
+}
+
+function paintInspect(ents) {
+  if (!ents.length) {
+    inspectEl.textContent = "Kimse seçili değil";
+    hintEl.textContent = "Sürükle: haritayı kaydır";
+    return;
+  }
+  if (ents.length === 1) {
+    const e = ents[0];
+    const def = entityDef(match, e);
+    const hp = Math.max(0, Math.ceil(e.hp));
+    const extra = e.isBuilding && !e.constructed ? ` · inşa %${Math.floor(e.progress * 100)}` : "";
+    const queue = e.queue?.length ? ` · sıra ${e.queue.length}` : "";
+    inspectEl.textContent = `${def.name} · ${hp}/${e.maxHp}${extra}${queue}`;
+  } else {
+    inspectEl.textContent = `${ents.length} seçili`;
+  }
+  if (tool?.type === "place") hintEl.textContent = "Yeşil alana dokunarak kur. Sürükleyerek kaydır.";
+  else if (tool === "attack") hintEl.textContent = "Hedefe veya yere dokun";
+  else if (tool === "box") hintEl.textContent = "Sürükleyerek kutu seç";
+  else if (tool === "rally") hintEl.textContent = "Toplanma noktasına dokun";
+  else if (ents.some((e) => !e.isBuilding)) hintEl.textContent = "Yere dokun: yürü · Düşmana dokun: saldır";
+  else hintEl.textContent = "Üretmek için birliğe dokun";
+}
+
+function buttonModel(ents) {
+  const own = ents.filter((e) => e.owner === 0);
+  const fac = match.players[0].faction;
+  if (tool) return [{ id: "cancel", label: "İptal" }];
+  if (!own.length) {
+    return [
+      { id: "army", label: "Ordu" },
+      { id: "workers", label: "İşçiler" },
+      { id: "home", label: "Ocağım" },
+      { id: "box", label: "Kutu seç" },
+    ];
+  }
+  const buildings = own.filter((e) => e.isBuilding);
+  const units = own.filter((e) => !e.isBuilding);
+  if (buildings.length === 1 && units.length === 0) {
+    const b = buildings[0];
+    const def = entityDef(match, b);
+    const items = [];
+    if (!b.constructed) items.push({ id: "send-build", label: "İşçi gönder" });
+    else {
+      for (const kind of def.trains || []) {
+        const udef = unitDef(fac, kind);
+        items.push({
+          id: "train",
+          unit: kind,
+          label: `${udef.name} · ${udef.cost}`,
+          poor: match.players[0].ash < udef.cost,
+        });
+      }
+      if (def.trains?.length) items.push({ id: "rally", label: "Toplanma" });
+    }
+    items.push({ id: "stop", label: b.queue?.length ? "Kuyruğu sil" : "Dur" });
+    return items;
+  }
+  const items = [
+    { id: "attack", label: "Saldır" },
+    { id: "stop", label: "Dur" },
+  ];
+  const workers = units.filter((e) => entityDef(match, e).worker);
+  if (workers.length) items.push({ id: "harvest", label: "Topla" });
+  if (workers.length && workers.length === units.length) {
+    for (const kind of BUILD_ORDER) {
+      const bdef = buildingDef(fac, kind);
+      items.push({
+        id: "build",
+        kind,
+        label: `${bdef.name} · ${bdef.cost}`,
+        poor: match.players[0].ash < bdef.cost,
+      });
+    }
+  }
+  items.push({ id: "box", label: "Kutu seç" });
+  return items;
+}
+
+function makeButton(item) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "cmd" + (item.poor ? " poor" : "");
+  btn.textContent = item.label;
+  btn.addEventListener("click", () => {
+    unlockAudio();
+    runButton(item);
+    refreshHud(true);
+  });
+  return btn;
+}
+
+function runButton(item) {
+  if (item.id === "cancel") {
+    tool = null;
+    return;
+  }
+  if (item.id === "army") {
+    view.selected.clear();
+    for (const e of match.entities) {
+      if (e.owner === 0 && e.hp > 0 && !e.isBuilding && (entityDef(match, e).damage || 0) > 0) view.selected.add(e.id);
+    }
+    if (!view.selected.size) toast("Henüz savaşan birliğin yok");
+    return;
+  }
+  if (item.id === "workers") {
+    view.selected.clear();
+    for (const e of match.entities) {
+      if (e.owner === 0 && e.hp > 0 && !e.isBuilding && entityDef(match, e).worker) view.selected.add(e.id);
+    }
+    return;
+  }
+  if (item.id === "home") {
+    focusHome();
+    return;
+  }
+  if (item.id === "box") {
+    tool = "box";
+    return;
+  }
+  if (item.id === "attack") {
+    armAttack();
+    return;
+  }
+  if (item.id === "stop") {
+    issueStop();
+    return;
+  }
+  if (item.id === "harvest") {
+    command(match, { by: 0, type: "harvest", ids: selectedWorkers().map((w) => w.id) });
+    return;
+  }
+  if (item.id === "build") {
+    const worker = selectedWorkers()[0];
+    if (!worker) {
+      toast(REASONS.worker);
+      return;
+    }
+    tool = { type: "place", kind: item.kind, workerId: worker.id };
+    return;
+  }
+  if (item.id === "train") {
+    const building = selectedEntities().find((e) => e.isBuilding);
+    const result = command(match, { by: 0, type: "train", buildingId: building.id, unitKind: item.unit });
+    if (!result.ok) toast(REASONS[result.reason] || "Üretilemedi");
+    return;
+  }
+  if (item.id === "rally") {
+    tool = "rally";
+    return;
+  }
+  if (item.id === "send-build") {
+    const building = selectedEntities().find((e) => e.isBuilding);
+    let worker = null;
+    let best = Infinity;
+    for (const e of match.entities) {
+      if (e.owner !== 0 || e.hp <= 0 || e.isBuilding || !entityDef(match, e).worker) continue;
+      if (e.plan?.kind === "construct") continue;
+      const d = Math.hypot(e.x - building.x, e.y - building.y);
+      if (d < best) {
+        best = d;
+        worker = e;
+      }
+    }
+    if (!worker) {
+      toast(REASONS.worker);
+      return;
+    }
+    command(match, { by: 0, type: "construct", buildingId: building.id, workerIds: [worker.id] });
+  }
+}
+
+function armAttack() {
+  if (!selectedUnits().length) {
+    toast(REASONS.units);
+    return;
+  }
+  tool = "attack";
+}
+
+function issueStop() {
+  const ids = selectedEntities().map((e) => e.id);
+  if (!ids.length) return;
+  command(match, { by: 0, type: "stop", ids });
+}
+
+function showResult() {
+  const you = match.winner === 0;
+  const draw = match.winner === "draw";
+  resultTitle.textContent = draw ? "İki ocak da yıkıldı" : you ? "Rakip ocak yıkıldı" : "Ocağın düştü";
+  const secs = Math.floor(match.time);
+  const mm = String(Math.floor(secs / 60)).padStart(2, "0");
+  const ss = String(secs % 60).padStart(2, "0");
+  resultBody.textContent = `${mm}:${ss} · toplanan kül ${Math.floor(match.players[0].gathered)} · yıkılan ${match.players[0].kills}`;
+  resultEl.classList.remove("hidden");
+  if (you) navigator.vibrate?.([20, 40, 20]);
+}
+
+function toast(text) {
+  toastEl.textContent = text;
+  toastEl.classList.remove("hidden");
+  toastTimer = 3.2;
+}
+
+function worldFromEvent(ev) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = ((ev.clientX - rect.left) / rect.width) * canvas.width;
+  const sy = ((ev.clientY - rect.top) / rect.height) * canvas.height;
+  return {
+    x: view.camX + sx / view.zoom,
+    y: view.camY + sy / view.zoom,
+  };
+}
+
+function clampTo(v, a, b) {
+  return Math.max(a, Math.min(b, v));
+}
+
+const facRoot = faction("tuz");
+document.querySelector("#card-tuz p").textContent = facRoot.blurb;
+document.querySelector("#card-ruzgar p").textContent = faction("ruzgar").blurb;
+
+if (new URLSearchParams(location.search).has("debug")) {
+  window.__tuz = {
+    get match() {
+      return match;
+    },
+    get view() {
+      return view;
+    },
+    command,
+  };
+}
+
+</script>
+  </body>
+</html>

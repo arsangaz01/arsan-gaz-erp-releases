@@ -206,8 +206,8 @@ function focusHome() {
 function clampCam() {
   const viewW = view.canvasWidth / view.zoom;
   const viewH = view.canvasHeight / view.zoom;
-  view.camX = clamp(view.camX, 0, Math.max(0, MAP_W - viewW));
-  view.camY = clamp(view.camY, 0, Math.max(0, MAP_H - viewH));
+  view.camX = clampTo(view.camX, 0, Math.max(0, MAP_W - viewW));
+  view.camY = clampTo(view.camY, 0, Math.max(0, MAP_H - viewH));
 }
 
 function frame(now) {
@@ -680,7 +680,7 @@ function worldFromEvent(ev) {
   };
 }
 
-function clamp(v, a, b) {
+function clampTo(v, a, b) {
   return Math.max(a, Math.min(b, v));
 }
 
