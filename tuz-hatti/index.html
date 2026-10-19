@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#1c1712" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Tuz Hattı</title>
+    <link rel="stylesheet" href="css/game.css" />
+  </head>
+  <body>
+    <div id="rotate">
+      <p>Harita yan tutulunca daha rahat okunur.</p>
+      <button type="button" id="play-portrait">Dikey oyna</button>
+    </div>
+
+    <section id="menu">
+      <div class="menu-card">
+        <p class="eyebrow">Tuz ovası · iki lonca</p>
+        <h1>Tuz Hattı</h1>
+        <p class="lead">
+          Kurak düzlükte kül cevheri topla, üssünü büyüt, birliklerini üret.
+          Rakip ocağı yıkan taraf ovayı alır.
+        </p>
+        <div class="factions">
+          <button type="button" class="faction selected" data-faction="tuz" id="card-tuz">
+            <span class="swatch tuz" aria-hidden="true"></span>
+            <strong>Tuz Loncası</strong>
+            <p></p>
+            <em>Sıra Kargısı · Kabuk · Çizik</em>
+          </button>
+          <button type="button" class="faction" data-faction="ruzgar" id="card-ruzgar">
+            <span class="swatch ruzgar" aria-hidden="true"></span>
+            <strong>Rüzgar Kervanı</strong>
+            <p></p>
+            <em>Toz İzci · Çekirge · Uzun Kazan</em>
+          </button>
+        </div>
+        <p class="note">Seçtiğin loncanın karşısına diğeri çıkar.</p>
+        <button type="button" id="start">Savaşa gir</button>
+        <ul class="how">
+          <li>Taşıyıcılar kül toplar, ocak ya da ambara bırakır.</li>
+          <li>İşçiyi seç, bina kur, binaya dokunup birlik üret.</li>
+          <li>Sürükleyerek haritayı kaydır. Yere dokununca birlik yürür.</li>
+          <li>Ocağı yıkılan taraf kaybeder.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="stage" class="hidden">
+      <canvas id="view"></canvas>
+      <header id="top">
+        <div class="stat">
+          <span>Kül</span>
+          <strong id="ash">0</strong>
+        </div>
+        <div class="stat">
+          <span>İkmal</span>
+          <strong id="supply">0/0</strong>
+        </div>
+        <p id="goal">Rakip ocağı yık</p>
+        <button type="button" id="pause">Duraklat</button>
+      </header>
+      <p id="inspect">Kimse seçili değil</p>
+      <p id="hint">Sürükle: haritayı kaydır</p>
+      <canvas id="minimap" aria-label="Küçük harita"></canvas>
+      <p id="toast" class="hidden"></p>
+      <footer id="bar"></footer>
+      <div id="result" class="hidden">
+        <div class="menu-card">
+          <h2 id="result-title"></h2>
+          <p id="result-body"></p>
+          <div class="result-actions">
+            <button type="button" id="again">Tekrar</button>
+            <button type="button" id="back-menu" class="ghost">Menü</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
