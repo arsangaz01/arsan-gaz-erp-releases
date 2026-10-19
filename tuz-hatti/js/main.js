@@ -32,7 +32,7 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 7, name: "2.5" };
+const APP = { code: 8, name: "2.6" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
@@ -58,6 +58,8 @@ const view = {
   camX: 0,
   camY: 0,
   zoom: 1,
+  userZoom: 1,
+  fitZoom: 1,
   canvasWidth: 1,
   canvasHeight: 1,
   selected: new Set(),
@@ -284,7 +286,9 @@ function resize() {
   minimap.width = Math.max(1, Math.floor(mini.width * miniDpr));
   minimap.height = Math.max(1, Math.floor(mini.height * miniDpr));
   const desired = rect.width < 900 ? gfx.viewWidth : Math.round(gfx.viewWidth * 1.12);
-  view.zoom = canvas.width / desired;
+  view.fitZoom = canvas.width / desired;
+  view.userZoom = view.userZoom || 1;
+  view.zoom = view.fitZoom * view.userZoom;
   view.canvasWidth = canvas.width;
   view.canvasHeight = canvas.height;
   clampCam();
@@ -408,9 +412,19 @@ function tickFx(dt) {
   view.fx = view.fx.filter((fx) => fx.life > 0);
 }
 
+const pointers = new Map();
+let pinch = null;
+
 function onPointerDown(ev) {
   if (!match) return;
   unlockAudio();
+  pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pointers.size >= 2) {
+    pinch = pinchOf(pointers);
+    pointer = null;
+    view.box = null;
+    return;
+  }
   canvas.setPointerCapture(ev.pointerId);
   const world = worldFromEvent(ev);
   pointer = {
@@ -427,7 +441,14 @@ function onPointerDown(ev) {
 }
 
 function onPointerMove(ev) {
-  if (!match || !pointer || ev.pointerId !== pointer.id) return;
+  if (!match) return;
+  if (pointers.has(ev.pointerId)) pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pointers.size >= 2 && pinch) {
+    const next = pinchOf(pointers);
+    setUserZoom(pinch.zoom * (next.dist / pinch.dist), worldFromClient(pinch.cx, pinch.cy));
+    return;
+  }
+  if (!pointer || ev.pointerId !== pointer.id) return;
   const world = worldFromEvent(ev);
   hover = world;
   const dx = ev.clientX - pointer.ox;
@@ -447,7 +468,21 @@ function onPointerMove(ev) {
   pointer.y = ev.clientY;
 }
 
+function pinchOf(map) {
+  const pts = [...map.values()];
+  const dx = pts[0].x - pts[1].x;
+  const dy = pts[0].y - pts[1].y;
+  return {
+    dist: Math.max(1, Math.hypot(dx, dy)),
+    cx: (pts[0].x + pts[1].x) / 2,
+    cy: (pts[0].y + pts[1].y) / 2,
+    zoom: view.userZoom || 1,
+  };
+}
+
 function onPointerUp(ev) {
+  pointers.delete(ev.pointerId);
+  if (pointers.size < 2) pinch = null;
   if (!match || !pointer || ev.pointerId !== pointer.id) return;
   const world = worldFromEvent(ev);
   if (tool === "box" && pointer.moved) {
@@ -628,7 +663,7 @@ function refreshHud(force) {
 function paintInspect(ents) {
   if (!ents.length) {
     inspectEl.textContent = "Kimse seçili değil";
-    hintEl.textContent = "Sürükle: haritayı kaydır";
+    hintEl.textContent = "Sürükle: kaydır · iki parmak veya + − : yakınlaş";
     return;
   }
   if (ents.length === 1) {
@@ -897,14 +932,31 @@ function toast(text) {
   toastTimer = 3.2;
 }
 
-function worldFromEvent(ev) {
+function worldFromClient(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
-  const sx = ((ev.clientX - rect.left) / rect.width) * canvas.width;
-  const sy = ((ev.clientY - rect.top) / rect.height) * canvas.height;
+  const sx = ((clientX - rect.left) / rect.width) * canvas.width;
+  const sy = ((clientY - rect.top) / rect.height) * canvas.height;
   return {
     x: view.camX + sx / view.zoom,
     y: view.camY + sy / view.zoom,
   };
+}
+
+function worldFromEvent(ev) {
+  return worldFromClient(ev.clientX, ev.clientY);
+}
+
+function setUserZoom(next, anchor) {
+  const prev = view.zoom || 1;
+  view.userZoom = clampTo(next, 0.55, 2.7);
+  view.zoom = (view.fitZoom || prev) * view.userZoom;
+  if (anchor && match) {
+    const sx = (anchor.x - view.camX) * prev;
+    const sy = (anchor.y - view.camY) * prev;
+    view.camX = anchor.x - sx / view.zoom;
+    view.camY = anchor.y - sy / view.zoom;
+    clampCam();
+  }
 }
 
 function clampTo(v, a, b) {
@@ -1232,7 +1284,7 @@ function sayUpdate(text, href) {
 window.__cepheUpdate = sayUpdate;
 
 async function checkUpdate() {
-  sayUpdate("Sürüm denetleniyor");
+    sayUpdate("denetleniyor");
   if (window.CepheUpdate && typeof window.CepheUpdate.checkAndUpdate === "function") {
     window.CepheUpdate.checkAndUpdate();
     return;
@@ -1247,12 +1299,39 @@ async function checkUpdate() {
         data.apk && String(data.apk).startsWith("https://") ? data.apk : ""
       );
     } else {
-      sayUpdate("Sürüm güncel · " + APP.name + ". Sunucu " + (data.versionName || "") + ".");
+      sayUpdate("güncel");
     }
   } catch (err) {
     sayUpdate("Sürüm denetlenemedi. Bağlantıyı kontrol et.");
   }
 }
+
+for (const el of document.querySelectorAll(".ver")) el.textContent = APP.name;
+
+document.querySelector("#zoom-in")?.addEventListener("click", () => {
+  if (!match) return;
+  unlockAudio();
+  const viewW = view.canvasWidth / view.zoom;
+  const viewH = view.canvasHeight / view.zoom;
+  setUserZoom(view.userZoom * 1.18, { x: view.camX + viewW / 2, y: view.camY + viewH / 2 });
+});
+document.querySelector("#zoom-out")?.addEventListener("click", () => {
+  if (!match) return;
+  unlockAudio();
+  const viewW = view.canvasWidth / view.zoom;
+  const viewH = view.canvasHeight / view.zoom;
+  setUserZoom(view.userZoom / 1.18, { x: view.camX + viewW / 2, y: view.camY + viewH / 2 });
+});
+canvas.addEventListener(
+  "wheel",
+  (ev) => {
+    if (!match) return;
+    ev.preventDefault();
+    const factor = ev.deltaY > 0 ? 0.9 : 1.11;
+    setUserZoom(view.userZoom * factor, worldFromEvent(ev));
+  },
+  { passive: false },
+);
 
 document.querySelector("#update")?.addEventListener("click", () => {
   unlockAudio();

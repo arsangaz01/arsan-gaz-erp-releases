@@ -1,6 +1,7 @@
 /** Dünya çizimi. Araç ve üs görselleri üstten, magenta zeminden ayrılmış özgün plakalardır. */
 
 import { faction } from "./balance.js";
+import { drawIso } from "./iso.js";
 import { canSeeEntity, cellExplored, cellVisible, entityDef } from "./sim.js";
 
 export const SPRITE_SRC = {
@@ -85,6 +86,7 @@ export function drawWorld(ctx, state, view) {
   ctx.imageSmoothingEnabled = !!gfx.smoothing;
   ctx.setTransform(view.zoom, 0, 0, view.zoom, -view.camX * view.zoom, -view.camY * view.zoom);
   ctx.drawImage(view.terrain, 0, 0, state.mapW, state.mapH);
+  drawSolids(ctx, state, gfx);
   if (gfx.decor) drawDecor(ctx, state);
   drawNodes(ctx, state, gfx);
   drawGroundMarks(ctx, state, view);
@@ -169,19 +171,42 @@ function drawDecor(ctx, state) {
   }
 }
 
+function drawSolids(ctx, state, gfx) {
+  for (const rock of state.obstacles) {
+    if (rock.kind === "water") continue;
+    ctx.save();
+    ctx.translate(rock.x, rock.y);
+    drawIso(ctx, {
+      form: rock.kind === "forest" ? "tree" : "peak",
+      radius: rock.r * (rock.kind === "forest" ? 0.34 : 0.48),
+      angle: 0.4,
+      paint: rock.kind === "forest" ? "#2f6a38" : "#8a8074",
+      dark: "#3a3228",
+      cloth: "#d9d3c6",
+      detail: !!gfx.decor,
+      grow: 1,
+    });
+    ctx.restore();
+  }
+}
+
 function drawNodes(ctx, state, gfx) {
   for (const n of state.nodes) {
     const left = n.amount / n.max;
-    const size = 36 * (gfx.nodeScale || 1);
     ctx.save();
     ctx.translate(n.x, n.y);
-    ctx.globalAlpha = left > 0 ? 1 : 0.4;
-    if (!drawSprite(ctx, "fuel", size, NODE_TINT[n.kind] || null)) {
-      ctx.fillStyle = left > 0 ? "#8a7040" : "#666";
-      ctx.beginPath();
-      ctx.arc(0, 0, 14, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.globalAlpha = left > 0 ? 1 : 0.35;
+    drawIso(ctx, {
+      form: "node",
+      key: n.kind,
+      radius: 16 * (gfx.nodeScale || 1),
+      angle: 0.5,
+      paint: NODE_TINT[n.kind] || "#8a7040",
+      dark: "#2a241c",
+      cloth: "#d7d2c4",
+      detail: !!gfx.decor,
+      grow: 0.45 + 0.55 * left,
+    });
     ctx.restore();
   }
 }
@@ -200,29 +225,31 @@ function drawEntities(ctx, state, view, gfx) {
     ctx.translate(e.x, e.y);
     ctx.globalAlpha = e.isBuilding && !e.constructed ? 0.72 : 1;
     if (e.isBuilding) drawBuilding(ctx, e, def, colors, gfx);
-    else drawUnit(ctx, e, def, colors, gfx);
+    else drawUnit(ctx, e, def, colors, gfx, state);
     ctx.restore();
   }
 }
 
 function drawBuilding(ctx, e, def, colors, gfx) {
-  const size = def.radius * 2.65;
+  const grow = e.constructed ? 1 : Math.max(0.18, Math.min(1, e.progress));
   if (gfx.shadows) {
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.beginPath();
-    ctx.ellipse(2, size * 0.18, size * 0.34, size * 0.12, 0, 0, Math.PI * 2);
+    ctx.ellipse(2, def.radius * 0.35, def.radius * 0.95, def.radius * 0.42, 0, 0, Math.PI * 2);
     ctx.fill();
   }
-  const grow = e.constructed ? 1 : Math.max(0.2, Math.min(1, e.progress));
-  ctx.save();
-  ctx.scale(1, grow);
-  ctx.translate(0, (1 - grow) * def.radius * 0.4);
-  const tint = colors.wash;
-  if (!drawSprite(ctx, def.sprite, size, tint)) {
-    ctx.fillStyle = colors.dark;
-    ctx.fillRect(-def.radius, -def.radius * 0.7, def.radius * 2, def.radius * 1.4);
-  }
-  ctx.restore();
+  drawIso(ctx, {
+    form: def.shape || "depot",
+    radius: def.radius * 0.86,
+    angle: 0.55,
+    aim: def.turret ? e.angle : 0.55,
+    paint: colors.main,
+    dark: colors.dark,
+    cloth: colors.cloth,
+    detail: gfx.decor !== false,
+    grow,
+    phase: 0,
+  });
   if (!e.constructed) {
     ctx.strokeStyle = "rgba(214, 196, 140, 0.9)";
     ctx.lineWidth = 1.6;
@@ -238,29 +265,68 @@ function drawBuilding(ctx, e, def, colors, gfx) {
   }
 }
 
-function drawUnit(ctx, e, def, colors, gfx) {
-  const size = def.radius * (def.air ? 3.15 : def.worker ? 2.45 : def.naval ? 2.7 : 2.15);
-  if (gfx.decor && e.plan && (e.plan.kind === "move" || e.plan.kind === "attackMove") && !def.air) {
-    ctx.translate(0, Math.sin((e.x + e.y) * 0.35) * 1.1);
+function unitForm(def) {
+  if (def.air) {
+    if (def.sprite === "apache") return "heli";
+    if (def.sprite === "f35" || def.sprite === "typhoon") return "jet";
+    if (def.sprite === "gj11" || def.sprite === "kizilelma" || def.sprite === "shahed") return "wing";
+    if (def.sprite === "fpv") return "quad";
+    return "drone";
+  }
+  if (def.naval) return "ship";
+  if (def.worker) return "truck";
+  if (def.sprite === "infantry") return "infantry";
+  if (def.sprite === "ifv") return "ifv";
+  if (def.sprite === "atgm") return "atgm";
+  if (def.sprite === "spg") {
+    const name = def.name || "";
+    if (/HIMARS|PHL|Tornado/i.test(name)) return "mlrs";
+    return "sph";
+  }
+  return "tank";
+}
+
+function drawUnit(ctx, e, def, colors, gfx, state) {
+  const moving = e.plan && e.plan.kind !== "guard" && e.plan.kind !== "hold";
+  const phase = moving ? state.time * (def.air ? 14 : 7) + e.id : e.id;
+  let aim = e.angle;
+  if (e.plan?.targetId) {
+    const target = state.entities.find((item) => item.id === e.plan.targetId);
+    if (target) aim = Math.atan2(target.y - e.y, target.x - e.x);
   }
   if (gfx.shadows) {
-    ctx.fillStyle = def.air ? "rgba(0,0,0,0.22)" : "rgba(0,0,0,0.35)";
+    ctx.fillStyle = def.air ? "rgba(0,0,0,0.22)" : "rgba(0,0,0,0.32)";
     ctx.beginPath();
-    ctx.ellipse(def.air ? 8 : 3, def.air ? 14 : 7, size * 0.22, size * 0.09, 0, 0, Math.PI * 2);
+    ctx.ellipse(def.air ? 10 : 2, def.air ? 16 : 8, def.radius * (def.air ? 1.1 : 0.95), def.radius * 0.38, 0, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.rotate(e.angle);
-  const tint = def.wash ? colors.wash : null;
-  if (!drawSprite(ctx, def.sprite, size, tint)) {
-    ctx.fillStyle = colors.dark;
-    ctx.fillRect(-def.radius, -def.radius * 0.55, def.radius * 2, def.radius * 1.1);
-    ctx.fillStyle = colors.cloth;
-    ctx.fillRect(0, -2, def.radius + 6, 3);
+  const pose = gfx._pose || (gfx._pose = new Map());
+  const prev = pose.get(e.id);
+  pose.set(e.id, e.angle);
+  let bank = 0;
+  if (prev != null && def.air) {
+    let d = e.angle - prev;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    bank = Math.max(-0.45, Math.min(0.45, d * 6));
   }
-  if (e.carry > 0) {
-    ctx.fillStyle = "#c6a15a";
-    ctx.fillRect(def.radius * 0.2, -def.radius * 0.9, 7, 5);
-  }
+  drawIso(ctx, {
+    form: unitForm(def),
+    key: def.sprite,
+    name: def.name,
+    radius: def.radius * (def.air ? 1.35 : def.naval ? 1.2 : 1.15),
+    angle: e.angle,
+    aim,
+    paint: colors.main,
+    dark: colors.dark,
+    cloth: colors.cloth,
+    detail: gfx.decor !== false,
+    phase,
+    lift: def.air ? 26 + Math.sin(state.time * 3 + e.id) * 2 : 0,
+    carry: e.carry > 0,
+    bank,
+    grow: 1,
+  });
 }
 
 function ready(img) {
@@ -427,7 +493,7 @@ function drawBarsAndRings(ctx, state, view) {
     if (!own && e.isBuilding && !cellVisible(state, who, e.x, e.y)) continue;
     const w = Math.max(18, e.radius * 2);
     const x = e.x - w / 2;
-    const y = e.y - e.radius - 10;
+    const y = e.y - e.radius - (e.isBuilding ? 28 : 16);
     ctx.fillStyle = "rgba(8,10,8,0.8)";
     ctx.fillRect(x, y, w, 3);
     ctx.fillStyle = e.hp / e.maxHp > 0.35 ? "#b7c48a" : "#c45c3c";
@@ -460,8 +526,17 @@ function drawGhost(ctx, state, view) {
   }
   ctx.save();
   ctx.translate(ghost.x, ghost.y);
-  ctx.globalAlpha = 0.5;
-  drawSprite(ctx, def.sprite, def.radius * 3.05, null);
+  ctx.globalAlpha = 0.55;
+  drawIso(ctx, {
+    form: def.shape || "depot",
+    radius: def.radius * 0.86,
+    angle: 0.55,
+    paint: fac.colors.main,
+    dark: fac.colors.dark,
+    cloth: fac.colors.cloth,
+    detail: false,
+    grow: 0.85,
+  });
   ctx.globalAlpha = 0.9;
   ctx.strokeStyle = ghost.ok ? "#b7c48a" : "#c45c3c";
   ctx.lineWidth = 2;

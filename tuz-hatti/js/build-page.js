@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const order = ["balance.js", "maps.js", "sim.js", "ai.js", "audio.js", "gfx.js", "render.js", "net.js", "main.js"];
+const order = ["balance.js", "maps.js", "sim.js", "ai.js", "audio.js", "gfx.js", "iso.js", "render.js", "net.js", "main.js"];
 
 function stripModules(source) {
   return source

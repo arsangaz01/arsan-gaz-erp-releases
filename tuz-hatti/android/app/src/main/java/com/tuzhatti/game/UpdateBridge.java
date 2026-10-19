@@ -69,7 +69,7 @@ public class UpdateBridge {
                 String apk = json.optString("apk", "");
                 long local = localVersion();
                 if (remote <= local) {
-                    post("Sürüm güncel · " + localName() + ". Sunucu " + name + ".");
+                    post("güncel");
                     return;
                 }
                 if (!apk.startsWith("https://")) {

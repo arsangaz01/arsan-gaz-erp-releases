@@ -473,7 +473,7 @@ function updateUnit(state, e, def, dt, events) {
   }
 
   if (plan.kind === "move") {
-    const arrived = moveToward(state, e, plan.x, plan.y, def.speed * dt, 10, null);
+    const arrived = moveToward(state, e, plan.x, plan.y, def.speed * dt, 10, null, dt);
     if (arrived) e.plan = { kind: "guard", x: e.x, y: e.y };
     return;
   }
@@ -485,7 +485,7 @@ function updateUnit(state, e, def, dt, events) {
       e.plan = { kind: "attack", targetId: foe.id, leash: 320, resume: { kind: "attackMove", x: plan.x, y: plan.y } };
       return;
     }
-    const arrived = moveToward(state, e, plan.x, plan.y, def.speed * dt, 12, null);
+    const arrived = moveToward(state, e, plan.x, plan.y, def.speed * dt, 12, null, dt);
     if (arrived) e.plan = { kind: "guard", x: e.x, y: e.y };
     return;
   }
@@ -527,12 +527,12 @@ function engage(state, e, def, target, dt, events) {
   const minR = def.minRange || 0;
   if (minR && dist < minR) {
     const ang = Math.atan2(e.y - target.y, e.x - target.x);
-    moveToward(state, e, e.x + Math.cos(ang) * 90, e.y + Math.sin(ang) * 90, def.speed * dt, 4, null);
+    moveToward(state, e, e.x + Math.cos(ang) * 90, e.y + Math.sin(ang) * 90, def.speed * dt, 4, null, dt);
     return;
   }
   if (dist > reach) {
     const stand = target.radius + e.radius + 1;
-    moveToward(state, e, target.x, target.y, def.speed * dt, Math.min(stand, reach - 2), target.isBuilding ? target.id : null);
+    moveToward(state, e, target.x, target.y, def.speed * dt, Math.min(stand, reach - 2), target.isBuilding ? target.id : null, dt);
     return;
   }
   face(e, target.x, target.y, dt);
@@ -622,7 +622,7 @@ function updateHarvest(state, e, def, dt, events) {
       e.plan = { kind: "guard", x: e.x, y: e.y };
       return;
     }
-    const arrived = moveToward(state, e, drop.x, drop.y, def.speed * dt, drop.radius + e.radius + 6, drop.id);
+    const arrived = moveToward(state, e, drop.x, drop.y, def.speed * dt, drop.radius + e.radius + 6, drop.id, dt);
     if (arrived) {
       state.players[e.owner].ash += e.carry;
       state.players[e.owner].gathered += e.carry;
@@ -643,7 +643,7 @@ function updateHarvest(state, e, def, dt, events) {
   }
   plan.nodeId = node.id;
   if (plan.phase !== "gather") {
-    const arrived = moveToward(state, e, node.x, node.y, def.speed * dt, 8, null);
+    const arrived = moveToward(state, e, node.x, node.y, def.speed * dt, 8, null, dt);
     if (arrived) {
       plan.phase = "gather";
       plan.gather = 0;
@@ -682,7 +682,7 @@ function updateConstruct(state, e, def, dt, events) {
     return;
   }
   const bdef = entityDef(state, b);
-  const arrived = moveToward(state, e, b.x, b.y, def.speed * dt, b.radius + e.radius + 4, b.id);
+  const arrived = moveToward(state, e, b.x, b.y, def.speed * dt, b.radius + e.radius + 4, b.id, dt);
   if (!arrived) return;
   face(e, b.x, b.y, dt);
   b.progress += dt / bdef.time;
@@ -743,19 +743,23 @@ function nearestDropoff(state, owner, x, y) {
   return best;
 }
 
-function moveToward(state, e, tx, ty, step, stopDist, ignoreId) {
+function moveToward(state, e, tx, ty, step, stopDist, ignoreId, dt) {
+  dt = dt || 0.016;
   let dx = tx - e.x;
   let dy = ty - e.y;
   let dist = Math.hypot(dx, dy);
   if (dist <= stopDist + 1.25) {
-    face(e, tx, ty, 0.05);
+    face(e, tx, ty, dt, 4);
+    e.drive = Math.max(0, (e.drive || 0) - dt * 3);
     return true;
   }
   let vx = dx / dist;
   let vy = dy / dist;
-  const look = isAir(state, e) ? 18 : 32;
+  const def = entityDef(state, e);
+  const agile = !!(def.air || def.worker);
+  const look = def.air ? 18 : 32;
   const naval = isNaval(state, e);
-  if (!isAir(state, e) && circleBlocked(state, e.x + vx * look, e.y + vy * look, e.radius * 0.75, ignoreId, naval)) {
+  if (!def.air && circleBlocked(state, e.x + vx * look, e.y + vy * look, e.radius * 0.75, ignoreId, naval)) {
     const base = Math.atan2(vy, vx);
     let steered = false;
     for (const off of [0.55, -0.55, 1.05, -1.05, 1.7, -1.7, 2.4, -2.4, 3.1]) {
@@ -777,24 +781,30 @@ function moveToward(state, e, tx, ty, step, stopDist, ignoreId) {
   let gap = aim - e.angle;
   while (gap > Math.PI) gap -= Math.PI * 2;
   while (gap < -Math.PI) gap += Math.PI * 2;
-  const def = entityDef(state, e);
-  const align = isAir(state, e) || def.worker ? 1 : Math.max(0.4, Math.cos(gap));
-  const travel = Math.min(step * align, dist - stopDist);
-  e.x += vx * travel;
-  e.y += vy * travel;
+  const align = agile ? 1 : Math.max(0.05, Math.cos(gap));
+  if (agile) e.drive = 1;
+  else {
+    const goal = Math.abs(gap) < 0.4 ? 1 : 0.15;
+    e.drive = (e.drive ?? 0) + (goal - (e.drive ?? 0)) * Math.min(1, dt * (goal > 0.5 ? 2.2 : 5));
+  }
+  const travel = Math.min(step * align * (agile ? 1 : 0.22 + 0.78 * e.drive), dist - stopDist);
+  if (travel > 0) {
+    e.x += vx * travel;
+    e.y += vy * travel;
+  }
   e.x = clamp(e.x, e.radius, state.mapW - e.radius);
   e.y = clamp(e.y, e.radius, state.mapH - e.radius);
-  face(e, e.x + vx, e.y + vy, 0.16);
+  face(e, e.x + vx * 30, e.y + vy * 30, dt, agile ? (def.air ? 9 : 7) : 2.35);
   return Math.hypot(tx - e.x, ty - e.y) <= stopDist + 1.25;
 }
 
-function face(e, x, y, dt) {
+function face(e, x, y, dt, turnRate) {
   const target = Math.atan2(y - e.y, x - e.x);
   let d = target - e.angle;
   while (d > Math.PI) d -= Math.PI * 2;
   while (d < -Math.PI) d += Math.PI * 2;
-  const turn = e.isBuilding ? 6 : 11;
-  const max = Math.max(0.05, dt) * turn;
+  const turn = turnRate ?? (e.isBuilding ? 7 : 3);
+  const max = Math.max(0.001, dt) * turn;
   if (Math.abs(d) < max) e.angle = target;
   else e.angle += Math.sign(d) * max;
 }

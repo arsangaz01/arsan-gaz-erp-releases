@@ -1,6 +1,6 @@
 {
-  "versionCode": 7,
-  "versionName": "2.5",
-  "notes": "Güncelleme artık önbellekteki eski sürüm listesine takılmaz. Kurulum dosyası doğrudan depodan iner.",
+  "versionCode": 8,
+  "versionName": "2.6",
+  "notes": "Araç ve yapılar izometrik gövdeyle çizilir. Yakınlaştırma var. Güncelle yanındaki sürüm yazısı, güncelse güncel der.",
   "apk": "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }
