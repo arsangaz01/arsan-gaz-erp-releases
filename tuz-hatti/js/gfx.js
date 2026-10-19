@@ -12,7 +12,7 @@ export const GFX_PRESETS = {
     smoothing: false,
     fogSmooth: false,
     fxCap: 10,
-    viewWidth: 1180,
+    viewWidth: 820,
     nodeScale: 0.72,
   },
   medium: {
@@ -26,7 +26,7 @@ export const GFX_PRESETS = {
     smoothing: true,
     fogSmooth: true,
     fxCap: 28,
-    viewWidth: 980,
+    viewWidth: 680,
     nodeScale: 0.9,
   },
   high: {
@@ -40,7 +40,7 @@ export const GFX_PRESETS = {
     smoothing: true,
     fogSmooth: true,
     fxCap: 64,
-    viewWidth: 820,
+    viewWidth: 540,
     nodeScale: 1,
   },
 };

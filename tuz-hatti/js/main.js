@@ -5,6 +5,7 @@ import { BUILD_RULES, FACTION_IDS, buildingDef, faction, structureLock, unitDef 
 import { MAP_IDS, MATCH_SIZES, battlePlan, mapById } from "./maps.js";
 import { applyPack, hostRoom, joinRoom, makeCode, packState } from "./net.js";
 import { playEvent, unlockAudio } from "./audio.js";
+import { groundPoint, groundSpan, worldPoint } from "./iso.js";
 import { aiAct, createAiMemory } from "./ai.js";
 import { drawMinimap, drawWorld } from "./render.js";
 import {
@@ -32,7 +33,7 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 8, name: "2.6" };
+const APP = { code: 9, name: "2.7" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
@@ -299,16 +300,19 @@ function focusHome() {
   if (!hq) return;
   const viewW = view.canvasWidth / view.zoom;
   const viewH = view.canvasHeight / view.zoom;
-  view.camX = hq.x - viewW * 0.38;
-  view.camY = hq.y - viewH * 0.5;
+  const g = groundPoint(hq.x, hq.y);
+  view.camX = g.x - viewW * 0.4;
+  view.camY = g.y - viewH * 0.52;
   clampCam();
 }
 
 function clampCam() {
+  if (!match) return;
+  const span = groundSpan(match.mapW, match.mapH);
   const viewW = view.canvasWidth / view.zoom;
   const viewH = view.canvasHeight / view.zoom;
-  view.camX = clampTo(view.camX, 0, Math.max(0, match.mapW - viewW));
-  view.camY = clampTo(view.camY, 0, Math.max(0, match.mapH - viewH));
+  view.camX = clampTo(view.camX, span.minX, Math.max(span.minX, span.maxX - viewW));
+  view.camY = clampTo(view.camY, span.minY, Math.max(span.minY, span.maxY - viewH));
 }
 
 function frame(now) {
@@ -445,7 +449,7 @@ function onPointerMove(ev) {
   if (pointers.has(ev.pointerId)) pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
   if (pointers.size >= 2 && pinch) {
     const next = pinchOf(pointers);
-    setUserZoom(pinch.zoom * (next.dist / pinch.dist), worldFromClient(pinch.cx, pinch.cy));
+    setUserZoom(pinch.zoom * (pinch.dist / next.dist), worldFromClient(pinch.cx, pinch.cy));
     return;
   }
   if (!pointer || ev.pointerId !== pointer.id) return;
@@ -501,10 +505,11 @@ function onMinimap(ev) {
   const rect = minimap.getBoundingClientRect();
   const x = ((ev.clientX - rect.left) / rect.width) * match.mapW;
   const y = ((ev.clientY - rect.top) / rect.height) * match.mapH;
+  const g = groundPoint(x, y);
   const viewW = view.canvasWidth / view.zoom;
   const viewH = view.canvasHeight / view.zoom;
-  view.camX = x - viewW / 2;
-  view.camY = y - viewH / 2;
+  view.camX = g.x - viewW / 2;
+  view.camY = g.y - viewH / 2;
   clampCam();
 }
 
@@ -529,6 +534,32 @@ function handleTap(x, y) {
     return;
   }
   const hit = pickEntity(match, x, y, me);
+  if (!hit && tool !== "attack" && tool !== "rally" && tool?.type !== "place") {
+    const now = performance.now();
+    const again = view.lastEmpty && now - view.lastEmpty < 420;
+    view.lastEmpty = again ? 0 : now;
+    if (again) {
+      if (view.pendingMove) {
+        clearTimeout(view.pendingMove);
+        view.pendingMove = null;
+      }
+      selectArmy();
+      return;
+    }
+    const units = selectedUnits();
+    if (units.length) {
+      const ids = units.map((unit) => unit.id);
+      if (view.pendingMove) clearTimeout(view.pendingMove);
+      view.pendingMove = setTimeout(() => {
+        view.pendingMove = null;
+        if (!match) return;
+        issue({ type: "move", ids, x, y });
+        view.ping = { x, y, life: 0.7, max: 0.7 };
+        recomputeFog(match);
+      }, 230);
+      return;
+    }
+  }
   if (tool === "attack") {
     const ids = selectedUnits().map((e) => e.id);
     if (hit && hostile(match, me, hit.owner)) issue({ type: "attack", ids, targetId: hit.id });
@@ -577,6 +608,18 @@ function handleTap(x, y) {
     view.ping = { x, y, life: 0.7, max: 0.7 };
   }
   recomputeFog(match);
+}
+
+function selectArmy() {
+  view.selected.clear();
+  for (const e of match.entities) {
+    if (e.owner !== me || e.hp <= 0 || e.isBuilding) continue;
+    if (entityDef(match, e).worker) continue;
+    if (!canSeeEntity(match, me, e)) continue;
+    view.selected.add(e.id);
+  }
+  if (!view.selected.size) toast("Sahada seçilecek birlik yok");
+  refreshHud(true);
 }
 
 function selectBox(x1, y1, x2, y2) {
@@ -663,7 +706,7 @@ function refreshHud(force) {
 function paintInspect(ents) {
   if (!ents.length) {
     inspectEl.textContent = "Kimse seçili değil";
-    hintEl.textContent = "Sürükle: kaydır · iki parmak veya + − : yakınlaş";
+    hintEl.textContent = "Sürükle: kaydır · iki parmak içe: yakınlaş, dışa: uzaklaş · boşluğa çift dokunuş: tüm birlik";
     return;
   }
   if (ents.length === 1) {
@@ -936,10 +979,7 @@ function worldFromClient(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   const sx = ((clientX - rect.left) / rect.width) * canvas.width;
   const sy = ((clientY - rect.top) / rect.height) * canvas.height;
-  return {
-    x: view.camX + sx / view.zoom,
-    y: view.camY + sy / view.zoom,
-  };
+  return worldPoint(sx / view.zoom + view.camX, sy / view.zoom + view.camY);
 }
 
 function worldFromEvent(ev) {
@@ -948,13 +988,21 @@ function worldFromEvent(ev) {
 
 function setUserZoom(next, anchor) {
   const prev = view.zoom || 1;
-  view.userZoom = clampTo(next, 0.55, 2.7);
-  view.zoom = (view.fitZoom || prev) * view.userZoom;
+  let hold = null;
   if (anchor && match) {
-    const sx = (anchor.x - view.camX) * prev;
-    const sy = (anchor.y - view.camY) * prev;
-    view.camX = anchor.x - sx / view.zoom;
-    view.camY = anchor.y - sy / view.zoom;
+    const g = groundPoint(anchor.x, anchor.y);
+    hold = {
+      x: g.x,
+      y: g.y,
+      sx: (g.x - view.camX) * prev,
+      sy: (g.y - view.camY) * prev,
+    };
+  }
+  view.userZoom = clampTo(next, 0.7, 3.2);
+  view.zoom = (view.fitZoom || prev) * view.userZoom;
+  if (hold) {
+    view.camX = hold.x - hold.sx / view.zoom;
+    view.camY = hold.y - hold.sy / view.zoom;
     clampCam();
   }
 }
@@ -1308,27 +1356,13 @@ async function checkUpdate() {
 
 for (const el of document.querySelectorAll(".ver")) el.textContent = APP.name;
 
-document.querySelector("#zoom-in")?.addEventListener("click", () => {
-  if (!match) return;
-  unlockAudio();
-  const viewW = view.canvasWidth / view.zoom;
-  const viewH = view.canvasHeight / view.zoom;
-  setUserZoom(view.userZoom * 1.18, { x: view.camX + viewW / 2, y: view.camY + viewH / 2 });
-});
-document.querySelector("#zoom-out")?.addEventListener("click", () => {
-  if (!match) return;
-  unlockAudio();
-  const viewW = view.canvasWidth / view.zoom;
-  const viewH = view.canvasHeight / view.zoom;
-  setUserZoom(view.userZoom / 1.18, { x: view.camX + viewW / 2, y: view.camY + viewH / 2 });
-});
 canvas.addEventListener(
   "wheel",
   (ev) => {
     if (!match) return;
     ev.preventDefault();
-    const factor = ev.deltaY > 0 ? 0.9 : 1.11;
-    setUserZoom(view.userZoom * factor, worldFromEvent(ev));
+    const factor = ev.deltaY > 0 ? 1 / 1.08 : 1.08;
+    setUserZoom((view.userZoom || 1) * factor, worldFromEvent(ev));
   },
   { passive: false },
 );

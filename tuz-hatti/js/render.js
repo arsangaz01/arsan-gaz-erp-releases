@@ -1,7 +1,7 @@
 /** Dünya çizimi. Araç ve üs görselleri üstten, magenta zeminden ayrılmış özgün plakalardır. */
 
 import { faction } from "./balance.js";
-import { drawIso } from "./iso.js";
+import { applyGround, drawIso, screenPoint, worldPoint } from "./iso.js";
 import { canSeeEntity, cellExplored, cellVisible, entityDef } from "./sim.js";
 
 export const SPRITE_SRC = {
@@ -83,19 +83,20 @@ function gfxOf(view) {
 export function drawWorld(ctx, state, view) {
   const gfx = gfxOf(view);
   ensureTerrain(view, state, gfx);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#2c2820";
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.save();
+  applyGround(ctx, view);
   ctx.imageSmoothingEnabled = !!gfx.smoothing;
-  ctx.setTransform(view.zoom, 0, 0, view.zoom, -view.camX * view.zoom, -view.camY * view.zoom);
   ctx.drawImage(view.terrain, 0, 0, state.mapW, state.mapH);
-  drawSolids(ctx, state, gfx);
   if (gfx.decor) drawDecor(ctx, state);
-  drawNodes(ctx, state, gfx);
   drawGroundMarks(ctx, state, view);
-  drawEntities(ctx, state, view, gfx);
   drawFog(ctx, state, view);
-  drawBarsAndRings(ctx, state, view);
-  drawGhost(ctx, state, view);
-  drawFx(ctx, view);
+  drawGhostPlan(ctx, state, view);
   if (view.box) drawBox(ctx, view.box);
+  ctx.restore();
+  drawUpright(ctx, state, view, gfx);
 }
 
 function ensureTerrain(view, state, gfx) {
@@ -130,9 +131,9 @@ function ensureTerrain(view, state, gfx) {
     g.fillRect(0, 0, state.mapW, state.mapH);
   }
   const shade = g.createLinearGradient(0, 0, 0, state.mapH);
-  shade.addColorStop(0, "rgba(12,16,10,0.18)");
+  shade.addColorStop(0, "rgba(12,16,10,0.08)");
   shade.addColorStop(0.5, "rgba(0,0,0,0)");
-  shade.addColorStop(1, "rgba(8,10,8,0.22)");
+  shade.addColorStop(1, "rgba(8,10,8,0.1)");
   g.fillStyle = shade;
   g.fillRect(0, 0, state.mapW, state.mapH);
   for (const rock of state.obstacles) paintObstacle(g, rock);
@@ -171,62 +172,69 @@ function drawDecor(ctx, state) {
   }
 }
 
-function drawSolids(ctx, state, gfx) {
+function drawUpright(ctx, state, view, gfx) {
   for (const rock of state.obstacles) {
     if (rock.kind === "water") continue;
-    ctx.save();
-    ctx.translate(rock.x, rock.y);
-    drawIso(ctx, {
-      form: rock.kind === "forest" ? "tree" : "peak",
-      radius: rock.r * (rock.kind === "forest" ? 0.34 : 0.48),
-      angle: 0.4,
-      paint: rock.kind === "forest" ? "#2f6a38" : "#8a8074",
-      dark: "#3a3228",
-      cloth: "#d9d3c6",
-      detail: !!gfx.decor,
-      grow: 1,
+    withModel(ctx, view, rock.x, rock.y, () => {
+      drawIso(ctx, {
+        form: rock.kind === "forest" ? "tree" : "peak",
+        radius: rock.r * (rock.kind === "forest" ? 0.34 : 0.48),
+        angle: 0.4,
+        paint: rock.kind === "forest" ? "#2f6a38" : "#8a8074",
+        dark: "#3a3228",
+        cloth: "#d9d3c6",
+        detail: !!gfx.decor,
+        grow: 1,
+      });
     });
-    ctx.restore();
   }
-}
-
-function drawNodes(ctx, state, gfx) {
   for (const n of state.nodes) {
     const left = n.amount / n.max;
-    ctx.save();
-    ctx.translate(n.x, n.y);
-    ctx.globalAlpha = left > 0 ? 1 : 0.35;
-    drawIso(ctx, {
-      form: "node",
-      key: n.kind,
-      radius: 16 * (gfx.nodeScale || 1),
-      angle: 0.5,
-      paint: NODE_TINT[n.kind] || "#8a7040",
-      dark: "#2a241c",
-      cloth: "#d7d2c4",
-      detail: !!gfx.decor,
-      grow: 0.45 + 0.55 * left,
+    withModel(ctx, view, n.x, n.y, () => {
+      ctx.globalAlpha = left > 0 ? 1 : 0.35;
+      drawIso(ctx, {
+        form: "node",
+        key: n.kind,
+        radius: 16 * (gfx.nodeScale || 1),
+        angle: 0.5,
+        paint: NODE_TINT[n.kind] || "#8a7040",
+        dark: "#2a241c",
+        cloth: "#d7d2c4",
+        detail: !!gfx.decor,
+        grow: 0.45 + 0.55 * left,
+      });
+      ctx.globalAlpha = 1;
     });
-    ctx.restore();
   }
+  drawEntities(ctx, state, view, gfx);
+  drawGhostModel(ctx, state, view);
+  drawBars(ctx, state, view);
+  drawFx(ctx, view);
+}
+
+function withModel(ctx, view, x, y, draw) {
+  const p = screenPoint(view, x, y);
+  ctx.save();
+  ctx.setTransform(view.zoom, 0, 0, view.zoom, p.x, p.y);
+  draw();
+  ctx.restore();
 }
 
 function drawEntities(ctx, state, view, gfx) {
   const list = state.entities.filter((e) => e.hp > 0);
   list.sort((a, b) => {
     const layer = (e) => (e.isBuilding ? 0 : entityDef(state, e).air ? 2 : 1);
-    return layer(a) - layer(b) || a.y - b.y;
+    return layer(a) - layer(b) || a.x + a.y - (b.x + b.y);
   });
   for (const e of list) {
     if (e.owner !== viewer(view) && !canSeeEntity(state, viewer(view), e)) continue;
     const colors = faction(state.players[e.owner].faction).colors;
     const def = entityDef(state, e);
-    ctx.save();
-    ctx.translate(e.x, e.y);
-    ctx.globalAlpha = e.isBuilding && !e.constructed ? 0.72 : 1;
-    if (e.isBuilding) drawBuilding(ctx, e, def, colors, gfx);
-    else drawUnit(ctx, e, def, colors, gfx, state);
-    ctx.restore();
+    withModel(ctx, view, e.x, e.y, () => {
+      ctx.globalAlpha = e.isBuilding && !e.constructed ? 0.72 : 1;
+      if (e.isBuilding) drawBuilding(ctx, e, def, colors, gfx);
+      else drawUnit(ctx, e, def, colors, gfx, state);
+    });
   }
 }
 
@@ -240,7 +248,7 @@ function drawBuilding(ctx, e, def, colors, gfx) {
   }
   drawIso(ctx, {
     form: def.shape || "depot",
-    radius: def.radius * 0.86,
+    radius: def.radius * 1.05,
     angle: 0.55,
     aim: def.turret ? e.angle : 0.55,
     paint: colors.main,
@@ -314,7 +322,7 @@ function drawUnit(ctx, e, def, colors, gfx, state) {
     form: unitForm(def),
     key: def.sprite,
     name: def.name,
-    radius: def.radius * (def.air ? 1.35 : def.naval ? 1.2 : 1.15),
+    radius: def.radius * (def.air ? 1.7 : def.naval ? 1.55 : def.worker ? 1.45 : 1.72),
     angle: e.angle,
     aim,
     paint: colors.main,
@@ -426,21 +434,6 @@ function drawGroundMarks(ctx, state, view) {
     ctx.beginPath();
     ctx.ellipse(e.x, e.y + rx * 0.08, rx, rx * 0.4, 0, 0, Math.PI * 2);
     ctx.stroke();
-    const arm = Math.max(6, rx * 0.55);
-    ctx.beginPath();
-    ctx.moveTo(e.x - rx, e.y - arm);
-    ctx.lineTo(e.x - rx, e.y - rx * 0.15);
-    ctx.lineTo(e.x - rx + arm, e.y - rx * 0.15);
-    ctx.moveTo(e.x + rx, e.y - arm);
-    ctx.lineTo(e.x + rx, e.y - rx * 0.15);
-    ctx.lineTo(e.x + rx - arm, e.y - rx * 0.15);
-    ctx.moveTo(e.x - rx, e.y + arm);
-    ctx.lineTo(e.x - rx, e.y + rx * 0.35);
-    ctx.lineTo(e.x - rx + arm, e.y + rx * 0.35);
-    ctx.moveTo(e.x + rx, e.y + arm);
-    ctx.lineTo(e.x + rx, e.y + rx * 0.35);
-    ctx.lineTo(e.x + rx - arm, e.y + rx * 0.35);
-    ctx.stroke();
   }
   for (const e of state.entities) {
     if (e.hp <= 0 || e.owner !== who || !view.selected?.has(e.id)) continue;
@@ -477,7 +470,8 @@ function drawGroundMarks(ctx, state, view) {
   }
 }
 
-function drawBarsAndRings(ctx, state, view) {
+function drawBars(ctx, state, view) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   const selected = view.selected;
   for (const e of state.entities) {
     if (e.hp <= 0) continue;
@@ -491,22 +485,18 @@ function drawBarsAndRings(ctx, state, view) {
     const showBar = isSel || e.hp < e.maxHp - 0.5;
     if (!showBar) continue;
     if (!own && e.isBuilding && !cellVisible(state, who, e.x, e.y)) continue;
-    const w = Math.max(18, e.radius * 2);
-    const x = e.x - w / 2;
-    const y = e.y - e.radius - (e.isBuilding ? 28 : 16);
+    const p = screenPoint(view, e.x, e.y);
+    const w = Math.max(22, e.radius * view.zoom * 1.4);
+    const x = p.x - w / 2;
+    const y = p.y - e.radius * view.zoom * (e.isBuilding ? 1.8 : 1.35);
     ctx.fillStyle = "rgba(8,10,8,0.8)";
-    ctx.fillRect(x, y, w, 3);
+    ctx.fillRect(x, y, w, 4);
     ctx.fillStyle = e.hp / e.maxHp > 0.35 ? "#b7c48a" : "#c45c3c";
-    ctx.fillRect(x, y, w * Math.max(0, e.hp / e.maxHp), 3);
-  }
-
-  if (view.rally) {
-    drawOrderLine(ctx, view.rally.fromX, view.rally.fromY, view.rally.x, view.rally.y, "#7ec45c");
-    drawFlag(ctx, view.rally.x, view.rally.y, "#7ec45c");
+    ctx.fillRect(x, y, w * Math.max(0, e.hp / e.maxHp), 4);
   }
 }
 
-function drawGhost(ctx, state, view) {
+function drawGhostPlan(ctx, state, view) {
   const ghost = view.ghost;
   if (!ghost) return;
   const fac = faction(state.players[viewer(view)].faction);
@@ -524,43 +514,59 @@ function drawGhost(ctx, state, view) {
       }
     }
   }
-  ctx.save();
-  ctx.translate(ghost.x, ghost.y);
-  ctx.globalAlpha = 0.55;
-  drawIso(ctx, {
-    form: def.shape || "depot",
-    radius: def.radius * 0.86,
-    angle: 0.55,
-    paint: fac.colors.main,
-    dark: fac.colors.dark,
-    cloth: fac.colors.cloth,
-    detail: false,
-    grow: 0.85,
-  });
-  ctx.globalAlpha = 0.9;
   ctx.strokeStyle = ghost.ok ? "#b7c48a" : "#c45c3c";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(0, 0, def.radius, 0, Math.PI * 2);
+  ctx.arc(ghost.x, ghost.y, def.radius, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.restore();
+  if (view.rally) {
+    drawOrderLine(ctx, view.rally.fromX, view.rally.fromY, view.rally.x, view.rally.y, "#7ec45c");
+    drawFlag(ctx, view.rally.x, view.rally.y, "#7ec45c");
+  }
+}
+
+function drawGhostModel(ctx, state, view) {
+  const ghost = view.ghost;
+  if (!ghost) return;
+  const fac = faction(state.players[viewer(view)].faction);
+  const def = fac.buildings[ghost.kind];
+  if (!def) return;
+  withModel(ctx, view, ghost.x, ghost.y, () => {
+    ctx.globalAlpha = 0.55;
+    drawIso(ctx, {
+      form: def.shape || "depot",
+      radius: def.radius * 1.05,
+      angle: 0.55,
+      paint: fac.colors.main,
+      dark: fac.colors.dark,
+      cloth: fac.colors.cloth,
+      detail: false,
+      grow: 0.85,
+    });
+    ctx.globalAlpha = 1;
+  });
 }
 
 function drawFx(ctx, view) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   for (const fx of view.fx) {
     const t = 1 - fx.life / fx.max;
     ctx.globalAlpha = Math.max(0, fx.life / fx.max);
     if (fx.type === "shot") {
+      const a = screenPoint(view, fx.x1, fx.y1);
+      const b = screenPoint(view, fx.x2, fx.y2);
+      const k = Math.min(1, t * 1.4);
       ctx.strokeStyle = fx.air ? "#f4fbff" : fx.heavy ? "#ffe08a" : "#fff4cf";
-      ctx.lineWidth = (fx.heavy ? 2.8 : 1.8) / view.zoom;
+      ctx.lineWidth = fx.heavy ? 2.8 : 1.8;
       ctx.beginPath();
-      ctx.moveTo(fx.x1, fx.y1);
-      ctx.lineTo(fx.x1 + (fx.x2 - fx.x1) * Math.min(1, t * 1.4), fx.y1 + (fx.y2 - fx.y1) * Math.min(1, t * 1.4));
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k);
       ctx.stroke();
     } else if (fx.type === "puff") {
+      const p = screenPoint(view, fx.x, fx.y);
       ctx.fillStyle = fx.color;
       ctx.beginPath();
-      ctx.arc(fx.x, fx.y, 4 + t * 14, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, (4 + t * 14) * Math.min(view.zoom, 2.2), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -613,9 +619,23 @@ export function drawMinimap(canvas, state, view) {
     const r = e.isBuilding ? 3.2 : 1.7;
     ctx.fillRect(e.x * sx - r / 2, e.y * sy - r / 2, r, r);
   }
-  const viewW = canvas.clientWidth ? (view.canvasWidth / view.zoom) * sx : 20;
-  const viewH = (view.canvasHeight / view.zoom) * sy;
+  const viewW = view.canvasWidth / view.zoom;
+  const viewH = view.canvasHeight / view.zoom;
+  const corners = [
+    [view.camX, view.camY],
+    [view.camX + viewW, view.camY],
+    [view.camX + viewW, view.camY + viewH],
+    [view.camX, view.camY + viewH],
+  ].map(([px, py]) => worldPoint(px, py));
   ctx.strokeStyle = "#e7d7a4";
   ctx.lineWidth = 1;
-  ctx.strokeRect(view.camX * sx, view.camY * sy, viewW, viewH);
+  ctx.beginPath();
+  corners.forEach((corner, index) => {
+    const x = corner.x * sx;
+    const y = corner.y * sy;
+    if (index) ctx.lineTo(x, y);
+    else ctx.moveTo(x, y);
+  });
+  ctx.closePath();
+  ctx.stroke();
 }

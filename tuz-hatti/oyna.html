@@ -271,26 +271,6 @@ h2 { font-size: 26px; }
   font-variant-numeric: tabular-nums;
 }
 
-.zoom-ctl {
-  position: absolute;
-  right: 12px;
-  bottom: calc(78px + env(safe-area-inset-bottom));
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.zoom-ctl button {
-  width: 44px;
-  min-height: 44px;
-  padding: 0;
-  background: #101410e6;
-  color: var(--paper);
-  font-size: 22px;
-  line-height: 1;
-}
-
 #stage { position: fixed; inset: 0; background: #101410; }
 
 #view {
@@ -315,7 +295,7 @@ h2 { font-size: 26px; }
   pointer-events: none;
 }
 
-#top button, #top .ver, #minimap, #bar, #result, #rotate button, #menu button, .zoom-ctl button { pointer-events: auto; }
+#top button, #top .ver, #minimap, #bar, #result, #rotate button, #menu button { pointer-events: auto; }
 
 #ver-hud { pointer-events: none; text-shadow: 0 1px 2px #000; }
 
@@ -524,7 +504,7 @@ h2 { font-size: 26px; }
         <div class="menu-top">
           <p class="eyebrow">2026 sahası · sekiz ordu</p>
           <button type="button" id="update" class="ghost">Güncelle</button>
-          <span class="ver" id="ver-menu">2.6</span>
+          <span class="ver" id="ver-menu">2.7</span>
           <button type="button" id="gfx-open" class="ghost">Görüntü</button>
         </div>
         <h1>Cephe Hattı</h1>
@@ -574,7 +554,7 @@ h2 { font-size: 26px; }
         </div>
         <p id="goal">Rakip karargâhı düşür</p>
         <button type="button" id="update-hud">Güncelle</button>
-        <span class="ver" id="ver-hud">2.6</span>
+        <span class="ver" id="ver-hud">2.7</span>
         <button type="button" id="gfx-hud">Görüntü</button>
         <button type="button" id="pause">Duraklat</button>
         <button type="button" id="leave">Çıkış</button>
@@ -583,10 +563,6 @@ h2 { font-size: 26px; }
       <p id="hint">Sürükle: haritayı kaydır</p>
       <canvas id="minimap" aria-label="Küçük harita"></canvas>
       <p id="toast" class="hidden"></p>
-      <div class="zoom-ctl">
-        <button type="button" id="zoom-in" aria-label="Yakınlaş">+</button>
-        <button type="button" id="zoom-out" aria-label="Uzaklaş">−</button>
-      </div>
       <footer id="bar"></footer>
       <div id="result" class="hidden">
         <div class="menu-card">
@@ -3355,7 +3331,7 @@ const GFX_PRESETS = {
     smoothing: false,
     fogSmooth: false,
     fxCap: 10,
-    viewWidth: 1180,
+    viewWidth: 820,
     nodeScale: 0.72,
   },
   medium: {
@@ -3369,7 +3345,7 @@ const GFX_PRESETS = {
     smoothing: true,
     fogSmooth: true,
     fxCap: 28,
-    viewWidth: 980,
+    viewWidth: 680,
     nodeScale: 0.9,
   },
   high: {
@@ -3383,7 +3359,7 @@ const GFX_PRESETS = {
     smoothing: true,
     fogSmooth: true,
     fxCap: 64,
-    viewWidth: 820,
+    viewWidth: 540,
     nodeScale: 1,
   },
 };
@@ -3456,7 +3432,49 @@ function project(x, y, z, yaw) {
   const s = Math.sin(yaw);
   const rx = x * c - y * s;
   const ry = x * s + y * c;
-  return [ (rx - ry) * IX, (rx + ry) * IY - z * 1.7 ];
+  return [rx * 1.05 + ry * 0.46, rx * 0.16 + ry * 0.34 - z * 1.28];
+}
+
+const GROUND_A = 1.04;
+const GROUND_B = 0.5;
+
+function groundPoint(x, y) {
+  return { x: (x - y) * GROUND_A, y: (x + y) * GROUND_B };
+}
+
+function worldPoint(px, py) {
+  return {
+    x: (px / GROUND_A + py / GROUND_B) / 2,
+    y: (py / GROUND_B - px / GROUND_A) / 2,
+  };
+}
+
+function groundSpan(mapW, mapH) {
+  const pts = [groundPoint(0, 0), groundPoint(mapW, 0), groundPoint(0, mapH), groundPoint(mapW, mapH)];
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of pts) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function applyGround(ctx, view) {
+  const z = view.zoom;
+  ctx.setTransform(GROUND_A * z, GROUND_B * z, -GROUND_A * z, GROUND_B * z, -view.camX * z, -view.camY * z);
+}
+
+function screenPoint(view, x, y) {
+  const g = groundPoint(x, y);
+  return {
+    x: (g.x - view.camX) * view.zoom,
+    y: (g.y - view.camY) * view.zoom,
+  };
 }
 
 function depthOf(x, y, yaw) {
@@ -3506,18 +3524,28 @@ function addBox(faces, cx, cy, cz, sx, sy, sz, spin, yaw, color) {
   ];
   for (const quad of quads) {
     const sun = lit(quad.n[0], quad.n[1], quad.n[2], spin, yaw);
-    if (sun.face <= 0.02) continue;
     let depth = 0;
     const pts = quad.idx.map((i) => {
       depth += depthOf(corners[i][0], corners[i][1], yaw);
       return project(corners[i][0], corners[i][1], corners[i][2], yaw);
     });
+    if (screenArea(pts) <= 0) continue;
     faces.push({
       pts,
       depth,
       color: shade(color, Math.max(-0.62, Math.min(0.5, quad.bias + sun.light * 0.22))),
     });
   }
+}
+
+function screenArea(pts) {
+  let area = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const q = pts[(i + 1) % pts.length];
+    area += p[0] * q[1] - q[0] * p[1];
+  }
+  return area;
 }
 
 function paintFaces(ctx, faces) {
@@ -3576,8 +3604,12 @@ function drawIso(ctx, spec) {
     );
   };
   const zLift = lift / Math.max(1, u);
+  const decals = [];
+  const wheel = (cx, cy, cz, r) => {
+    decals.push({ x: cx * u, y: cy * u, z: cz * u * grow + lift, r: r * u });
+  };
 
-  if (spec.form === "tank") tank(box, spec, paint, dark, cloth, detail, phase, aim);
+  if (spec.form === "tank") tank(box, wheel, spec, paint, dark, cloth, detail, phase, aim);
   else if (spec.form === "sph") sph(box, paint, dark, detail, aim);
   else if (spec.form === "mlrs") mlrs(box, paint, dark, cloth, detail, phase);
   else if (spec.form === "ifv") ifv(box, paint, dark, cloth, detail, aim);
@@ -3596,22 +3628,45 @@ function drawIso(ctx, spec) {
   else building(box, spec.form, paint, dark, cloth, detail, aim);
 
   paintFaces(ctx, faces);
+  paintWheels(ctx, decals, yaw);
   if (spec.form === "heli") rotor(ctx, 0, 0, (zLift + 0.95) * u * grow, u * 1.7, yaw, phase);
   if (spec.form === "quad") rotor(ctx, 0, 0, (zLift + 0.55) * u, u * 0.85, yaw, phase * 2);
 }
 
-function tank(box, spec, paint, dark, cloth, detail, phase, aim) {
+function paintWheels(ctx, decals, yaw) {
+  for (const d of decals) {
+    const p = project(d.x, d.y, d.z, yaw);
+    ctx.fillStyle = "#121412";
+    ctx.beginPath();
+    ctx.ellipse(p[0], p[1], d.r, d.r * 0.82, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#3e4038";
+    ctx.lineWidth = Math.max(0.7, d.r * 0.16);
+    ctx.stroke();
+    ctx.fillStyle = "#8a7d62";
+    ctx.beginPath();
+    ctx.ellipse(p[0], p[1], d.r * 0.32, d.r * 0.26, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function tank(box, wheel, spec, paint, dark, cloth, detail, phase, aim) {
   const p = TANKS[spec.key] || TANKS.altay;
-  box(0, 0, p.H * 0.45, p.L, p.W * 0.72, p.H * 0.7, 0, shade(paint, -0.05));
-  box(0, -p.W * 0.46, p.H * 0.32, p.L * 0.92, p.W * 0.22, p.H * 0.55, 0, dark);
-  box(0, p.W * 0.46, p.H * 0.32, p.L * 0.92, p.W * 0.22, p.H * 0.55, 0, dark);
+  box(0, 0, p.H * 0.42, p.L, p.W * 0.78, p.H * 0.62, 0, shade(paint, -0.08));
+  box(p.L * 0.34, 0, p.H * 0.62, p.L * 0.28, p.W * 0.7, p.H * 0.28, 0, shade(paint, 0.05));
+  box(0, -p.W * 0.48, p.H * 0.28, p.L * 0.9, p.W * 0.16, p.H * 0.46, 0, "#1a1c18");
+  box(0, p.W * 0.48, p.H * 0.28, p.L * 0.9, p.W * 0.16, p.H * 0.46, 0, "#1a1c18");
+  const span = p.L * 0.74;
+  const step = span / Math.max(1, p.wheels - 1);
+  for (let i = 0; i < p.wheels; i++) {
+    const x = -span / 2 + i * step;
+    wheel(x, -p.W * 0.52, 0.15, i === 0 || i === p.wheels - 1 ? 0.17 : 0.145);
+    wheel(x, p.W * 0.52, 0.15, i === 0 || i === p.wheels - 1 ? 0.17 : 0.145);
+  }
   if (detail) {
-    const step = p.L / (p.wheels + 1);
-    for (let i = 0; i < p.wheels; i++) {
-      const wobble = ((i + Math.floor(phase * 2)) % 2) * 0.02;
-      const x = -p.L / 2 + step * (i + 1);
-      box(x, -p.W * 0.5, 0.12 + wobble, 0.16, 0.1, 0.16, 0, "#1a1c18");
-      box(x, p.W * 0.5, 0.12 + wobble, 0.16, 0.1, 0.16, 0, "#1a1c18");
+    for (let i = 0; i < 8; i++) {
+      box(-p.L * 0.38 + i * (p.L * 0.1), -p.W * 0.56, p.H * 0.22, 0.06, 0.04, 0.08, 0, "#2a2c28");
+      box(-p.L * 0.38 + i * (p.L * 0.1), p.W * 0.56, p.H * 0.22, 0.06, 0.04, 0.08, 0, "#2a2c28");
     }
   }
   if (p.wedge) box(p.L * 0.28, 0, p.H * 0.78, p.L * 0.28, p.W * 0.5, 0.12, 0, shade(paint, 0.08));
@@ -3619,9 +3674,11 @@ function tank(box, spec, paint, dark, cloth, detail, phase, aim) {
     box(p.L * 0.22, -p.W * 0.28, p.H * 0.72, 0.28, 0.12, 0.12, 0, shade(cloth, -0.2));
     box(p.L * 0.22, p.W * 0.28, p.H * 0.72, 0.28, 0.12, 0.12, 0, shade(cloth, -0.2));
   }
-  box(p.tX, 0, p.H * 0.85, p.tL, p.tW, p.tH, aim, shade(paint, 0.12));
-  box(p.tX + p.tL * 0.45, 0, p.H * 0.95, p.gun, 0.08, 0.08, aim, "#2a2c28");
-  box(p.tX - p.tL * 0.2, 0, p.H + p.tH * 0.7, 0.16, 0.16, 0.18, aim, dark);
+  box(p.tX, 0, p.H * 0.95, p.tL, p.tW, p.tH, aim, shade(paint, 0.1));
+  box(p.tX - p.tL * 0.28, 0, p.H * 0.9, p.tL * 0.32, p.tW * 0.9, p.tH * 0.7, aim, shade(paint, -0.02));
+  box(p.tX + p.tL * 0.42, 0, p.H + 0.02, p.gun, 0.07, 0.07, aim, "#242620");
+  box(p.tX + p.tL * 0.42 + p.gun * 0.46, 0, p.H + 0.02, 0.14, 0.11, 0.11, aim, "#121412");
+  box(p.tX - p.tL * 0.05, 0, p.H + p.tH * 0.85, 0.18, 0.18, 0.16, aim, dark);
 }
 
 function sph(box, paint, dark, detail, aim) {
@@ -3789,13 +3846,13 @@ function peak(box, dark, cloth) {
 
 function building(box, form, paint, dark, cloth, detail, aim) {
   if (form === "hq") {
-    box(0, 0, 0.55, 1.55, 1.15, 0.85, 0, shade(paint, -0.2));
-    box(0.05, -0.05, 1.15, 0.72, 0.58, 0.42, 0, shade(paint, 0.02));
+    box(0, 0, 0.32, 1.7, 1.25, 0.48, 0, shade(paint, -0.2));
+    box(0.1, -0.08, 0.68, 0.7, 0.55, 0.32, 0, shade(paint, 0.02));
     box(-0.15, 0.15, 0.95, 0.22, 0.16, 0.16, 0, "#8fb0bc");
     box(0.2, -0.28, 0.7, 0.16, 0.08, 0.22, 0, shade(cloth, -0.15));
     box(-0.55, 0.4, 0.22, 0.55, 0.4, 0.16, 0, shade(dark, 0.2));
-    box(0.15, -0.05, 1.5, 0.06, 0.06, 0.4, 0, cloth);
-    if (detail) box(0.42, 0.12, 1.42, 0.26, 0.26, 0.05, 0.5, "#c5d0d2");
+    box(0.15, -0.05, 1.02, 0.06, 0.06, 0.36, 0, cloth);
+    if (detail) box(0.42, 0.12, 0.92, 0.26, 0.26, 0.05, 0.5, "#c5d0d2");
   } else if (form === "barracks") {
     box(0, 0, 0.32, 1.8, 0.85, 0.48, 0, shade(paint, -0.02));
     box(0, 0.55, 0.12, 1.5, 0.25, 0.12, 0, shade(dark, 0.3));
@@ -3914,19 +3971,20 @@ function gfxOf(view) {
 function drawWorld(ctx, state, view) {
   const gfx = gfxOf(view);
   ensureTerrain(view, state, gfx);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#2c2820";
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.save();
+  applyGround(ctx, view);
   ctx.imageSmoothingEnabled = !!gfx.smoothing;
-  ctx.setTransform(view.zoom, 0, 0, view.zoom, -view.camX * view.zoom, -view.camY * view.zoom);
   ctx.drawImage(view.terrain, 0, 0, state.mapW, state.mapH);
-  drawSolids(ctx, state, gfx);
   if (gfx.decor) drawDecor(ctx, state);
-  drawNodes(ctx, state, gfx);
   drawGroundMarks(ctx, state, view);
-  drawEntities(ctx, state, view, gfx);
   drawFog(ctx, state, view);
-  drawBarsAndRings(ctx, state, view);
-  drawGhost(ctx, state, view);
-  drawFx(ctx, view);
+  drawGhostPlan(ctx, state, view);
   if (view.box) drawBox(ctx, view.box);
+  ctx.restore();
+  drawUpright(ctx, state, view, gfx);
 }
 
 function ensureTerrain(view, state, gfx) {
@@ -3961,9 +4019,9 @@ function ensureTerrain(view, state, gfx) {
     g.fillRect(0, 0, state.mapW, state.mapH);
   }
   const shade = g.createLinearGradient(0, 0, 0, state.mapH);
-  shade.addColorStop(0, "rgba(12,16,10,0.18)");
+  shade.addColorStop(0, "rgba(12,16,10,0.08)");
   shade.addColorStop(0.5, "rgba(0,0,0,0)");
-  shade.addColorStop(1, "rgba(8,10,8,0.22)");
+  shade.addColorStop(1, "rgba(8,10,8,0.1)");
   g.fillStyle = shade;
   g.fillRect(0, 0, state.mapW, state.mapH);
   for (const rock of state.obstacles) paintObstacle(g, rock);
@@ -4002,62 +4060,69 @@ function drawDecor(ctx, state) {
   }
 }
 
-function drawSolids(ctx, state, gfx) {
+function drawUpright(ctx, state, view, gfx) {
   for (const rock of state.obstacles) {
     if (rock.kind === "water") continue;
-    ctx.save();
-    ctx.translate(rock.x, rock.y);
-    drawIso(ctx, {
-      form: rock.kind === "forest" ? "tree" : "peak",
-      radius: rock.r * (rock.kind === "forest" ? 0.34 : 0.48),
-      angle: 0.4,
-      paint: rock.kind === "forest" ? "#2f6a38" : "#8a8074",
-      dark: "#3a3228",
-      cloth: "#d9d3c6",
-      detail: !!gfx.decor,
-      grow: 1,
+    withModel(ctx, view, rock.x, rock.y, () => {
+      drawIso(ctx, {
+        form: rock.kind === "forest" ? "tree" : "peak",
+        radius: rock.r * (rock.kind === "forest" ? 0.34 : 0.48),
+        angle: 0.4,
+        paint: rock.kind === "forest" ? "#2f6a38" : "#8a8074",
+        dark: "#3a3228",
+        cloth: "#d9d3c6",
+        detail: !!gfx.decor,
+        grow: 1,
+      });
     });
-    ctx.restore();
   }
-}
-
-function drawNodes(ctx, state, gfx) {
   for (const n of state.nodes) {
     const left = n.amount / n.max;
-    ctx.save();
-    ctx.translate(n.x, n.y);
-    ctx.globalAlpha = left > 0 ? 1 : 0.35;
-    drawIso(ctx, {
-      form: "node",
-      key: n.kind,
-      radius: 16 * (gfx.nodeScale || 1),
-      angle: 0.5,
-      paint: NODE_TINT[n.kind] || "#8a7040",
-      dark: "#2a241c",
-      cloth: "#d7d2c4",
-      detail: !!gfx.decor,
-      grow: 0.45 + 0.55 * left,
+    withModel(ctx, view, n.x, n.y, () => {
+      ctx.globalAlpha = left > 0 ? 1 : 0.35;
+      drawIso(ctx, {
+        form: "node",
+        key: n.kind,
+        radius: 16 * (gfx.nodeScale || 1),
+        angle: 0.5,
+        paint: NODE_TINT[n.kind] || "#8a7040",
+        dark: "#2a241c",
+        cloth: "#d7d2c4",
+        detail: !!gfx.decor,
+        grow: 0.45 + 0.55 * left,
+      });
+      ctx.globalAlpha = 1;
     });
-    ctx.restore();
   }
+  drawEntities(ctx, state, view, gfx);
+  drawGhostModel(ctx, state, view);
+  drawBars(ctx, state, view);
+  drawFx(ctx, view);
+}
+
+function withModel(ctx, view, x, y, draw) {
+  const p = screenPoint(view, x, y);
+  ctx.save();
+  ctx.setTransform(view.zoom, 0, 0, view.zoom, p.x, p.y);
+  draw();
+  ctx.restore();
 }
 
 function drawEntities(ctx, state, view, gfx) {
   const list = state.entities.filter((e) => e.hp > 0);
   list.sort((a, b) => {
     const layer = (e) => (e.isBuilding ? 0 : entityDef(state, e).air ? 2 : 1);
-    return layer(a) - layer(b) || a.y - b.y;
+    return layer(a) - layer(b) || a.x + a.y - (b.x + b.y);
   });
   for (const e of list) {
     if (e.owner !== viewer(view) && !canSeeEntity(state, viewer(view), e)) continue;
     const colors = faction(state.players[e.owner].faction).colors;
     const def = entityDef(state, e);
-    ctx.save();
-    ctx.translate(e.x, e.y);
-    ctx.globalAlpha = e.isBuilding && !e.constructed ? 0.72 : 1;
-    if (e.isBuilding) drawBuilding(ctx, e, def, colors, gfx);
-    else drawUnit(ctx, e, def, colors, gfx, state);
-    ctx.restore();
+    withModel(ctx, view, e.x, e.y, () => {
+      ctx.globalAlpha = e.isBuilding && !e.constructed ? 0.72 : 1;
+      if (e.isBuilding) drawBuilding(ctx, e, def, colors, gfx);
+      else drawUnit(ctx, e, def, colors, gfx, state);
+    });
   }
 }
 
@@ -4071,7 +4136,7 @@ function drawBuilding(ctx, e, def, colors, gfx) {
   }
   drawIso(ctx, {
     form: def.shape || "depot",
-    radius: def.radius * 0.86,
+    radius: def.radius * 1.05,
     angle: 0.55,
     aim: def.turret ? e.angle : 0.55,
     paint: colors.main,
@@ -4145,7 +4210,7 @@ function drawUnit(ctx, e, def, colors, gfx, state) {
     form: unitForm(def),
     key: def.sprite,
     name: def.name,
-    radius: def.radius * (def.air ? 1.35 : def.naval ? 1.2 : 1.15),
+    radius: def.radius * (def.air ? 1.7 : def.naval ? 1.55 : def.worker ? 1.45 : 1.72),
     angle: e.angle,
     aim,
     paint: colors.main,
@@ -4257,21 +4322,6 @@ function drawGroundMarks(ctx, state, view) {
     ctx.beginPath();
     ctx.ellipse(e.x, e.y + rx * 0.08, rx, rx * 0.4, 0, 0, Math.PI * 2);
     ctx.stroke();
-    const arm = Math.max(6, rx * 0.55);
-    ctx.beginPath();
-    ctx.moveTo(e.x - rx, e.y - arm);
-    ctx.lineTo(e.x - rx, e.y - rx * 0.15);
-    ctx.lineTo(e.x - rx + arm, e.y - rx * 0.15);
-    ctx.moveTo(e.x + rx, e.y - arm);
-    ctx.lineTo(e.x + rx, e.y - rx * 0.15);
-    ctx.lineTo(e.x + rx - arm, e.y - rx * 0.15);
-    ctx.moveTo(e.x - rx, e.y + arm);
-    ctx.lineTo(e.x - rx, e.y + rx * 0.35);
-    ctx.lineTo(e.x - rx + arm, e.y + rx * 0.35);
-    ctx.moveTo(e.x + rx, e.y + arm);
-    ctx.lineTo(e.x + rx, e.y + rx * 0.35);
-    ctx.lineTo(e.x + rx - arm, e.y + rx * 0.35);
-    ctx.stroke();
   }
   for (const e of state.entities) {
     if (e.hp <= 0 || e.owner !== who || !view.selected?.has(e.id)) continue;
@@ -4308,7 +4358,8 @@ function drawGroundMarks(ctx, state, view) {
   }
 }
 
-function drawBarsAndRings(ctx, state, view) {
+function drawBars(ctx, state, view) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   const selected = view.selected;
   for (const e of state.entities) {
     if (e.hp <= 0) continue;
@@ -4322,22 +4373,18 @@ function drawBarsAndRings(ctx, state, view) {
     const showBar = isSel || e.hp < e.maxHp - 0.5;
     if (!showBar) continue;
     if (!own && e.isBuilding && !cellVisible(state, who, e.x, e.y)) continue;
-    const w = Math.max(18, e.radius * 2);
-    const x = e.x - w / 2;
-    const y = e.y - e.radius - (e.isBuilding ? 28 : 16);
+    const p = screenPoint(view, e.x, e.y);
+    const w = Math.max(22, e.radius * view.zoom * 1.4);
+    const x = p.x - w / 2;
+    const y = p.y - e.radius * view.zoom * (e.isBuilding ? 1.8 : 1.35);
     ctx.fillStyle = "rgba(8,10,8,0.8)";
-    ctx.fillRect(x, y, w, 3);
+    ctx.fillRect(x, y, w, 4);
     ctx.fillStyle = e.hp / e.maxHp > 0.35 ? "#b7c48a" : "#c45c3c";
-    ctx.fillRect(x, y, w * Math.max(0, e.hp / e.maxHp), 3);
-  }
-
-  if (view.rally) {
-    drawOrderLine(ctx, view.rally.fromX, view.rally.fromY, view.rally.x, view.rally.y, "#7ec45c");
-    drawFlag(ctx, view.rally.x, view.rally.y, "#7ec45c");
+    ctx.fillRect(x, y, w * Math.max(0, e.hp / e.maxHp), 4);
   }
 }
 
-function drawGhost(ctx, state, view) {
+function drawGhostPlan(ctx, state, view) {
   const ghost = view.ghost;
   if (!ghost) return;
   const fac = faction(state.players[viewer(view)].faction);
@@ -4355,43 +4402,59 @@ function drawGhost(ctx, state, view) {
       }
     }
   }
-  ctx.save();
-  ctx.translate(ghost.x, ghost.y);
-  ctx.globalAlpha = 0.55;
-  drawIso(ctx, {
-    form: def.shape || "depot",
-    radius: def.radius * 0.86,
-    angle: 0.55,
-    paint: fac.colors.main,
-    dark: fac.colors.dark,
-    cloth: fac.colors.cloth,
-    detail: false,
-    grow: 0.85,
-  });
-  ctx.globalAlpha = 0.9;
   ctx.strokeStyle = ghost.ok ? "#b7c48a" : "#c45c3c";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(0, 0, def.radius, 0, Math.PI * 2);
+  ctx.arc(ghost.x, ghost.y, def.radius, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.restore();
+  if (view.rally) {
+    drawOrderLine(ctx, view.rally.fromX, view.rally.fromY, view.rally.x, view.rally.y, "#7ec45c");
+    drawFlag(ctx, view.rally.x, view.rally.y, "#7ec45c");
+  }
+}
+
+function drawGhostModel(ctx, state, view) {
+  const ghost = view.ghost;
+  if (!ghost) return;
+  const fac = faction(state.players[viewer(view)].faction);
+  const def = fac.buildings[ghost.kind];
+  if (!def) return;
+  withModel(ctx, view, ghost.x, ghost.y, () => {
+    ctx.globalAlpha = 0.55;
+    drawIso(ctx, {
+      form: def.shape || "depot",
+      radius: def.radius * 1.05,
+      angle: 0.55,
+      paint: fac.colors.main,
+      dark: fac.colors.dark,
+      cloth: fac.colors.cloth,
+      detail: false,
+      grow: 0.85,
+    });
+    ctx.globalAlpha = 1;
+  });
 }
 
 function drawFx(ctx, view) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   for (const fx of view.fx) {
     const t = 1 - fx.life / fx.max;
     ctx.globalAlpha = Math.max(0, fx.life / fx.max);
     if (fx.type === "shot") {
+      const a = screenPoint(view, fx.x1, fx.y1);
+      const b = screenPoint(view, fx.x2, fx.y2);
+      const k = Math.min(1, t * 1.4);
       ctx.strokeStyle = fx.air ? "#f4fbff" : fx.heavy ? "#ffe08a" : "#fff4cf";
-      ctx.lineWidth = (fx.heavy ? 2.8 : 1.8) / view.zoom;
+      ctx.lineWidth = fx.heavy ? 2.8 : 1.8;
       ctx.beginPath();
-      ctx.moveTo(fx.x1, fx.y1);
-      ctx.lineTo(fx.x1 + (fx.x2 - fx.x1) * Math.min(1, t * 1.4), fx.y1 + (fx.y2 - fx.y1) * Math.min(1, t * 1.4));
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k);
       ctx.stroke();
     } else if (fx.type === "puff") {
+      const p = screenPoint(view, fx.x, fx.y);
       ctx.fillStyle = fx.color;
       ctx.beginPath();
-      ctx.arc(fx.x, fx.y, 4 + t * 14, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, (4 + t * 14) * Math.min(view.zoom, 2.2), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -4444,11 +4507,25 @@ function drawMinimap(canvas, state, view) {
     const r = e.isBuilding ? 3.2 : 1.7;
     ctx.fillRect(e.x * sx - r / 2, e.y * sy - r / 2, r, r);
   }
-  const viewW = canvas.clientWidth ? (view.canvasWidth / view.zoom) * sx : 20;
-  const viewH = (view.canvasHeight / view.zoom) * sy;
+  const viewW = view.canvasWidth / view.zoom;
+  const viewH = view.canvasHeight / view.zoom;
+  const corners = [
+    [view.camX, view.camY],
+    [view.camX + viewW, view.camY],
+    [view.camX + viewW, view.camY + viewH],
+    [view.camX, view.camY + viewH],
+  ].map(([px, py]) => worldPoint(px, py));
   ctx.strokeStyle = "#e7d7a4";
   ctx.lineWidth = 1;
-  ctx.strokeRect(view.camX * sx, view.camY * sy, viewW, viewH);
+  ctx.beginPath();
+  corners.forEach((corner, index) => {
+    const x = corner.x * sx;
+    const y = corner.y * sy;
+    if (index) ctx.lineTo(x, y);
+    else ctx.moveTo(x, y);
+  });
+  ctx.closePath();
+  ctx.stroke();
 }
 
 /** Ev sahibi simülasyonu yürütür. Konuklar emir yollar, görüntü ev sahibinden gelir. */
@@ -4609,7 +4686,7 @@ function joinRoom(code, hooks) {
   );
 }
 
-/** Dokunmatik arayüz. Sürükle kaydırır, dokunuş seçer veya emir verir. */
+/** Dokunmatik arayüz. Sürükle kaydırır, dokunuş seçer veya emir verir. */
 
 const REASONS = {
   ash: "Yakıt yetmiyor",
@@ -4622,7 +4699,7 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 8, name: "2.6" };
+const APP = { code: 9, name: "2.7" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://raw.githubusercontent.com/arsangaz01/arsan-gaz-erp-releases/cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
@@ -4889,16 +4966,19 @@ function focusHome() {
   if (!hq) return;
   const viewW = view.canvasWidth / view.zoom;
   const viewH = view.canvasHeight / view.zoom;
-  view.camX = hq.x - viewW * 0.38;
-  view.camY = hq.y - viewH * 0.5;
+  const g = groundPoint(hq.x, hq.y);
+  view.camX = g.x - viewW * 0.4;
+  view.camY = g.y - viewH * 0.52;
   clampCam();
 }
 
 function clampCam() {
+  if (!match) return;
+  const span = groundSpan(match.mapW, match.mapH);
   const viewW = view.canvasWidth / view.zoom;
   const viewH = view.canvasHeight / view.zoom;
-  view.camX = clampTo(view.camX, 0, Math.max(0, match.mapW - viewW));
-  view.camY = clampTo(view.camY, 0, Math.max(0, match.mapH - viewH));
+  view.camX = clampTo(view.camX, span.minX, Math.max(span.minX, span.maxX - viewW));
+  view.camY = clampTo(view.camY, span.minY, Math.max(span.minY, span.maxY - viewH));
 }
 
 function frame(now) {
@@ -5035,7 +5115,7 @@ function onPointerMove(ev) {
   if (pointers.has(ev.pointerId)) pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
   if (pointers.size >= 2 && pinch) {
     const next = pinchOf(pointers);
-    setUserZoom(pinch.zoom * (next.dist / pinch.dist), worldFromClient(pinch.cx, pinch.cy));
+    setUserZoom(pinch.zoom * (pinch.dist / next.dist), worldFromClient(pinch.cx, pinch.cy));
     return;
   }
   if (!pointer || ev.pointerId !== pointer.id) return;
@@ -5091,10 +5171,11 @@ function onMinimap(ev) {
   const rect = minimap.getBoundingClientRect();
   const x = ((ev.clientX - rect.left) / rect.width) * match.mapW;
   const y = ((ev.clientY - rect.top) / rect.height) * match.mapH;
+  const g = groundPoint(x, y);
   const viewW = view.canvasWidth / view.zoom;
   const viewH = view.canvasHeight / view.zoom;
-  view.camX = x - viewW / 2;
-  view.camY = y - viewH / 2;
+  view.camX = g.x - viewW / 2;
+  view.camY = g.y - viewH / 2;
   clampCam();
 }
 
@@ -5119,6 +5200,32 @@ function handleTap(x, y) {
     return;
   }
   const hit = pickEntity(match, x, y, me);
+  if (!hit && tool !== "attack" && tool !== "rally" && tool?.type !== "place") {
+    const now = performance.now();
+    const again = view.lastEmpty && now - view.lastEmpty < 420;
+    view.lastEmpty = again ? 0 : now;
+    if (again) {
+      if (view.pendingMove) {
+        clearTimeout(view.pendingMove);
+        view.pendingMove = null;
+      }
+      selectArmy();
+      return;
+    }
+    const units = selectedUnits();
+    if (units.length) {
+      const ids = units.map((unit) => unit.id);
+      if (view.pendingMove) clearTimeout(view.pendingMove);
+      view.pendingMove = setTimeout(() => {
+        view.pendingMove = null;
+        if (!match) return;
+        issue({ type: "move", ids, x, y });
+        view.ping = { x, y, life: 0.7, max: 0.7 };
+        recomputeFog(match);
+      }, 230);
+      return;
+    }
+  }
   if (tool === "attack") {
     const ids = selectedUnits().map((e) => e.id);
     if (hit && hostile(match, me, hit.owner)) issue({ type: "attack", ids, targetId: hit.id });
@@ -5167,6 +5274,18 @@ function handleTap(x, y) {
     view.ping = { x, y, life: 0.7, max: 0.7 };
   }
   recomputeFog(match);
+}
+
+function selectArmy() {
+  view.selected.clear();
+  for (const e of match.entities) {
+    if (e.owner !== me || e.hp <= 0 || e.isBuilding) continue;
+    if (entityDef(match, e).worker) continue;
+    if (!canSeeEntity(match, me, e)) continue;
+    view.selected.add(e.id);
+  }
+  if (!view.selected.size) toast("Sahada seçilecek birlik yok");
+  refreshHud(true);
 }
 
 function selectBox(x1, y1, x2, y2) {
@@ -5253,7 +5372,7 @@ function refreshHud(force) {
 function paintInspect(ents) {
   if (!ents.length) {
     inspectEl.textContent = "Kimse seçili değil";
-    hintEl.textContent = "Sürükle: kaydır · iki parmak veya + − : yakınlaş";
+    hintEl.textContent = "Sürükle: kaydır · iki parmak içe: yakınlaş, dışa: uzaklaş · boşluğa çift dokunuş: tüm birlik";
     return;
   }
   if (ents.length === 1) {
@@ -5526,10 +5645,7 @@ function worldFromClient(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   const sx = ((clientX - rect.left) / rect.width) * canvas.width;
   const sy = ((clientY - rect.top) / rect.height) * canvas.height;
-  return {
-    x: view.camX + sx / view.zoom,
-    y: view.camY + sy / view.zoom,
-  };
+  return worldPoint(sx / view.zoom + view.camX, sy / view.zoom + view.camY);
 }
 
 function worldFromEvent(ev) {
@@ -5538,13 +5654,21 @@ function worldFromEvent(ev) {
 
 function setUserZoom(next, anchor) {
   const prev = view.zoom || 1;
-  view.userZoom = clampTo(next, 0.55, 2.7);
-  view.zoom = (view.fitZoom || prev) * view.userZoom;
+  let hold = null;
   if (anchor && match) {
-    const sx = (anchor.x - view.camX) * prev;
-    const sy = (anchor.y - view.camY) * prev;
-    view.camX = anchor.x - sx / view.zoom;
-    view.camY = anchor.y - sy / view.zoom;
+    const g = groundPoint(anchor.x, anchor.y);
+    hold = {
+      x: g.x,
+      y: g.y,
+      sx: (g.x - view.camX) * prev,
+      sy: (g.y - view.camY) * prev,
+    };
+  }
+  view.userZoom = clampTo(next, 0.7, 3.2);
+  view.zoom = (view.fitZoom || prev) * view.userZoom;
+  if (hold) {
+    view.camX = hold.x - hold.sx / view.zoom;
+    view.camY = hold.y - hold.sy / view.zoom;
     clampCam();
   }
 }
@@ -5898,27 +6022,13 @@ async function checkUpdate() {
 
 for (const el of document.querySelectorAll(".ver")) el.textContent = APP.name;
 
-document.querySelector("#zoom-in")?.addEventListener("click", () => {
-  if (!match) return;
-  unlockAudio();
-  const viewW = view.canvasWidth / view.zoom;
-  const viewH = view.canvasHeight / view.zoom;
-  setUserZoom(view.userZoom * 1.18, { x: view.camX + viewW / 2, y: view.camY + viewH / 2 });
-});
-document.querySelector("#zoom-out")?.addEventListener("click", () => {
-  if (!match) return;
-  unlockAudio();
-  const viewW = view.canvasWidth / view.zoom;
-  const viewH = view.canvasHeight / view.zoom;
-  setUserZoom(view.userZoom / 1.18, { x: view.camX + viewW / 2, y: view.camY + viewH / 2 });
-});
 canvas.addEventListener(
   "wheel",
   (ev) => {
     if (!match) return;
     ev.preventDefault();
-    const factor = ev.deltaY > 0 ? 0.9 : 1.11;
-    setUserZoom(view.userZoom * factor, worldFromEvent(ev));
+    const factor = ev.deltaY > 0 ? 1 / 1.08 : 1.08;
+    setUserZoom((view.userZoom || 1) * factor, worldFromEvent(ev));
   },
   { passive: false },
 );

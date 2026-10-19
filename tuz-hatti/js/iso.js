@@ -45,7 +45,49 @@ function project(x, y, z, yaw) {
   const s = Math.sin(yaw);
   const rx = x * c - y * s;
   const ry = x * s + y * c;
-  return [ (rx - ry) * IX, (rx + ry) * IY - z * 1.7 ];
+  return [rx * 1.05 + ry * 0.46, rx * 0.16 + ry * 0.34 - z * 1.28];
+}
+
+export const GROUND_A = 1.04;
+export const GROUND_B = 0.5;
+
+export function groundPoint(x, y) {
+  return { x: (x - y) * GROUND_A, y: (x + y) * GROUND_B };
+}
+
+export function worldPoint(px, py) {
+  return {
+    x: (px / GROUND_A + py / GROUND_B) / 2,
+    y: (py / GROUND_B - px / GROUND_A) / 2,
+  };
+}
+
+export function groundSpan(mapW, mapH) {
+  const pts = [groundPoint(0, 0), groundPoint(mapW, 0), groundPoint(0, mapH), groundPoint(mapW, mapH)];
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of pts) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+export function applyGround(ctx, view) {
+  const z = view.zoom;
+  ctx.setTransform(GROUND_A * z, GROUND_B * z, -GROUND_A * z, GROUND_B * z, -view.camX * z, -view.camY * z);
+}
+
+export function screenPoint(view, x, y) {
+  const g = groundPoint(x, y);
+  return {
+    x: (g.x - view.camX) * view.zoom,
+    y: (g.y - view.camY) * view.zoom,
+  };
 }
 
 function depthOf(x, y, yaw) {
@@ -95,18 +137,28 @@ function addBox(faces, cx, cy, cz, sx, sy, sz, spin, yaw, color) {
   ];
   for (const quad of quads) {
     const sun = lit(quad.n[0], quad.n[1], quad.n[2], spin, yaw);
-    if (sun.face <= 0.02) continue;
     let depth = 0;
     const pts = quad.idx.map((i) => {
       depth += depthOf(corners[i][0], corners[i][1], yaw);
       return project(corners[i][0], corners[i][1], corners[i][2], yaw);
     });
+    if (screenArea(pts) <= 0) continue;
     faces.push({
       pts,
       depth,
       color: shade(color, Math.max(-0.62, Math.min(0.5, quad.bias + sun.light * 0.22))),
     });
   }
+}
+
+function screenArea(pts) {
+  let area = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const q = pts[(i + 1) % pts.length];
+    area += p[0] * q[1] - q[0] * p[1];
+  }
+  return area;
 }
 
 function paintFaces(ctx, faces) {
@@ -165,8 +217,12 @@ export function drawIso(ctx, spec) {
     );
   };
   const zLift = lift / Math.max(1, u);
+  const decals = [];
+  const wheel = (cx, cy, cz, r) => {
+    decals.push({ x: cx * u, y: cy * u, z: cz * u * grow + lift, r: r * u });
+  };
 
-  if (spec.form === "tank") tank(box, spec, paint, dark, cloth, detail, phase, aim);
+  if (spec.form === "tank") tank(box, wheel, spec, paint, dark, cloth, detail, phase, aim);
   else if (spec.form === "sph") sph(box, paint, dark, detail, aim);
   else if (spec.form === "mlrs") mlrs(box, paint, dark, cloth, detail, phase);
   else if (spec.form === "ifv") ifv(box, paint, dark, cloth, detail, aim);
@@ -185,22 +241,45 @@ export function drawIso(ctx, spec) {
   else building(box, spec.form, paint, dark, cloth, detail, aim);
 
   paintFaces(ctx, faces);
+  paintWheels(ctx, decals, yaw);
   if (spec.form === "heli") rotor(ctx, 0, 0, (zLift + 0.95) * u * grow, u * 1.7, yaw, phase);
   if (spec.form === "quad") rotor(ctx, 0, 0, (zLift + 0.55) * u, u * 0.85, yaw, phase * 2);
 }
 
-function tank(box, spec, paint, dark, cloth, detail, phase, aim) {
+function paintWheels(ctx, decals, yaw) {
+  for (const d of decals) {
+    const p = project(d.x, d.y, d.z, yaw);
+    ctx.fillStyle = "#121412";
+    ctx.beginPath();
+    ctx.ellipse(p[0], p[1], d.r, d.r * 0.82, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#3e4038";
+    ctx.lineWidth = Math.max(0.7, d.r * 0.16);
+    ctx.stroke();
+    ctx.fillStyle = "#8a7d62";
+    ctx.beginPath();
+    ctx.ellipse(p[0], p[1], d.r * 0.32, d.r * 0.26, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function tank(box, wheel, spec, paint, dark, cloth, detail, phase, aim) {
   const p = TANKS[spec.key] || TANKS.altay;
-  box(0, 0, p.H * 0.45, p.L, p.W * 0.72, p.H * 0.7, 0, shade(paint, -0.05));
-  box(0, -p.W * 0.46, p.H * 0.32, p.L * 0.92, p.W * 0.22, p.H * 0.55, 0, dark);
-  box(0, p.W * 0.46, p.H * 0.32, p.L * 0.92, p.W * 0.22, p.H * 0.55, 0, dark);
+  box(0, 0, p.H * 0.42, p.L, p.W * 0.78, p.H * 0.62, 0, shade(paint, -0.08));
+  box(p.L * 0.34, 0, p.H * 0.62, p.L * 0.28, p.W * 0.7, p.H * 0.28, 0, shade(paint, 0.05));
+  box(0, -p.W * 0.48, p.H * 0.28, p.L * 0.9, p.W * 0.16, p.H * 0.46, 0, "#1a1c18");
+  box(0, p.W * 0.48, p.H * 0.28, p.L * 0.9, p.W * 0.16, p.H * 0.46, 0, "#1a1c18");
+  const span = p.L * 0.74;
+  const step = span / Math.max(1, p.wheels - 1);
+  for (let i = 0; i < p.wheels; i++) {
+    const x = -span / 2 + i * step;
+    wheel(x, -p.W * 0.52, 0.15, i === 0 || i === p.wheels - 1 ? 0.17 : 0.145);
+    wheel(x, p.W * 0.52, 0.15, i === 0 || i === p.wheels - 1 ? 0.17 : 0.145);
+  }
   if (detail) {
-    const step = p.L / (p.wheels + 1);
-    for (let i = 0; i < p.wheels; i++) {
-      const wobble = ((i + Math.floor(phase * 2)) % 2) * 0.02;
-      const x = -p.L / 2 + step * (i + 1);
-      box(x, -p.W * 0.5, 0.12 + wobble, 0.16, 0.1, 0.16, 0, "#1a1c18");
-      box(x, p.W * 0.5, 0.12 + wobble, 0.16, 0.1, 0.16, 0, "#1a1c18");
+    for (let i = 0; i < 8; i++) {
+      box(-p.L * 0.38 + i * (p.L * 0.1), -p.W * 0.56, p.H * 0.22, 0.06, 0.04, 0.08, 0, "#2a2c28");
+      box(-p.L * 0.38 + i * (p.L * 0.1), p.W * 0.56, p.H * 0.22, 0.06, 0.04, 0.08, 0, "#2a2c28");
     }
   }
   if (p.wedge) box(p.L * 0.28, 0, p.H * 0.78, p.L * 0.28, p.W * 0.5, 0.12, 0, shade(paint, 0.08));
@@ -208,9 +287,11 @@ function tank(box, spec, paint, dark, cloth, detail, phase, aim) {
     box(p.L * 0.22, -p.W * 0.28, p.H * 0.72, 0.28, 0.12, 0.12, 0, shade(cloth, -0.2));
     box(p.L * 0.22, p.W * 0.28, p.H * 0.72, 0.28, 0.12, 0.12, 0, shade(cloth, -0.2));
   }
-  box(p.tX, 0, p.H * 0.85, p.tL, p.tW, p.tH, aim, shade(paint, 0.12));
-  box(p.tX + p.tL * 0.45, 0, p.H * 0.95, p.gun, 0.08, 0.08, aim, "#2a2c28");
-  box(p.tX - p.tL * 0.2, 0, p.H + p.tH * 0.7, 0.16, 0.16, 0.18, aim, dark);
+  box(p.tX, 0, p.H * 0.95, p.tL, p.tW, p.tH, aim, shade(paint, 0.1));
+  box(p.tX - p.tL * 0.28, 0, p.H * 0.9, p.tL * 0.32, p.tW * 0.9, p.tH * 0.7, aim, shade(paint, -0.02));
+  box(p.tX + p.tL * 0.42, 0, p.H + 0.02, p.gun, 0.07, 0.07, aim, "#242620");
+  box(p.tX + p.tL * 0.42 + p.gun * 0.46, 0, p.H + 0.02, 0.14, 0.11, 0.11, aim, "#121412");
+  box(p.tX - p.tL * 0.05, 0, p.H + p.tH * 0.85, 0.18, 0.18, 0.16, aim, dark);
 }
 
 function sph(box, paint, dark, detail, aim) {
@@ -378,13 +459,13 @@ function peak(box, dark, cloth) {
 
 function building(box, form, paint, dark, cloth, detail, aim) {
   if (form === "hq") {
-    box(0, 0, 0.55, 1.55, 1.15, 0.85, 0, shade(paint, -0.2));
-    box(0.05, -0.05, 1.15, 0.72, 0.58, 0.42, 0, shade(paint, 0.02));
+    box(0, 0, 0.32, 1.7, 1.25, 0.48, 0, shade(paint, -0.2));
+    box(0.1, -0.08, 0.68, 0.7, 0.55, 0.32, 0, shade(paint, 0.02));
     box(-0.15, 0.15, 0.95, 0.22, 0.16, 0.16, 0, "#8fb0bc");
     box(0.2, -0.28, 0.7, 0.16, 0.08, 0.22, 0, shade(cloth, -0.15));
     box(-0.55, 0.4, 0.22, 0.55, 0.4, 0.16, 0, shade(dark, 0.2));
-    box(0.15, -0.05, 1.5, 0.06, 0.06, 0.4, 0, cloth);
-    if (detail) box(0.42, 0.12, 1.42, 0.26, 0.26, 0.05, 0.5, "#c5d0d2");
+    box(0.15, -0.05, 1.02, 0.06, 0.06, 0.36, 0, cloth);
+    if (detail) box(0.42, 0.12, 0.92, 0.26, 0.26, 0.05, 0.5, "#c5d0d2");
   } else if (form === "barracks") {
     box(0, 0, 0.32, 1.8, 0.85, 0.48, 0, shade(paint, -0.02));
     box(0, 0.55, 0.12, 1.5, 0.25, 0.12, 0, shade(dark, 0.3));
