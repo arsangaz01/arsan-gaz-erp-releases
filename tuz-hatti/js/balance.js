@@ -96,6 +96,61 @@ function buildings(t) {
       time: 10,
       supply: 0,
       turret: true,
+      role: "air",
+    },
+    kara: {
+      name: "Kara mevzii",
+      shape: "bunker",
+      sprite: "sam",
+      wash: true,
+      hp: Math.round(t.samHp * 1.15),
+      radius: 22,
+      sight: 210,
+      damage: Math.round(t.samDmg * 1.15),
+      range: Math.round(t.samRange * 0.82),
+      cooldown: t.samCd + 0.15,
+      armor: "building",
+      bonus: { light: 1.35, heavy: 1.2, building: 0.45, air: 0.08, naval: 0.35 },
+      cost: t.samCost,
+      time: 10,
+      supply: 0,
+      turret: true,
+      role: "ground",
+    },
+    tersane: {
+      name: "Tersane",
+      shape: "yard",
+      sprite: "depot",
+      wash: true,
+      hp: t.shopHp,
+      radius: 40,
+      sight: 180,
+      armor: "building",
+      cost: t.shopCost + 20,
+      time: 16,
+      supply: 0,
+      trains: ["gemi"],
+      navalYard: true,
+    },
+    sahil: {
+      name: "Kıyı bataryası",
+      shape: "battery",
+      sprite: "spg",
+      wash: true,
+      hp: t.samHp,
+      radius: 24,
+      sight: 230,
+      damage: t.samDmg + 4,
+      range: t.samRange + 20,
+      cooldown: 1.1,
+      armor: "building",
+      bonus: { light: 0.85, heavy: 1, building: 0.5, air: 0.45, naval: 1.85 },
+      cost: t.samCost + 20,
+      time: 12,
+      supply: 0,
+      turret: true,
+      role: "sea",
+      shore: true,
     },
     depo: {
       name: "İkmal ambarı",
@@ -1001,6 +1056,64 @@ export const FACTIONS = {
 export const ARMOR_TAKEN = { light: 1, heavy: 0.7, building: 0.82, air: 0.8 };
 
 export const BUILD_ORDER = ["barinak", "atolye", "pist", "kule", "depo"];
+
+export const BUILD_RULES = [
+  { kind: "barinak", need: [], band: "Üs" },
+  { kind: "depo", need: [], band: "Üs" },
+  { kind: "kara", need: ["barinak"], band: "Kara" },
+  { kind: "atolye", need: ["barinak"], band: "Kara" },
+  { kind: "kule", need: ["barinak"], band: "Hava" },
+  { kind: "pist", need: ["atolye"], band: "Hava" },
+  { kind: "tersane", need: ["barinak"], band: "Deniz", naval: true },
+  { kind: "sahil", need: ["tersane"], band: "Deniz", naval: true },
+];
+
+const SHIPS = {
+  tur: "Ada sınıfı",
+  usa: "Arleigh Burke",
+  cin: "Type 055",
+  rus: "Gorshkov",
+  alm: "Braunschweig",
+  ing: "Type 45",
+  ukr: "Gyurza-M",
+  irn: "Moudge",
+};
+
+for (const id of FACTION_IDS) {
+  FACTIONS[id].units.gemi = unit({
+    name: SHIPS[id],
+    shape: "ship",
+    sprite: "ship",
+    naval: true,
+    hp: 250,
+    speed: 50,
+    radius: 16,
+    sight: 240,
+    damage: 18,
+    range: 148,
+    cooldown: 1.15,
+    armor: "heavy",
+    bonus: { light: 1.05, heavy: 0.9, building: 1.2, air: 0.2, naval: 1.35 },
+    cost: 130,
+    time: 12,
+    supply: 2,
+  });
+}
+
+export function structureLock(factionId, kind, entities, owner, naval) {
+  const rule = BUILD_RULES.find((item) => item.kind === kind);
+  const def = buildingDef(factionId, kind);
+  if (!rule || !def) return { ok: false, reason: "Bu yapı yok" };
+  if (rule.naval && !naval) return { ok: false, reason: "Bu haritada gemi hattı yok" };
+  for (const need of rule.need) {
+    const ready = entities.some((e) => e.owner === owner && e.kind === need && e.hp > 0 && e.constructed);
+    if (!ready) {
+      const prior = buildingDef(factionId, need);
+      return { ok: false, reason: `Önce ${prior ? prior.name : need} bitsin` };
+    }
+  }
+  return { ok: true, reason: "", rule, def };
+}
 
 export const SUPPLY_CAP = 36;
 

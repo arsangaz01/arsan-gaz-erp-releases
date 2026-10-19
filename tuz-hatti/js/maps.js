@@ -55,6 +55,7 @@ export const MAPS = {
     posture: "İki dağ geçidi. Hattı tutan taraf saldırıyı daraltır.",
     blurb: "Toros sırtı ortayı keser. Kuzeyde boğaz suyu kıyıyı kapatır.",
     terrain: "map-tur",
+    naval: true,
     obstacles: [
       ...ridge(1050, 280, 1050, 370, 46, 70, "mountain"),
       ...ridge(1050, 930, 1050, 1040, 46, 70, "mountain"),
@@ -71,6 +72,7 @@ export const MAPS = {
     posture: "Geniş ırmak, üç sığ geçit. Kanatlar açık, saldırı rahat.",
     blurb: "Düz otlak. Irmak yolu böler ama kıyısından dolaşılır.",
     terrain: "map-usa",
+    naval: true,
     obstacles: [
       ...ridge(1050, 150, 1050, 340, 40, 90, "water"),
       ...ridge(1050, 580, 1050, 740, 40, 90, "water"),
@@ -86,6 +88,7 @@ export const MAPS = {
     posture: "Enine nehir, iki köprü. Karşıya geçen daralır.",
     blurb: "Yeşil havza ortadan bir ırmakla ayrılır.",
     terrain: "map-cin",
+    naval: true,
     obstacles: [
       ...ridge(640, 620, 900, 620, 36, 80, "water"),
       ...ridge(1200, 620, 1480, 620, 36, 80, "water"),
@@ -100,6 +103,7 @@ export const MAPS = {
     posture: "Açık koridorlar. Mesafe uzun, saldırı kolu toplanır.",
     blurb: "Seyrek orman yolu kapatmaz. Cephe geniş kalır.",
     terrain: "map-rus",
+    naval: false,
     obstacles: [
       { x: 760, y: 420, r: 34, kind: "forest" },
       { x: 1380, y: 860, r: 34, kind: "forest" },
@@ -116,6 +120,7 @@ export const MAPS = {
     posture: "Tek temiz geçit. Savunma kısa, saldırı sıkışır.",
     blurb: "Sık orman ve dar su. Karşıya bir yerden geçilir.",
     terrain: "map-alm",
+    naval: true,
     obstacles: [
       ...ridge(1050, 160, 1050, 390, 44, 80, "water"),
       ...ridge(1050, 910, 1050, 1160, 44, 80, "water"),
@@ -132,6 +137,7 @@ export const MAPS = {
     posture: "Ortada kanal, iki kumsal. Çıkarma daralır.",
     blurb: "Kıyı suyla çevrili. Karşı cepheye iki sahilden girilir.",
     terrain: "map-ing",
+    naval: true,
     obstacles: [
       ...ridge(1050, 150, 1050, 380, 42, 80, "water"),
       ...ridge(1050, 920, 1050, 1160, 42, 80, "water"),
@@ -148,6 +154,7 @@ export const MAPS = {
     posture: "İnce ırmak, çok geçit. Açık sahada saldırı hızlıdır.",
     blurb: "Düz tarla. Su yolu orduyu durdurmaz.",
     terrain: "map-ukr",
+    naval: false,
     obstacles: [
       { x: 1050, y: 280, r: 28, kind: "water" },
       { x: 1050, y: 980, r: 28, kind: "water" },
@@ -162,6 +169,7 @@ export const MAPS = {
     posture: "Çapraz sırt, iki geçit. Geçidi tutan savunur.",
     blurb: "Kurak plato. Dağ sırası orduları geçide sokar.",
     terrain: "map-irn",
+    naval: false,
     obstacles: [
       { x: 700, y: 520, r: 46, kind: "mountain" },
       { x: 1420, y: 760, r: 46, kind: "mountain" },

@@ -1,7 +1,7 @@
 /** Dokunmatik arayüz. Sürükle kaydırır, dokunuş seçer veya emir verir. */
 
 import { GFX_PRESETS, suggestTier, tierAbove } from "./gfx.js";
-import { BUILD_ORDER, FACTION_IDS, buildingDef, faction, unitDef } from "./balance.js";
+import { BUILD_RULES, FACTION_IDS, buildingDef, faction, structureLock, unitDef } from "./balance.js";
 import { MAP_IDS, MATCH_SIZES, battlePlan, mapById } from "./maps.js";
 import { applyPack, hostRoom, joinRoom, makeCode, packState } from "./net.js";
 import { playEvent, unlockAudio } from "./audio.js";
@@ -32,7 +32,7 @@ const REASONS = {
   target: "Hedef yok",
 };
 
-const APP = { code: 3, name: "2.1" };
+const APP = { code: 4, name: "2.2" };
 const SIZE_LABEL = { 2: "1'e 1", 3: "Herkes", 4: "2'ye 2", 6: "3'e 3", 8: "4'e 4" };
 const VERSION_URL =
   "https://cdn.jsdelivr.net/gh/arsangaz01/arsan-gaz-erp-releases@cursor/tuz-hatti-rts-f116/tuz-hatti/version.json";
@@ -99,7 +99,7 @@ document.querySelector("#again").addEventListener("click", () => {
   startMatch();
 });
 
-document.querySelector("#back-menu").addEventListener("click", () => {
+function leaveMatch() {
   running = false;
   match = null;
   if (net) {
@@ -113,6 +113,12 @@ document.querySelector("#back-menu").addEventListener("click", () => {
   stage.classList.add("hidden");
   menu.classList.remove("hidden");
   sayRoom("Yapay zekâ boş koltukları doldurur. Oda kodu ile karşılıklı da oynanır.");
+}
+
+document.querySelector("#back-menu").addEventListener("click", leaveMatch);
+document.querySelector("#leave")?.addEventListener("click", () => {
+  unlockAudio();
+  leaveMatch();
 });
 
 pauseBtn.addEventListener("click", () => {
@@ -228,7 +234,12 @@ function beginMatch(options) {
   });
   last = performance.now();
   const map = mapById(match.mapId);
-  toast(`${map.name} · ${map.resourceName}. ${map.posture}`);
+  const hq = match.entities.find((e) => e.owner === me && e.kind === "ocak");
+  if (hq) view.selected.add(hq.id);
+  toast(
+    `${map.name}. Karargâh seçili: alttan bina kur. Askere dokun, yere dokununca yürür, düşmana dokununca saldırır.` +
+      (map.naval ? " Bu haritada tersane ve gemi açılır." : " Bu haritada gemi hattı yok."),
+  );
   if (!looping) {
     looping = true;
     requestAnimationFrame(frame);
@@ -465,6 +476,16 @@ function handleTap(x, y) {
     return;
   }
   if (hit && hit.owner === me) {
+    const now = performance.now();
+    if (!hit.isBuilding && view.lastPick && view.lastPick.kind === hit.kind && now - view.lastPick.at < 450) {
+      view.selected.clear();
+      for (const e of match.entities) {
+        if (e.owner === me && e.hp > 0 && e.kind === hit.kind && canSeeEntity(match, me, e)) view.selected.add(e.id);
+      }
+      view.lastPick = { kind: hit.kind, at: now };
+      return;
+    }
+    view.lastPick = { kind: hit.kind, at: now };
     if (!hit.constructed && hit.isBuilding && selectedWorkers().length) {
       const result = issue({
         type: "construct",
@@ -586,72 +607,94 @@ function paintInspect(ents) {
   else if (tool === "attack") hintEl.textContent = "Hedefe veya yere dokun";
   else if (tool === "box") hintEl.textContent = "Sürükleyerek kutu seç";
   else if (tool === "rally") hintEl.textContent = "Toplanma noktasına dokun";
-  else if (ents.some((e) => !e.isBuilding)) hintEl.textContent = "Yere dokun: yürü · Düşmana dokun: saldır";
-  else hintEl.textContent = "Üretmek için birliğe dokun";
+  else if (ents.length === 1 && ents[0].kind === "ocak") hintEl.textContent = "Alt şerit: önce kışla, sonra araç, hava ve varsa deniz.";
+  else if (ents.some((e) => !e.isBuilding)) hintEl.textContent = "Yere dokun: yürü · Düşmana dokun: saldır · Çift dokunuş: aynı tip";
+  else hintEl.textContent = "Bu binadan alttaki kartla üret";
+}
+
+function structureCards() {
+  const fac = match.players[me].faction;
+  return BUILD_RULES.map((rule) => {
+    const def = buildingDef(fac, rule.kind);
+    const lock = structureLock(fac, rule.kind, match.entities, me, match.naval);
+    return {
+      id: "build",
+      kind: rule.kind,
+      label: def.name,
+      sub: lock.ok ? `${rule.band} · ${def.cost}` : lock.reason,
+      poor: match.players[me].ash < def.cost,
+      locked: !lock.ok,
+    };
+  });
+}
+
+function trainCards(building) {
+  const fac = match.players[me].faction;
+  const def = entityDef(match, building);
+  const items = [];
+  for (const kind of def.trains || []) {
+    const udef = unitDef(fac, kind);
+    const queued = building.queue?.filter((job) => job.kind === kind).length || 0;
+    items.push({
+      id: "train",
+      unit: kind,
+      label: udef.name,
+      sub: `${udef.cost} yakıt${queued ? ` · sıra ${queued}` : ""}`,
+      poor: match.players[me].ash < udef.cost,
+    });
+  }
+  if (def.trains?.length) items.push({ id: "rally", label: "Toplanma", sub: "Çıkan birlik buraya gelir" });
+  return items;
 }
 
 function buttonModel(ents) {
   const own = ents.filter((e) => e.owner === me);
-  const fac = match.players[me].faction;
-  if (tool) return [{ id: "cancel", label: "İptal" }];
+  if (tool) return [{ id: "cancel", label: "İptal", sub: "Emri kapat" }];
   if (!own.length) {
     return [
-      { id: "army", label: "Ordu" },
-      { id: "workers", label: "İkmal" },
-      { id: "home", label: "Karargâh" },
-      { id: "box", label: "Kutu seç" },
+      { id: "army", label: "Ordu", sub: "Savaşanları seç" },
+      { id: "workers", label: "İkmal", sub: "Toplayıcıları seç" },
+      { id: "home", label: "Karargâh", sub: "Üsse dön" },
+      { id: "box", label: "Kutu", sub: "Sürükleyerek seç" },
     ];
   }
   const buildings = own.filter((e) => e.isBuilding);
   const units = own.filter((e) => !e.isBuilding);
   if (buildings.length === 1 && units.length === 0) {
     const b = buildings[0];
-    const def = entityDef(match, b);
-    const items = [];
-    if (!b.constructed) items.push({ id: "send-build", label: "İkmal gönder" });
-    else {
-      for (const kind of def.trains || []) {
-        const udef = unitDef(fac, kind);
-        items.push({
-          id: "train",
-          unit: kind,
-          label: `${udef.name} · ${udef.cost}`,
-          poor: match.players[me].ash < udef.cost,
-        });
-      }
-      if (def.trains?.length) items.push({ id: "rally", label: "Toplanma" });
-    }
-    items.push({ id: "stop", label: b.queue?.length ? "Kuyruğu sil" : "Dur" });
+    if (!b.constructed) return [{ id: "send-build", label: "İkmal gönder", sub: "İnşayı bitir" }, { id: "stop", label: "Dur", sub: "Emri kes" }];
+    const items = trainCards(b);
+    if (b.kind === "ocak") items.push(...structureCards());
+    items.push({ id: "stop", label: b.queue?.length ? "Kuyruğu sil" : "Dur", sub: "Üretimi kes" });
     return items;
   }
   const items = [
-    { id: "attack", label: "Saldır" },
-    { id: "stop", label: "Dur" },
+    { id: "attack", label: "Saldır", sub: "Hedefe yürü" },
+    { id: "stop", label: "Dur", sub: "Olduğun yerde kal" },
+    { id: "same", label: "Aynı tip", sub: "Bu cinsten hepsi" },
   ];
   const workers = units.filter((e) => entityDef(match, e).worker);
-  if (workers.length) items.push({ id: "harvest", label: "Yakıt" });
-  if (workers.length && workers.length === units.length) {
-    for (const kind of BUILD_ORDER) {
-      const bdef = buildingDef(fac, kind);
-      items.push({
-        id: "build",
-        kind,
-        label: `${bdef.name} · ${bdef.cost}`,
-        poor: match.players[me].ash < bdef.cost,
-      });
-    }
-  }
-  items.push({ id: "box", label: "Kutu seç" });
+  if (workers.length) items.push({ id: "harvest", label: "Yakıt", sub: "Kaynağa dön" });
+  if (workers.length && workers.length === units.length) items.push(...structureCards());
+  items.push({ id: "box", label: "Kutu", sub: "Sürükleyerek seç" });
   return items;
 }
 
 function makeButton(item) {
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = "cmd" + (item.poor ? " poor" : "");
-  btn.textContent = item.label;
+  btn.className = "cmd" + (item.poor ? " poor" : "") + (item.locked ? " locked" : "");
+  const title = document.createElement("b");
+  title.textContent = item.label;
+  btn.append(title);
+  if (item.sub) {
+    const sub = document.createElement("small");
+    sub.textContent = item.sub;
+    btn.append(sub);
+  }
   btn.addEventListener("click", () => {
     unlockAudio();
+    playEvent({ type: "ui" }, performance.now());
     runButton(item);
     refreshHud(true);
   });
@@ -698,13 +741,27 @@ function runButton(item) {
     issue({ type: "harvest", ids: selectedWorkers().map((w) => w.id) });
     return;
   }
+  if (item.id === "same") {
+    const kind = selectedUnits()[0]?.kind;
+    if (!kind) return;
+    view.selected.clear();
+    for (const e of match.entities) {
+      if (e.owner === me && e.hp > 0 && e.kind === kind) view.selected.add(e.id);
+    }
+    return;
+  }
   if (item.id === "build") {
-    const worker = selectedWorkers()[0];
+    if (item.locked) {
+      toast(item.sub);
+      return;
+    }
+    const worker = nearestFreeWorker();
     if (!worker) {
-      toast(REASONS.worker);
+      toast("Önce karargâhtan ikmal aracı üret");
       return;
     }
     tool = { type: "place", kind: item.kind, workerId: worker.id };
+    toast(`${item.label}: karargâhın yanındaki açık alana dokun`);
     return;
   }
   if (item.id === "train") {
@@ -736,6 +793,26 @@ function runButton(item) {
     }
     issue({ type: "construct", buildingId: building.id, workerIds: [worker.id] });
   }
+}
+
+function nearestFreeWorker() {
+  const selected = selectedWorkers().find((w) => w.plan?.kind !== "construct");
+  if (selected) return selected;
+  let best = null;
+  let bestD = Infinity;
+  const hq = match.entities.find((e) => e.owner === me && e.kind === "ocak" && e.hp > 0);
+  const ax = hq ? hq.x : 0;
+  const ay = hq ? hq.y : 0;
+  for (const e of match.entities) {
+    if (e.owner !== me || e.hp <= 0 || e.isBuilding || !entityDef(match, e).worker) continue;
+    if (e.plan?.kind === "construct") continue;
+    const d = Math.hypot(e.x - ax, e.y - ay);
+    if (d < bestD) {
+      bestD = d;
+      best = e;
+    }
+  }
+  return best;
 }
 
 function issue(cmd) {

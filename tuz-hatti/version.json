@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "2.1",
-  "notes": "Sekiz cephe haritası, eşit kaynak, 2–8’li hat, oda kodu ile karşılıklı oyun, görüntü ayarı.",
+  "versionCode": 4,
+  "versionName": "2.2",
+  "notes": "Karargâhtan sıralı bina ve üretim, birlik kontrolü, çıkış, su olan haritada gemi ve kıyı savunması.",
   "apk": "https://github.com/arsangaz01/arsan-gaz-erp-releases/raw/cursor/tuz-hatti-rts-f116/tuz-hatti/TuzHatti.apk"
 }

@@ -5,6 +5,7 @@ import {
   SUPPLY_CAP,
   buildingDef,
   defFor,
+  structureLock,
   unitDef,
 } from "./balance.js";
 import { battlePlan } from "./maps.js";
@@ -65,6 +66,7 @@ export function createMatch({
     mapW: plan.map.w,
     mapH: plan.map.h,
     terrainKey: plan.map.terrain,
+    naval: !!plan.map.naval,
     battle: plan.battle,
     playerCount: plan.count,
     slots: plan.slots,
@@ -232,6 +234,8 @@ export function canPlace(state, owner, kind, x, y) {
   for (const n of state.nodes) {
     if (n.amount > 0 && Math.hypot(n.x - x, n.y - y) < n.radius + r + 10) return false;
   }
+  if ((def.navalYard || def.shore) && !nearWater(state, x, y, 72)) return false;
+  if (!structureLock(state.players[owner].faction, kind, state.entities, owner, state.naval).ok) return false;
   return true;
 }
 
@@ -531,7 +535,20 @@ function engage(state, e, def, target, dt, events) {
 
 function fireAtNearest(state, e, def, events) {
   if (e.cooldown > 0 || !(def.damage > 0)) return;
-  const target = nearestEnemy(state, e, shotReach(def, { radius: 0 }));
+  const reach = shotReach(def, { radius: 0 });
+  const prefer = (target, tdef) => {
+    if (def.role === "air") return !!tdef.air;
+    if (def.role === "ground") return !tdef.air && !tdef.naval && !target.isBuilding;
+    if (def.role === "sea") return !!tdef.naval;
+    return true;
+  };
+  const fallback = (target, tdef) => {
+    if (def.role === "air") return !tdef.naval;
+    if (def.role === "ground") return !tdef.air;
+    if (def.role === "sea") return !tdef.air;
+    return true;
+  };
+  const target = (def.role ? nearestEnemy(state, e, reach, prefer) : null) || nearestEnemy(state, e, reach, def.role ? fallback : null);
   if (!target) return;
   const dist = Math.hypot(target.x - e.x, target.y - e.y);
   if (dist > shotReach(def, target)) return;
@@ -669,12 +686,13 @@ function updateConstruct(state, e, def, dt, events) {
   }
 }
 
-function nearestEnemy(state, e, range) {
+function nearestEnemy(state, e, range, accept) {
   let best = null;
   let bestD = Infinity;
   for (const o of state.entities) {
     if (!hostile(state, e.owner, o.owner) || o.hp <= 0) continue;
     if (o.isBuilding && !o.constructed && o.progress <= 0) continue;
+    if (accept && !accept(o, entityDef(state, o))) continue;
     const d = Math.hypot(o.x - e.x, o.y - e.y);
     if (d <= range + o.radius && d < bestD) {
       if (!o.isBuilding && !cellVisible(state, e.owner, o.x, o.y) && d > (entityDef(state, e).sight || range)) {
@@ -727,13 +745,14 @@ function moveToward(state, e, tx, ty, step, stopDist, ignoreId) {
   let vx = dx / dist;
   let vy = dy / dist;
   const look = isAir(state, e) ? 18 : 32;
-  if (!isAir(state, e) && circleBlocked(state, e.x + vx * look, e.y + vy * look, e.radius * 0.75, ignoreId)) {
+  const naval = isNaval(state, e);
+  if (!isAir(state, e) && circleBlocked(state, e.x + vx * look, e.y + vy * look, e.radius * 0.75, ignoreId, naval)) {
     const base = Math.atan2(vy, vx);
     let steered = false;
     for (const off of [0.55, -0.55, 1.05, -1.05, 1.7, -1.7, 2.4, -2.4, 3.1]) {
       const ax = Math.cos(base + off);
       const ay = Math.sin(base + off);
-      if (!circleBlocked(state, e.x + ax * look, e.y + ay * look, e.radius * 0.7, ignoreId)) {
+      if (!circleBlocked(state, e.x + ax * look, e.y + ay * look, e.radius * 0.7, ignoreId, naval)) {
         vx = ax;
         vy = ay;
         steered = true;
@@ -765,9 +784,14 @@ function face(e, x, y, dt) {
   else e.angle += Math.sign(d) * max;
 }
 
-function circleBlocked(state, x, y, r, ignoreId) {
+function nearWater(state, x, y, pad) {
+  return state.obstacles.some((o) => o.kind === "water" && Math.hypot(o.x - x, o.y - y) <= o.r + pad);
+}
+
+function circleBlocked(state, x, y, r, ignoreId, naval) {
   if (x < r || y < r || x > state.mapW - r || y > state.mapH - r) return true;
   for (const o of state.obstacles) {
+    if (naval && o.kind === "water") continue;
     if (Math.hypot(o.x - x, o.y - y) < o.r + r) return true;
   }
   for (const b of state.entities) {
@@ -779,6 +803,30 @@ function circleBlocked(state, x, y, r, ignoreId) {
 
 function isAir(state, e) {
   return !e.isBuilding && !!entityDef(state, e).air;
+}
+
+function isNaval(state, e) {
+  return !e.isBuilding && !!entityDef(state, e).naval;
+}
+
+function pullToWater(state, u) {
+  if (nearWater(state, u.x, u.y, 46)) return;
+  let best = null;
+  let bestD = Infinity;
+  for (const obstacle of state.obstacles) {
+    if (obstacle.kind !== "water") continue;
+    const d = Math.hypot(obstacle.x - u.x, obstacle.y - u.y);
+    if (d < bestD) {
+      bestD = d;
+      best = obstacle;
+    }
+  }
+  if (!best) return;
+  const dx = best.x - u.x;
+  const dy = best.y - u.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  u.x += (dx / dist) * 8;
+  u.y += (dy / dist) * 8;
 }
 
 function separateUnits(state) {
@@ -814,7 +862,11 @@ function separateUnits(state) {
       u.y = clamp(u.y, u.radius, state.mapH - u.radius);
       continue;
     }
-    for (const o of state.obstacles) pushOut(u, o.x, o.y, o.r);
+    for (const o of state.obstacles) {
+      if (isNaval(state, u) && o.kind === "water") continue;
+      pushOut(u, o.x, o.y, o.r);
+    }
+    if (isNaval(state, u)) pullToWater(state, u);
     for (const b of state.entities) {
       if (!b.isBuilding || b.hp <= 0) continue;
       if (u.plan?.kind === "construct" && u.plan.buildingId === b.id) continue;

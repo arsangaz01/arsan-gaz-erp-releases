@@ -309,7 +309,7 @@ h2 { font-size: 26px; }
   text-shadow: 0 1px 2px #000;
 }
 
-#pause, #update-hud, #gfx-hud {
+#pause, #update-hud, #gfx-hud, #leave {
   background: #101410e6;
   color: var(--paper);
   border-color: var(--line);
@@ -385,13 +385,21 @@ h2 { font-size: 26px; }
 
 .cmd {
   flex: 0 0 auto;
+  min-width: 108px;
+  max-width: 148px;
   background: #1c2420;
   color: var(--paper);
   border-color: #4d5c46;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: left;
+  padding: 6px 8px;
+  line-height: 1.2;
 }
 
-.cmd.poor { opacity: 0.45; }
+.cmd b { display: block; font-size: 13px; font-weight: 650; }
+.cmd small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; letter-spacing: 0.02em; }
+.cmd.poor { opacity: 0.55; }
+.cmd.locked { opacity: 0.4; }
 
 #result { background: rgba(8, 10, 8, 0.72); }
 

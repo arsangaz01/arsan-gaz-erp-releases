@@ -32,6 +32,7 @@ export const SPRITE_SRC = {
   depot: "assets/depot.png",
   strip: "assets/strip.png",
   fuel: "assets/fuel.png",
+  ship: "assets/ship.png",
   terrain: "assets/terrain.jpg",
   "map-tur": "assets/map-tur.jpg",
   "map-usa": "assets/map-usa.jpg",
@@ -311,6 +312,27 @@ function drawFog(ctx, state, view) {
   ctx.drawImage(view.fogCanvas, 0, 0, state.mapW, state.mapH);
 }
 
+function drawSelection(ctx, e, view) {
+  const r = e.radius + (e.isBuilding ? 8 : 5);
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.strokeStyle = e.owner === viewer(view) ? "#e7d7a4" : "#c45c3c";
+  ctx.lineWidth = 1.5 / view.zoom;
+  ctx.beginPath();
+  ctx.ellipse(0, r * 0.35, r * 1.05, r * 0.38, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  const arm = Math.max(8, r * 0.45);
+  const box = r;
+  ctx.beginPath();
+  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    ctx.moveTo(sx * box, sy * box + sy * -arm);
+    ctx.lineTo(sx * box, sy * box);
+    ctx.lineTo(sx * box + sx * -arm, sy * box);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawBarsAndRings(ctx, state, view) {
   const selected = view.selected;
   for (const e of state.entities) {
@@ -322,13 +344,7 @@ function drawBarsAndRings(ctx, state, view) {
     const visibleNow = own || cellVisible(state, who, e.x, e.y) || (e.isBuilding && cellExplored(state, who, e.x, e.y));
     if (!visibleNow && !own) continue;
     const isSel = selected.has(e.id);
-    if (isSel) {
-      ctx.strokeStyle = "#e7d7a4";
-      ctx.lineWidth = 1.6 / view.zoom;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius + 6, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    if (isSel) drawSelection(ctx, e, view);
     const showBar = isSel || e.hp < e.maxHp - 0.5;
     if (!showBar) continue;
     if (!own && e.isBuilding && !cellVisible(state, who, e.x, e.y)) continue;

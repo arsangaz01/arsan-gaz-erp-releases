@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { unitDef } from "./balance.js";
+import { structureLock, unitDef } from "./balance.js";
 import { aiAct, createAiMemory } from "./ai.js";
 import { MAP_IDS, MATCH_SIZES, battlePlan, resourceTotal } from "./maps.js";
 import { cellExplored, cellVisible, command, createMatch, getEntity, hostile, step, supplyInfo } from "./sim.js";
@@ -190,6 +190,17 @@ const ffa = createMatch({
 assert.equal(ffa.battle, "ffa");
 assert.equal(hostile(ffa, 0, 1), true);
 assert.equal(hostile(ffa, 1, 2), true);
+
+const yard = createMatch({ seed: 12, mapId: "anadolu", playerFaction: "tur", enemyFaction: "rus" });
+assert.equal(yard.naval, true);
+assert.equal(structureLock("tur", "tersane", yard.entities, 0, yard.naval).ok, false);
+assert.equal(structureLock("tur", "atolye", yard.entities, 0, yard.naval).ok, false);
+assert.equal(structureLock("tur", "barinak", yard.entities, 0, yard.naval).ok, true);
+const dry = createMatch({ seed: 13, mapId: "plato", playerFaction: "tur", enemyFaction: "irn" });
+assert.equal(dry.naval, false);
+assert.equal(structureLock("tur", "tersane", dry.entities, 0, dry.naval).reason.includes("gemi"), true);
+assert.equal(unitDef("tur", "gemi").name, "Ada sınıfı");
+assert.equal(unitDef("ukr", "gemi").naval, true);
 
 console.log("cephe sim tamam");
 console.log(
